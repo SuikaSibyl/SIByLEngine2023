@@ -11,6 +11,9 @@ namespace SIByL::Math
 		Point2(Vector2<T> const& v = { 0,0 })
 			:Vector2<T>(v) {}
 
+		Point2(T const& x, T const& y)
+			:Vector2<T>(x, y) {}
+
 		template <typename U>
 		explicit Point2(Point2<U> const& p)
 			:Vector2<T>((T)p.x, (T)p.y) {}

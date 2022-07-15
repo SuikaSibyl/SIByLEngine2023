@@ -3,6 +3,7 @@ module;
 #include <utility>
 #include <type_traits>
 module Core.Memory:MemoryManager;
+import Core.Memory;
 import :Allocator;
 
 namespace SIByL::Core

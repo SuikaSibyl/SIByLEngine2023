@@ -81,5 +81,8 @@
     <ClCompile Include="Public\Transform\Math.Transform-AnimatedTransform.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Private\Transform\Math.Transform-Transform.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

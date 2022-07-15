@@ -11,5 +11,6 @@ namespace SIByL::Math
 	{
 		point3 o;
 		vec3 d;
+		float tMax;
 	};
 }

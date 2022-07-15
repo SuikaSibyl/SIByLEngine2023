@@ -15,15 +15,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Public\Camera\GFX.Camera.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Geometric\GFX.Geometric.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Geometric\GFX.Geometric-Shape.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="Public\Light\GFX.Light.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -31,15 +22,6 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Scene\GFX.Scene.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Medium\GFX.Medium.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Geometric\GFX.Geometric-Sphere.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Camera\GFX.Camera-Camera.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

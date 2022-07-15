@@ -152,9 +152,6 @@
     <ProjectReference Include="..\Engine\Source\Runtime\Parallelism\Parallelism.vcxproj">
       <Project>{d44bc11a-922a-43b5-8641-480b82bb1815}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\Engine\Source\Runtime\Radiometry\Radiometry.vcxproj">
-      <Project>{647b6183-29b9-4a9a-89dc-acba080117f7}</Project>
-    </ProjectReference>
     <ProjectReference Include="..\Engine\Source\Runtime\Tracer\Tracer.vcxproj">
       <Project>{2b8cdd09-aa57-4f5f-ab1b-6595ba7d1528}</Project>
     </ProjectReference>

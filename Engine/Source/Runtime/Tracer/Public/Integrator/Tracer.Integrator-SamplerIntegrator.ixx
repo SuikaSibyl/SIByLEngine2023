@@ -1,14 +1,14 @@
 export module Tracer.Integrator:SamplerIntegrator;
 import :Integrator;
 import GFX.Scene;
-import GFX.Camera;
+import Tracer.Camera;
 import Tracer.Sampler;
 
 namespace SIByL::Tracer
 {
 	export struct SamplerIntegrator :public Integrator
 	{
-		SamplerIntegrator(GFX::Camera* camera, Sampler* sampler)
+		SamplerIntegrator(Camera* camera, Sampler* sampler)
 			: camera(camera), sampler(sampler) {}
 
 		virtual auto preprocess(GFX::Scene const& scene) noexcept -> void {}
@@ -16,7 +16,7 @@ namespace SIByL::Tracer
 
 	private:
 		Sampler* sampler;
-		GFX::Camera* camera;
+		Camera* camera;
 	};
 
 	auto SamplerIntegrator::render(GFX::Scene const& scene) noexcept -> void

@@ -11,7 +11,6 @@ import Math.Matrix;
 import Math.Limits;
 import Math.Transform;
 import Tracer.Ray;
-import Radiometry.Spectrum;
 
 import Application.Root;
 
@@ -36,8 +35,6 @@ int main()
 		{0, 0, 1, 0},
 		{0, 0, 0, 1}
 	};
-
-	Radiometry::SampledSpectrum Spectrum;
 
 	size_t size;
 	Buffer image_binary;

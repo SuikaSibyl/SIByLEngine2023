@@ -5,6 +5,7 @@ module;
 export module Math.Geometry:Bounds3;
 import Math.Vector;
 import :Point3;
+import :Ray3;
 
 namespace SIByL::Math
 {
@@ -26,6 +27,9 @@ namespace SIByL::Math
 		auto lerp(Point3<T> const& t) const->Point3<T>;
 		auto offset(Point3<T> const& p) const->Vector3<T>;
 		auto boundingSphere(Point3<T>* center, float* radius) const -> void;
+		
+		inline auto intersectP(ray3 const& ray, float* hitt0, float* hitt1) const -> bool;
+		inline auto intersectP(ray3 const& ray, vec3 const& invDir, ivec3 dirIsNeg) const -> bool;
 
 		Point3<T> pMin;
 		Point3<T> pMax;
@@ -134,6 +138,49 @@ namespace SIByL::Math
 	{
 		*center = (pMin + pMax) / 2;
 		*radius = inside(*center, *this) ? distance(*center, pMax) : 0;
+	}
+
+	template <class T>
+	auto Bounds3<T>::intersectP(ray3 const& ray, float* hitt0, float* hitt1) const -> bool
+	{
+		float t0 = 0, t1 = ray.tMax;
+		for (int i = 0; i < 3; ++i) {
+			// could handle infinite (1/0) cases
+			float invRayDir = 1 / ray.d[i];
+			float tNear = (pMin[i] - ray.o[i]) * invRayDir;
+			float tFar = (pMax[i] - ray.o[i]) * invRayDir;
+			if (tNear > tFar) std::swap(tNear, tFar);
+			// could handle NaN (0/0) cases
+			t0 = tNear > t0 ? tNear : t0;
+			t1 = tFar < t1 ? tFar : t1;
+			if (t0 > t1) return false;
+		}
+		if (hitt0) *hitt0 = t0;
+		if (hitt1) *hitt1 = t1;
+		return true;
+	}
+
+	template <class T>
+	auto Bounds3<T>::intersectP(ray3 const& ray, vec3 const& invDir, ivec3 dirIsNeg) const -> bool
+	{
+		Bounds3<float> const& bounds = *this;
+		// Check for ray intersection against x and y slabs
+		float tMin	= (bounds[0 + dirIsNeg[0]].x - ray.o.x) * invDir.x;
+		float tMax	= (bounds[1 - dirIsNeg[0]].x - ray.o.x) * invDir.x;
+		float tyMin = (bounds[0 + dirIsNeg[1]].y - ray.o.y) * invDir.y;
+		float tyMax = (bounds[1 - dirIsNeg[1]].y - ray.o.y) * invDir.y;
+		if (tMin > tyMax || tyMin > tMax)
+			return false;
+		if (tyMin > tMin) tMin = tyMin;
+		if (tyMax < tMax) tMax = tyMax;
+		// Check for ray intersection against z slab
+		float tzMin = (bounds[0 + dirIsNeg[2]].z - ray.o.z) * invDir.z;
+		float tzMax = (bounds[1 - dirIsNeg[2]].z - ray.o.z) * invDir.z;
+		if (tMin > tzMax || tzMin > tMax)
+			return false;
+		if (tzMin > tMin) tMin = tzMin;
+		if (tzMax < tMax) tMax = tzMax;
+		return (tMin < ray.tMax) && (tMax > 0);
 	}
 
 	export template <class T>

@@ -137,14 +137,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Public\Camera\GFX.Camera-Camera.ixx" />
-    <ClCompile Include="Public\Geometric\GFX.Geometric-Shape.ixx" />
-    <ClCompile Include="Public\Geometric\GFX.Geometric-Sphere.ixx" />
-    <ClCompile Include="Public\Geometric\GFX.Geometric.ixx" />
-    <ClCompile Include="Public\Camera\GFX.Camera.ixx" />
     <ClCompile Include="Public\Light\GFX.Light-Light.ixx" />
     <ClCompile Include="Public\Light\GFX.Light.ixx" />
-    <ClCompile Include="Public\Medium\GFX.Medium.ixx" />
     <ClCompile Include="Public\Scene\GFX.Scene.ixx" />
   </ItemGroup>
   <ItemGroup>

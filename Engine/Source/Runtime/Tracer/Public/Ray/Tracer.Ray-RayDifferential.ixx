@@ -4,7 +4,7 @@ export module Tracer.Ray:RayDifferential;
 import Math.Vector;
 import Math.Geometry;
 import Math.Limits;
-import GFX.Medium;
+import Tracer.Medium;
 import :Ray;
 
 namespace SIByL::Tracer
@@ -12,7 +12,7 @@ namespace SIByL::Tracer
 	export struct RayDifferential :public Ray
 	{
 		RayDifferential() { hasDifferentials = false; }
-		RayDifferential(Math::point3 const& o, Math::vec3 const& d, float tMax = Math::float_infinity, float time = 0.f, GFX::Medium const* medium = nullptr)
+		RayDifferential(Math::point3 const& o, Math::vec3 const& d, float tMax = Math::float_infinity, float time = 0.f, Medium const* medium = nullptr)
 			:Ray(o, d, tMax, time, medium) {
 			hasDifferentials = false;
 		}

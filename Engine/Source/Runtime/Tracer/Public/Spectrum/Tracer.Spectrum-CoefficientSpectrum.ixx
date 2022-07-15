@@ -1,31 +1,31 @@
 module;
 #include <cmath>
-export module Radiometry.Spectrum:CoefficientSpectrum;
+export module Tracer.Spectrum:CoefficientSpectrum;
 import Math.Limits;
 import Math.Common;
 
-namespace SIByL::Radiometry
+namespace SIByL::Tracer
 {
 	export template<size_t nSpectrumSamples>
-	struct CoefficientSpectrum
+		struct CoefficientSpectrum
 	{
 	public:
 		CoefficientSpectrum(float v = 0.f);
 
-		auto operator-() -> CoefficientSpectrum&;
-		auto operator+=(CoefficientSpectrum const& s2) -> CoefficientSpectrum&;
-		auto operator-=(CoefficientSpectrum const& s2) -> CoefficientSpectrum&;
-		auto operator*=(CoefficientSpectrum const& s2) -> CoefficientSpectrum&;
-		auto operator/=(CoefficientSpectrum const& s2) -> CoefficientSpectrum&;
-		auto operator+(CoefficientSpectrum const& s2) const -> CoefficientSpectrum;
-		auto operator-(CoefficientSpectrum const& s2) const -> CoefficientSpectrum;
-		auto operator*(CoefficientSpectrum const& s2) const -> CoefficientSpectrum;
-		auto operator/(CoefficientSpectrum const& s2) const -> CoefficientSpectrum;
-		auto operator+(float x) const -> CoefficientSpectrum;
-		auto operator-(float x) const -> CoefficientSpectrum;
-		auto operator*(float x) const -> CoefficientSpectrum;
-		auto operator/(float x) const -> CoefficientSpectrum;
-		
+		auto operator-()->CoefficientSpectrum&;
+		auto operator+=(CoefficientSpectrum const& s2)->CoefficientSpectrum&;
+		auto operator-=(CoefficientSpectrum const& s2)->CoefficientSpectrum&;
+		auto operator*=(CoefficientSpectrum const& s2)->CoefficientSpectrum&;
+		auto operator/=(CoefficientSpectrum const& s2)->CoefficientSpectrum&;
+		auto operator+(CoefficientSpectrum const& s2) const->CoefficientSpectrum;
+		auto operator-(CoefficientSpectrum const& s2) const->CoefficientSpectrum;
+		auto operator*(CoefficientSpectrum const& s2) const->CoefficientSpectrum;
+		auto operator/(CoefficientSpectrum const& s2) const->CoefficientSpectrum;
+		auto operator+(float x) const->CoefficientSpectrum;
+		auto operator-(float x) const->CoefficientSpectrum;
+		auto operator*(float x) const->CoefficientSpectrum;
+		auto operator/(float x) const->CoefficientSpectrum;
+
 		auto isBlack() const noexcept -> bool;
 		auto hasNaNs() const noexcept -> bool;
 
@@ -46,7 +46,7 @@ namespace SIByL::Radiometry
 		for (size_t i = 0; i < nSpectrumSamples; ++i)
 			c[i] = v;
 	}
-	
+
 	template<size_t nSpectrumSamples>
 	auto CoefficientSpectrum<nSpectrumSamples>::operator-()->CoefficientSpectrum&
 	{
@@ -62,7 +62,7 @@ namespace SIByL::Radiometry
 			c[i] += s2.c[i];
 		return *this;
 	}
-	
+
 	template<size_t nSpectrumSamples>
 	auto CoefficientSpectrum<nSpectrumSamples>::operator-=(CoefficientSpectrum const& s2)->CoefficientSpectrum&
 	{
@@ -70,7 +70,7 @@ namespace SIByL::Radiometry
 			c[i] -= s2.c[i];
 		return *this;
 	}
-	
+
 	template<size_t nSpectrumSamples>
 	auto CoefficientSpectrum<nSpectrumSamples>::operator*=(CoefficientSpectrum const& s2)->CoefficientSpectrum&
 	{
@@ -78,7 +78,7 @@ namespace SIByL::Radiometry
 			c[i] *= s2.c[i];
 		return *this;
 	}
-	
+
 	template<size_t nSpectrumSamples>
 	auto CoefficientSpectrum<nSpectrumSamples>::operator/=(CoefficientSpectrum const& s2)->CoefficientSpectrum&
 	{
@@ -104,7 +104,7 @@ namespace SIByL::Radiometry
 			ret.c[i] -= s2.c[i];
 		return ret;
 	}
-	
+
 	template<size_t nSpectrumSamples>
 	auto CoefficientSpectrum<nSpectrumSamples>::operator*(CoefficientSpectrum const& s2) const->CoefficientSpectrum
 	{
@@ -113,7 +113,7 @@ namespace SIByL::Radiometry
 			ret.c[i] *= s2.c[i];
 		return ret;
 	}
-	
+
 	template<size_t nSpectrumSamples>
 	auto CoefficientSpectrum<nSpectrumSamples>::operator/(CoefficientSpectrum const& s2) const->CoefficientSpectrum
 	{
@@ -166,7 +166,7 @@ namespace SIByL::Radiometry
 			if (c[i] != 0.) return false;
 		return true;
 	}
-	
+
 	template<size_t nSpectrumSamples>
 	auto CoefficientSpectrum<nSpectrumSamples>::hasNaNs() const noexcept -> bool
 	{
@@ -176,7 +176,7 @@ namespace SIByL::Radiometry
 	}
 
 	export template<size_t nSpectrumSamples>
-	inline auto sqrt(CoefficientSpectrum<nSpectrumSamples> const& s) noexcept -> CoefficientSpectrum<nSpectrumSamples>
+		inline auto sqrt(CoefficientSpectrum<nSpectrumSamples> const& s) noexcept -> CoefficientSpectrum<nSpectrumSamples>
 	{
 		CoefficientSpectrum<nSpectrumSamples> ret;
 		for (size_t i = 0; i < nSpectrumSamples; ++i)
@@ -185,13 +185,13 @@ namespace SIByL::Radiometry
 	}
 
 	export template<size_t nSpectrumSamples>
-	inline auto lerp(float t, CoefficientSpectrum<nSpectrumSamples> const& s1, CoefficientSpectrum<nSpectrumSamples> const& s2) noexcept -> CoefficientSpectrum<nSpectrumSamples>
+		inline auto lerp(float t, CoefficientSpectrum<nSpectrumSamples> const& s1, CoefficientSpectrum<nSpectrumSamples> const& s2) noexcept -> CoefficientSpectrum<nSpectrumSamples>
 	{
 		return s1 * (1 - t) + s2 * t;
 	}
-	
+
 	export template<size_t nSpectrumSamples>
-	inline auto clamp(CoefficientSpectrum<nSpectrumSamples> const& s, float low = 0, float high = Math::float_infinity) noexcept -> CoefficientSpectrum<nSpectrumSamples>
+		inline auto clamp(CoefficientSpectrum<nSpectrumSamples> const& s, float low = 0, float high = Math::float_infinity) noexcept -> CoefficientSpectrum<nSpectrumSamples>
 	{
 		CoefficientSpectrum<nSpectrumSamples> ret;
 		for (size_t i = 0; i < nSpectrumSamples; ++i)

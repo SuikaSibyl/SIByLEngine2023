@@ -137,16 +137,42 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Private\Camera\Tracer.Camera-Camera.cpp" />
+    <ClCompile Include="Private\Camera\Tracer.Camera-OrthographicCamera.cpp" />
+    <ClCompile Include="Private\Camera\Tracer.Camera-ProjectiveCamera.cpp" />
+    <ClCompile Include="Private\Film\Tracer.Film-Film.cpp" />
+    <ClCompile Include="Private\Spectrum\Tracer.Spectrum-SampledSpectrum.cpp" />
+    <ClCompile Include="Public\Camera\Tracer.Camera-OrthographicCamera.ixx" />
+    <ClCompile Include="Public\Camera\Tracer.Camera-Camera.ixx" />
+    <ClCompile Include="Public\Camera\Tracer.Camera-ProjectiveCamera.ixx" />
+    <ClCompile Include="Public\Camera\Tracer.Camera.ixx" />
+    <ClCompile Include="Public\Film\Tracer.Film-Film.ixx" />
+    <ClCompile Include="Public\Film\Tracer.Film.ixx" />
+    <ClCompile Include="Public\Filter\Tracer.Filter-Filter.ixx" />
+    <ClCompile Include="Public\Filter\Tracer.Filter.ixx" />
     <ClCompile Include="Public\Integrator\Tracer.Integrator-Integrator.ixx" />
     <ClCompile Include="Public\Integrator\Tracer.Integrator-SamplerIntegrator.ixx" />
     <ClCompile Include="Public\Integrator\Tracer.Integrator.ixx" />
     <ClCompile Include="Public\Interactions\Tracer.Interactions-Interaction.ixx" />
     <ClCompile Include="Public\Interactions\Tracer.Interactions-SurfaceInteraction.ixx" />
     <ClCompile Include="Public\Interactions\Tracer.Interactions.ixx" />
+    <ClCompile Include="Public\Medium\Tracer.Medium-Medium.ixx" />
+    <ClCompile Include="Public\Medium\Tracer.Medium.ixx" />
     <ClCompile Include="Public\Ray\Tracer.Ray-Ray.ixx" />
     <ClCompile Include="Public\Ray\Tracer.Ray-RayDifferential.ixx" />
     <ClCompile Include="Public\Ray\Tracer.Ray.ixx" />
     <ClCompile Include="Public\Sampler\Tracer.Sampler.ixx" />
+    <ClCompile Include="Private\Shape\Tracer.Shape-Shape.cpp">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Default</CompileAs>
+    </ClCompile>
+    <ClCompile Include="Public\Shape\Tracer.Shape-Shape.ixx">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Default</CompileAs>
+    </ClCompile>
+    <ClCompile Include="Public\Shape\Tracer.Shape-Sphere.ixx" />
+    <ClCompile Include="Public\Shape\Tracer.Shape.ixx" />
+    <ClCompile Include="Public\Spectrum\Tracer.Spectrum-CoefficientSpectrum.ixx" />
+    <ClCompile Include="Public\Spectrum\Tracer.Spectrum-SampledSpectrum.ixx" />
+    <ClCompile Include="Public\Spectrum\Tracer.Spectrum.ixx" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\GFX\GFX.vcxproj">

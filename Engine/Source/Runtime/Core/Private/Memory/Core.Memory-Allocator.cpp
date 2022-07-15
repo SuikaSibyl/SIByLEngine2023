@@ -1,6 +1,7 @@
 module;
 #include <cstdint>
 module Core.Memory:Allocator;
+import Core.Memory;
 
 #ifndef ALIGN
 #define ALIGN(x, a) (((x) + ((a) - 1)) & ~((a) - 1))
