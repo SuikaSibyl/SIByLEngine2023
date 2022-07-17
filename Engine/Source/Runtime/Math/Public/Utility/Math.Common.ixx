@@ -9,4 +9,10 @@ namespace SIByL::Math
 		else if (val > max) return max;
 		else return val;
 	}
+
+	export template <class T>
+		inline auto lerp(float t, T const& a, T const& b) noexcept -> T
+	{
+		return a * (1 - t) + b * t;
+	}
 }

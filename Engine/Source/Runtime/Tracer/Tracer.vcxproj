@@ -141,6 +141,8 @@
     <ClCompile Include="Private\Camera\Tracer.Camera-OrthographicCamera.cpp" />
     <ClCompile Include="Private\Camera\Tracer.Camera-ProjectiveCamera.cpp" />
     <ClCompile Include="Private\Film\Tracer.Film-Film.cpp" />
+    <ClCompile Include="Private\Spectrum\Tracer.Spectrum-Common.cpp" />
+    <ClCompile Include="Private\Spectrum\Tracer.Spectrum-RGBSpectrum.cpp" />
     <ClCompile Include="Private\Spectrum\Tracer.Spectrum-SampledSpectrum.cpp" />
     <ClCompile Include="Public\Camera\Tracer.Camera-OrthographicCamera.ixx" />
     <ClCompile Include="Public\Camera\Tracer.Camera-Camera.ixx" />
@@ -171,6 +173,8 @@
     <ClCompile Include="Public\Shape\Tracer.Shape-Sphere.ixx" />
     <ClCompile Include="Public\Shape\Tracer.Shape.ixx" />
     <ClCompile Include="Public\Spectrum\Tracer.Spectrum-CoefficientSpectrum.ixx" />
+    <ClCompile Include="Public\Spectrum\Tracer.Spectrum-Common.ixx" />
+    <ClCompile Include="Public\Spectrum\Tracer.Spectrum-RGBSpectrum.ixx" />
     <ClCompile Include="Public\Spectrum\Tracer.Spectrum-SampledSpectrum.ixx" />
     <ClCompile Include="Public\Spectrum\Tracer.Spectrum.ixx" />
   </ItemGroup>

@@ -111,5 +111,17 @@
     <ClCompile Include="Private\Camera\Tracer.Camera-OrthographicCamera.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Spectrum\Tracer.Spectrum-RGBSpectrum.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Private\Spectrum\Tracer.Spectrum-RGBSpectrum.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Spectrum\Tracer.Spectrum-Common.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Private\Spectrum\Tracer.Spectrum-Common.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
