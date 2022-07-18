@@ -1,4 +1,8 @@
 module;
+#include <cmath>
+#include <vector>
+#include <numeric>
+#include <algorithm>
 module Tracer.Spectrum:Common;
 import Math.Common;
 
@@ -16,6 +20,22 @@ namespace SIByL::Tracer
         xyz[2] = 0.019334f * rgb[0] + 0.119193f * rgb[1] + 0.950227f * rgb[2];
     }
 
+    template <typename Predicate>
+    int findInterval(int size, const Predicate& pred) {
+        int first = 0, len = size;
+        while (len > 0) {
+            int half = len >> 1, middle = first + half;
+            // Bisect range based on value of _pred_ at _middle_
+            if (pred(middle)) {
+                first = middle + 1;
+                len -= half + 1;
+            }
+            else
+                len = half;
+        }
+        return Math::clamp(first - 1, 0, size - 2);
+    }
+
     inline auto interpolateSpectrumSamples(const float* lambda, const float* vals, int n, float l) noexcept -> float
     {
         if (l <= lambda[0])     return vals[0];
@@ -24,6 +44,59 @@ namespace SIByL::Tracer
         float t = (l - lambda[offset]) / (lambda[offset + 1] - lambda[offset]);
         return Math::lerp(t, vals[offset], vals[offset + 1]);
     }
+    
+    inline auto spectrumSamplesSorted(float const* lambda, float const* v, int n) noexcept -> bool
+    {
+        for (int i = 0; i < n - 1; i++)
+            if (lambda[i] > lambda[i + 1]) return false;
+        return true;
+    }
+
+    inline auto sortSpectrumSamples(float* lambda, float* v, int n) noexcept -> void
+    {
+        std::vector<float> slambda(&lambda[0], &lambda[n]);
+        std::vector<float> sv(&v[0], &v[n]);
+
+        std::vector<std::size_t> permutation(slambda.size());
+        std::iota(permutation.begin(), permutation.end(), 0);
+        std::sort(permutation.begin(), permutation.end());
+
+        std::transform(permutation.begin(), permutation.end(), &lambda[0],
+            [&](std::size_t i) { return slambda[i]; });
+        std::transform(permutation.begin(), permutation.end(), &v[0],
+            [&](std::size_t i) { return sv[i]; });
+    }
+
+    inline auto averageSpectrumSamples(float const* lambda, float const* v, int n, float lambda0, float lambda1) noexcept -> float
+    {
+        // Handle cases with out-of-bounds range or single sample only
+        if (lambda1 <= lambda[0])		return v[0];
+        if (lambda0 >= lambda[n - 1])	return v[n - 1];
+        if (n == 1)						return v[0];
+
+        float sum = 0;
+        // Add contributions of constant segments before/after samples
+        if (lambda0 < lambda[0])
+            sum += v[0] * (lambda[0] - lambda0);
+        if (lambda1 > lambda[n - 1])
+            sum += v[n - 1] * (lambda1 - lambda[n - 1]);
+        // Advance to first relevant wavelent segments
+        int i = 0;
+        while (lambda0 > lambda[i + 1]) ++i;
+        // Loop over wavelength segments and add contribitions
+        auto interp = [&lambda, &v](float w, int i) {
+            return std::lerp(v[i], v[i + 1],
+                (w - lambda[i]) / (lambda[i + 1] - lambda[i]));
+        };
+        for (; i + 1 < n && lambda1 >= lambda[i]; ++i) {
+            float segLambdaStart = std::max(lambda0, lambda[i]);
+            float segLambdaEnd   = std::min(lambda1, lambda[i + 1]);
+            sum += 0.5 * (interp(segLambdaStart, i) + interp(segLambdaEnd, i)) *
+                (segLambdaEnd - segLambdaStart);
+        }
+        return sum / (lambda1 - lambda0);
+    }
+
     float const CIE_X[nCIESamples] = {
         // CIE X function values
         0.0001299000f,   0.0001458470f,   0.0001638021f,   0.0001840037f,

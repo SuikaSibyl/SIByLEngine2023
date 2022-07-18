@@ -146,6 +146,9 @@
     <ProjectReference Include="..\Engine\Source\Runtime\GFX\GFX.vcxproj">
       <Project>{587f5443-b048-4a7a-b773-fe5b6ba0728a}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\Engine\Source\Runtime\Image\Image.vcxproj">
+      <Project>{0fc8b275-7514-4117-93a1-7e9c112b4b70}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\Engine\Source\Runtime\Math\Math.vcxproj">
       <Project>{0eec40c7-807a-4d99-99a6-e3d329aea25d}</Project>
     </ProjectReference>

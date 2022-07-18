@@ -69,5 +69,8 @@
     <ClCompile Include="Public\Memory\Core.Memory-Buffer.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Private\Memory\Core.Memory-Buffer.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

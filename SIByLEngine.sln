@@ -29,6 +29,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ModulesTracer", "ModulesTra
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ModulesRaster", "ModulesRaster", "{45666204-0F3C-4716-8A81-62A818974313}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Image", "Engine\Source\Runtime\Image\Image.vcxproj", "{0FC8B275-7514-4117-93A1-7E9C112B4B70}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -93,6 +95,14 @@ Global
 		{B47595DD-25C9-4B07-808A-7CCE497A61D1}.Release|x64.Build.0 = Release|x64
 		{B47595DD-25C9-4B07-808A-7CCE497A61D1}.Release|x86.ActiveCfg = Release|Win32
 		{B47595DD-25C9-4B07-808A-7CCE497A61D1}.Release|x86.Build.0 = Release|Win32
+		{0FC8B275-7514-4117-93A1-7E9C112B4B70}.Debug|x64.ActiveCfg = Debug|x64
+		{0FC8B275-7514-4117-93A1-7E9C112B4B70}.Debug|x64.Build.0 = Debug|x64
+		{0FC8B275-7514-4117-93A1-7E9C112B4B70}.Debug|x86.ActiveCfg = Debug|Win32
+		{0FC8B275-7514-4117-93A1-7E9C112B4B70}.Debug|x86.Build.0 = Debug|Win32
+		{0FC8B275-7514-4117-93A1-7E9C112B4B70}.Release|x64.ActiveCfg = Release|x64
+		{0FC8B275-7514-4117-93A1-7E9C112B4B70}.Release|x64.Build.0 = Release|x64
+		{0FC8B275-7514-4117-93A1-7E9C112B4B70}.Release|x86.ActiveCfg = Release|Win32
+		{0FC8B275-7514-4117-93A1-7E9C112B4B70}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -109,6 +119,7 @@ Global
 		{52754269-DCB3-4047-9B64-F9AE32323F4C} = {EEE2A187-F607-48A8-8AA1-C221DA587F80}
 		{B8F74424-F806-4E76-8C1B-3C85FA578323} = {EEE2A187-F607-48A8-8AA1-C221DA587F80}
 		{45666204-0F3C-4716-8A81-62A818974313} = {EEE2A187-F607-48A8-8AA1-C221DA587F80}
+		{0FC8B275-7514-4117-93A1-7E9C112B4B70} = {52754269-DCB3-4047-9B64-F9AE32323F4C}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {6AB0EB42-EF7B-4605-9661-1D6F63E9F033}

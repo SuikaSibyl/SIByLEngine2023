@@ -1,11 +1,14 @@
 module;
 #include <cstdint>
 #include <memory>
+#include <string>
 export module Core.Memory:Buffer;
 import :MemoryManager;
 
 namespace SIByL::Core
 {
+	struct BufferStream;
+
 	export struct Buffer
 	{
 		Buffer();
@@ -17,67 +20,18 @@ namespace SIByL::Core
 		auto operator=(Buffer&& b) -> Buffer&;
 
 		auto release() noexcept -> void;
+		auto stream() noexcept -> BufferStream;
 
-		void* data;
-		size_t size;
+		void* data = nullptr;
+		size_t size = 0;
 	};
 
-	Buffer::Buffer()
-		:data(nullptr), size(0)
-	{}
-
-	Buffer::Buffer(size_t size)
-		:size(size)
+	export struct BufferStream
 	{
-		data = Alloc(size);
-	}
+		char* data;
 
-	Buffer::Buffer(Buffer const& b)
-	{
-		release();
-		size = b.size;
-		data = Alloc(size);
-		memcpy(data, b.data, size);
-	}
-
-	Buffer::Buffer(Buffer&& b)
-	{
-		release();
-		size = b.size;
-		data = b.data;
-		b.data = nullptr;
-		b.size = 0;
-	}
-
-	Buffer::~Buffer()
-	{
-		release();
-	}
-
-	auto Buffer::operator=(Buffer const& b)->Buffer&
-	{
-		release();
-		size = b.size;
-		data = Alloc(size);
-		memcpy(data, b.data, size);
-		return *this;
-	}
-
-	auto Buffer::operator=(Buffer&& b)->Buffer&
-	{
-		release();
-		size = b.size;
-		data = b.data;
-		b.data = nullptr;
-		b.size = 0;
-		return *this;
-	}
-
-	auto Buffer::release() noexcept -> void
-	{
-		if (data == nullptr) return;
-		Free(data, size);
-		data = nullptr;
-		size = 0;
-	}
+		auto operator<<(char c) -> BufferStream&;
+		auto operator<<(std::string const& string) -> BufferStream&;
+		auto operator<<(Core::Buffer const& buffer) -> BufferStream&;
+	};
 }

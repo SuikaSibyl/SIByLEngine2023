@@ -29,6 +29,13 @@ namespace SIByL::Tracer
 	
 	auto RGBSpectrum::fromSampled(float const* lambda, float const* v, int n) noexcept -> RGBSpectrum {
 		// Sort samples if unordered, use sorted for returned spectrum
+		if (!spectrumSamplesSorted(lambda, v, n)) {
+			std::vector<float> slambda(&lambda[0], &lambda[n]);
+			std::vector<float> sv(&v[0], &v[n]);
+			sortSpectrumSamples(slambda.data(), sv.data(), n);
+			return fromSampled(slambda.data(), sv.data(), n);
+		}
+
 		float xyz[3] = { 0,0,0 };
 		for (int i = 0; i < nCIESamples; ++i) {
 			float val = interpolateSpectrumSamples(lambda, v, n, CIE_lambda[i]);

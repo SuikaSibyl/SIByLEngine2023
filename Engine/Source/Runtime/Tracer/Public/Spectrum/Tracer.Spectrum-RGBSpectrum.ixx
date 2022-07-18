@@ -5,12 +5,12 @@ module;
 #include <algorithm>
 export module Tracer.Spectrum:RGBSpectrum;
 import :CoefficientSpectrum;
+import :Common;
 import Math.Limits;
 import Math.Common;
 
 namespace SIByL::Tracer
 {
-	export enum struct SpectrumType;
 	/**
 	* Represent SPDs with a weighted sum of red, green & blue components
 	*/
@@ -26,9 +26,9 @@ namespace SIByL::Tracer
 		* which is only used for keep the interface similar
 		* @see SampledSpectrum::fromRGB
 		*/
-		static auto fromRGB(float const rgb[3], SpectrumType type) noexcept -> RGBSpectrum;
+		static auto fromRGB(float const rgb[3], SpectrumType type = SpectrumType::Reflectance) noexcept -> RGBSpectrum;
 		/** Convert from a given XYZ to a RGB Spectrum representation */
-		static auto fromXYZ(float const xyz[3], SpectrumType type) noexcept -> RGBSpectrum;
+		static auto fromXYZ(float const xyz[3], SpectrumType type = SpectrumType::Reflectance) noexcept -> RGBSpectrum;
 		/** Convert from a given set of samples to a RGB Spectrum representation */
 		static auto fromSampled(float const* lambda, float const* v, int n) noexcept -> RGBSpectrum;
 

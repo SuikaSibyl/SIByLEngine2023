@@ -13,7 +13,7 @@ namespace SIByL::Math
 		union {
 			T data[3];
 			struct { T x, y, z; };
-			struct { T s, g, b; };
+			struct { T r, g, b; };
 			struct { T s, t, p; };
 		};
 

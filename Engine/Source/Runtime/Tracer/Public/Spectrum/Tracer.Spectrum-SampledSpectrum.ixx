@@ -7,6 +7,7 @@ export module Tracer.Spectrum:SampledSpectrum;
 import Math.Limits;
 import Math.Common;
 import :CoefficientSpectrum;
+import :Common;
 
 namespace SIByL::Tracer
 {
@@ -15,15 +16,6 @@ namespace SIByL::Tracer
 	inline constexpr size_t sampledLambdaStart = 400;
 	inline constexpr size_t sampledLambdaEnd = 700;
 	inline constexpr size_t nSpectralSamples = 60;
-
-	/**
-	* Convert RGB to Spectrum will use different coefficients
-	* when RGB represents surface reflection or an illuminaion
-	*/
-	export enum struct SpectrumType {
-		Reflectance,
-		Illuminant
-	};
 
 	/**
 	* Sampled Spectrum represent an SPD with uniformly spaced samples

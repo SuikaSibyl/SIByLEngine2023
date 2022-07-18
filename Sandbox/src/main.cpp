@@ -13,6 +13,9 @@ import Math.Transform;
 import Tracer.Ray;
 
 import Application.Root;
+import Image.Color;
+import Image.Image;
+import Image.FileFormat;
 
 using namespace SIByL;
 using namespace SIByL::Core;
@@ -20,36 +23,7 @@ using namespace SIByL::Math;
 
 int main()
 {
-	Application::Root root;
-
-	float test_f[4][4] = {
-		{2, -1, 0, 0},
-		{-1, 2, -1, 0},
-		{0, -1, 2, 0},
-		{0, 0, 0, 1}
-	};
-
-	float id[4][4] = {
-		{1, 0, 0, 0},
-		{0, 1, 0, 0},
-		{0, 0, 1, 0},
-		{0, 0, 0, 1}
-	};
-
-	size_t size;
-	Buffer image_binary;
-	syncReadFile("P:/SIByLEngine/Sandbox/cache/42", image_binary);
-
-	int* i = New<int>(1);
-	Delete<int>(i);
-
-	Buffer buffer(1000);
-	Buffer buffer2;
-	buffer2 = std::move(buffer);
-
-	mat4 test(id);
-	Quaternion quat1(test);
-	mat3 converted = quat1.toMat3();
-	Quaternion quat2 = { 1,2,3,4 };
-	Quaternion quat = normalize(quat2);
+	Image::Image<Image::COLOR_R32G32B32_FLOAT> image(720, 360);
+	Buffer buffer = Image::PFM::toPFM(image);
+	syncWriteFile("./test.pfm", buffer);
 }

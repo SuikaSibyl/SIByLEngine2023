@@ -32,7 +32,7 @@ namespace SIByL::Core
 		std::ofstream ofs(path.string().c_str(), std::ifstream::out);
 		if (ofs.is_open())
 		{
-			ofs << buffer.data;
+			ofs.write((char*)buffer.data, buffer.size);
 			ofs.close();
 		}
 		else

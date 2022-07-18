@@ -3,6 +3,15 @@ export module Tracer.Spectrum:Common;
 
 namespace SIByL::Tracer
 {
+    /**
+    * Convert RGB to Spectrum will use different coefficients
+    * when RGB represents surface reflection or an illuminaion
+    */
+    export enum struct SpectrumType {
+        Reflectance,
+        Illuminant
+    };
+
     export inline int constexpr    nCIESamples = 471;
     export inline float constexpr  CIE_Y_integral = 106.856895;
 
@@ -39,4 +48,9 @@ namespace SIByL::Tracer
     */
     export inline auto interpolateSpectrumSamples(const float* lambda, const float* vals, int n, float l) noexcept -> float;
 
+    export inline auto spectrumSamplesSorted(float const* lambda, float const* v, int n) noexcept -> bool;
+
+    export inline auto sortSpectrumSamples(float* lambda, float* v, int n) noexcept -> void;
+
+    export inline auto averageSpectrumSamples(float const* lambda, float const* v, int n, float lambda0, float lambda1) noexcept -> float;
 }
