@@ -23,7 +23,10 @@ using namespace SIByL::Math;
 
 int main()
 {
-	Image::Image<Image::COLOR_R32G32B32_FLOAT> image(720, 360);
-	Buffer buffer = Image::PFM::toPFM(image);
-	syncWriteFile("./test.pfm", buffer);
+	Application::Root root;
+
+	Image::Image<Image::COLOR_R8G8B8_UINT> image(4, 4);
+	image[0][0] = Image::COLOR_R8G8B8_UINT{200,200,200};
+	Buffer buffer = Image::PPM::toPPM(image);
+	syncWriteFile("./test.ppm", buffer);
 }

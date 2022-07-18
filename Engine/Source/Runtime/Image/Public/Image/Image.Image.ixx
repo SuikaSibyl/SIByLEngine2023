@@ -28,7 +28,7 @@ namespace SIByL::Image
 	template <class ColorStruct>
 	auto Image<ColorStruct>::operator[](size_t i)->ColorStruct*
 	{
-		return reinterpret_cast<ColorStruct*>(data.data)[i * width];
+		return &(reinterpret_cast<ColorStruct*>(data.data)[i * width]);
 	}
 
 }

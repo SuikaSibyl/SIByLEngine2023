@@ -12,7 +12,7 @@ namespace SIByL::Image
 	{
 		std::string width = std::to_string(i.width);
 		std::string height = std::to_string(i.height);
-		std::string byte_order = "1.0";
+		std::string byte_order = "-1.0";
 
 		Core::Buffer PFMBuffer(width.length() + height.length() +
 			byte_order.length() + 6 + i.data.size);
