@@ -4,6 +4,7 @@ module;
 export module Math.Geometry:Quaternion;
 import Math.Vector;
 import Math.Matrix;
+import Math.Common;
 
 namespace SIByL::Math
 {
@@ -15,7 +16,7 @@ namespace SIByL::Math
 		Quaternion(mat3 const& m);
 		Quaternion(mat4 const& m);
 
-		auto toMat3() noexcept -> mat3;
+		auto toMat3() const noexcept -> mat3;
 
 		auto lengthSquared() const -> float;
 		auto length() const -> float;
@@ -27,6 +28,7 @@ namespace SIByL::Math
 		auto operator+(Quaternion const& q2) const -> Quaternion;
 		auto operator*(Quaternion const& q2) const -> Quaternion;
 		auto operator+=(Quaternion const& q) -> Quaternion&;
+		auto operator-() const -> Quaternion;
 
 		union
 		{
@@ -48,6 +50,31 @@ namespace SIByL::Math
 	export inline auto normalize(Quaternion const& q) noexcept -> Quaternion
 	{
 		return q / std::sqrt(dot(q, q));
+	}
+
+	export auto operator*(float s, Quaternion const& q) -> Quaternion {
+		return Quaternion{ s * q.x,s * q.y,s * q.z,s * q.w };
+	}
+	
+	export auto operator*(Quaternion const& q, float s) -> Quaternion {
+		return Quaternion{ s * q.x,s * q.y,s * q.z,s * q.w };
+	}
+
+	export auto operator-(Quaternion const& q1, Quaternion const& q2) -> Quaternion {
+		return Quaternion{ q1.x - q2.x, q1.y - q2.y,q1.z - q2.z,q1.w - q2.w };
+	}
+
+	export inline auto slerp(float t, Quaternion const& q1, Quaternion const& q2) noexcept -> Quaternion
+	{
+		float cosTheta = dot(q1, q2);
+		if (cosTheta > .9995f)
+			return normalize((1 - t) * q1 + t * q2);
+		else {
+			float theta = std::acos(clamp(cosTheta, -1.f, 1.f));
+			float thetap = theta * t;
+			Quaternion qperp = normalize(q2 - q1 * cosTheta);
+			return q1 * std::cos(thetap) + qperp * std::sin(thetap);
+		}
 	}
 
 	// Quaternion::toMat3()
@@ -115,7 +142,7 @@ namespace SIByL::Math
 		return std::sqrt(lengthSquared());
 	}
 
-	auto Quaternion::toMat3() noexcept -> mat3
+	auto Quaternion::toMat3() const noexcept -> mat3
 	{
 		return mat3(
 			1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * x * z - y * w,
@@ -163,5 +190,8 @@ namespace SIByL::Math
 		s += q.s;
 		return *this;
 	}
-
+	
+	auto Quaternion::operator-() const->Quaternion {
+		return Quaternion{ -x,-y,-z,-w }; 
+	}
 }

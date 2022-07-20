@@ -16,6 +16,7 @@ namespace SIByL::Math
 		Transform(float const mat[4][4]);
 		Transform(mat4 const& m);
 		Transform(mat4 const& m, mat4 const& mInverse);
+		Transform(Quaternion const& q);
 
 		auto isIdentity() const noexcept -> bool;
 		auto hasScale() const noexcept -> bool;
@@ -33,7 +34,7 @@ namespace SIByL::Math
 
 		friend auto inverse(Transform const& t) noexcept -> Transform;
 		friend auto transpose(Transform const& t) noexcept -> Transform;
-	private:
+
 		mat4 m;
 		mat4 mInv;
 	};
@@ -51,4 +52,7 @@ namespace SIByL::Math
 	export inline auto lookAt(point3 const& pos, point3 const& look, vec3 const& up) noexcept -> Transform;
 	
 	export inline auto orthographic(float zNear, float zFar) noexcept -> Transform;
+
+	/** Decompose an affine transformation into Translation x Rotation x Scaling */
+	export inline auto decompose(mat4 const& m, vec3* t, Quaternion* rquat, mat4* s) noexcept -> void;
 }

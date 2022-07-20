@@ -12,12 +12,11 @@ namespace SIByL::Math
 {
 	export struct AnimatedTransform
 	{
-		//auto operator*(point3 const& p) const->point3;
-		//auto operator*(vec3 const& v) const->vec3;
-		//auto operator*(normal3 const& n) const->normal3;
-		//auto operator*(ray3 const& s) const->ray3;
-		//auto operator*(bounds3 const& b) const->bounds3;
-		//auto operator*(Transform const& t2) const->Transform;
+		AnimatedTransform(
+			Transform const* startTransform, float startTime,
+			Transform const* endTransform, float endTime);
+
+		auto interpolate(float time, Transform* t) const -> void;
 
 		Transform const* startTransform;
 		Transform const* endTransform;

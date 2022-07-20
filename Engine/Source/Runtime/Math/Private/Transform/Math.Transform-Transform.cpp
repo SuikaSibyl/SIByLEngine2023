@@ -21,6 +21,15 @@ namespace SIByL::Math
 
 	Transform::Transform(mat4 const& m, mat4 const& mInverse)
 		:m(m), mInv(mInverse) {}
+	
+	Transform::Transform(Quaternion const& q) {
+		mat3 mat3x3 = q.toMat3();
+		m = mat4{ mat3x3.data[0][0],mat3x3.data[0][1],mat3x3.data[0][2],0,
+				 mat3x3.data[1][0],mat3x3.data[1][1],mat3x3.data[2][2],0,
+				 mat3x3.data[2][0],mat3x3.data[2][1],mat3x3.data[2][2],0,
+				 0,0,0,1 };
+		mInv = inverse(m);
+	}
 
 	auto Transform::isIdentity() const noexcept -> bool
 	{
@@ -232,6 +241,47 @@ namespace SIByL::Math
 
 	inline auto orthographic(float zNear, float zFar) noexcept -> Transform {
 		return Math::scale(1, 1, 1.f / (zFar - zNear)) * Math::translate({ 0,0,-zNear });
+	}
+	
+	inline auto decompose(mat4 const& m, vec3* t, Quaternion* rquat, mat4* s) noexcept -> void {
+		// Extract translation T from transformation matrix
+		// which could be found directly from matrix
+		t->x = m.data[0][3];
+		t->y = m.data[1][3];
+		t->z = m.data[2][3];
+
+		// Compute new transformation matrix M without translation
+		mat4 M = m;
+		for (int i = 0; i < 3; i++)
+			M.data[i][3] = M.data[3][i] = 0.f;
+		M.data[3][3] = 1.f;
+
+		// Extract rotation R from transformation matrix
+		// use polar decomposition, decompose into R&S by averaging M with its inverse transpose
+		// until convergence to get R (because pure rotation matrix has similar inverse and transpose)
+		float norm;
+		int count = 0;
+		mat4 R = M;
+		do {
+			// Compute next matrix Rnext in series
+			mat4 rNext;
+			mat4 rInvTrans = inverse(transpose(R));
+			for (int i = 0; i < 4; ++i)
+				for (int j = 0; j < 4; ++j)
+					rNext.data[i][j] = 0.5f * (R.data[i][j] + rInvTrans.data[i][j]);
+			// Compute norm of difference between R and Rnext
+			norm = 0.f;
+			for (int i = 0; i < 3; ++i) {
+				float n = std::abs(R.data[i][0] = rNext.data[i][0]) +
+						  std::abs(R.data[i][1] = rNext.data[i][1]) +
+						  std::abs(R.data[i][2] = rNext.data[i][2]);
+				norm = std::max(norm, n);
+			}
+			R = rNext;
+		} while (++count < 100 && norm>.0001);
+		*rquat = Quaternion(R);
+		// Compute scale S using rotationand original matrix
+		*s = mul(inverse(R), M);
 	}
 
 }

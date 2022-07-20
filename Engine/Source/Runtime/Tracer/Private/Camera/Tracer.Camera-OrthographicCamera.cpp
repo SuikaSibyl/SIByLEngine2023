@@ -37,6 +37,26 @@ namespace SIByL::Tracer
 		ray->time = Math::lerp(sample.time, shutterOpen, shutterClose);
 		ray->medium = medium;
 		*ray = cameraToWorld * (*ray);
-		return 0.0f;
+		return 1;
 	}
+
+	auto OrthographicCamera::generateRayDifferential(CameraSample const& sample, RayDifferential* rd) noexcept -> float {
+		//// Compute main orthographic viewing ray
+		//// Compute ray differentials for OrthographicCamera
+		//if (lensRadius > 0) {
+		//	// Compute OrthographicCamera ray differentials accounting for lens
+		//}
+		//else {
+		//	rd->rxOrigin = rd->o + dxCamera;
+		//	rd->ryOrigin = rd->o + dyCamera;
+		//	rd->rxDirection = rd->ryDirection = rd->d;
+		//}
+
+		rd->time = Math::lerp(sample.time, shutterOpen, shutterClose);
+		rd->hasDifferentials = true;
+		rd->medium = medium;
+		*rd = cameraToWorld * (*rd);
+		return 1;
+	}
+
 }

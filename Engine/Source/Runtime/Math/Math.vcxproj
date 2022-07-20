@@ -137,6 +137,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Private\Transform\Math.Transform-AnimatedTransform.cpp" />
     <ClCompile Include="Private\Transform\Math.Transform-Transform.cpp" />
     <ClCompile Include="Public\Geometry\Math.Geometry-Bounds2.ixx" />
     <ClCompile Include="Public\Geometry\Math.Geometry-Bounds3.ixx" />

@@ -19,6 +19,7 @@ namespace SIByL::Math
 
 		auto operator==(Matrix4x4<T> const& t) const -> bool;
 		auto operator!=(Matrix4x4<T> const& t) const -> bool;
+		auto operator-() const ->Matrix4x4<T>;
 		operator Matrix3x3<T>() const;
 
 		T data[4][4] = {
@@ -57,6 +58,17 @@ namespace SIByL::Math
 	auto Matrix4x4<T>::operator!=(Matrix4x4<T> const& t) const -> bool
 	{
 		return !(*this == t);
+	}
+
+	template <class T>
+	auto Matrix4x4<T>::operator-() const -> Matrix4x4<T>
+	{
+		return Matrix4x4<T>{
+			-data[0][0], -data[0][1], -data[0][2], -data[0][3], 
+			-data[1][0], -data[1][1], -data[1][2], -data[1][3],
+			-data[2][0], -data[2][1], -data[2][2], -data[2][3],
+			-data[3][0], -data[3][1], -data[3][2], -data[3][3]
+		};
 	}
 
 	template <class T>

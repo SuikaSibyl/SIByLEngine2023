@@ -58,6 +58,10 @@ namespace SIByL::Math
 		return Vector2<U>(x, y);
 	}
 
+	export template <class S, class T> auto operator*(S s, Vector2<T> const& v) noexcept -> Vector2<T> {
+		return Vector2<T>{v.x* s, v.y* s};
+	}
+
 	export template <class T> inline auto abs(Vector2<T> const& v) noexcept -> T
 	{
 		T result;
