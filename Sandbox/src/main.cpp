@@ -13,6 +13,7 @@ import Math.Matrix;
 import Math.Limits;
 import Math.Transform;
 import Tracer.Ray;
+import Tracer.Camera;
 
 import Application.Root;
 import Image.Color;
