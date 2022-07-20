@@ -22,6 +22,9 @@
     <ClCompile Include="Private\Memory\Core.Memory-Allocator.cpp" />
     <ClCompile Include="Private\Memory\Core.Memory-Buffer.cpp" />
     <ClCompile Include="Private\Memory\Core.Memory-MemoryManager.cpp" />
+    <ClCompile Include="Public\Event\Core.Event-Event.ixx" />
+    <ClCompile Include="Public\Event\Core.Event-Signal.ixx" />
+    <ClCompile Include="Public\Event\Core.Event.ixx" />
     <ClCompile Include="Public\IO\Core.IO-File.ixx" />
     <ClCompile Include="Public\IO\Core.IO-SyncRW.ixx" />
     <ClCompile Include="Public\IO\Core.IO.ixx" />
