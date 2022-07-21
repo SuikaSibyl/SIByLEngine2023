@@ -141,6 +141,7 @@
     <ClCompile Include="Private\Camera\Tracer.Camera-OrthographicCamera.cpp" />
     <ClCompile Include="Private\Camera\Tracer.Camera-ProjectiveCamera.cpp" />
     <ClCompile Include="Private\Film\Tracer.Film-Film.cpp" />
+    <ClCompile Include="Private\Sampler\Tracer.Sampler-Sampler.cpp" />
     <ClCompile Include="Private\Spectrum\Tracer.Spectrum-Common.cpp" />
     <ClCompile Include="Private\Spectrum\Tracer.Spectrum-RGBSpectrum.cpp" />
     <ClCompile Include="Private\Spectrum\Tracer.Spectrum-SampledSpectrum.cpp" />
@@ -163,6 +164,7 @@
     <ClCompile Include="Public\Ray\Tracer.Ray-Ray.ixx" />
     <ClCompile Include="Public\Ray\Tracer.Ray-RayDifferential.ixx" />
     <ClCompile Include="Public\Ray\Tracer.Ray.ixx" />
+    <ClCompile Include="Public\Sampler\Tracer.Sampler-Sampler.ixx" />
     <ClCompile Include="Public\Sampler\Tracer.Sampler.ixx" />
     <ClCompile Include="Private\Shape\Tracer.Shape-Shape.cpp">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Default</CompileAs>
@@ -184,6 +186,9 @@
     </ProjectReference>
     <ProjectReference Include="..\Math\Math.vcxproj">
       <Project>{0eec40c7-807a-4d99-99a6-e3d329aea25d}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\Parallelism\Parallelism.vcxproj">
+      <Project>{d44bc11a-922a-43b5-8641-480b82bb1815}</Project>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

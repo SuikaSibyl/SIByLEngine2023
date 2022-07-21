@@ -1,6 +1,7 @@
 module;
 #include <atomic>
 module Parallelism.Atomic:AtomicFloat;
+import Parallelism.Atomic;
 
 namespace SIByL::Parallelism
 {

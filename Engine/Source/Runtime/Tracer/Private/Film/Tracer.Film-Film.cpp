@@ -26,5 +26,24 @@ namespace SIByL::Tracer
 										 std::ceil(fullResolution.y * cropWindow.pMin.y)),
 						   Math::ipoint2(std::ceil(fullResolution.x * cropWindow.pMax.x),
 										 std::ceil(fullResolution.y * cropWindow.pMax.y)));
+		// Allocate film image storage
+		pixels = std::unique_ptr<Pixel[]>(new Pixel[croppedPixelBounds.surfaceArea()]);
+		// Precompute filter weight table
+		int offset = 0;
+		for (int y = 0; y < filterTableWidth; ++y) {
+			for (int x = 0; x < filterTableWidth; ++x, ++offset) {
+				Math::point2 p;
+				p.x = (x + 0.5f) * filter->radius.x / filterTableWidth;
+				p.y = (y + 0.5f) * filter->radius.y / filterTableWidth;
+				filterTable[offset] = filter->evaluate(p);
+			}
+		}
+	}
+
+	auto Film::getPhysicalExtent() const noexcept -> Math::bounds2 {
+		float aspect = (float)fullResolution.y / (float)fullResolution.x;
+		float x = std::sqrt(diagonal * diagonal / (1 + aspect * aspect));
+		float y = aspect * x;
+		return Math::bounds2(Math::point2(-x / 2, -y / 2), Math::point2(x / 2, y / 2));
 	}
 }
