@@ -129,5 +129,14 @@
     <ClCompile Include="Private\Sampler\Tracer.Sampler-Sampler.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Primitive\Tracer.Primitive.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Primitive\Tracer.Primitive-Primitive.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Primitive\Tracer.Primitive-TransformedPrimitive.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

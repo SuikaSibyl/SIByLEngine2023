@@ -33,6 +33,7 @@ namespace SIByL::Tracer
 		/** Pixel bounds from the upper-left  to the lower-right corners of the crop window */
 		Math::ibounds2 croppedPixelBounds;
 
+		/** Get actual extent of the film in the scene */
 		auto getPhysicalExtent() const noexcept -> Math::bounds2;
 
 		/** Length of the diagnoal of the film's physical area in meters*/

@@ -1,6 +1,7 @@
 module;
 #include <cstdint>
 #include <utility>
+#include <memory>
 #include <type_traits>
 export module Core.Memory:MemoryManager;
 import Core.System;
@@ -8,6 +9,11 @@ import :Allocator;
 
 namespace SIByL::Core
 {
+	/**
+	* Memory Manager mainly use a set of Allocators to allocate memory from specific allocator.
+	* It is a Manager struct, whose singleton is store in Application::Root.
+	* @see Allocator
+	*/
 	export struct MemoryManager :public Manager
 	{
 		virtual auto startUp() noexcept -> void override;
@@ -25,27 +31,4 @@ namespace SIByL::Core
 	};
 	
 	MemoryManager* MemoryManager::singleton = nullptr;
-
-	export inline auto Alloc(size_t size) -> void*
-	{
-		return MemoryManager::get()->allocate(size);
-	}
-
-	export inline auto Free(void* p, size_t size) -> void
-	{
-		return MemoryManager::get()->free(p, size);
-	}
-
-	export template<typename T, typename... Args>
-		inline auto New(Args&&... args) noexcept -> T*
-	{
-		return ::new (MemoryManager::get()->allocate(sizeof(T))) T(std::forward<Args>(args)...);
-	}
-
-	export template<typename T>
-		inline auto Delete(T* p) noexcept -> void
-	{
-		reinterpret_cast<T*>(p)->~T();
-		MemoryManager::get()->free(p, sizeof(T));
-	}
 }

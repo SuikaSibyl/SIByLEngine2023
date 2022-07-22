@@ -161,6 +161,9 @@
     <ClCompile Include="Public\Interactions\Tracer.Interactions.ixx" />
     <ClCompile Include="Public\Medium\Tracer.Medium-Medium.ixx" />
     <ClCompile Include="Public\Medium\Tracer.Medium.ixx" />
+    <ClCompile Include="Public\Primitive\Tracer.Primitive-Primitive.ixx" />
+    <ClCompile Include="Public\Primitive\Tracer.Primitive-TransformedPrimitive.ixx" />
+    <ClCompile Include="Public\Primitive\Tracer.Primitive.ixx" />
     <ClCompile Include="Public\Ray\Tracer.Ray-Ray.ixx" />
     <ClCompile Include="Public\Ray\Tracer.Ray-RayDifferential.ixx" />
     <ClCompile Include="Public\Ray\Tracer.Ray.ixx" />

@@ -70,7 +70,7 @@ namespace SIByL::Core
 		if (pAlloc)
 			return pAlloc->allocate();
 		else
-			return ::malloc(size);
+			return AllocAligned(size);
 	}
 
 	auto MemoryManager::free(void* p, size_t size) noexcept -> void
@@ -79,7 +79,7 @@ namespace SIByL::Core
 		if (pAlloc)
 			pAlloc->free(p);
 		else
-			::free(p);
+			FreeAligned(p);
 	}
 
 	auto MemoryManager::lookUpAllocator(size_t size) noexcept -> Allocator*

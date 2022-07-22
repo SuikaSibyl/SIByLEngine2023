@@ -21,6 +21,7 @@
   <ItemGroup>
     <ClCompile Include="Private\Memory\Core.Memory-Allocator.cpp" />
     <ClCompile Include="Private\Memory\Core.Memory-Buffer.cpp" />
+    <ClCompile Include="Private\Memory\Core.Memory-MemoryArena.cpp" />
     <ClCompile Include="Private\Memory\Core.Memory-MemoryManager.cpp" />
     <ClCompile Include="Public\Event\Core.Event-Event.ixx" />
     <ClCompile Include="Public\Event\Core.Event-Signal.ixx" />
@@ -28,8 +29,11 @@
     <ClCompile Include="Public\IO\Core.IO-File.ixx" />
     <ClCompile Include="Public\IO\Core.IO-SyncRW.ixx" />
     <ClCompile Include="Public\IO\Core.IO.ixx" />
+    <ClCompile Include="Public\Memory\Core.Memory-BlockedArray.ixx" />
     <ClCompile Include="Public\Memory\Core.Memory-Buffer.ixx" />
     <ClCompile Include="Public\Memory\Core.Memory-DoubleEndedStackAllocator.ixx" />
+    <ClCompile Include="Public\Memory\Core.Memory-Memory.ixx" />
+    <ClCompile Include="Public\Memory\Core.Memory-MemoryArena.ixx" />
     <ClCompile Include="Public\Memory\Core.Memory-StackAllocator.ixx" />
     <ClCompile Include="Public\Print\Core.Log-Logger.ixx" />
     <ClCompile Include="Public\Print\Core.Log-LogManager.ixx" />
