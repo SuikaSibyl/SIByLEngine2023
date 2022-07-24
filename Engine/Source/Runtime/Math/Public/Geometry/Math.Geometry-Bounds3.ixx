@@ -28,7 +28,9 @@ namespace SIByL::Math
 		auto offset(Point3<T> const& p) const->Vector3<T>;
 		auto boundingSphere(Point3<T>* center, float* radius) const -> void;
 		
+		/** Test a ray-AABB intersection */
 		inline auto intersectP(ray3 const& ray, float* hitt0, float* hitt1) const -> bool;
+		/** Test a ray-AABB intersection, using precomputed values indicating negativity of each components. */
 		inline auto intersectP(ray3 const& ray, vec3 const& invDir, ivec3 dirIsNeg) const -> bool;
 
 		Point3<T> pMin;

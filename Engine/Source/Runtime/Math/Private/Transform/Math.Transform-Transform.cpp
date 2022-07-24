@@ -10,8 +10,7 @@ import Math.Trigonometric;
 
 namespace SIByL::Math
 {
-	Transform::Transform(float const mat[4][4])
-	{
+	Transform::Transform(float const mat[4][4]) {
 		m = mat4(mat);
 		mInv = inverse(m);
 	}
@@ -31,14 +30,12 @@ namespace SIByL::Math
 		mInv = inverse(m);
 	}
 
-	auto Transform::isIdentity() const noexcept -> bool
-	{
+	auto Transform::isIdentity() const noexcept -> bool {
 		static Transform identity;
 		return *this == identity;
 	}
 
-	auto Transform::hasScale() const noexcept -> bool
-	{
+	auto Transform::hasScale() const noexcept -> bool {
 		float la2 = ((*this) * vec3(1, 0, 0)).lengthSquared();
 		float lb2 = ((*this) * vec3(0, 1, 0)).lengthSquared();
 		float lc2 = ((*this) * vec3(0, 0, 1)).lengthSquared();
@@ -47,8 +44,7 @@ namespace SIByL::Math
 #undef NOT_ONE
 	}
 
-	auto Transform::swapsHandness() const noexcept -> bool
-	{
+	auto Transform::swapsHandness() const noexcept -> bool {
 		float det =
 			m.data[0][0] * (m.data[1][1] * m.data[2][2] - m.data[1][2] * m.data[2][1]) -
 			m.data[0][1] * (m.data[1][0] * m.data[2][2] - m.data[1][2] * m.data[2][0]) +
@@ -56,18 +52,15 @@ namespace SIByL::Math
 		return det < 0;
 	}
 
-	auto Transform::operator==(Transform const& t) const -> bool
-	{
+	auto Transform::operator==(Transform const& t) const -> bool {
 		return m == t.m;
 	}
 
-	auto Transform::operator!=(Transform const& t) const -> bool
-	{
+	auto Transform::operator!=(Transform const& t) const -> bool {
 		return !(*this == t);
 	}
 
-	auto Transform::operator*(point3 const& p) const -> point3
-	{
+	auto Transform::operator*(point3 const& p) const -> point3 {
 		vec3 s(
 			m.data[0][0] * p.x + m.data[0][1] * p.y + m.data[0][2] * p.z + m.data[0][3],
 			m.data[1][0] * p.x + m.data[1][1] * p.y + m.data[1][2] * p.z + m.data[1][3],
@@ -76,8 +69,7 @@ namespace SIByL::Math
 		return point3(s);
 	}
 
-	auto Transform::operator*(vec3 const& v) const -> vec3
-	{
+	auto Transform::operator*(vec3 const& v) const -> vec3 {
 		return vec3{
 			m.data[0][0] * v.x + m.data[0][1] * v.y + m.data[0][2] * v.z,
 			m.data[1][0] * v.x + m.data[1][1] * v.y + m.data[1][2] * v.z,
@@ -85,8 +77,7 @@ namespace SIByL::Math
 		};
 	}
 
-	auto Transform::operator*(normal3 const& n) const -> normal3
-	{
+	auto Transform::operator*(normal3 const& n) const -> normal3 {
 		return normal3{
 			mInv.data[0][0] * n.x + mInv.data[1][0] * n.y + mInv.data[2][0] * n.z,
 			mInv.data[0][1] * n.x + mInv.data[1][1] * n.y + mInv.data[2][1] * n.z,
@@ -94,16 +85,16 @@ namespace SIByL::Math
 		};
 	}
 
-	auto Transform::operator*(ray3 const& s) const -> ray3
-	{
+	auto Transform::operator*(ray3 const& s) const -> ray3 {
+		// offset ray origin to edge of error bounds and compute tMax
+
 		return ray3{
 			(*this) * s.o,
 			(*this) * s.d,
 		};
 	}
 
-	auto Transform::operator*(bounds3 const& b) const -> bounds3
-	{
+	auto Transform::operator*(bounds3 const& b) const -> bounds3 {
 		Transform const& m = *this;
 		bounds3 ret(m * point3(b.pMin.x, b.pMin.y, b.pMin.z));
 		ret = unionPoint(ret, m * point3(b.pMax.x, b.pMin.y, b.pMin.z));
@@ -116,24 +107,20 @@ namespace SIByL::Math
 		return ret;
 	}
 
-	auto Transform::operator*(Transform const& t2) const -> Transform
-	{
+	auto Transform::operator*(Transform const& t2) const -> Transform {
 		return Transform(mul(m, t2.m),
 			mul(t2.mInv, mInv));
 	}
 
-	inline auto inverse(Transform const& t) noexcept -> Transform
-	{
+	inline auto inverse(Transform const& t) noexcept -> Transform {
 		return Transform(t.mInv, t.m);
 	}
 
-	inline auto transpose(Transform const& t) noexcept -> Transform
-	{
+	inline auto transpose(Transform const& t) noexcept -> Transform {
 		return Transform(transpose(t.m), transpose(t.mInv));
 	}
 
-	inline auto translate(vec3 const& delta) noexcept -> Transform
-	{
+	inline auto translate(vec3 const& delta) noexcept -> Transform {
 		mat4 m(1, 0, 0, delta.x,
 			0, 1, 0, delta.y,
 			0, 0, 1, delta.z,
@@ -147,8 +134,7 @@ namespace SIByL::Math
 		return Transform(m, minv);
 	}
 
-	inline auto scale(float x, float y, float z) noexcept -> Transform
-	{
+	inline auto scale(float x, float y, float z) noexcept -> Transform {
 		mat4 m(x, 0, 0, 0,
 			0, y, 0, 0,
 			0, 0, z, 0,
@@ -162,8 +148,7 @@ namespace SIByL::Math
 		return Transform(m, minv);
 	}
 
-	inline auto rotateX(float theta) noexcept -> Transform
-	{
+	inline auto rotateX(float theta) noexcept -> Transform {
 		float sinTheta = std::sin(Math::radians(theta));
 		float cosTheta = std::cos(Math::radians(theta));
 		mat4 m(1, 0, 0, 0,
@@ -173,8 +158,7 @@ namespace SIByL::Math
 		return Transform(m, transpose(m));
 	}
 
-	inline auto rotateY(float theta) noexcept -> Transform
-	{
+	inline auto rotateY(float theta) noexcept -> Transform {
 		float sinTheta = std::sin(Math::radians(theta));
 		float cosTheta = std::cos(Math::radians(theta));
 		mat4 m(cosTheta, 0, sinTheta, 0,
@@ -184,8 +168,7 @@ namespace SIByL::Math
 		return Transform(m, transpose(m));
 	}
 
-	inline auto rotateZ(float theta) noexcept -> Transform
-	{
+	inline auto rotateZ(float theta) noexcept -> Transform {
 		float sinTheta = std::sin(Math::radians(theta));
 		float cosTheta = std::cos(Math::radians(theta));
 		mat4 m(cosTheta, -sinTheta, 0, 0,
@@ -195,8 +178,7 @@ namespace SIByL::Math
 		return Transform(m, transpose(m));
 	}
 
-	inline auto rotate(float theta, vec3 const& axis) noexcept -> Transform
-	{
+	inline auto rotate(float theta, vec3 const& axis) noexcept -> Transform {
 		vec3 a = normalize(axis);
 		float sinTheta = std::sin(Math::radians(theta));
 		float cosTheta = std::cos(Math::radians(theta));
@@ -220,8 +202,7 @@ namespace SIByL::Math
 		return Transform(m, transpose(m));
 	}
 
-	inline auto lookAt(point3 const& pos, point3 const& look, vec3 const& up) noexcept -> Transform
-	{
+	inline auto lookAt(point3 const& pos, point3 const& look, vec3 const& up) noexcept -> Transform {
 		mat4 cameraToWorld;
 		// move to position
 		cameraToWorld.data[0][3] = pos.x;

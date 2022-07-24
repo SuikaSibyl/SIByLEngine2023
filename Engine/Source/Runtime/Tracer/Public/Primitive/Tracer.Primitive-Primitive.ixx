@@ -1,4 +1,5 @@
 export module Tracer.Primitive:Primitive;
+import Core.Memory;
 import Math.Geometry;
 import Tracer.Ray;
 import Tracer.Interactions;
@@ -29,6 +30,8 @@ namespace SIByL::Tracer
 
 		//virtual auto computeScatteringFunctions(
 		//	SurfaceInteraction* isec,
+		//	Core::MemoryArena& arena,
+
 		//	) const noexcept ->
 	};
 }

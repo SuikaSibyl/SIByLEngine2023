@@ -138,5 +138,26 @@
     <ClCompile Include="Public\Primitive\Tracer.Primitive-TransformedPrimitive.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Private\Interactions\Tracer.Interactions-Interaction.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Light\Tracer.Light.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Light\Tracer.Light-Light.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Medium\Tracer.Medium-MediumInterface.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Interactions\Tracer.Interactions-MediumInteraction.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Medium\Tracer.Medium-PhaseFunction.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Private\Shape\Tracer.Shape-Sphere.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

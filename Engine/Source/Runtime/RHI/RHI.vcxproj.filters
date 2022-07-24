@@ -15,22 +15,16 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Public\Window\Platform.Window.ixx">
+    <ClCompile Include="Public\Device\RHI.Device.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Private\Window\Platform.Window-Win64.cpp">
+    <ClCompile Include="Public\Device\RHI.Device-Adapter.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Window\Platform.Window-Win64.ixx">
+    <ClCompile Include="Public\Device\RHI.Device-Device.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Window\Platform.Window-Window.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Window\Platform.Window-GLFW.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Private\Window\Platform.Window-GLFW.cpp">
+    <ClCompile Include="Public\Device\RHI.Device-Enums.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

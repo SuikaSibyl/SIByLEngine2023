@@ -23,6 +23,7 @@
     <ClCompile Include="Private\Memory\Core.Memory-Buffer.cpp" />
     <ClCompile Include="Private\Memory\Core.Memory-MemoryArena.cpp" />
     <ClCompile Include="Private\Memory\Core.Memory-MemoryManager.cpp" />
+    <ClCompile Include="Private\Memory\Core.Memory-StackAllocator.cpp" />
     <ClCompile Include="Public\Event\Core.Event-Event.ixx" />
     <ClCompile Include="Public\Event\Core.Event-Signal.ixx" />
     <ClCompile Include="Public\Event\Core.Event.ixx" />

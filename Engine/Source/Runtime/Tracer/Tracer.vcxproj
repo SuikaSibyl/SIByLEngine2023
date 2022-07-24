@@ -141,7 +141,9 @@
     <ClCompile Include="Private\Camera\Tracer.Camera-OrthographicCamera.cpp" />
     <ClCompile Include="Private\Camera\Tracer.Camera-ProjectiveCamera.cpp" />
     <ClCompile Include="Private\Film\Tracer.Film-Film.cpp" />
+    <ClCompile Include="Private\Interactions\Tracer.Interactions-Interaction.cpp" />
     <ClCompile Include="Private\Sampler\Tracer.Sampler-Sampler.cpp" />
+    <ClCompile Include="Private\Shape\Tracer.Shape-Sphere.cpp" />
     <ClCompile Include="Private\Spectrum\Tracer.Spectrum-Common.cpp" />
     <ClCompile Include="Private\Spectrum\Tracer.Spectrum-RGBSpectrum.cpp" />
     <ClCompile Include="Private\Spectrum\Tracer.Spectrum-SampledSpectrum.cpp" />
@@ -157,9 +159,14 @@
     <ClCompile Include="Public\Integrator\Tracer.Integrator-SamplerIntegrator.ixx" />
     <ClCompile Include="Public\Integrator\Tracer.Integrator.ixx" />
     <ClCompile Include="Public\Interactions\Tracer.Interactions-Interaction.ixx" />
+    <ClCompile Include="Public\Interactions\Tracer.Interactions-MediumInteraction.ixx" />
     <ClCompile Include="Public\Interactions\Tracer.Interactions-SurfaceInteraction.ixx" />
     <ClCompile Include="Public\Interactions\Tracer.Interactions.ixx" />
+    <ClCompile Include="Public\Light\Tracer.Light-Light.ixx" />
+    <ClCompile Include="Public\Light\Tracer.Light.ixx" />
     <ClCompile Include="Public\Medium\Tracer.Medium-Medium.ixx" />
+    <ClCompile Include="Public\Medium\Tracer.Medium-MediumInterface.ixx" />
+    <ClCompile Include="Public\Medium\Tracer.Medium-PhaseFunction.ixx" />
     <ClCompile Include="Public\Medium\Tracer.Medium.ixx" />
     <ClCompile Include="Public\Primitive\Tracer.Primitive-Primitive.ixx" />
     <ClCompile Include="Public\Primitive\Tracer.Primitive-TransformedPrimitive.ixx" />
@@ -184,6 +191,9 @@
     <ClCompile Include="Public\Spectrum\Tracer.Spectrum.ixx" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Core\Core.vcxproj">
+      <Project>{cadb2da2-56fd-47f9-817b-aafa42378dd9}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\GFX\GFX.vcxproj">
       <Project>{587f5443-b048-4a7a-b773-fe5b6ba0728a}</Project>
     </ProjectReference>
