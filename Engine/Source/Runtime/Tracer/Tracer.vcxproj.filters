@@ -159,5 +159,8 @@
     <ClCompile Include="Private\Shape\Tracer.Shape-Sphere.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Private\Ray\Tracer.Ray-Ray.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

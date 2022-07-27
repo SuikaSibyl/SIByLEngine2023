@@ -142,6 +142,7 @@
     <ClCompile Include="Private\Camera\Tracer.Camera-ProjectiveCamera.cpp" />
     <ClCompile Include="Private\Film\Tracer.Film-Film.cpp" />
     <ClCompile Include="Private\Interactions\Tracer.Interactions-Interaction.cpp" />
+    <ClCompile Include="Private\Ray\Tracer.Ray-Ray.cpp" />
     <ClCompile Include="Private\Sampler\Tracer.Sampler-Sampler.cpp" />
     <ClCompile Include="Private\Shape\Tracer.Shape-Sphere.cpp" />
     <ClCompile Include="Private\Spectrum\Tracer.Spectrum-Common.cpp" />

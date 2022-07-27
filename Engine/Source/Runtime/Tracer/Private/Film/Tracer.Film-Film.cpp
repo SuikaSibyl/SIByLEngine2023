@@ -29,15 +29,15 @@ namespace SIByL::Tracer
 		// Allocate film image storage
 		pixels = std::unique_ptr<Pixel[]>(new Pixel[croppedPixelBounds.surfaceArea()]);
 		// Precompute filter weight table
-		int offset = 0;
-		for (int y = 0; y < filterTableWidth; ++y) {
-			for (int x = 0; x < filterTableWidth; ++x, ++offset) {
-				Math::point2 p;
-				p.x = (x + 0.5f) * filter->radius.x / filterTableWidth;
-				p.y = (y + 0.5f) * filter->radius.y / filterTableWidth;
-				filterTable[offset] = filter->evaluate(p);
-			}
-		}
+		//int offset = 0;
+		//for (int y = 0; y < filterTableWidth; ++y) {
+		//	for (int x = 0; x < filterTableWidth; ++x, ++offset) {
+		//		Math::point2 p;
+		//		p.x = (x + 0.5f) * filter->radius.x / filterTableWidth;
+		//		p.y = (y + 0.5f) * filter->radius.y / filterTableWidth;
+		//		filterTable[offset] = filter->evaluate(p);
+		//	}
+		//}
 	}
 
 	auto Film::getPhysicalExtent() const noexcept -> Math::bounds2 {

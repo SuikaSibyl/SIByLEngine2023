@@ -34,6 +34,8 @@ namespace SIByL::Tracer
 			SurfaceInteraction* isect,
 			bool testAlphaTexture = true) const -> bool override;
 
+		/** @see Shape::area() */
+		virtual auto area() const noexcept -> float override { return 0.f; }
 
 		float const radius;
 		float const zMin, zMax;

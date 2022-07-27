@@ -105,7 +105,13 @@ namespace SIByL::Platform
 
 	auto Window_Win64::resize(size_t x, size_t y) noexcept -> void
 	{
-		SetWindowPos(wndHandle, 0, 0, 0, x, y, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+		RECT rcClient, rcWind;
+		POINT ptDiff;
+		GetClientRect(wndHandle, &rcClient);
+		GetWindowRect(wndHandle, &rcWind);
+		ptDiff.x = (rcWind.right - rcWind.left) - rcClient.right;
+		ptDiff.y = (rcWind.bottom - rcWind.top) - rcClient.bottom;
+		MoveWindow(wndHandle, rcWind.left, rcWind.top, x + ptDiff.x, y + ptDiff.y, TRUE);
 	}
 
 	auto Window_Win64::wndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)noexcept -> LRESULT {
@@ -163,6 +169,10 @@ namespace SIByL::Platform
 
 	auto Window_Win64::isRunning() noexcept -> bool {
 		return !shouldQuit;
+	}
+
+	auto Window_Win64::getHighDPI() noexcept -> float {
+		return 1. * GetDpiForWindow(wndHandle) / 96;
 	}
 
 	auto paintRGB8Bitmap(HDC& hdc, size_t width, size_t height, char* data) -> void

@@ -7,6 +7,7 @@ import Math.Matrix;
 import Math.Vector;
 import Math.Geometry;
 import Math.Trigonometric;
+import Math.RoundingError;
 
 namespace SIByL::Math
 {
@@ -86,12 +87,18 @@ namespace SIByL::Math
 	}
 
 	auto Transform::operator*(ray3 const& s) const -> ray3 {
+		vec3 oError;
+		point3 o = (*this) * s.o;
+		vec3 d = (*this) * s.d;
 		// offset ray origin to edge of error bounds and compute tMax
-
-		return ray3{
-			(*this) * s.o,
-			(*this) * s.d,
-		};
+		float lengthSquared = d.lengthSquared();
+		float tMax = s.tMax;
+		if (lengthSquared > 0) {
+			float dt = dot((vec3)abs(d), oError) / lengthSquared;
+			o += d * dt;
+			tMax -= dt;
+		}
+		return ray3{o, d, tMax };
 	}
 
 	auto Transform::operator*(bounds3 const& b) const -> bounds3 {
@@ -110,6 +117,110 @@ namespace SIByL::Math
 	auto Transform::operator*(Transform const& t2) const -> Transform {
 		return Transform(mul(m, t2.m),
 			mul(t2.mInv, mInv));
+	}
+	
+	auto Transform::operator()(point3 const& p, vec3& absError) const->point3 {
+		// Compute transformed coordinates from point p
+		vec3 s(
+			(m.data[0][0] * p.x + m.data[0][1] * p.y) + (m.data[0][2] * p.z + m.data[0][3]),
+			(m.data[1][0] * p.x + m.data[1][1] * p.y) + (m.data[1][2] * p.z + m.data[1][3]),
+			(m.data[2][0] * p.x + m.data[2][1] * p.y) + (m.data[2][2] * p.z + m.data[2][3]));
+		float wp = m.data[3][0] * p.x + m.data[3][1] * p.y + m.data[3][2] * p.z + m.data[3][3];
+		// Compute absolute error for transformed point
+		float xAbsSum = (std::abs(m.data[0][0] * p.x) + std::abs(m.data[0][1] * p.y) +
+						 std::abs(m.data[0][2] * p.z) + std::abs(m.data[0][3]));
+		float yAbsSum = (std::abs(m.data[1][0] * p.x) + std::abs(m.data[1][1] * p.y) +
+						 std::abs(m.data[1][2] * p.z) + std::abs(m.data[1][3]));
+		float zAbsSum = (std::abs(m.data[2][0] * p.x) + std::abs(m.data[2][1] * p.y) +
+						 std::abs(m.data[2][2] * p.z) + std::abs(m.data[2][3]));
+		// TODO :: FIX absError bug when (wp!=1)
+		absError = gamma(3) * vec3(xAbsSum, yAbsSum, zAbsSum);
+		// return transformed point
+		if (wp == 1) return s;
+		else         return s / wp;
+	}
+
+	auto Transform::operator()(point3 const& p, vec3 const& pError, vec3& tError) const->point3 {
+		// Compute transformed coordinates from point p
+		vec3 s(
+			(m.data[0][0] * p.x + m.data[0][1] * p.y) + (m.data[0][2] * p.z + m.data[0][3]),
+			(m.data[1][0] * p.x + m.data[1][1] * p.y) + (m.data[1][2] * p.z + m.data[1][3]),
+			(m.data[2][0] * p.x + m.data[2][1] * p.y) + (m.data[2][2] * p.z + m.data[2][3]));
+		float wp = m.data[3][0] * p.x + m.data[3][1] * p.y + m.data[3][2] * p.z + m.data[3][3];
+		// Compute absolute error for transformed point
+		float xAbsSum = (std::abs(m.data[0][0] * p.x) + std::abs(m.data[0][1] * p.y) +
+			std::abs(m.data[0][2] * p.z) + std::abs(m.data[0][3]));
+		float yAbsSum = (std::abs(m.data[1][0] * p.x) + std::abs(m.data[1][1] * p.y) +
+			std::abs(m.data[1][2] * p.z) + std::abs(m.data[1][3]));
+		float zAbsSum = (std::abs(m.data[2][0] * p.x) + std::abs(m.data[2][1] * p.y) +
+			std::abs(m.data[2][2] * p.z) + std::abs(m.data[2][3]));
+		float xPError = std::abs(m.data[0][0]) * pError.x + std::abs(m.data[0][1]) * pError.y +
+			std::abs(m.data[0][2]) * pError.z;
+		float yPError = std::abs(m.data[1][0]) * pError.x + std::abs(m.data[1][1]) * pError.y +
+			std::abs(m.data[1][2]) * pError.z;
+		float zPError = std::abs(m.data[2][0]) * pError.x + std::abs(m.data[2][1]) * pError.y +
+			std::abs(m.data[2][2]) * pError.z;
+		// TODO :: FIX absError bug when (wp!=1)
+		tError = gamma(3) * vec3(xAbsSum, yAbsSum, zAbsSum)
+			+ (gamma(3) + 1) * vec3(xPError, yPError, zPError);
+		// return transformed point
+		if (wp == 1) return s;
+		else         return s / wp;
+	}
+
+	auto Transform::operator()(vec3 const& v, vec3& absError) const->vec3 {
+		absError.x = gamma(3) * (std::abs(m.data[0][0] * v.x) + std::abs(m.data[0][1] * v.y) +
+				std::abs(m.data[0][2] * v.z));
+		absError.y = gamma(3) * (std::abs(m.data[1][0] * v.x) + std::abs(m.data[1][1] * v.y) +
+				std::abs(m.data[1][2] * v.z));
+		absError.z = gamma(3) * (std::abs(m.data[2][0] * v.x) + std::abs(m.data[2][1] * v.y) +
+				std::abs(m.data[2][2] * v.z));
+
+		return vec3{
+			m.data[0][0] * v.x + m.data[0][1] * v.y + m.data[0][2] * v.z,
+			m.data[1][0] * v.x + m.data[1][1] * v.y + m.data[1][2] * v.z,
+			m.data[2][0] * v.x + m.data[2][1] * v.y + m.data[2][2] * v.z
+		};
+	}
+
+	auto Transform::operator()(vec3 const& v, vec3 const& pError, vec3& tError) const->vec3 {
+		// Compute absolute error for transformed point
+		float xAbsSum = (std::abs(m.data[0][0] * v.x) + std::abs(m.data[0][1] * v.y) +
+			std::abs(m.data[0][2] * v.z));
+		float yAbsSum = (std::abs(m.data[1][0] * v.x) + std::abs(m.data[1][1] * v.y) +
+			std::abs(m.data[1][2] * v.z));
+		float zAbsSum = (std::abs(m.data[2][0] * v.x) + std::abs(m.data[2][1] * v.y) +
+			std::abs(m.data[2][2] * v.z));
+		float xPError = std::abs(m.data[0][0]) * pError.x + std::abs(m.data[0][1]) * pError.y +
+			std::abs(m.data[0][2]) * pError.z;
+		float yPError = std::abs(m.data[1][0]) * pError.x + std::abs(m.data[1][1]) * pError.y +
+			std::abs(m.data[1][2]) * pError.z;
+		float zPError = std::abs(m.data[2][0]) * pError.x + std::abs(m.data[2][1]) * pError.y +
+			std::abs(m.data[2][2]) * pError.z;
+
+		// TODO :: FIX absError bug when (wp!=1)
+		tError = gamma(3) * vec3(xAbsSum, yAbsSum, zAbsSum)
+			+ (gamma(3) + 1) * vec3(xPError, yPError, zPError);
+
+		return vec3{
+			m.data[0][0] * v.x + m.data[0][1] * v.y + m.data[0][2] * v.z,
+			m.data[1][0] * v.x + m.data[1][1] * v.y + m.data[1][2] * v.z,
+			m.data[2][0] * v.x + m.data[2][1] * v.y + m.data[2][2] * v.z
+		};
+	}
+
+	auto Transform::operator()(ray3 const& r, vec3& oError, vec3& dError) const -> ray3 {
+		point3 o = (*this)(r.o, oError);
+		vec3 d = (*this)(r.d, dError);
+		// offset ray origin to edge of error bounds and compute tMax
+		float lengthSquared = d.lengthSquared();
+		float tMax = r.tMax;
+		if (lengthSquared > 0) {
+			float dt = dot((vec3)abs(d), oError) / lengthSquared;
+			o += d * dt;
+			tMax -= dt;
+		}
+		return ray3{ o, d, tMax };
 	}
 
 	inline auto inverse(Transform const& t) noexcept -> Transform {

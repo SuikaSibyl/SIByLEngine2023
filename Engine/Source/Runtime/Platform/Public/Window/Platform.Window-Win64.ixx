@@ -17,6 +17,7 @@ namespace SIByL::Platform
 		auto resize(size_t x, size_t y) noexcept -> void;
 		auto destroy() noexcept -> void;
 		auto isRunning() noexcept -> bool;
+		auto getHighDPI() noexcept -> float;
 
 		Core::EventSignal<HDC&> onPaintSignal;
 

@@ -17,8 +17,8 @@ namespace SIByL::Tracer
 	export struct Film
 	{
 		/**
-		* @param resolution:   resolution of the image in pixels
-		* @param cropWindow: Specify a subset of image to render, In NDC space with each coordinate ranging from 0-1
+		* @param resolution: Resolution of the image in pixels
+		* @param cropWindow: Specify a subset of image to render, In NDC space with each coordinate ranging in [0-1]
 		*					 Film only allocates space for and store pixel values in the region inside the crop window.
 		* @param diagonal  : Length of the diagnoal of the film's physical area in millimeters
 		* @param filt	   : A filter function

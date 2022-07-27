@@ -14,6 +14,8 @@ namespace SIByL::Math
 		ray3(Math::point3 const& o, Math::vec3 const& d, float tMax = Math::float_infinity)
 			:o(o), d(d), tMax(tMax) {}
 
+		auto operator()(float t) const -> Math::point3;
+
 		/** origin */
 		point3 o;
 		/** direction */
@@ -21,4 +23,9 @@ namespace SIByL::Math
 		/** restrict the ray to segment [0,r(tMax)]*/
 		mutable float tMax;
 	};
+
+	auto ray3::operator()(float t) const->Math::point3 {
+		return o + (d - o) * tMax;
+	}
+
 }

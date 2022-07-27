@@ -26,7 +26,7 @@ namespace SIByL::Tracer
 		/** A medium containing its origin */
 		Medium const* medium;
 
-		operator Math::ray3() { return Math::ray3{ o,d,tMax }; }
+		operator Math::ray3() const { return Math::ray3{ o,d,tMax }; }
 		Math::point3 operator()(float t) const { return o + d * t; }
 	};
 }

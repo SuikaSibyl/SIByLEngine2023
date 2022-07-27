@@ -138,6 +138,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Private\Random\Math.Random-RNG.cpp" />
+    <ClCompile Include="Private\Utility\Math.EquationSolving.cpp" />
+    <ClCompile Include="Private\Utility\Math.RoundingError.cpp" />
     <ClCompile Include="Private\Transform\Math.Transform-AnimatedTransform.cpp" />
     <ClCompile Include="Private\Transform\Math.Transform-Transform.cpp" />
     <ClCompile Include="Public\Geometry\Math.Geometry-Bounds2.ixx" />
@@ -154,6 +156,8 @@
     <ClCompile Include="Public\Matrix\Math.Matrix.ixx" />
     <ClCompile Include="Public\Random\Math.Random-RNG.ixx" />
     <ClCompile Include="Public\Random\Math.Random.ixx" />
+    <ClCompile Include="Public\Utility\Math.EquationSolving.ixx" />
+    <ClCompile Include="Public\Utility\Math.RoundingError.ixx" />
     <ClCompile Include="Public\Transform\Math.Transform-AnimatedTransform.ixx" />
     <ClCompile Include="Public\Transform\Math.Transform-Transform.ixx" />
     <ClCompile Include="Public\Transform\Math.Transform.ixx" />

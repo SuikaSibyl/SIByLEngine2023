@@ -32,6 +32,12 @@ namespace SIByL::Math
 		auto operator*(bounds3 const& b) const -> bounds3;
 		auto operator*(Transform const& t2) const-> Transform;
 
+		auto operator()(point3 const& p, vec3& absError) const -> point3;
+		auto operator()(point3 const& p, vec3 const& pError, vec3& tError) const -> point3;
+		auto operator()(vec3 const& v, vec3& absError) const -> vec3;
+		auto operator()(vec3 const& v, vec3 const& pError, vec3& tError) const -> vec3;
+		auto operator()(ray3 const& r, vec3& oError, vec3& dError) const -> ray3;
+
 		friend auto inverse(Transform const& t) noexcept -> Transform;
 		friend auto transpose(Transform const& t) noexcept -> Transform;
 
