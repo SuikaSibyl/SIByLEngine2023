@@ -33,5 +33,11 @@
     <ClCompile Include="Private\Window\Platform.Window-GLFW.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\System\Platform.System.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\System\Platform.System-Win64.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

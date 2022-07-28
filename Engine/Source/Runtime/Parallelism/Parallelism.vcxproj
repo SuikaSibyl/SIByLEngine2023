@@ -143,6 +143,17 @@
     <ClCompile Include="Public\Parallel\Parallelism.Parallel-ParallelFor.ixx" />
     <ClCompile Include="Public\Parallel\Parallelism.Parallel.ixx" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Core\Core.vcxproj">
+      <Project>{cadb2da2-56fd-47f9-817b-aafa42378dd9}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\Math\Math.vcxproj">
+      <Project>{0eec40c7-807a-4d99-99a6-e3d329aea25d}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\Platform\Platform.vcxproj">
+      <Project>{05b6310e-59bc-496a-ad4f-ccdd23c7f04d}</Project>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

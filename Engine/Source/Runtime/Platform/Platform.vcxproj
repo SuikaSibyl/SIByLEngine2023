@@ -141,6 +141,8 @@
   <ItemGroup>
     <ClCompile Include="Private\Window\Platform.Window-GLFW.cpp" />
     <ClCompile Include="Private\Window\Platform.Window-Win64.cpp" />
+    <ClCompile Include="Public\System\Platform.System-Win64.ixx" />
+    <ClCompile Include="Public\System\Platform.System.ixx" />
     <ClCompile Include="Public\Window\Platform.Window-GLFW.ixx" />
     <ClCompile Include="Public\Window\Platform.Window-Win64.ixx" />
     <ClCompile Include="Public\Window\Platform.Window-Window.ixx" />
