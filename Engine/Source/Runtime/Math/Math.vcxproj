@@ -163,6 +163,7 @@
     <ClCompile Include="Public\Transform\Math.Transform.ixx" />
     <ClCompile Include="Public\Utility\Math.Common.ixx" />
     <ClCompile Include="Public\Utility\Math.Limits.ixx" />
+    <ClCompile Include="Public\Utility\Math.SIMD.ixx" />
     <ClCompile Include="Public\Utility\Math.Trigonometric.ixx" />
     <ClCompile Include="Public\Vector\Math.Vector-Vector2.ixx" />
     <ClCompile Include="Public\Vector\Math.Vector-Vector3.ixx" />

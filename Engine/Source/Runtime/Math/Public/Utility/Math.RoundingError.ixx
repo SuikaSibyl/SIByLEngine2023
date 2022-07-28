@@ -15,7 +15,7 @@ namespace SIByL::Math
 
 	/** machine epsilon is a conservative relative error for floating-point rounding */
 	export inline float MachineEpsilon = std::numeric_limits<float>::epsilon() * 0.5f;
-	/* tight bound of (1¡À¦Å)^n given by Higham */
+	/* tight bound of (1ï¿½ï¿½ï¿½ï¿½)^n given by Higham */
 	export inline auto gamma(int n) noexcept -> float;
 	
 	/**

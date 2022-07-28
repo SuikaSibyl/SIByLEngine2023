@@ -108,5 +108,8 @@
     <ClCompile Include="Private\Utility\Math.EquationSolving.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Utility\Math.SIMD.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

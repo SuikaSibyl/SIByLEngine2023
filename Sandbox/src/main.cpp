@@ -33,11 +33,6 @@ int main()
 {
 	Application::Root root;
 
-	//Platform::Window_GLFW window(L"GLFW Window", 720, 640);
-	//window.create();
-	//while (window.isRunning()) {
-	//	window.run();
-	//}
 	Image::Image<Image::COLOR_R8G8B8_UINT> image(720, 480);
 	std::fill((Image::COLOR_R8G8B8_UINT*) & ((reinterpret_cast<char*>(image.data.data))[0]), 
 		(Image::COLOR_R8G8B8_UINT*)&((reinterpret_cast<char*>(image.data.data))[image.data.size]), 

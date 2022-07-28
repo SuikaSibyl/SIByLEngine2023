@@ -2,8 +2,10 @@ module;
 #include <cstring>
 #include <cstdint>
 #include <memory>
+#include <xmmintrin.h>
 export module Math.Matrix:Matrix4x4;
 import :Matrix3x3;
+import Math.SIMD;
 
 namespace SIByL::Math
 {
@@ -101,6 +103,28 @@ namespace SIByL::Math
 							   m1.data[i][1] * m2.data[1][j] +
 							   m1.data[i][2] * m2.data[2][j] +
 							   m1.data[i][3] * m2.data[3][j];
+		return s;
+	}
+
+	export template <>
+		inline auto mul(Matrix4x4<float> const& m1, Matrix4x4<float> const& m2) noexcept -> Matrix4x4<float>
+	{
+		Matrix4x4<float> s;
+		
+		__m128 v, result;
+		__m128 const mrow0 = _mm_load_ps(&m2.data[0][0]);
+		__m128 const mrow1 = _mm_load_ps(&m2.data[1][0]);
+		__m128 const mrow2 = _mm_load_ps(&m2.data[2][0]);
+		__m128 const mrow3 = _mm_load_ps(&m2.data[3][0]);
+
+		for (int i = 0; i < 4; ++i) {
+			v = _mm_load_ps(&m1.data[i][0]);
+			result = _mm_mul_ps(_mm_replicate_x_ps(v), mrow0);
+			result = _mm_add_ps(_mm_mul_ps(_mm_replicate_y_ps(v), mrow1), result);
+			result = _mm_add_ps(_mm_mul_ps(_mm_replicate_z_ps(v), mrow2), result);
+			result = _mm_add_ps(_mm_mul_ps(_mm_replicate_w_ps(v), mrow3), result);
+			_mm_store_ps(&s.data[i][0], result);
+		}
 		return s;
 	}
 
