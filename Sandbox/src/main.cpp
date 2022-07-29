@@ -24,6 +24,8 @@ import Image.Image;
 import Image.FileFormat;
 
 import Platform.Window;
+import Platform.System;
+import Parallelism.Parallel;
 
 using namespace SIByL;
 using namespace SIByL::Core;
@@ -32,7 +34,7 @@ using namespace SIByL::Math;
 int main()
 {
 	Application::Root root;
-
+	int ncores = Platform::getNumSystemCores();
 	Image::Image<Image::COLOR_R8G8B8_UINT> image(720, 480);
 	std::fill((Image::COLOR_R8G8B8_UINT*) & ((reinterpret_cast<char*>(image.data.data))[0]), 
 		(Image::COLOR_R8G8B8_UINT*)&((reinterpret_cast<char*>(image.data.data))[image.data.size]), 
@@ -64,20 +66,32 @@ int main()
 			(Image::COLOR_R8G8B8_UINT*)&((reinterpret_cast<char*>(image.data.data))[image.data.size]),
 			Image::COLOR_R8G8B8_UINT{ 0 ,0 ,0 });
 
-		Tracer::Ray ray;
 		float tHit;
-		for (int j = 0; j < 480; j++) {
+		Parallelism::ParallelFor([&](int j)->void {
+			Tracer::Ray ray;
 			for (int i = 0; i < 720; ++i) {
 				Tracer::CameraSample sample = { Math::point2{ 0.5f + i * 1.f, 0.5f + j * 1.f }, Math::point2{ 0.f,0.f }, 0.f };
 				camera.generateRay(sample, &ray);
- 				bool intersected = sphere.intersect(ray, &tHit, nullptr);
-				if (intersected) 
+				bool intersected = sphere.intersect(ray, &tHit, nullptr);
+				if (intersected)
 					image[j][i] = Image::COLOR_R8G8B8_UINT{ 255 ,255 ,255 };
-				if (j == 239 && i == 360)
-					image[j][i] = Image::COLOR_R8G8B8_UINT{ 0 ,0 ,255 };
+				//if (j == 239 && i == 360)
+				//	image[j][i] = Image::COLOR_R8G8B8_UINT{ 0 ,0 ,255 };
 
 			}
-		}
+		}, 480, 40);
+		//for (int j = 0; j < 480; j++) {
+		//	for (int i = 0; i < 720; ++i) {
+		//		Tracer::CameraSample sample = { Math::point2{ 0.5f + i * 1.f, 0.5f + j * 1.f }, Math::point2{ 0.f,0.f }, 0.f };
+		//		camera.generateRay(sample, &ray);
+ 	//			bool intersected = sphere.intersect(ray, &tHit, nullptr);
+		//		if (intersected) 
+		//			image[j][i] = Image::COLOR_R8G8B8_UINT{ 255 ,255 ,255 };
+		//		if (j == 239 && i == 360)
+		//			image[j][i] = Image::COLOR_R8G8B8_UINT{ 0 ,0 ,255 };
+
+		//	}
+		//}
 
 		window.run();
 		window.invalid();
@@ -89,4 +103,5 @@ int main()
 		std::cout << "Time each frame: " << (time * 1. / 1000000) << std::endl;
 	}
 	window.destroy();
+	Parallelism::clearThreadPool();
 }

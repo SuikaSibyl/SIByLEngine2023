@@ -138,6 +138,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Private\Atomic\Parallelism.Atomic-AtomicFloat.cpp" />
+    <ClCompile Include="Private\Parallel\Parallelism.Parallel-ParallelFor.cpp" />
     <ClCompile Include="Public\Atomic\Parallelism.Atomic-AtomicFloat.ixx" />
     <ClCompile Include="Public\Atomic\Parallelism.Atomic.ixx" />
     <ClCompile Include="Public\Parallel\Parallelism.Parallel-ParallelFor.ixx" />
