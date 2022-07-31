@@ -335,6 +335,19 @@ namespace SIByL::Math
 		return Math::scale(1, 1, 1.f / (zFar - zNear)) * Math::translate({ 0,0,-zNear });
 	}
 	
+	inline auto perspective(float fov, float n, float f) noexcept -> Transform {
+		// perform projective divide for perspective projection
+		mat4 persp{
+			1.0f, 0.0f, 0.0f, 0.0f,
+			0.0f, 1.0f, 0.0f, 0.0f,
+			0.0f, 0.0f, f / (f - n), -f * n / (f - n),
+			0.0f, 0.0f, 1.0f, 0.0f
+		};
+		// scale canonical perspective view to specified field of view
+		float invTanAng = 1 / std::tan(radians(fov) / 2);
+		return scale(invTanAng, invTanAng, 1) * Transform(persp);
+	}
+
 	inline auto decompose(mat4 const& m, vec3* t, Quaternion* rquat, mat4* s) noexcept -> void {
 		// Extract translation T from transformation matrix
 		// which could be found directly from matrix

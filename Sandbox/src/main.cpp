@@ -75,11 +75,9 @@ int main()
 				bool intersected = sphere.intersect(ray, &tHit, nullptr);
 				if (intersected)
 					image[j][i] = Image::COLOR_R8G8B8_UINT{ 255 ,255 ,255 };
-				//if (j == 239 && i == 360)
-				//	image[j][i] = Image::COLOR_R8G8B8_UINT{ 0 ,0 ,255 };
-
 			}
-		}, 480, 40);
+		}, 480, 30);
+
 		//for (int j = 0; j < 480; j++) {
 		//	for (int i = 0; i < 720; ++i) {
 		//		Tracer::CameraSample sample = { Math::point2{ 0.5f + i * 1.f, 0.5f + j * 1.f }, Math::point2{ 0.f,0.f }, 0.f };

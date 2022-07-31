@@ -55,7 +55,7 @@ namespace SIByL::Tracer
 
 		/**
 		* adjust the number of samples to a better number, 
-		* which could result in better distribution¡£
+		* which could result in better distributionï¿½ï¿½
 		*/
 		virtual auto roundCount(int n) const noexcept -> int;
 

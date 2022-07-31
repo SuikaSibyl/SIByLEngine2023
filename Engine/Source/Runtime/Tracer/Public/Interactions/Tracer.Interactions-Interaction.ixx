@@ -7,11 +7,11 @@ namespace SIByL::Tracer
 {
 	export struct Interaction
 	{
-		//Interaction(Math::point3 const& p, Math::normal3 const& n, Math::vec3 const& pError,
-		//	Math::vec3 const& wo, float time,
-		//	const MediumInterface& mediumInterface)
-		//	: p(p), time(time), pError(pError), wo(wo), n(n),
-		//	mediumInterface(mediumInterface) { }
+		Interaction(Math::point3 const& p, Math::normal3 const& n, Math::vec3 const& pError,
+			Math::vec3 const& wo, float time,
+			MediumInterface const* mediumInterface)
+			: p(p), time(time), pError(pError), wo(wo), n(n),
+			mediumInterface(mediumInterface) { }
 
 		auto isSurfaceInteraction() const noexcept -> bool;
 
@@ -27,6 +27,6 @@ namespace SIByL::Tracer
 		Math::normal3 n;
 		/** the scattering media at the point (if any) */
 
-		// TODO::MediumInterface
+		MediumInterface const* mediumInterface;
 	};
 }

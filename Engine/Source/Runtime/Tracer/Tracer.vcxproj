@@ -139,15 +139,19 @@
   <ItemGroup>
     <ClCompile Include="Private\Camera\Tracer.Camera-Camera.cpp" />
     <ClCompile Include="Private\Camera\Tracer.Camera-OrthographicCamera.cpp" />
+    <ClCompile Include="Private\Camera\Tracer.Camera-PerspectiveCamera.cpp" />
     <ClCompile Include="Private\Camera\Tracer.Camera-ProjectiveCamera.cpp" />
     <ClCompile Include="Private\Film\Tracer.Film-Film.cpp" />
     <ClCompile Include="Private\Interactions\Tracer.Interactions-Interaction.cpp" />
+    <ClCompile Include="Private\Interactions\Tracer.Interactions-SurfaceInteraction.cpp" />
+    <ClCompile Include="Private\Material\Tracer.BSDF.cpp" />
     <ClCompile Include="Private\Ray\Tracer.Ray-Ray.cpp" />
     <ClCompile Include="Private\Sampler\Tracer.Sampler-Sampler.cpp" />
     <ClCompile Include="Private\Shape\Tracer.Shape-Sphere.cpp" />
     <ClCompile Include="Private\Spectrum\Tracer.Spectrum-Common.cpp" />
     <ClCompile Include="Private\Spectrum\Tracer.Spectrum-RGBSpectrum.cpp" />
     <ClCompile Include="Private\Spectrum\Tracer.Spectrum-SampledSpectrum.cpp" />
+    <ClCompile Include="Public\Camera\Tracer.Camera-PerspectiveCamera.ixx" />
     <ClCompile Include="Public\Camera\Tracer.Camera-OrthographicCamera.ixx" />
     <ClCompile Include="Public\Camera\Tracer.Camera-Camera.ixx" />
     <ClCompile Include="Public\Camera\Tracer.Camera-ProjectiveCamera.ixx" />
@@ -165,6 +169,7 @@
     <ClCompile Include="Public\Interactions\Tracer.Interactions.ixx" />
     <ClCompile Include="Public\Light\Tracer.Light-Light.ixx" />
     <ClCompile Include="Public\Light\Tracer.Light.ixx" />
+    <ClCompile Include="Public\Material\Tracer.BSDF.ixx" />
     <ClCompile Include="Public\Medium\Tracer.Medium-Medium.ixx" />
     <ClCompile Include="Public\Medium\Tracer.Medium-MediumInterface.ixx" />
     <ClCompile Include="Public\Medium\Tracer.Medium-PhaseFunction.ixx" />
