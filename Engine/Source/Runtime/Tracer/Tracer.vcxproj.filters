@@ -162,19 +162,223 @@
     <ClCompile Include="Private\Ray\Tracer.Ray-Ray.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Camera\Tracer.Camera-PerspectiveCamera.ixx">
+    <ClCompile Include="Public\Material\Tracer.BxDF.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Private\Camera\Tracer.Camera-PerspectiveCamera.cpp">
+    <ClCompile Include="Public\Material\Tracer.BxDF-BxDF.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Private\Material\Tracer.BxDF-BxDF.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Material\Tracer.BxDF-ScaledBxDF.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Private\Interactions\Tracer.Interactions-SurfaceInteraction.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Material\Tracer.BSDF.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Private\Material\Tracer.BSDF.cpp">
+    <ClCompile Include="Public\Material\Tracer.Material.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Private\Interactions\Tracer.Interactions-SurfaceInteraction.cpp">
+    <ClCompile Include="Public\Material\Tracer.Material-Material.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Material\Tracer.Material-MatteMaterial.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Material\Tracer.Material-PlasticMaterial.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Material\Tracer.Material-MixMaterial.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Material\Tracer.Material-FourierMaterial.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Texture\Tracer.Texture.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Texture\Tracer.Texture-Texture.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Texture\Tracer.Texture-ConstantTexture.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Texture\Tracer.Texture-ScaleTexture.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Texture\Tracer.Texture-MixTexture.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Texture\Tracer.Texture-BilerpTexture.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Texture\Tracer.Texture-ImageTexture.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Texture\Tracer.Texture-MIPMap.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Texture\Tracer.Texture-UVTexture.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Texture\Tracer.Texture-Checkerboard2DTexture.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Texture\Tracer.Texture-Checkerboard3DTexture.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Texture\Tracer.Texture-DotsTexture.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Texture\Tracer.Texture-FBmTexture.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Texture\Tracer.Texture-WindyTexture.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Texture\Tracer.Texture-MarbleTexture.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Light\Tracer.Light-PointLight.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Light\Tracer.Light-DistantLight.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Light\Tracer.Light-AreaLight.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Light\Tracer.Light-InfiniteAreaLight.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Material\Tracer.BSSRDF.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Material\Tracer.BSSRDF-BSSRDF.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Material\Tracer.BSSRDF-SeparableBSSRDF.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Sampler\Tracer.Sampler-PixelSampler.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Private\Sampler\Tracer.Sampler-PixelSampler.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Sampler\Tracer.Sampler-GlobalSampler.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Sampler\Tracer.Sampler-StratifiedSampler.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Sampler\Tracer.Sampler-HaltonSampler.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Sampler\Tracer.Sampler-ZeroTwoSequenceSampler.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Sampler\Tracer.Sampler-MaxMinDistSampler.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Sampler\Tracer.Sampler-SobolSampler.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Filter\Tracer.Filter-BoxFilter.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Filter\Tracer.Filter-TriangleFilter.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Filter\Tracer.Filter-GaussianFilter.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Filter\Tracer.Filter-MitchellFilter.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Filter\Tracer.Filter-LanczosSincFilter.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Camera\Tracer.Camera-PerspectiveCamera.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Material\Tracer.BxDF-SpecularReflection.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Material\Tracer.BxDF-SpecularTransmission.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Material\Tracer.BxDF-FresnelSpecular.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Material\Tracer.BxDF-LambertianReflection.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Material\Tracer.BxDF-MicrofacetReflection.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Material\Tracer.BxDF-MicrofacetTransmission.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Material\Tracer.BxDF-FresnelBlend.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Material\Tracer.BxDF-FourierBSDF.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Material\Tracer.BSSRDF-TabulatedBSSRDF.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Material\Tracer.Material-SubsurfaceMaterial.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Sampling\Tracer.Sampling.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Sampling\Tracer.Sampling-Distribution1D.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Sampling\Tracer.Sampling-Distribution2D.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Integrator\Tracer.Integrator-PathIntegrator.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Shape\Tracer.Shape-Cylinder.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Shape\Tracer.Shape-Disk.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Shape\Tracer.Shape-Paraboloid.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Shape\Tracer.Shape-Cone.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Shape\Tracer.Shape-Hyperboloid.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Shape\Tracer.Shape-Triangle.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Shape\Tracer.Shape-Curve.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Primitive\Tracer.Primitive-GeometricPrimitive.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Primitive\Tracer.Primitive-Aggregate.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Camera\Tracer.Camera-EnvironmentCamera.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Camera\Tracer.Camera-RealisticCamera.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

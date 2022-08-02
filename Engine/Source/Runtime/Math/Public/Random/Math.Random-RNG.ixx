@@ -26,7 +26,7 @@ namespace SIByL::Math
 		auto uniformUInt32(uint32_t b) noexcept -> uint32_t;
 
 		/** returns a pseudo-random floating-point number in range [0, 1) */
-		auto uniformFloat(uint32_t b) noexcept -> uint32_t;
+		auto uniformFloat() noexcept -> float;
 
 		template <class Iterator>
 		auto shuffle(Iterator begin, Iterator end) noexcept -> void;

@@ -60,5 +60,8 @@ namespace SIByL::Tracer
 		virtual auto roundCount(int n) const noexcept -> int;
 
 		int64_t const samplesPerPixel;
+
+		Math::ipoint2 currentPixel;
+		int64_t currentPixelSampleIndex;
 	};
 }

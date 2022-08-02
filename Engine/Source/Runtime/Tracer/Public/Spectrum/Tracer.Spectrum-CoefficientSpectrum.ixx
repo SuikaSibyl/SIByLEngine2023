@@ -37,7 +37,7 @@ namespace SIByL::Tracer
 
 		friend inline auto sqrt(CoefficientSpectrum const& s) noexcept -> CoefficientSpectrum;
 		friend inline auto lerp(float t, CoefficientSpectrum const& s1, CoefficientSpectrum const& s2) noexcept -> CoefficientSpectrum;
-		friend inline auto clamp(CoefficientSpectrum const& s, float low = 0, float high = Math::float_max) noexcept -> CoefficientSpectrum;
+		friend inline auto clamp(CoefficientSpectrum const& s, float low, float high) noexcept -> CoefficientSpectrum;
 		friend auto operator*(float v, CoefficientSpectrum const& s)->CoefficientSpectrum;
 
 		static size_t const nSamples = nSpectrumSamples;

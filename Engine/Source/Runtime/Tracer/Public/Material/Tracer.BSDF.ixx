@@ -1,7 +1,8 @@
 export module Tracer.BSDF;
-import Tracer.Interactions;
 import Math.Vector;
 import Math.Geometry;
+import Tracer.Interactions;
+import Tracer.BxDF;
 
 namespace SIByL::Tracer
 {
@@ -22,5 +23,9 @@ namespace SIByL::Tracer
 		float const eta;
 		Math::normal3 ns, ng;
 		Math::vec3 ss, ts;
+
+		static constexpr int maxBxDFs = 8;
+		int nBxDFs = 0;
+		BxDF* bxdfs[maxBxDFs];
 	};
 }

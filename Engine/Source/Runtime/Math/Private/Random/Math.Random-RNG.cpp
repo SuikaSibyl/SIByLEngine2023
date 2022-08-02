@@ -40,7 +40,7 @@ namespace SIByL::Math
 		}
 	}
 
-	auto RNG::uniformFloat(uint32_t b) noexcept -> uint32_t {
+	auto RNG::uniformFloat() noexcept -> float {
 		return std::min(oneMinusEpsilon, uniformUInt32() * 0x1p-32f);
 	}
 
