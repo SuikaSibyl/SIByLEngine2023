@@ -55,7 +55,7 @@ int main()
 	Math::Transform objectToWorld = Math::translate({ 0,0,5 });
 	Math::Transform worldToObject = Math::translate({ 0,0,-5 });
 
-	Tracer::Sphere sphere(&objectToWorld, &worldToObject, false, 1, -1, 1, 7);
+	Tracer::Sphere sphere(&objectToWorld, &worldToObject, false, 1, -1, 1, 360);
 
 	int i = 0;
 	while (window.isRunning()) {

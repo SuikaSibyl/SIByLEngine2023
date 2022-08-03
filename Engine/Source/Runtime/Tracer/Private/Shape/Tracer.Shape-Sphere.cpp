@@ -93,6 +93,15 @@ namespace SIByL::Tracer
 			(zMax < +radius && pHit.z > zMax) || phi > phiMax) {
 			if (tShapeHit == t1) return false;
 			if (t1.upperBound() > ray.tMax) return false;
+			tShapeHit = t1;
+			// compute sphere hit position and Φ
+			pHit = ray((float)tShapeHit);
+			if (pHit.x == 0 && pHit.y == 0) pHit.x = 1e-5f * radius;
+			phi = std::atan2(pHit.y, pHit.x);
+			if (phi < 0) phi += 2 * Math::float_Pi;
+			if ((zMin > -radius && pHit.z < zMin) ||
+				(zMax < +radius && pHit.z > zMax) || phi > phiMax)
+				return false;
 		}
 		// find parametric representation of sphere hit
 		float u = phi / phiMax;

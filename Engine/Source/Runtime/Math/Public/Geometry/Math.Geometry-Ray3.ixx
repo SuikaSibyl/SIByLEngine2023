@@ -25,7 +25,7 @@ namespace SIByL::Math
 	};
 
 	auto ray3::operator()(float t) const->Math::point3 {
-		return o + (d - o) * tMax;
+		return o + d * t;
 	}
 
 }
