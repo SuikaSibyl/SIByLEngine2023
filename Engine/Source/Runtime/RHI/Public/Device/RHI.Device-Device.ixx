@@ -1,10 +1,10 @@
 export module RHI.Device:Device;
+import :Adapter;
 
 namespace SIByL::RHI
 {
-	export struct Adapter;
-	/*
-	* A logical instantiation of an adapter, through which internal objects are created.
+	/**
+	* Device is a logical instantiation of an adapter, through which internal objects are created.
 	* Is the exclusive owner of all internal objects created from it.
 	*/
 	export struct Device

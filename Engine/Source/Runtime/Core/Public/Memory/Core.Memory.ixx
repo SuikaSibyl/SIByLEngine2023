@@ -12,5 +12,8 @@ export import :DoubleEndedStackAllocator;
 export import :Buffer;
 export import :BlockedArray;
 
+/** Utils */
+export import :SmartPtr;
+
 /** Interface */
 export import :Memory;

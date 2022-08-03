@@ -137,10 +137,22 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Private\Device\RHI.Device-Adapter_VK.cpp" />
+    <ClCompile Include="Private\Device\RHI.Device-Adapter_VK.ixx" />
+    <ClCompile Include="Private\Device\RHI.Device-Context_VK.cpp" />
+    <ClCompile Include="Private\Device\RHI.Device-Context_VK.ixx" />
+    <ClCompile Include="Private\Device\RHI.Device-Device_VK.cpp" />
+    <ClCompile Include="Private\Device\RHI.Device-Device_VK.ixx" />
     <ClCompile Include="Public\Device\RHI.Device-Adapter.ixx" />
+    <ClCompile Include="Public\Device\RHI.Device-Context.ixx" />
     <ClCompile Include="Public\Device\RHI.Device-Device.ixx" />
     <ClCompile Include="Public\Device\RHI.Device-Enums.ixx" />
     <ClCompile Include="Public\Device\RHI.Device.ixx" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Core\Core.vcxproj">
+      <Project>{cadb2da2-56fd-47f9-817b-aafa42378dd9}</Project>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
