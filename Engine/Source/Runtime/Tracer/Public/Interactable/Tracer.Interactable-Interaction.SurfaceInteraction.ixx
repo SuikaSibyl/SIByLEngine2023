@@ -1,18 +1,19 @@
 ﻿export module Tracer.Interactable:Interaction.SurfaceInteraction;
 import :Interaction;
+import :Material;
 import Core.Memory;
 import Math.Vector;
 import Math.Geometry;
 import Math.Transform;
 import Tracer.Shape;
 import Tracer.Ray;
-import Tracer.Material;
 import Tracer.Spectrum;
-import Tracer.BSDF;
 
 namespace SIByL::Tracer
 {
 	export struct Primitive;
+	export struct BSDF;
+	export struct BSSRDF;
 	/**
 	* Represent local information at a point on a 2D surface.
 	* Supply enough information about the surface point.
@@ -56,6 +57,7 @@ namespace SIByL::Tracer
 		mutable float dudx = 0, dvdx = 0, dudy = 0, dvdy = 0;
 
 		BSDF* bsdf = nullptr;
+		BSSRDF* bssrdf = nullptr;
 
 		/**
 		* The shading geometry, a second instance of geometry information.

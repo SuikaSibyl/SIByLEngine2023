@@ -12,6 +12,7 @@ import Tracer.Camera;
 import Tracer.Sampler;
 import Tracer.Spectrum;
 import Tracer.Film;
+import Tracer.BxDF;
 
 namespace SIByL::Tracer
 {

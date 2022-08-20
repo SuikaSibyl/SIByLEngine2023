@@ -11,6 +11,8 @@ export import :Primitive.Aggregate;
 export import :Primitive.BVHAccel;
 export import :Primitive.KdTreeAccel;
 
+export import :Material;
+export import :BSDF;
 export import :Scene;
 
 export import :Light;

@@ -9,8 +9,6 @@ import Math.Transform;
 import Math.EquationSolving;
 import Tracer.Shape;
 import Tracer.Ray;
-import Tracer.Material;
-import Tracer.BSDF;
 
 namespace SIByL::Tracer
 {

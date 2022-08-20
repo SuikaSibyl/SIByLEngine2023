@@ -9,7 +9,6 @@ import Tracer.Camera;
 import Tracer.Sampler;
 import Tracer.Spectrum;
 import Tracer.Interactable;
-import Tracer.BSDF;
 
 namespace SIByL::Tracer
 {

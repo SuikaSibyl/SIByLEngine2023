@@ -1,9 +1,9 @@
 export module Tracer.Interactable:Primitive;
 import :Interaction.SurfaceInteraction;
+import :Material;
 import Core.Memory;
 import Math.Geometry;
 import Tracer.Ray;
-import Tracer.Material;
 
 namespace SIByL::Tracer
 {
@@ -28,6 +28,10 @@ namespace SIByL::Tracer
 		/** Return a pointer to the material instance assigned to the primitive */
 		virtual auto getMaterial() const noexcept -> Material const* = 0;
 
+		/**
+		* Initialize representations of the light-scattering properties of
+		* the material at the intersection point on the surface.
+		*/
 		virtual auto computeScatteringFunctions(
 			SurfaceInteraction* isec,
 			Core::MemoryArena& arena,

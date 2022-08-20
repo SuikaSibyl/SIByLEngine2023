@@ -405,5 +405,17 @@
     <ClCompile Include="Public\Interactable\Tracer.Interactable-Light.DistantLight.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Interactable\Tracer.Interactable-Material.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Interactable\Tracer.Interactable-BSDF.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Interactable\Tracer.Interactable-BSSRDF.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Private\Interactable\Tracer.Interactable-Primitive.TransformedPrimitive.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

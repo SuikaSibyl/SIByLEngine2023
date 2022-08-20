@@ -146,6 +146,7 @@
     <ClCompile Include="Private\Interactable\Tracer.Interactable-Interaction.cpp" />
     <ClCompile Include="Private\Interactable\Tracer.Interactable-Light.cpp" />
     <ClCompile Include="Private\Interactable\Tracer.Interactable-Primitive.GeometricPrimitive.cpp" />
+    <ClCompile Include="Private\Interactable\Tracer.Interactable-Primitive.TransformedPrimitive.cpp" />
     <ClCompile Include="Private\Interactable\Tracer.Interactable-Scene.cpp" />
     <ClCompile Include="Private\Interactable\Tracer.Interactable-Interaction.SurfaceInteraction.cpp" />
     <ClCompile Include="Private\Material\Tracer.BxDF-BxDF.cpp" />
@@ -178,6 +179,8 @@
     <ClCompile Include="Public\Integrator\Tracer.Integrator-SamplerIntegrator.ixx" />
     <ClCompile Include="Public\Integrator\Tracer.Integrator-WhittedIntegrator.ixx" />
     <ClCompile Include="Public\Integrator\Tracer.Integrator.ixx" />
+    <ClCompile Include="Public\Interactable\Tracer.Interactable-BSDF.ixx" />
+    <ClCompile Include="Public\Interactable\Tracer.Interactable-BSSRDF.ixx" />
     <ClCompile Include="Public\Interactable\Tracer.Interactable-Interaction.ixx" />
     <ClCompile Include="Public\Interactable\Tracer.Interactable-Interaction.SurfaceInteraction.ixx" />
     <ClCompile Include="Public\Interactable\Tracer.Interactable-Interaction.MediumInteraction.ixx" />
@@ -186,6 +189,7 @@
     <ClCompile Include="Public\Interactable\Tracer.Interactable-Light.InfiniteAreaLight.ixx" />
     <ClCompile Include="Public\Interactable\Tracer.Interactable-Light.ixx" />
     <ClCompile Include="Public\Interactable\Tracer.Interactable-Light.PointLight.ixx" />
+    <ClCompile Include="Public\Interactable\Tracer.Interactable-Material.ixx" />
     <ClCompile Include="Public\Interactable\Tracer.Interactable-Primitive.Aggregate.ixx" />
     <ClCompile Include="Public\Interactable\Tracer.Interactable-Primitive.BVHAccel.ixx" />
     <ClCompile Include="Public\Interactable\Tracer.Interactable-Primitive.GeometricPrimitive.ixx" />

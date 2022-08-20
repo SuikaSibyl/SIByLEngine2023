@@ -3,7 +3,6 @@ import Tracer.Interactable;
 import Math.Geometry;
 import Tracer.Ray;
 import Tracer.Shape;
-import Tracer.Material;
 import Tracer.Medium;
 
 namespace SIByL::Tracer
@@ -28,4 +27,19 @@ namespace SIByL::Tracer
 		// initialize SurfaceInteraction::mediumInterface after Shape intersection
 		return true;
 	}
+
+	auto GeometricPrimitive::getAreaLight() const noexcept -> AreaLight const* {
+		return areaLight;
+	}
+	
+	auto GeometricPrimitive::computeScatteringFunctions(
+		SurfaceInteraction* isect,
+		Core::MemoryArena& arena,
+		TransportMode mode,
+		bool allowMultipleLobes) const noexcept -> void
+	{
+		if (material)
+			material->computeScatteringFunctions(isect, arena, mode, allowMultipleLobes);
+	}
+
 }

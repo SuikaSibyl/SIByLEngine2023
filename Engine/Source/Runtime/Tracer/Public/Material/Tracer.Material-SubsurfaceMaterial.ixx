@@ -1,10 +1,10 @@
-export module Tracer.Material:SubsurfaceMaterial;
-import :Material;
-
-namespace SIByL::Tracer
-{
-	export struct SubsurfaceMaterial :public Material
-	{
-
-	};
-}
+//export module Tracer.Material:SubsurfaceMaterial;
+//import :Material;
+//
+//namespace SIByL::Tracer
+//{
+//	export struct SubsurfaceMaterial :public Material
+//	{
+//
+//	};
+//}
