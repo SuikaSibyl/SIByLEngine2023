@@ -251,9 +251,9 @@ namespace SIByL::Math
 			0, 0, z, 0,
 			0, 0, 0, 1);
 
-		mat4 minv(1. / x, 0, 0, 0,
-			0, 1. / y, 0, 0,
-			0, 0, 1. / z, 0,
+		mat4 minv(1.f / x, 0, 0, 0,
+			0, 1.f / y, 0, 0,
+			0, 0, 1.f / z, 0,
 			0, 0, 0, 1);
 
 		return Transform(m, minv);

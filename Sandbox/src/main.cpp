@@ -4,6 +4,7 @@
 #include <functional>
 #include <filesystem>
 #include <chrono>
+#include <memory>
 import Core.Log;
 import Core.Memory;
 import Core.IO;
@@ -17,6 +18,8 @@ import Tracer.Ray;
 import Tracer.Camera;
 import Tracer.Film;
 import Tracer.Shape;
+import Tracer.Filter;
+import Tracer.Interactable;
 
 import Application.Root;
 import Image.Color;
@@ -34,6 +37,10 @@ using namespace SIByL::Math;
 int main()
 {
 	Application::Root root;
+
+	//Tracer::SurfaceInteraction* a = nullptr;
+	//auto test = a->primitive->worldBound();
+
 	int ncores = Platform::getNumSystemCores();
 	Image::Image<Image::COLOR_R8G8B8_UINT> image(720, 480);
 	std::fill((Image::COLOR_R8G8B8_UINT*) & ((reinterpret_cast<char*>(image.data.data))[0]), 
@@ -49,7 +56,7 @@ int main()
 
 	Math::Transform defaultTransform(mat4{});
 	Math::AnimatedTransform animatedDefaultTransform(&defaultTransform, 0, &defaultTransform, 0);
-	Tracer::Film film(Math::ipoint2{ 720, 480 }, Math::bounds2{ {0,0}, {1,1} }, nullptr, 1, "what.c", 1);
+	Tracer::Film film(Math::ipoint2{ 720, 480 }, Math::bounds2{ {0,0}, {1,1} }, std::make_unique<Tracer::BoxFilter>(Math::vec2{1.f,1.f}), 1, "what.c", 1);
 	Tracer::OrthographicCamera camera(animatedDefaultTransform, Math::bounds2{ {-1.f * 720.f / 480.f,-1.f}, {1.f * 720.f / 480.f, 1.f} } , 0, 0, 0, 0, &film, nullptr);
 
 	Math::Transform objectToWorld = Math::translate({ 0,0,5 });

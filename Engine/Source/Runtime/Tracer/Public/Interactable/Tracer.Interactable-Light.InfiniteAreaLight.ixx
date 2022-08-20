@@ -1,4 +1,4 @@
-export module Tracer.Light:InfiniteAreaLight;
+export module Tracer.Interactable:Light.InfiniteAreaLight;
 import :Light;
 
 namespace SIByL::Tracer

@@ -18,6 +18,9 @@ namespace SIByL::Math
 		auto operator[](uint32_t i) const -> Point2<T> const&;
 		auto operator[](uint32_t i) -> Point2<T>&;
 
+		template <typename U>
+		explicit operator Bounds2<U>() const { return Bounds2<U>((Point2<U>)this->pMin, (Point2<U>)this->pMax); }
+
 		auto corner(uint32_t c) const -> Point2<T>;
 		auto diagonal() const -> Vector2<T>;
 		auto surfaceArea() const -> T;

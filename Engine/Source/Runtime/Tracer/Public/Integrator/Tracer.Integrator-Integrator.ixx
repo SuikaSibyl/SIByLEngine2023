@@ -1,10 +1,10 @@
 export module Tracer.Integrator:Integrator;
-import GFX.Scene;
+import Tracer.Interactable;
 
 namespace SIByL::Tracer
 {
 	export struct Integrator
 	{
-		virtual auto render(GFX::Scene const& scene) noexcept -> void = 0;
+		virtual auto render(Scene const& scene) noexcept -> void = 0;
 	};
 }

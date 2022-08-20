@@ -11,8 +11,9 @@ namespace SIByL::Tracer
 	*/
 	export struct MediumInterface
 	{
-		MediumInterface(Medium const* medium) :inside(medium), outside(medium) {};
-		MediumInterface(Medium const* inside, Medium const* outside) :inside(inside), outside(outside) {};
+		MediumInterface() :inside(nullptr), outside(nullptr) {}
+		MediumInterface(Medium const* medium) :inside(medium), outside(medium) {}
+		MediumInterface(Medium const* inside, Medium const* outside) :inside(inside), outside(outside) {}
 
 		/** checks whether a particular instance marks a transition between two distinct media*/
 		auto isMediumTransition() const noexcept -> bool { return inside != outside; }

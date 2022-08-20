@@ -17,7 +17,7 @@ namespace SIByL::Tracer
 		, medium(medium)
 	{}
 
-	auto Camera::generateRayDifferential(CameraSample const& sample, RayDifferential* rd) noexcept -> float {
+	auto Camera::generateRayDifferential(CameraSample const& sample, RayDifferential* rd) const noexcept -> float {
 		float wt = generateRay(sample, rd);
 		// Find camera ray after shifting one pixel in the x direction
 		CameraSample sshift = sample;

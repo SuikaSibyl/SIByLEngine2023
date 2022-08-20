@@ -20,7 +20,7 @@ namespace SIByL::Tracer
 
 		virtual auto generateRay(CameraSample const& sample, Ray* ray) const noexcept -> float override;
 
-		auto generateRayDifferential(CameraSample const& sample, RayDifferential* rd) noexcept -> float;
+		auto generateRayDifferential(CameraSample const& sample, RayDifferential* rd) const noexcept -> float;
 
 		Math::vec3 dxCamera, dyCamera;
 	};

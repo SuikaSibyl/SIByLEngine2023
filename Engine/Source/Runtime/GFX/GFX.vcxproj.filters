@@ -15,13 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Public\Light\GFX.Light.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Light\GFX.Light-Light.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Scene\GFX.Scene.ixx">
+    <ClCompile Include="Public\Core\GFX.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

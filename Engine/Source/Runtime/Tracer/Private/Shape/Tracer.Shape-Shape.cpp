@@ -4,7 +4,7 @@ import Tracer.Shape;
 
 import Math.Transform;
 import Math.Geometry;
-import Tracer.Interactions;
+import Tracer.Interactable;
 
 namespace SIByL::Tracer
 {

@@ -10,7 +10,9 @@ namespace SIByL::Core
 	{
 		using Slot = std::function<void(T...)>;
 		auto connect(Slot const& slot) noexcept -> void;
-		auto emit(T&&... args) noexcept -> void;
+
+		template<class ...U>
+		auto emit(U&&... args) noexcept -> void;
 	private:
 		std::vector<Slot> connectedSlots;
 	};
@@ -21,8 +23,9 @@ namespace SIByL::Core
 	}
 
 	template<class ...T>
-	auto EventSignal<T...>::emit(T&&... args) noexcept -> void {
+	template<class ...U>
+	auto EventSignal<T...>::emit(U&&... args) noexcept -> void {
 		for (auto& slot : connectedSlots)
-			slot(std::forward<T>(args)...);
+			slot(std::forward<U>(args)...);
 	}
 }

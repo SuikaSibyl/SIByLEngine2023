@@ -12,7 +12,7 @@ namespace SIByL::Tracer
 	*/
 	export struct BxDF
 	{
-		enum struct Type :uint32_t {
+		enum Type {
 			BSDF_REFLECTION		= 1 << 0,
 			BSDF_TRANSMISSION	= 1 << 1,
 			BSDF_DIFFUSE		= 1 << 1,

@@ -7,6 +7,8 @@ namespace SIByL::Tracer
 {
 	export struct BoxFilter :public Filter
 	{
-		virtual auto evaluate(Math::point2 const& p) noexcept -> float override;
+		BoxFilter(Math::vec2 const& radius) :Filter(radius) {}
+
+		virtual auto evaluate(Math::point2 const& p) const noexcept -> float override { return 1; }
 	};
 }

@@ -40,7 +40,7 @@ namespace SIByL::Tracer
 		return 1;
 	}
 
-	auto OrthographicCamera::generateRayDifferential(CameraSample const& sample, RayDifferential* rd) noexcept -> float {
+	auto OrthographicCamera::generateRayDifferential(CameraSample const& sample, RayDifferential* rd) const noexcept -> float {
 		//// Compute main orthographic viewing ray
 		//// Compute ray differentials for OrthographicCamera
 		//if (lensRadius > 0) {

@@ -1,5 +1,5 @@
 export module Tracer.Texture:Texture;
-import Tracer.Interactions;
+import Tracer.Interactable;
 
 namespace SIByL::Tracer
 {

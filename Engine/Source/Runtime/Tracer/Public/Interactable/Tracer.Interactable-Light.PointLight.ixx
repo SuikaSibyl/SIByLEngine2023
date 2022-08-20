@@ -1,4 +1,4 @@
-export module Tracer.Light:PointLight;
+export module Tracer.Interactable:Light.PointLight;
 import :Light;
 
 namespace SIByL::Tracer

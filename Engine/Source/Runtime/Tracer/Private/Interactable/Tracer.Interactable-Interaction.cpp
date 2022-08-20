@@ -1,5 +1,5 @@
-module Tracer.Interactions:Interaction;
-import Tracer.Interactions;
+module Tracer.Interactable:Interaction;
+import Tracer.Interactable;
 import Math.Vector;
 import Math.Geometry;
 import Tracer.Medium;

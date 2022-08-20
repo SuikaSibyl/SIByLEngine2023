@@ -13,7 +13,7 @@ namespace SIByL::Math
 {
 	AnimatedTransform::AnimatedTransform(
 		Transform const* startTransform, float startTime,
-		Transform const* endTransform, float endTime) 
+		Transform const* endTransform, float endTime)
 		: startTransform(startTransform), endTransform(endTransform)
 		, startTime(startTime), endTime(endTime)
 		, actuallyAnimated(*startTransform != *endTransform)
@@ -55,4 +55,22 @@ namespace SIByL::Math
 		// compute interpolated matrix as product of interpolated components
 		*t = translate(trans) * Transform(rotate) * Transform(scale);
 	}
+
+	auto AnimatedTransform::motionBounds(bounds3 const& b) const noexcept -> bounds3 {
+		if (!actuallyAnimated)
+			return (*startTransform) * b;
+		if (hasRotation == false)
+			return unionBounds((*startTransform) * b, (*endTransform) * b);
+		// Return motion bounds accounting for animated rotation
+		bounds3 bounds;
+		for (int corner = 0; corner < 8; ++corner)
+			bounds = unionBounds(bounds, boundPointMotion(b.corner(corner)));
+		return bounds;
+	}
+
+	auto AnimatedTransform::boundPointMotion(point3 const& p) const noexcept -> bounds3 {
+		// TODO
+		return bounds3{};
+	}
+
 }

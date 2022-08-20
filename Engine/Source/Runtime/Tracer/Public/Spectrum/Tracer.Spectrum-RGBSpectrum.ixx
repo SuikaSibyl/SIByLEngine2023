@@ -41,4 +41,6 @@ namespace SIByL::Tracer
 		/** Convert specturm to RGBSpectrum. Exist for satisfying common interface of Spectrum */
 		auto toRGBSpectrum() const noexcept -> RGBSpectrum;
 	};
+
+	export using Spectrum = RGBSpectrum;
 }

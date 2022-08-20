@@ -2,7 +2,7 @@ export module Tracer.BSSRDF:TabulatedBSSRDF;
 import :BSSRDF;
 import :SeparableBSSRDF;
 import Math.Vector;
-import Tracer.Interactions;
+import Tracer.Interactable;
 import Tracer.Spectrum;
 import Tracer.Material;
 

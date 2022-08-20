@@ -7,6 +7,6 @@ namespace SIByL::Tracer
 {
 	export struct LanczosSincFilter :public Filter
 	{
-		virtual auto evaluate(Math::point2 const& p) noexcept -> float override;
+		virtual auto evaluate(Math::point2 const& p) const noexcept -> float override;
 	};
 }

@@ -144,9 +144,6 @@
     <ProjectReference Include="..\Core\Core.vcxproj">
       <Project>{cadb2da2-56fd-47f9-817b-aafa42378dd9}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\Radiometry\Radiometry.vcxproj">
-      <Project>{647b6183-29b9-4a9a-89dc-acba080117f7}</Project>
-    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

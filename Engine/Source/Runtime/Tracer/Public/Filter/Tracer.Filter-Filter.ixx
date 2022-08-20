@@ -6,8 +6,13 @@ namespace SIByL::Tracer
 {
 	export struct Filter
 	{
-		virtual auto evaluate(Math::point2 const& p) noexcept -> float = 0;
+		Filter(Math::vec2 const& radius)
+			: radius(radius)
+			, invRadius(Math::vec2{ 1.f / radius.x,1.f / radius.y })
+		{}
 
-		Math::vec2 radius, invRadius;
+		virtual auto evaluate(Math::point2 const& p) const noexcept -> float = 0;
+
+		Math::vec2 const radius, invRadius;
 	};
 }

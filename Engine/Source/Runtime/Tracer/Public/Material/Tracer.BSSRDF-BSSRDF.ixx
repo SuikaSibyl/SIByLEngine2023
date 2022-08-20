@@ -1,6 +1,6 @@
 export module Tracer.BSSRDF:BSSRDF;
 import Math.Vector;
-import Tracer.Interactions;
+import Tracer.Interactable;
 import Tracer.Spectrum;
 
 namespace SIByL::Tracer

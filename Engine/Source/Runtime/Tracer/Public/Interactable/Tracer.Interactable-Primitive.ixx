@@ -1,13 +1,13 @@
-export module Tracer.Primitive:Primitive;
+export module Tracer.Interactable:Primitive;
+import :Interaction.SurfaceInteraction;
 import Core.Memory;
 import Math.Geometry;
 import Tracer.Ray;
-import Tracer.Interactions;
+import Tracer.Material;
 
 namespace SIByL::Tracer
 {
-	struct AreaLight;
-	struct Material;
+	export struct AreaLight;
 	/*
 	* Primitve is the bridge between the geometry processing & shading subsystem of pbrt
 	*/
@@ -28,10 +28,10 @@ namespace SIByL::Tracer
 		/** Return a pointer to the material instance assigned to the primitive */
 		virtual auto getMaterial() const noexcept -> Material const* = 0;
 
-		//virtual auto computeScatteringFunctions(
-		//	SurfaceInteraction* isec,
-		//	Core::MemoryArena& arena,
-
-		//	) const noexcept ->
+		virtual auto computeScatteringFunctions(
+			SurfaceInteraction* isec,
+			Core::MemoryArena& arena,
+			TransportMode mode,
+			bool allowMultipleLobes) const noexcept -> void = 0;
 	};
 }

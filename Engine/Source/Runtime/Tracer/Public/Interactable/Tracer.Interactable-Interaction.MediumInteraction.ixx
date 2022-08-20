@@ -1,4 +1,4 @@
-export module Tracer.Interactions:MediumInteraction;
+export module Tracer.Interactable:Interaction.MediumInteraction;
 import :Interaction;
 
 namespace SIByL::Tracer

@@ -1,6 +1,6 @@
 export module Tracer.Texture:UVTexture;
 import :Texture;
-import Tracer.Interactions;
+import Tracer.Interactable;
 
 namespace SIByL::Tracer
 {

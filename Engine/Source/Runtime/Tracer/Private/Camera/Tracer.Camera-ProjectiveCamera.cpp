@@ -21,8 +21,8 @@ namespace SIByL::Tracer
 	{
 		// Compute projective camera screen transformations
 		// Note, y-axis is inversed in screen-to-raster process
-		screenToRaster = Math::scale(film->fullResolution.x, film->fullResolution.y, 1)
-			* Math::scale(1 / (screenWindow.pMax.x - screenWindow.pMin.x), 1 / (screenWindow.pMin.y - screenWindow.pMax.y), 1)
+		screenToRaster = Math::scale((float)film->fullResolution.x, (float)film->fullResolution.y, 1.f)
+			* Math::scale(1.f / (screenWindow.pMax.x - screenWindow.pMin.x), 1.f / (screenWindow.pMin.y - screenWindow.pMax.y), 1.f)
 			* Math::translate(Math::vec3(-screenWindow.pMin.x, -screenWindow.pMax.y, 0));
 		rasterToScreen = Math::inverse(screenToRaster);
 

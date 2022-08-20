@@ -5,7 +5,7 @@ import Math.Geometry;
 
 namespace SIByL::Tracer
 {
-	struct SurfaceInteraction;
+	export struct SurfaceInteraction;
 	
 	/**
 	* A general Shape interface.
@@ -16,7 +16,7 @@ namespace SIByL::Tracer
 			: objectToWorld(objectToWorld)
 			, worldToObject(worldToObject)
 			, reverseOrientation(reverseOrientation)
-			, transformSwapHandedness(objectToWorld->swapsHandness())
+			, transformSwapsHandedness(objectToWorld->swapsHandness())
 		{}
 
 		/** return a bounding box in shape's object space */
@@ -64,6 +64,6 @@ namespace SIByL::Tracer
 		/** Whether surface normal directions should be reversed from default */
 		bool const reverseOrientation;
 		/** The value of Transform::SwapsHandedness() of object-to-world Transform */
-		bool const transformSwapHandedness;
+		bool const transformSwapsHandedness;
 	};
 }

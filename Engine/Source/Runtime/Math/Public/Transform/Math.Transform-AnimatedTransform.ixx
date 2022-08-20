@@ -18,6 +18,10 @@ namespace SIByL::Math
 
 		auto interpolate(float time, Transform* t) const -> void;
 
+		auto motionBounds(bounds3 const& b) const noexcept -> bounds3;
+
+		auto boundPointMotion(point3 const& p) const noexcept -> bounds3;
+
 		Transform const* startTransform;
 		Transform const* endTransform;
 		float const startTime, endTime;
