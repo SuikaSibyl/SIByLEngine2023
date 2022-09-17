@@ -2,6 +2,7 @@ export module Tracer.Integrator:WhittedIntegrator;
 import :Integrator;
 import :SamplerIntegrator;
 import Core.Memory;
+import Math.Limits;
 import Parallelism.Parallel;
 import Tracer.Ray;
 import Tracer.Camera;

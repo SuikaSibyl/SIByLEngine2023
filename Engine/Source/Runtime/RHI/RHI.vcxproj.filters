@@ -18,34 +18,16 @@
     <ClCompile Include="Public\Device\RHI.Device.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Device\RHI.Device-Adapter.ixx">
+    <ClCompile Include="Private\Device\RHI.Device-VK.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Device\RHI.Device-Device.ixx">
+    <ClCompile Include="Private\Device\RHI.Device-GL.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Device\RHI.Device-Enums.ixx">
+    <ClCompile Include="..\..\ThirdParty\glad\src\glad.c">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Private\Device\RHI.Device-Adapter_VK.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Private\Device\RHI.Device-Adapter_VK.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Private\Device\RHI.Device-Device_VK.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Private\Device\RHI.Device-Device_VK.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Device\RHI.Device-Context.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Private\Device\RHI.Device-Context_VK.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Private\Device\RHI.Device-Context_VK.cpp">
+    <ClCompile Include="Public\Device\RHI.Device-Interface.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

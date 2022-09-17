@@ -1,6 +1,5 @@
 module;
 export module Tracer.Camera:EnvironmentCamera;
-import :Camera;
 import Tracer.Medium;
 import Tracer.Film;
 import Tracer.Ray;

@@ -1,5 +1,4 @@
 export module Tracer.Texture:WindyTexture;
-import :Texture;
 import Tracer.Interactable;
 
 namespace SIByL::Tracer

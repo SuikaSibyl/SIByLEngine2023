@@ -7,3 +7,5 @@ export import :Ray3;
 export import :Bounds2;
 export import :Bounds3;
 export import :Quaternion;
+export import :Geometric;
+export import :Integral;

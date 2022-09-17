@@ -20,27 +20,11 @@ namespace SIByL::Tracer
         xyz[2] = 0.019334f * rgb[0] + 0.119193f * rgb[1] + 0.950227f * rgb[2];
     }
 
-    template <typename Predicate>
-    int findInterval(int size, const Predicate& pred) {
-        int first = 0, len = size;
-        while (len > 0) {
-            int half = len >> 1, middle = first + half;
-            // Bisect range based on value of _pred_ at _middle_
-            if (pred(middle)) {
-                first = middle + 1;
-                len -= half + 1;
-            }
-            else
-                len = half;
-        }
-        return Math::clamp(first - 1, 0, size - 2);
-    }
-
     inline auto interpolateSpectrumSamples(const float* lambda, const float* vals, int n, float l) noexcept -> float
     {
         if (l <= lambda[0])     return vals[0];
         if (l >= lambda[n - 1]) return vals[n - 1];
-        int offset = findInterval(n, [&](int index) { return lambda[index] <= l; });
+        int offset = Math::findInterval(n, [&](int index) { return lambda[index] <= l; });
         float t = (l - lambda[offset]) / (lambda[offset + 1] - lambda[offset]);
         return Math::lerp(t, vals[offset], vals[offset + 1]);
     }
@@ -95,6 +79,29 @@ namespace SIByL::Tracer
                 (segLambdaEnd - segLambdaStart);
         }
         return sum / (lambda1 - lambda0);
+    }
+
+    inline auto blackBody(float const* lambda, int n, float T, float* Le) noexcept -> void {
+        float const c = 299792458;
+        float const h = 6.62606957e-34;
+        float const kb = 1.3806488e-23;
+        for (int i = 0; i < n; ++i) {
+            // Compute emitted radiance for blackbody at wavelength lambda[i]
+            float l = lambda[i] * 1e-9;
+            float lambda5 = (l * l) * (l * l) * l;
+            Le[i] = (2 * h * c * c) /
+                (lambda5 * (std::exp((h * c) / (l * kb * T)) - 1));
+        }
+    }
+    
+    inline auto blackBodyNormalized(float const* lambda, int n, float T, float* Le) noexcept -> void {
+        blackBody(lambda, n, T, Le);
+        // Normalize Le values based on maximum blackbody radiance
+        float lambdaMax = 2.8977721e-3 / T * 1e9;
+        float maxL;
+        blackBody(&lambdaMax, 1, T, &maxL);
+        for (int i = 0; i < n; ++i)
+            Le[i] /= maxL;
     }
 
     float const CIE_X[nCIESamples] = {

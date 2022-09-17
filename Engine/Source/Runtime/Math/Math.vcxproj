@@ -137,13 +137,17 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Private\Deterministic\Math.FixedPoint.cpp" />
     <ClCompile Include="Private\Random\Math.Random-RNG.cpp" />
     <ClCompile Include="Private\Utility\Math.EquationSolving.cpp" />
     <ClCompile Include="Private\Utility\Math.RoundingError.cpp" />
     <ClCompile Include="Private\Transform\Math.Transform-AnimatedTransform.cpp" />
     <ClCompile Include="Private\Transform\Math.Transform-Transform.cpp" />
+    <ClCompile Include="Public\Deterministic\Math.FixedPoint.ixx" />
     <ClCompile Include="Public\Geometry\Math.Geometry-Bounds2.ixx" />
     <ClCompile Include="Public\Geometry\Math.Geometry-Bounds3.ixx" />
+    <ClCompile Include="Public\Geometry\Math.Geometry-Geometric.ixx" />
+    <ClCompile Include="Public\Geometry\Math.Geometry-Integral.ixx" />
     <ClCompile Include="Public\Geometry\Math.Geometry-Normal3.ixx" />
     <ClCompile Include="Public\Geometry\Math.Geometry-Point2.ixx" />
     <ClCompile Include="Public\Geometry\Math.Geometry-Point3.ixx" />

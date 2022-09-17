@@ -1,9 +1,8 @@
 export module Tracer.Shape:Disk;
-import :Shape;
-
 import Math.Transform;
 import Math.Geometry;
 import Math.Common;
+import Tracer.Interactable;
 
 namespace SIByL::Tracer
 {

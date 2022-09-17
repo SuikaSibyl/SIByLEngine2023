@@ -1,6 +1,7 @@
 module;
 #include <cmath>
 #include <algorithm>
+#include <limits>
 module Tracer.Integrator:SamplerIntegrator;
 import Tracer.Integrator;
 import Core.Memory;

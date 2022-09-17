@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <chrono>
 #include <memory>
+#include <glad/glad.h>
 import Core.Log;
 import Core.Memory;
 import Core.IO;
@@ -21,7 +22,6 @@ import Tracer.Shape;
 import Tracer.Filter;
 import Tracer.Interactable;
 
-import Application.Root;
 import Image.Color;
 import Image.Image;
 import Image.FileFormat;
@@ -30,16 +30,56 @@ import Platform.Window;
 import Platform.System;
 import Parallelism.Parallel;
 
+import RHI.Device;
+
+import Application.Root;
+import Application.Base;
+
 using namespace SIByL;
 using namespace SIByL::Core;
 using namespace SIByL::Math;
 
+struct SandBoxApplication :public Application::ApplicationBase {
+	/** Initialize the application */
+	virtual auto Init() noexcept -> void override {
+		glViewport(0, 0, 720, 480);
+
+	};
+
+	/** Update the application every loop */
+	virtual auto Update() noexcept -> void override {
+		glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
+	};
+
+	/** Update the application every fixed update timestep */
+	virtual auto FixedUpdate() noexcept -> void override {
+
+	};
+};
+
 int main()
 {
 	Application::Root root;
+	
+	SandBoxApplication app;
+	Scope<Platform::Window> window = Platform::Window::create({
+			Platform::WindowVendor::WIN_64,
+			L"SIByL Engine 2022.0",
+			720, 480,
+			Platform::WindowProperties::OPENGL_CONTEX
+		});
+	//app.createMainWindow({
+	//		Platform::WindowVendor::WIN_64,
+	//		L"SIByL Engine 2022.0",
+	//		720, 480,
+	//		Platform::WindowProperties::OPENGL_CONTEX
+	//	});
 
-	//Tracer::SurfaceInteraction* a = nullptr;
-	//auto test = a->primitive->worldBound();
+	RHI::Context_GL context;
+	bool win = context.init(app.mainWindow.get());
+
+	//app.run();
 
 	int ncores = Platform::getNumSystemCores();
 	Image::Image<Image::COLOR_R8G8B8_UINT> image(720, 480);
@@ -47,12 +87,8 @@ int main()
 		(Image::COLOR_R8G8B8_UINT*)&((reinterpret_cast<char*>(image.data.data))[image.data.size]), 
 		Image::COLOR_R8G8B8_UINT{255,255,0});
 
-	Platform::Window_Win64 window(L"Hello World");
-	window.create();
-	auto paintbitmap = std::bind(Platform::paintRGB8Bitmap,
-		std::placeholders::_1, size_t(720), size_t(480), (char*)image.data.data);
-	window.onPaintSignal.connect(paintbitmap);
-	window.resize(720, 480);
+	window->bindPaintingBitmapRGB8(size_t(720), size_t(480), (char*)image.data.data);
+	window->resize(720.f, 480);
 
 	Math::Transform defaultTransform(mat4{});
 	Math::AnimatedTransform animatedDefaultTransform(&defaultTransform, 0, &defaultTransform, 0);
@@ -65,7 +101,7 @@ int main()
 	Tracer::Sphere sphere(&objectToWorld, &worldToObject, false, 1, -1, 1, 360);
 
 	int i = 0;
-	while (window.isRunning()) {
+	while (window->isRunning()) {
 		auto startPoint = std::chrono::high_resolution_clock::now();
 
 		// Clear background to black
@@ -79,7 +115,7 @@ int main()
 			for (int i = 0; i < 720; ++i) {
 				Tracer::CameraSample sample = { Math::point2{ 0.5f + i * 1.f, 0.5f + j * 1.f }, Math::point2{ 0.f,0.f }, 0.f };
 				camera.generateRay(sample, &ray);
-				bool intersected = sphere.intersect(ray, &tHit, nullptr);
+				bool intersected = sphere.intersect(ray, &tHit, nullptr, false);
 				if (intersected)
 					image[j][i] = Image::COLOR_R8G8B8_UINT{ 255 ,255 ,255 };
 			}
@@ -98,8 +134,8 @@ int main()
 		//	}
 		//}
 
-		window.run();
-		window.invalid();
+		window->fetchEvents();
+		window->invalid();
 
 		auto endPoint = std::chrono::high_resolution_clock::now();
 		long long start = std::chrono::time_point_cast<std::chrono::microseconds>(startPoint).time_since_epoch().count();
@@ -107,6 +143,6 @@ int main()
 		long long time = end - start;
 		std::cout << "Time each frame: " << (time * 1. / 1000000) << std::endl;
 	}
-	window.destroy();
+	window->destroy();
 	Parallelism::clearThreadPool();
 }

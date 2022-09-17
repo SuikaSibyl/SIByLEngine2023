@@ -1,7 +1,5 @@
 export module Tracer.Sampler;
 
-export import :Sampler;
-
 export import :PixelSampler;
 export import :GlobalSampler;
 

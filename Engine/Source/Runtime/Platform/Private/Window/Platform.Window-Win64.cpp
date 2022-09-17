@@ -2,6 +2,7 @@ module;
 #include <string>
 #include <functional>
 #include <windows.h>
+#include <WinUser.h>
 module Platform.Window:WindowWin64;
 import Platform.Window;
 
@@ -28,10 +29,40 @@ namespace SIByL::Platform
 		return pWnd->wndProc(hwnd, msg, wParam, lParam);
 	}
 
-	Window_Win64::Window_Win64(std::wstring const& unique_name)
-		:uniName(unique_name) {}
+	/**
+	* Bind OpenGL context for Win32 window.
+	* Ref: https://github.com/gszauer/GamePhysicsCookbook/blob/master/Code/main-win32.cpp
+	*/
+	auto bindOpenGLContext(HDC hdc) noexcept -> HGLRC {
+		PIXELFORMATDESCRIPTOR pfd;
+		ZeroMemory(&pfd, sizeof(PIXELFORMATDESCRIPTOR));
 
-	auto Window_Win64::create() noexcept -> bool {
+		pfd.nSize = sizeof(PIXELFORMATDESCRIPTOR);
+		pfd.nVersion = 1;
+		pfd.dwFlags = PFD_SUPPORT_OPENGL | PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER;
+		pfd.iPixelType = PFD_TYPE_RGBA;
+		pfd.cColorBits = 24;
+		pfd.cDepthBits = 32;
+		pfd.cStencilBits = 8;
+		pfd.iLayerType = PFD_MAIN_PLANE;
+
+		int pixelFormat = ChoosePixelFormat(hdc, &pfd);
+		SetPixelFormat(hdc, pixelFormat, &pfd);
+
+		HGLRC context = wglCreateContext(hdc);
+		wglMakeCurrent(hdc, context);
+
+		return context;
+	}
+
+	Window_Win64::Window_Win64(WindowOptions const& option)
+		:uniName(option.title), width(option.width), height(option.height), properties(option.properties)
+	{ init(); }
+
+	auto Window_Win64::init() noexcept -> bool {
+		// Always set the window to be DPI awared, to aligned to GLFW ones
+		SetProcessDPIAware();
+
 		WNDCLASS wc;
 		wc.style = CS_HREDRAW | CS_VREDRAW;
 		wc.lpfnWndProc = StaticWndProc;
@@ -44,35 +75,39 @@ namespace SIByL::Platform
 		wc.lpszMenuName = 0;
 		wc.lpszClassName = uniName.c_str();
 
-		if (!RegisterClass(&wc))
-		{
+		if (!RegisterClass(&wc)) {
 			MessageBox(0, L"RegisterClass Failed.", 0, 0);
 			return false;
 		}
 
 		// Compute window rectangle dimensions based on requested client area dimensions.
-		RECT R = { 0, 0, 800, 600 };
+		RECT R = { 0, 0, width, height };
 		AdjustWindowRect(&R, WS_OVERLAPPEDWINDOW, false);
 		int width = R.right - R.left;
 		int height = R.bottom - R.top;
 
+		FLOAT dpiX, dpiY;
+		HDC screen = GetDC(0);
+		dpiX = static_cast<FLOAT>(GetDeviceCaps(screen, LOGPIXELSX));
+		dpiY = static_cast<FLOAT>(GetDeviceCaps(screen, LOGPIXELSY));
+		ReleaseDC(0, screen);
+
 		wndHandle = CreateWindowEx(
 			NULL,
 			uniName.c_str(),
-			L"d3d App",
+			uniName.c_str(),
 			WS_OVERLAPPEDWINDOW,
 			CW_USEDEFAULT,
 			CW_USEDEFAULT,
-			width,
-			height,
+			static_cast<INT>(width),
+			static_cast<INT>(height), 
 			0,
 			0,
 			instanceHandle,
 			static_cast<LPVOID>(this)
 		);
 
-		if (!wndHandle)
-		{
+		if (!wndHandle) {
 			MessageBox(0, L"CreateWindow Failed.", 0, 0);
 			return false;
 		}
@@ -80,10 +115,14 @@ namespace SIByL::Platform
 		ShowWindow(wndHandle, SW_SHOW);
 		UpdateWindow(wndHandle);
 
+		if (properties & WindowProperties::OPENGL_CONTEX) {
+			HDC hdc = GetDC(wndHandle);
+			HGLRC hglrc = bindOpenGLContext(hdc);
+		}
 		return true;
 	}
 
-	auto Window_Win64::run() noexcept -> int
+	auto Window_Win64::fetchEvents() noexcept -> int
 	{
 		MSG msg = { 0 };
 		while (PeekMessage(&msg, 0, 0, 0, PM_REMOVE))
@@ -102,16 +141,13 @@ namespace SIByL::Platform
 		InvalidateRect(wndHandle, NULL, TRUE);
 		UpdateWindow(wndHandle);
 	}
+	
+	auto Window_Win64::endFrame() noexcept -> void {
+		if (properties & WindowProperties::OPENGL_CONTEX)
+			SwapBuffers(GetDC(wndHandle));
+		else {
 
-	auto Window_Win64::resize(size_t x, size_t y) noexcept -> void
-	{
-		RECT rcClient, rcWind;
-		POINT ptDiff;
-		GetClientRect(wndHandle, &rcClient);
-		GetWindowRect(wndHandle, &rcWind);
-		ptDiff.x = (rcWind.right - rcWind.left) - rcClient.right;
-		ptDiff.y = (rcWind.bottom - rcWind.top) - rcClient.bottom;
-		MoveWindow(wndHandle, rcWind.left, rcWind.top, x + ptDiff.x, y + ptDiff.y, TRUE);
+		}
 	}
 
 	auto Window_Win64::wndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)noexcept -> LRESULT {
@@ -173,6 +209,22 @@ namespace SIByL::Platform
 
 	auto Window_Win64::getHighDPI() noexcept -> float {
 		return 1. * GetDpiForWindow(wndHandle) / 96;
+	}
+	
+	auto Window_Win64::resize(size_t x, size_t y) noexcept -> void
+	{
+		RECT rcClient, rcWind;
+		POINT ptDiff;
+		GetClientRect(wndHandle, &rcClient);
+		GetWindowRect(wndHandle, &rcWind);
+		ptDiff.x = (rcWind.right - rcWind.left) - rcClient.right;
+		ptDiff.y = (rcWind.bottom - rcWind.top) - rcClient.bottom;
+		MoveWindow(wndHandle, rcWind.left, rcWind.top, x + ptDiff.x, y + ptDiff.y, TRUE);
+	}
+
+	auto Window_Win64::bindPaintingBitmapRGB8(size_t width, size_t height, char* data) noexcept -> void {
+		auto paintbitmap = std::bind(paintRGB8Bitmap, std::placeholders::_1, width, height, data);
+		onPaintSignal.connect(paintbitmap);
 	}
 
 	auto paintRGB8Bitmap(HDC& hdc, size_t width, size_t height, char* data) -> void

@@ -10,8 +10,8 @@ namespace SIByL::Math
 {
 	export struct ray3
 	{
-		ray3() :tMax(Math::float_infinity) {}
-		ray3(Math::point3 const& o, Math::vec3 const& d, float tMax = Math::float_infinity)
+		ray3() :tMax(float_infinity) {}
+		ray3(Math::point3 const& o, Math::vec3 const& d, float tMax = float_infinity)
 			:o(o), d(d), tMax(tMax) {}
 
 		auto operator()(float t) const -> Math::point3;

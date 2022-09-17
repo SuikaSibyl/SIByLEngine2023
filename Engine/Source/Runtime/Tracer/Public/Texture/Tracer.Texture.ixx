@@ -1,7 +1,5 @@
 export module Tracer.Texture;
 
-export import :Texture;
-
 export import :ConstantTexture;
 export import :ScaleTexture;
 export import :MixTexture;

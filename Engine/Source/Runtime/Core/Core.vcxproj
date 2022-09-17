@@ -36,6 +36,7 @@
     <ClCompile Include="Public\Memory\Core.Memory-Memory.ixx" />
     <ClCompile Include="Public\Memory\Core.Memory-MemoryArena.ixx" />
     <ClCompile Include="Public\Memory\Core.Memory-StackAllocator.ixx" />
+    <ClCompile Include="Public\Misc\Core.String.ixx" />
     <ClCompile Include="Public\Print\Core.Log-Logger.ixx" />
     <ClCompile Include="Public\Print\Core.Log-LogManager.ixx" />
     <ClCompile Include="Public\Print\Core.Log-LogStream.ixx" />

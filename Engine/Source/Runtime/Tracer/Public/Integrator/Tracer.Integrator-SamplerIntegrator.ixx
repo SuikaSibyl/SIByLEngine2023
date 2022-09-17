@@ -1,6 +1,7 @@
 export module Tracer.Integrator:SamplerIntegrator;
 import :Integrator;
 import Core.Memory;
+import Math.Limits;
 import Parallelism.Parallel;
 import Tracer.Ray;
 import Tracer.Camera;

@@ -1,5 +1,4 @@
 export module Tracer.Texture:BilerpTexture;
-import :Texture;
 import Tracer.Interactable;
 
 namespace SIByL::Tracer

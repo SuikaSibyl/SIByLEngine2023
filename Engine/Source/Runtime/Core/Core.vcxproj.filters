@@ -96,5 +96,8 @@
     <ClCompile Include="Private\Memory\Core.Memory-StackAllocator.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Misc\Core.String.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

@@ -3,6 +3,7 @@ module;
 #include <vector>
 #include <numeric>
 #include <algorithm>
+#include <limits>
 export module Tracer.Spectrum:RGBSpectrum;
 import :CoefficientSpectrum;
 import :Common;

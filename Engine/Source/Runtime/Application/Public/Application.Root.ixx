@@ -10,7 +10,7 @@ namespace SIByL::Application
 		~Root();
 
 		Core::MemoryManager gMemManager;
-		Core::LogManager gLogManager;
+		Core::LogManager	gLogManager;
 	};
 
 	Root::Root()

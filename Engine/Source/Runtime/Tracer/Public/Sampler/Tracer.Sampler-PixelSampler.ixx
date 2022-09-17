@@ -2,7 +2,7 @@ module;
 #include <cstdint>
 #include <vector>
 export module Tracer.Sampler:PixelSampler;
-import :Sampler;
+import Tracer.Ray;
 import Math.Geometry;
 import Math.Random;
 

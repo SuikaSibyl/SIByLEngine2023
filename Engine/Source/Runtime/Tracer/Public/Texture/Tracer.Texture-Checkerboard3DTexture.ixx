@@ -1,5 +1,4 @@
 export module Tracer.Texture:Checkerboard3DTexture;
-import :Texture;
 import Tracer.Interactable;
 
 namespace SIByL::Tracer

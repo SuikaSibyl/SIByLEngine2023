@@ -36,7 +36,6 @@ namespace SIByL::Math
 		auto operator-() const->Vector3<T>;
 		auto operator*(T s) const->Vector3<T>;
 		auto operator/(T s) const->Vector3<T>;
-		auto operator*=(T s) const->Vector3<T>&;
 		auto operator/=(T s) const->Vector3<T>&;
 		auto operator+(Vector3<T> const& v) const->Vector3<T>;
 		auto operator-(Vector3<T> const& v) const->Vector3<T>;
@@ -221,15 +220,6 @@ namespace SIByL::Math
 			result.data[i] = data[i] * inv;
 		}
 		return result;
-	}
-
-	template <class T>
-	auto Vector3<T>::operator*=(T s) const->Vector3<T>&
-	{
-		for (size_t i = 0; i < 3; i++) {
-			data[i] *= s;
-		}
-		return *this;
 	}
 
 	template <class T>

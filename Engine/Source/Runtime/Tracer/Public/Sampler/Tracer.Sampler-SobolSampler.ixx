@@ -1,5 +1,5 @@
 export module Tracer.Sampler:SobolSampler;
-import :Sampler;
+import Tracer.Ray;
 import :GlobalSampler;
 
 namespace SIByL::Tracer

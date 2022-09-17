@@ -1,14 +1,17 @@
 module;
 #include <limits>
 export module Tracer.Ray:Ray;
+import :Sampler;
 import Math.Vector;
 import Math.Geometry;
 import Math.Limits;
 import Math.Transform;
-import Tracer.Medium;
+import Tracer.Spectrum;
 
 namespace SIByL::Tracer
 {
+	export struct Medium;
+
 	export struct Ray
 	{
 		Ray() :tMax(Math::float_infinity), time(0.f), medium(nullptr) {}

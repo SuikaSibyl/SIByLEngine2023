@@ -1,6 +1,5 @@
 module;
 export module Tracer.Camera:RealisticCamera;
-import :Camera;
 import Tracer.Medium;
 import Tracer.Film;
 import Tracer.Ray;

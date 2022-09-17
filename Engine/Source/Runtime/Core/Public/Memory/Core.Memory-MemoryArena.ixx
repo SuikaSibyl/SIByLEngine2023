@@ -1,6 +1,8 @@
 module;
+#include <new>
 #include <cstdint>
 #include <list>
+//#include <utility>
 export module Core.Memory:MemoryArena;
 
 namespace SIByL::Core
@@ -45,5 +47,10 @@ namespace SIByL::Core
 			for (size_t i = 0; i < n; i++)
 				new(&ret[i])T();
 		return ret;
+	}
+
+	export template<typename T, typename... Args>
+	inline auto ArenaAlloc(MemoryArena& arena, Args&&... args) noexcept -> T* {
+		return ::new (arena.alloc(sizeof(T))) T(std::forward<Args>(args)...);
 	}
 }

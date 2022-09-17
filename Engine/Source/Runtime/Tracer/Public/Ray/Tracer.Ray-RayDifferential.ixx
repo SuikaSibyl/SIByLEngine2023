@@ -1,11 +1,10 @@
 module;
 #include <limits>
 export module Tracer.Ray:RayDifferential;
+import :Ray;
 import Math.Vector;
 import Math.Geometry;
 import Math.Limits;
-import Tracer.Medium;
-import :Ray;
 
 namespace SIByL::Tracer
 {

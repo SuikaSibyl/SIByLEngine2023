@@ -1,6 +1,6 @@
 export module Tracer.Sampler:ZeroTwoSequenceSampler;
-import :Sampler;
 import :PixelSampler;
+import Tracer.Ray;
 
 namespace SIByL::Tracer
 {

@@ -53,4 +53,8 @@ namespace SIByL::Tracer
     export inline auto sortSpectrumSamples(float* lambda, float* v, int n) noexcept -> void;
 
     export inline auto averageSpectrumSamples(float const* lambda, float const* v, int n, float lambda0, float lambda1) noexcept -> float;
+
+    export inline auto blackBody(float const* lambda, int n, float T, float* Le) noexcept -> void;
+
+    export inline auto blackBodyNormalized(float const* lambda, int n, float T, float* Le) noexcept -> void;
 }

@@ -73,10 +73,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+    <IncludePath>$(SolutionDir)Engine\Source\\Runtime\Tracer\Private;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+    <IncludePath>$(SolutionDir)Engine\Source\\Runtime\Tracer\Private;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -137,31 +139,44 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Private\Camera\Tracer.Camera-Camera.cpp" />
+    <ClCompile Include="Private\Interactable\Tracer.Interactable.cpp" />
+    <ClCompile Include="Private\Primitives\Tracer.Primitives-GeometricPrimitive.cpp" />
+    <ClCompile Include="Private\Primitives\Tracer.Primitives-TransformedPrimitive.cpp" />
+    <ClCompile Include="Private\Ray\Tracer.Ray-Camera.cpp" />
     <ClCompile Include="Private\Camera\Tracer.Camera-OrthographicCamera.cpp" />
     <ClCompile Include="Private\Camera\Tracer.Camera-ProjectiveCamera.cpp" />
     <ClCompile Include="Private\Film\Tracer.Film.cpp" />
     <ClCompile Include="Private\Integrator\Tracer.Integrator-SamplerIntegrator.cpp" />
     <ClCompile Include="Private\Integrator\Tracer.Integrator-WhittedIntegrator.cpp" />
-    <ClCompile Include="Private\Interactable\Tracer.Interactable-Interaction.cpp" />
-    <ClCompile Include="Private\Interactable\Tracer.Interactable-Light.cpp" />
-    <ClCompile Include="Private\Interactable\Tracer.Interactable-Primitive.GeometricPrimitive.cpp" />
-    <ClCompile Include="Private\Interactable\Tracer.Interactable-Primitive.TransformedPrimitive.cpp" />
-    <ClCompile Include="Private\Interactable\Tracer.Interactable-Scene.cpp" />
-    <ClCompile Include="Private\Interactable\Tracer.Interactable-Interaction.SurfaceInteraction.cpp" />
     <ClCompile Include="Private\Material\Tracer.BxDF-BxDF.cpp" />
     <ClCompile Include="Private\Ray\Tracer.Ray-Ray.cpp" />
     <ClCompile Include="Private\Sampler\Tracer.Sampler-GlobalSampler.cpp" />
     <ClCompile Include="Private\Sampler\Tracer.Sampler-PixelSampler.cpp" />
-    <ClCompile Include="Private\Sampler\Tracer.Sampler-Sampler.cpp" />
+    <ClCompile Include="Private\Ray\Tracer.Ray-Sampler.cpp" />
     <ClCompile Include="Private\Sampler\Tracer.Sampler-StratifiedSampler.cpp" />
-    <ClCompile Include="Private\Shape\Tracer.Shape-Sphere.cpp" />
+    <ClCompile Include="Private\Sampling\Tracer.Sampling-Distribution1D.cpp" />
+    <ClCompile Include="Private\Sampling\Tracer.Sampling-Distribution2D.cpp" />
+    <ClCompile Include="Private\Sampling\Tracer.Sampling-Sampling.cpp" />
     <ClCompile Include="Private\Spectrum\Tracer.Spectrum-Common.cpp" />
     <ClCompile Include="Private\Spectrum\Tracer.Spectrum-RGBSpectrum.cpp" />
     <ClCompile Include="Private\Spectrum\Tracer.Spectrum-SampledSpectrum.cpp" />
     <ClCompile Include="Public\Camera\Tracer.Camera-EnvironmentCamera.ixx" />
     <ClCompile Include="Public\Camera\Tracer.Camera-OrthographicCamera.ixx" />
-    <ClCompile Include="Public\Camera\Tracer.Camera-Camera.ixx" />
+    <ClCompile Include="Public\Integrator\Tracer.Integrator-DirectLightingIntegrator.ixx" />
+    <ClCompile Include="Public\Interactable\Tracer.Interactable.ixx" />
+    <ClCompile Include="Public\Light\Tracer.Light-DiffuseAreaLight.ixx" />
+    <ClCompile Include="Public\Light\Tracer.Light-GonioPhotometricLight.ixx" />
+    <ClCompile Include="Public\Light\Tracer.Light-InfiniteAreaLight.ixx" />
+    <ClCompile Include="Public\Light\Tracer.Light-ProjectionLight.ixx" />
+    <ClCompile Include="Public\Light\Tracer.Light.ixx" />
+    <ClCompile Include="Public\Medium\Tracer.Medium-GridDensityMedium.ixx" />
+    <ClCompile Include="Public\Medium\Tracer.Medium-HomogeneousMedium.ixx" />
+    <ClCompile Include="Public\Primitives\Tracer.Primitives-BVHAccel.ixx" />
+    <ClCompile Include="Public\Primitives\Tracer.Primitives-GeometricPrimitive.ixx" />
+    <ClCompile Include="Public\Primitives\Tracer.Primitives-KdTreeAccel.ixx" />
+    <ClCompile Include="Public\Primitives\Tracer.Primitives-TransformedPrimitive.ixx" />
+    <ClCompile Include="Public\Primitives\Tracer.Primitives.ixx" />
+    <ClCompile Include="Public\Ray\Tracer.Ray-Camera.ixx" />
     <ClCompile Include="Public\Camera\Tracer.Camera-PerspectiveCamera.ixx" />
     <ClCompile Include="Public\Camera\Tracer.Camera-ProjectiveCamera.ixx" />
     <ClCompile Include="Public\Camera\Tracer.Camera-RealisticCamera.ixx" />
@@ -179,52 +194,32 @@
     <ClCompile Include="Public\Integrator\Tracer.Integrator-SamplerIntegrator.ixx" />
     <ClCompile Include="Public\Integrator\Tracer.Integrator-WhittedIntegrator.ixx" />
     <ClCompile Include="Public\Integrator\Tracer.Integrator.ixx" />
-    <ClCompile Include="Public\Interactable\Tracer.Interactable-BSDF.ixx" />
-    <ClCompile Include="Public\Interactable\Tracer.Interactable-BSSRDF.ixx" />
-    <ClCompile Include="Public\Interactable\Tracer.Interactable-Interaction.ixx" />
-    <ClCompile Include="Public\Interactable\Tracer.Interactable-Interaction.SurfaceInteraction.ixx" />
-    <ClCompile Include="Public\Interactable\Tracer.Interactable-Interaction.MediumInteraction.ixx" />
-    <ClCompile Include="Public\Interactable\Tracer.Interactable-Light.AreaLight.ixx" />
-    <ClCompile Include="Public\Interactable\Tracer.Interactable-Light.DistantLight.ixx" />
-    <ClCompile Include="Public\Interactable\Tracer.Interactable-Light.InfiniteAreaLight.ixx" />
-    <ClCompile Include="Public\Interactable\Tracer.Interactable-Light.ixx" />
-    <ClCompile Include="Public\Interactable\Tracer.Interactable-Light.PointLight.ixx" />
-    <ClCompile Include="Public\Interactable\Tracer.Interactable-Material.ixx" />
-    <ClCompile Include="Public\Interactable\Tracer.Interactable-Primitive.Aggregate.ixx" />
-    <ClCompile Include="Public\Interactable\Tracer.Interactable-Primitive.BVHAccel.ixx" />
-    <ClCompile Include="Public\Interactable\Tracer.Interactable-Primitive.GeometricPrimitive.ixx" />
-    <ClCompile Include="Public\Interactable\Tracer.Interactable-Primitive.ixx" />
-    <ClCompile Include="Public\Interactable\Tracer.Interactable-Primitive.KdTreeAccel.ixx" />
-    <ClCompile Include="Public\Interactable\Tracer.Interactable-Primitive.TransformedPrimitive.ixx" />
-    <ClCompile Include="Public\Interactable\Tracer.Interactable-Scene.ixx" />
-    <ClCompile Include="Public\Interactable\Tracer.Interactable.ixx" />
-    <ClCompile Include="Public\Material\Tracer.BSSRDF-BSSRDF.ixx" />
+    <ClCompile Include="Public\Primitives\Tracer.Primitives-Aggregate.ixx" />
     <ClCompile Include="Public\Material\Tracer.BSSRDF-SeparableBSSRDF.ixx" />
     <ClCompile Include="Public\Material\Tracer.BSSRDF-TabulatedBSSRDF.ixx" />
     <ClCompile Include="Public\Material\Tracer.BSSRDF.ixx" />
     <ClCompile Include="Public\Material\Tracer.BxDF-FourierBSDF.ixx" />
+    <ClCompile Include="Public\Material\Tracer.BxDF-Fresnel.ixx" />
     <ClCompile Include="Public\Material\Tracer.BxDF-FresnelBlend.ixx" />
     <ClCompile Include="Public\Material\Tracer.BxDF-FresnelSpecular.ixx" />
-    <ClCompile Include="Public\Material\Tracer.BxDF-LambertianReflection.ixx" />
+    <ClCompile Include="Public\Material\Tracer.BxDF-Lambertian.ixx" />
+    <ClCompile Include="Public\Material\Tracer.BxDF-MicrofacetDistribution.ixx" />
     <ClCompile Include="Public\Material\Tracer.BxDF-MicrofacetReflection.ixx" />
     <ClCompile Include="Public\Material\Tracer.BxDF-MicrofacetTransmission.ixx" />
+    <ClCompile Include="Public\Material\Tracer.BxDF-OrenNayar.ixx" />
     <ClCompile Include="Public\Material\Tracer.BxDF-SpecularReflection.ixx" />
     <ClCompile Include="Public\Material\Tracer.BxDF-SpecularTransmission.ixx" />
     <ClCompile Include="Public\Material\Tracer.Material-FourierMaterial.ixx" />
     <ClCompile Include="Public\Material\Tracer.Material-MixMaterial.ixx" />
-    <ClCompile Include="Public\Material\Tracer.BSDF.ixx" />
     <ClCompile Include="Public\Material\Tracer.BxDF-BxDF.ixx" />
     <ClCompile Include="Public\Material\Tracer.BxDF-ScaledBxDF.ixx" />
     <ClCompile Include="Public\Material\Tracer.BxDF.ixx" />
-    <ClCompile Include="Public\Material\Tracer.Material-Material.ixx" />
     <ClCompile Include="Public\Material\Tracer.Material-MatteMaterial.ixx" />
     <ClCompile Include="Public\Material\Tracer.Material-PlasticMaterial.ixx" />
     <ClCompile Include="Public\Material\Tracer.Material-SubsurfaceMaterial.ixx" />
     <ClCompile Include="Public\Material\Tracer.Material.ixx" />
-    <ClCompile Include="Public\Medium\Tracer.Medium-Medium.ixx" />
-    <ClCompile Include="Public\Medium\Tracer.Medium-MediumInterface.ixx" />
-    <ClCompile Include="Public\Medium\Tracer.Medium-PhaseFunction.ixx" />
     <ClCompile Include="Public\Medium\Tracer.Medium.ixx" />
+    <ClCompile Include="Public\Ray\Tracer.Ray-Medium.ixx" />
     <ClCompile Include="Public\Ray\Tracer.Ray-Ray.ixx" />
     <ClCompile Include="Public\Ray\Tracer.Ray-RayDifferential.ixx" />
     <ClCompile Include="Public\Ray\Tracer.Ray.ixx" />
@@ -232,28 +227,16 @@
     <ClCompile Include="Public\Sampler\Tracer.Sampler-HaltonSampler.ixx" />
     <ClCompile Include="Public\Sampler\Tracer.Sampler-MaxMinDistSampler.ixx" />
     <ClCompile Include="Public\Sampler\Tracer.Sampler-PixelSampler.ixx" />
-    <ClCompile Include="Public\Sampler\Tracer.Sampler-Sampler.ixx" />
+    <ClCompile Include="Public\Ray\Tracer.Ray-Sampler.ixx" />
     <ClCompile Include="Public\Sampler\Tracer.Sampler-SobolSampler.ixx" />
     <ClCompile Include="Public\Sampler\Tracer.Sampler-StratifiedSampler.ixx" />
     <ClCompile Include="Public\Sampler\Tracer.Sampler-ZeroTwoSequenceSampler.ixx" />
     <ClCompile Include="Public\Sampler\Tracer.Sampler.ixx" />
-    <ClCompile Include="Private\Shape\Tracer.Shape-Shape.cpp">
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Default</CompileAs>
-    </ClCompile>
     <ClCompile Include="Public\Sampling\Tracer.Sampling-Distribution1D.ixx" />
     <ClCompile Include="Public\Sampling\Tracer.Sampling-Distribution2D.ixx" />
+    <ClCompile Include="Public\Sampling\Tracer.Sampling-Sampling.ixx" />
     <ClCompile Include="Public\Sampling\Tracer.Sampling.ixx" />
-    <ClCompile Include="Public\Shape\Tracer.Shape-Cone.ixx" />
-    <ClCompile Include="Public\Shape\Tracer.Shape-Curve.ixx" />
-    <ClCompile Include="Public\Shape\Tracer.Shape-Hyperboloid.ixx" />
-    <ClCompile Include="Public\Shape\Tracer.Shape-Paraboloid.ixx" />
-    <ClCompile Include="Public\Shape\Tracer.Shape-Cylinder.ixx" />
-    <ClCompile Include="Public\Shape\Tracer.Shape-Disk.ixx" />
-    <ClCompile Include="Public\Shape\Tracer.Shape-Shape.ixx">
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Default</CompileAs>
-    </ClCompile>
     <ClCompile Include="Public\Shape\Tracer.Shape-Sphere.ixx" />
-    <ClCompile Include="Public\Shape\Tracer.Shape-Triangle.ixx" />
     <ClCompile Include="Public\Shape\Tracer.Shape.ixx" />
     <ClCompile Include="Public\Spectrum\Tracer.Spectrum-CoefficientSpectrum.ixx" />
     <ClCompile Include="Public\Spectrum\Tracer.Spectrum-Common.ixx" />
@@ -270,7 +253,6 @@
     <ClCompile Include="Public\Texture\Tracer.Texture-MarbleTexture.ixx" />
     <ClCompile Include="Public\Texture\Tracer.Texture-MixTexture.ixx" />
     <ClCompile Include="Public\Texture\Tracer.Texture-ScaleTexture.ixx" />
-    <ClCompile Include="Public\Texture\Tracer.Texture-Texture.ixx" />
     <ClCompile Include="Public\Texture\Tracer.Texture-UVTexture.ixx" />
     <ClCompile Include="Public\Texture\Tracer.Texture-WindyTexture.ixx" />
     <ClCompile Include="Public\Texture\Tracer.Texture.ixx" />

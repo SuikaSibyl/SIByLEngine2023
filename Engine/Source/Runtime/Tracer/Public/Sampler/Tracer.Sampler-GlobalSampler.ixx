@@ -3,7 +3,7 @@ module;
 #include <vector>
 #include <memory>
 export module Tracer.Sampler:GlobalSampler;
-import :Sampler;
+import Tracer.Ray;
 import Core.Memory;
 import Math.Geometry;
 import Tracer.Camera;

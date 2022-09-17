@@ -1,8 +1,8 @@
 export module Tracer.Sampler:StratifiedSampler;
-import :Sampler;
 import :PixelSampler;
 import Math.Geometry;
 import Math.Random;
+import Tracer.Ray;
 
 namespace SIByL::Tracer
 {
