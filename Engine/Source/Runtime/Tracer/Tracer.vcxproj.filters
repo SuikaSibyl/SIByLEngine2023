@@ -27,13 +27,7 @@
     <ClCompile Include="Public\Sampler\Tracer.Sampler.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Ray\Tracer.Ray.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Ray\Tracer.Ray-Ray.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Ray\Tracer.Ray-RayDifferential.ixx">
+    <ClCompile Include="Public\Core\Tracer.Ray.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Shape\Tracer.Shape.ixx">
@@ -45,16 +39,10 @@
     <ClCompile Include="Public\Camera\Tracer.Camera.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Ray\Tracer.Ray-Camera.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="Public\Medium\Tracer.Medium.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Film\Tracer.Film.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Private\Ray\Tracer.Ray-Camera.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Camera\Tracer.Camera-ProjectiveCamera.ixx">
@@ -100,15 +88,6 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Private\Spectrum\Tracer.Spectrum-Common.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Ray\Tracer.Ray-Sampler.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Private\Ray\Tracer.Ray-Sampler.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Private\Ray\Tracer.Ray-Ray.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Material\Tracer.BxDF.ixx">
@@ -303,9 +282,6 @@
     <ClCompile Include="Public\Material\Tracer.BxDF-MicrofacetDistribution.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Ray\Tracer.Ray-Medium.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="Public\Medium\Tracer.Medium-HomogeneousMedium.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -363,10 +339,22 @@
     <ClCompile Include="Private\Primitives\Tracer.Primitives-GeometricPrimitive.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Interactable\Tracer.Interactable.ixx">
+    <ClCompile Include="Public\Core\Tracer.Interactable.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Private\Interactable\Tracer.Interactable.cpp">
+    <ClCompile Include="Private\Core\Tracer.Interactable.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Integrator\Tracer.Integrator-Utility.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Core\Tracer.Base.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Private\Core\Tracer.Base.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Private\Core\Tracer.Ray.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

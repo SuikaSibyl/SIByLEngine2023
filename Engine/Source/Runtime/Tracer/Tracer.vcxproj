@@ -139,20 +139,19 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Private\Interactable\Tracer.Interactable.cpp" />
+    <ClCompile Include="Private\Core\Tracer.Interactable.cpp" />
+    <ClCompile Include="Private\Core\Tracer.Base.cpp" />
     <ClCompile Include="Private\Primitives\Tracer.Primitives-GeometricPrimitive.cpp" />
     <ClCompile Include="Private\Primitives\Tracer.Primitives-TransformedPrimitive.cpp" />
-    <ClCompile Include="Private\Ray\Tracer.Ray-Camera.cpp" />
     <ClCompile Include="Private\Camera\Tracer.Camera-OrthographicCamera.cpp" />
     <ClCompile Include="Private\Camera\Tracer.Camera-ProjectiveCamera.cpp" />
     <ClCompile Include="Private\Film\Tracer.Film.cpp" />
     <ClCompile Include="Private\Integrator\Tracer.Integrator-SamplerIntegrator.cpp" />
     <ClCompile Include="Private\Integrator\Tracer.Integrator-WhittedIntegrator.cpp" />
     <ClCompile Include="Private\Material\Tracer.BxDF-BxDF.cpp" />
-    <ClCompile Include="Private\Ray\Tracer.Ray-Ray.cpp" />
+    <ClCompile Include="Private\Core\Tracer.Ray.cpp" />
     <ClCompile Include="Private\Sampler\Tracer.Sampler-GlobalSampler.cpp" />
     <ClCompile Include="Private\Sampler\Tracer.Sampler-PixelSampler.cpp" />
-    <ClCompile Include="Private\Ray\Tracer.Ray-Sampler.cpp" />
     <ClCompile Include="Private\Sampler\Tracer.Sampler-StratifiedSampler.cpp" />
     <ClCompile Include="Private\Sampling\Tracer.Sampling-Distribution1D.cpp" />
     <ClCompile Include="Private\Sampling\Tracer.Sampling-Distribution2D.cpp" />
@@ -162,8 +161,10 @@
     <ClCompile Include="Private\Spectrum\Tracer.Spectrum-SampledSpectrum.cpp" />
     <ClCompile Include="Public\Camera\Tracer.Camera-EnvironmentCamera.ixx" />
     <ClCompile Include="Public\Camera\Tracer.Camera-OrthographicCamera.ixx" />
+    <ClCompile Include="Public\Core\Tracer.Base.ixx" />
     <ClCompile Include="Public\Integrator\Tracer.Integrator-DirectLightingIntegrator.ixx" />
-    <ClCompile Include="Public\Interactable\Tracer.Interactable.ixx" />
+    <ClCompile Include="Public\Integrator\Tracer.Integrator-Utility.ixx" />
+    <ClCompile Include="Public\Core\Tracer.Interactable.ixx" />
     <ClCompile Include="Public\Light\Tracer.Light-DiffuseAreaLight.ixx" />
     <ClCompile Include="Public\Light\Tracer.Light-GonioPhotometricLight.ixx" />
     <ClCompile Include="Public\Light\Tracer.Light-InfiniteAreaLight.ixx" />
@@ -176,7 +177,6 @@
     <ClCompile Include="Public\Primitives\Tracer.Primitives-KdTreeAccel.ixx" />
     <ClCompile Include="Public\Primitives\Tracer.Primitives-TransformedPrimitive.ixx" />
     <ClCompile Include="Public\Primitives\Tracer.Primitives.ixx" />
-    <ClCompile Include="Public\Ray\Tracer.Ray-Camera.ixx" />
     <ClCompile Include="Public\Camera\Tracer.Camera-PerspectiveCamera.ixx" />
     <ClCompile Include="Public\Camera\Tracer.Camera-ProjectiveCamera.ixx" />
     <ClCompile Include="Public\Camera\Tracer.Camera-RealisticCamera.ixx" />
@@ -219,15 +219,11 @@
     <ClCompile Include="Public\Material\Tracer.Material-SubsurfaceMaterial.ixx" />
     <ClCompile Include="Public\Material\Tracer.Material.ixx" />
     <ClCompile Include="Public\Medium\Tracer.Medium.ixx" />
-    <ClCompile Include="Public\Ray\Tracer.Ray-Medium.ixx" />
-    <ClCompile Include="Public\Ray\Tracer.Ray-Ray.ixx" />
-    <ClCompile Include="Public\Ray\Tracer.Ray-RayDifferential.ixx" />
-    <ClCompile Include="Public\Ray\Tracer.Ray.ixx" />
+    <ClCompile Include="Public\Core\Tracer.Ray.ixx" />
     <ClCompile Include="Public\Sampler\Tracer.Sampler-GlobalSampler.ixx" />
     <ClCompile Include="Public\Sampler\Tracer.Sampler-HaltonSampler.ixx" />
     <ClCompile Include="Public\Sampler\Tracer.Sampler-MaxMinDistSampler.ixx" />
     <ClCompile Include="Public\Sampler\Tracer.Sampler-PixelSampler.ixx" />
-    <ClCompile Include="Public\Ray\Tracer.Ray-Sampler.ixx" />
     <ClCompile Include="Public\Sampler\Tracer.Sampler-SobolSampler.ixx" />
     <ClCompile Include="Public\Sampler\Tracer.Sampler-StratifiedSampler.ixx" />
     <ClCompile Include="Public\Sampler\Tracer.Sampler-ZeroTwoSequenceSampler.ixx" />

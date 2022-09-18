@@ -1,6 +1,6 @@
 export module Tracer.Sampler:HaltonSampler;
-import Tracer.Ray;
 import :GlobalSampler;
+import Tracer.Base;
 
 namespace SIByL::Tracer
 {

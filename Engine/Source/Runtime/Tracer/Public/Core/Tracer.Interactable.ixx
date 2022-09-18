@@ -1,5 +1,6 @@
 module;
 #include <cstdint>
+#include <vector>
 export module Tracer.Interactable;
 import Core.Memory;
 import Math.Vector;
@@ -7,6 +8,7 @@ import Math.Geometry;
 import Math.Transform;
 import Tracer.Ray;
 import Tracer.BxDF;
+import Tracer.Base;
 import Tracer.Medium;
 import Tracer.Spectrum;
 

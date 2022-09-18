@@ -3,9 +3,9 @@ module;
 #include <vector>
 #include <memory>
 export module Tracer.Sampler:GlobalSampler;
-import Tracer.Ray;
 import Core.Memory;
 import Math.Geometry;
+import Tracer.Base;
 import Tracer.Camera;
 
 namespace SIByL::Tracer

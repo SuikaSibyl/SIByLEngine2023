@@ -1,8 +1,9 @@
 module;
-#include <cstdint>
 #include <vector>
 #include <memory>
-export module Tracer.Ray:Sampler;
+#include <cstdint>
+#include <algorithm>
+export module Tracer.Base;
 import Core.Memory;
 import Math.Geometry;
 import Math.Random;
@@ -20,7 +21,7 @@ namespace SIByL::Tracer
 	* where one such sample vector is generated for each image sample and
 	* the number of dimensions n in each sample may vary, depending on the calculations
 	* performed by the light transport algorithms.
-	* 
+	*
 	* Sample Vectors assumptions:
 	* - First five dimensions generated are generallly used by Camera. The first two
 	*   are specifically used to choose a point on the image inside the current pixel
@@ -34,18 +35,18 @@ namespace SIByL::Tracer
 		/** Initialize with the number of samples that will be generated for each pixel */
 		Sampler(int64_t spp) :samplesPerPixel(spp) {}
 
-		/** 
+		/**
 		* Providing the coordinates of the pixel in the image. Some implementations
 		* use the knowledge of the pixel coordinate to improve overall distribution.
 		*/
 		virtual auto startPixel(Math::ipoint2 const& p) noexcept -> void;
 		/**
-		* Notify the sampler that subsequent request should return 
+		* Notify the sampler that subsequent request should return
 		* the first dimension of the next sample
 		*/
 		virtual auto startNextSample() noexcept -> bool;
 		/**
-		* Allows integrators to set the index of the samples in 
+		* Allows integrators to set the index of the samples in
 		* the current pixels to generate next
 		*/
 		virtual auto setSampleNumber(int64_t sampleNum) noexcept -> bool;
@@ -76,7 +77,7 @@ namespace SIByL::Tracer
 		auto get2DArray(int n) noexcept -> Math::point2 const*;
 
 		/**
-		* Adjust the number of samples to a better number, 
+		* Adjust the number of samples to a better number,
 		* which could result in better distribution.
 		*/
 		virtual auto roundCount(int n) const noexcept -> int;
@@ -101,7 +102,7 @@ namespace SIByL::Tracer
 
 	/** Randomly permutes an array of count sample values, each of which has nDimensions dimensions. */
 	export template<class T>
-	inline auto shuffle(T* samp, int count, int nDimensions, Math::RNG& rng) noexcept -> void {
+		inline auto shuffle(T* samp, int count, int nDimensions, Math::RNG& rng) noexcept -> void {
 		for (int i = 0; i < count; ++i) {
 			int other = i + rng.uniformUInt32(count - i);
 			for (int j = 0; j < nDimensions; ++j)

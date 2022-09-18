@@ -1,6 +1,6 @@
 export module Tracer.Sampler:MaxMinDistSampler;
 import :PixelSampler;
-import Tracer.Ray;
+import Tracer.Base;
 
 namespace SIByL::Tracer
 {

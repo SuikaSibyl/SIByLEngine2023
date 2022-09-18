@@ -2,9 +2,9 @@ module;
 #include <cstdint>
 #include <vector>
 export module Tracer.Sampler:PixelSampler;
-import Tracer.Ray;
 import Math.Geometry;
 import Math.Random;
+import Tracer.Base;
 
 namespace SIByL::Tracer
 {

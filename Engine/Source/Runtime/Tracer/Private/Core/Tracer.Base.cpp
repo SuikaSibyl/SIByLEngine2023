@@ -1,13 +1,13 @@
 module;
-#include <cstdint>
 #include <vector>
 #include <memory>
-module Tracer.Ray:Sampler;
+#include <cstdint>
+#include <algorithm>
+module Tracer.Base;
 import Core.Memory;
 import Math.Geometry;
 import Math.Random;
 import Math.Limits;
-import Tracer.Camera;
 
 namespace SIByL::Tracer
 {
@@ -18,20 +18,20 @@ namespace SIByL::Tracer
 		cs.pLens = get2D();
 		return cs;
 	}
-	
+
 	auto Sampler::startPixel(Math::ipoint2 const& p) noexcept -> void {
 		currentPixel = p;
 		currentPixelSampleIndex = 0;
 		// reset array offsets for next pixel sample
 		array1DOffset = array2DOffset = 0;
 	}
-	
+
 	auto Sampler::startNextSample() noexcept -> bool {
 		// reset array offsets for next pixel sample
 		array1DOffset = array2DOffset = 0;
 		return ++currentPixelSampleIndex < samplesPerPixel;
 	}
-	
+
 	auto Sampler::setSampleNumber(int64_t sampleNum) noexcept -> bool {
 		// reset array offsets of next pixel sample
 		array1DOffset = array2DOffset = 0;
@@ -81,5 +81,4 @@ namespace SIByL::Tracer
 			}
 		}
 	}
-
 }

@@ -1,10 +1,18 @@
 module;
-module Tracer.Ray:Camera;
-import Tracer.Camera;
-import Tracer.Medium;
-import Tracer.Film;
+#include <limits>
+#include <cstdint>
+#include <vector>
+#include <memory>
+#include <string>
+module Tracer.Ray;
+import Core.Memory;
+import Math.Vector;
 import Math.Geometry;
+import Math.Limits;
 import Math.Transform;
+import Math.Random;
+import Tracer.Spectrum;
+import Tracer.Medium;
 
 namespace SIByL::Tracer
 {
@@ -39,9 +47,30 @@ namespace SIByL::Tracer
 		rd->hasDifferentials = true;
 		return wt;
 	}
-	
+
 	auto Camera::generateRay(CameraSample const& sample, Ray* ray) const noexcept -> float {
 		return 1.0f;
 	}
+}
 
+namespace SIByL::Math
+{
+	inline auto operator*(Transform const& t, Tracer::Ray const& r)->Tracer::Ray {
+		Math::ray3 ray = (Math::ray3)r;
+		ray = t * ray;
+		Tracer::Ray ret;
+		ret.o = ray.o;
+		ret.d = ray.d;
+		ret.tMax = ray.tMax;
+		ret.medium = r.medium;
+		ret.time = r.time;
+		return r;
+	}
+
+	inline auto operator*(AnimatedTransform const& t, Tracer::Ray const& r)->Tracer::Ray {
+		Math::ray3 ray = (Math::ray3)r;
+		Transform interpTrans;
+		t.interpolate(r.time, &interpTrans);
+		return interpTrans * r;
+	}
 }
