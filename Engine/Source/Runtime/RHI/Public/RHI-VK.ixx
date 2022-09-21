@@ -19,7 +19,7 @@ namespace SIByL::RHI
 	struct Context_VK;
 	struct Adapter_VK;
 	struct Device_VK;
-	struct VkQueueFamilyIndices;
+	struct QueueFamilyIndices_VK;
 	// **************************
 	// Buffers					|
 	struct Buffer_VK;			
@@ -95,7 +95,7 @@ namespace SIByL::RHI
 	// Adapter
 	//
 
-	export struct VkQueueFamilyIndices {
+	export struct QueueFamilyIndices_VK {
 		std::optional<uint32_t> graphicsFamily;
 		std::optional<uint32_t> presentFamily;
 		std::optional<uint32_t> computeFamily;
@@ -130,8 +130,8 @@ namespace SIByL::RHI
 		VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 		/** the timestamp period for timestemp query */
 		float timestampPeriod = 0.0f;
-		/** VkQueueFamilyIndices */
-		VkQueueFamilyIndices queueFamilyIndices;
+		/** QueueFamilyIndices_VK */
+		QueueFamilyIndices_VK queueFamilyIndices;
 	};
 
 	////////////////////////////////////
@@ -417,8 +417,8 @@ namespace SIByL::RHI
 		return true;
 	}
 
-	auto findQueueFamilies(Context_VK* contextVk, VkPhysicalDevice& device) noexcept -> VkQueueFamilyIndices {
-		VkQueueFamilyIndices indices;
+	auto findQueueFamilies(Context_VK* contextVk, VkPhysicalDevice& device) noexcept -> QueueFamilyIndices_VK {
+		QueueFamilyIndices_VK indices;
 		// Logic to find queue family indices to populate struct with
 		uint32_t queueFamilyCount = 0;
 		vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
@@ -499,7 +499,7 @@ namespace SIByL::RHI
 
 	auto isDeviceSuitable(Context_VK* contextVk, VkPhysicalDevice& device, std::string& device_diagnosis) noexcept -> bool {
 		// check queue family supports
-		VkQueueFamilyIndices indices = findQueueFamilies(contextVk, device);
+		QueueFamilyIndices_VK indices = findQueueFamilies(contextVk, device);
 		// check extension supports
 		bool const extensionsSupported = checkDeviceExtensionSupport(contextVk, device, device_diagnosis);
 		// check swapchain support
@@ -1060,9 +1060,95 @@ namespace SIByL::RHI
 	// Resource Binding Interface
 
 	export struct BindGroupLayout_VK :public BindGroupLayout {
-		
+		/** vulkan Descriptor Set Layout */
+		VkDescriptorSetLayout layout;
+		/** the device this bind group layout is created on */
+		Device_VK* device = nullptr;
 	};
 
+	export struct BindGroupPool_VK {
+		/** vulkan Bind Group Pool */
+		VkDescriptorPool  descriptorPool;
+		/** the device this bind group pool is created on */
+		Device_VK* device = nullptr;
+	};
+
+	export struct BindGroup_VK :public BindGroup {
+		/** vulkan Descriptor Set */
+		VkDescriptorSet set;
+		/** the bind group set this bind group is created on */
+		BindGroupPool_VK* descriptorPool;
+		/** the device this bind group is created on */
+		Device_VK* device = nullptr;
+	};
+
+	export struct PipelineLayout_VK :public PipelineLayout {
+		/** vulkan pipeline layout */
+		VkPipelineLayout pipelineLayout;
+		/** the push constans on pipeline layouts */
+		std::vector<VkPushConstantRange> pushConstants;
+		/** the device this pipeline layout is created on */
+		Device_VK* device = nullptr;
+	};
+
+	// Resource Binding Interface
+	// ===========================================================================
+	// Shader Modules Interface
+
+	export struct ShaderModule_VK :public ShaderModule {
+		/** the shader stages included in this module */
+		ShaderStagesFlags stages;
+		/** vulkan shader module */
+		VkShaderModule shaderModule;
+		/** vulkan shader stage create info */
+		VkPipelineShaderStageCreateInfo shaderStageInfo{};
+		/** the device this shader module is created on */
+		Device_VK* device = nullptr;
+	};
+
+	// Shader Modules Interface
+	// ===========================================================================
+	// Pipelines Interface
+
+	export struct ComputePipeline_VK :public ComputePipeline {
+		/** vulkan compute pipeline */
+		VkPipeline pipeline;
+		/** the device this compute pipeline is created on */
+		Device_VK* device = nullptr;
+	};
+
+	export struct RenderPipeline_VK :public RenderPipeline {
+		/** vulkan render pipeline */
+		VkPipeline pipeline;
+		/** the device this render pipeline is created on */
+		Device_VK* device = nullptr;
+	};
+
+	// Pipelines Interface
+	// ===========================================================================
+	// Command Buffers Interface
+
+	export struct CommandPool_VK {
+		/** vulkan command pool */
+		VkCommandPool commandPool;
+		/** the device this command pool is created on */
+		Device_VK* device = nullptr;
+	};
+
+	export struct CommandBuffer_VK :public CommandBuffer {
+		/** vulkan command buffer */
+		VkCommandBuffer commandBuffer;
+		/** the device this command buffer is created on */
+		Device_VK* device = nullptr;
+	};
+
+	// Command Buffers Interface
+	// ===========================================================================
+	// Command Encoding Interface
+
+	export struct CommandEncoder_VK :public CommandEncoder {
+		
+	};
 
 	// Bundles Interface
 	// ===========================================================================

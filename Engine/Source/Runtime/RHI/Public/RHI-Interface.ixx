@@ -994,8 +994,67 @@ namespace SIByL::RHI
 	};
 
 	export struct Color {
-
+		double r, g, b, a;
 	};
+
+	// Command Encoding Interface
+	// ===========================================================================
+	// Programmable Passes Interface
+
+	export using BufferDynamicOffset = uint32_t;
+
+	export struct BindingCommandMixin {
+		auto setBindGroup(uint32_t index, BindGroup* bindgroup,
+			std::vector<BufferDynamicOffset> const& dynamicOffsets = {}) noexcept -> void;
+
+		auto setBindGroup(uint32_t index, BindGroup* bindgroup,
+			uint64_t dynamicOffsetDataStart, uint32_t dynamicOffsetDataLength) noexcept -> void;
+	};
+
+	// Programmable Passes Interface
+	// ===========================================================================
+	// Debug Marks Interface
+	
+	export struct DebugCommandMixin {
+		auto pushDebugGroup(std::string const& groupLabel) noexcept -> void;
+		auto popDebugGroup() noexcept -> void;
+		auto insertDebugMarker(std::string const& markerLabel) noexcept -> void;
+	};
+
+	// Debug Marks Interface
+	// ===========================================================================
+	// Compute Passes Interface
+	
+	export struct ComputePassEncoder {
+		auto setPipeline(ComputePipeline* pipeline) noexcept -> void;
+		auto dispatchWorkgroups(uint32_t workgroupCountX, uint32_t workgroupCountY = 1, uint32_t workgroupCountZ = 1) noexcept -> void;
+		auto dispatchWorkgroupsIndirect(Buffer* indirectBuffer, uint64_t indirectOffset) noexcept -> void;
+		auto end() noexcept -> void;
+	};
+
+	export enum struct ComputePassTimestampLocation {
+		BEGINNING,
+		END,
+	};
+
+	export struct ComputePassTimestampWrite {
+		std::unique_ptr<QuerySet> querySet = nullptr;
+		uint32_t queryIndex;
+		ComputePassTimestampLocation location;
+	};
+
+	export using ComputePassTimestampWrites = std::vector<ComputePassTimestampWrite>;
+
+	export struct ComputePassDescriptor {
+		ComputePassTimestampWrites timestampWrites = {};
+	};
+
+	// Compute Passes Interface
+	// ===========================================================================
+	// Render Passes Interface
+
+	struct RenderPassColorAttachment;
+	struct RenderPassDepthStencilAttachment;
 
 	export struct RenderPassEncoder {
 		auto setViewport(
@@ -1012,6 +1071,7 @@ namespace SIByL::RHI
 		auto setStencilReference(StencilValue reference) noexcept -> void;
 
 		auto beginOcclusionQuery(uint32_t queryIndex) noexcept -> void;
+
 		auto endOcclusionQuery() noexcept -> void;
 
 		auto executeBundles(std::vector<RenderBundle> const& bundles) noexcept -> void;
@@ -1019,36 +1079,58 @@ namespace SIByL::RHI
 		auto end() noexcept -> void;
 	};
 
+	export enum struct RenderPassTimestampLocation {
+		BEGINNING,
+		END,
+	};
+
+	export struct RenderPassTimestampWrite {
+		QuerySet* querySet;
+		uint32_t  queryIndex;
+		RenderPassTimestampLocation location;
+	};
+
+	export using RenderPassTimestampWrites = std::vector<RenderPassTimestampWrite>;
+
+	export enum struct LoadOp {
+		LOAD,
+		CLEAR
+	};
+
+	export enum struct StoreOp {
+		STORE,
+		DISCARD
+	};
+
+	export struct RenderPassColorAttachment {
+		TextureView* view;
+		TextureView* resolveTarget;
+
+		Color	clearValue;
+		LoadOp	loadOp;
+		StoreOp storeOp;
+	};
+
+	export struct RenderPassDepthStencilAttachment {
+		TextureView* view;
+		float depthClearValue = 0;
+		LoadOp depthLoadOp;
+		StoreOp depthStoreOp;
+		bool depthReadOnly = false;
+		StencilValue stencilClearValue = 0;
+		LoadOp stencilLoadOp;
+		StoreOp stencilStoreOp;
+		bool stencilReadOnly = false;
+	};
+
 	export struct RenderPassDescriptor {
-
-	};
-	
-	export struct ComputePassEncoder {
-
-	};
-
-	export struct ComputePassDescriptor {
-
+		std::vector<RenderPassColorAttachment> colorAttachments;
+		RenderPassDepthStencilAttachment depthStencilAttachment;
+		std::unique_ptr<QuerySet> occlusionQuerySet;
+		RenderPassTimestampWrites timestampWrites = {};
+		uint64_t maxDrawCount = 50000000;
 	};
 
-	// Command Encoding Interface
-	// ===========================================================================
-	// Programmable Passes Interface
-
-	// Programmable Passes Interface
-	// ===========================================================================
-	// Debug Marks Interface
-	
-
-	// Debug Marks Interface
-	// ===========================================================================
-	// Compute Passes Interface
-	
-
-	// Compute Passes Interface
-	// ===========================================================================
-	// Render Passes Interface
-	
 	export struct RenderPassLayout {
 		std::vector<TextureFormat> colorFormats;
 		TextureFormat depthStencilFormat;
