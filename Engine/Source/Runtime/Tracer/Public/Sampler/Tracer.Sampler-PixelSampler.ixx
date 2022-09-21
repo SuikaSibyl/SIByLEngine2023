@@ -33,7 +33,7 @@ namespace SIByL::Tracer
 		std::vector<std::vector<Math::point2>>	samples2D;
 		/** stores the offeset into the respective arrays for the current pixel samples */
 		int current1DDimension = 0, current2DDimension = 0;
-
+		/** Random number generator */
 		Math::RNG rng;
 	};
 }

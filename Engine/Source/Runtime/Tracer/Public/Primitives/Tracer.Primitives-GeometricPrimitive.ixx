@@ -25,9 +25,12 @@ namespace SIByL::Tracer
 			TransportMode mode,
 			bool allowMultipleLobes) const noexcept -> void override;
 
-		Shape*		shape;
-		Material*	material;
-		AreaLight*	areaLight;
+		/** Return a pointer to the material instance assigned to the primitive */
+		virtual auto getMaterial() const noexcept -> Material const* override { return material; }
+
+		Shape*			shape		= nullptr;
+		Material*		material	= nullptr;
+		AreaLight*		areaLight	= nullptr;
 		MediumInterface mediumInterface;
 	};
 }

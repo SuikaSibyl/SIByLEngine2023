@@ -1,6 +1,7 @@
 module;
 #include <cmath>
 #include <filesystem>
+#include <Core.h>
 export module Tracer.BxDF:FourierBSDF;
 import :BxDF;
 import Core.IO;
@@ -96,7 +97,7 @@ namespace SIByL::Tracer
 				!bsdfTable.getWeightsAndOffset(muO, &offsetO, weightsO))
 				return Spectrum(0.f);
 			//  Allocate storage to accumulate ak coefficients
-			float* ak = Core::Alloca<float>(bsdfTable.mMax * bsdfTable.nChannels);
+			float* ak = Alloca(float, bsdfTable.mMax * bsdfTable.nChannels);
 			memset(ak, 0, bsdfTable.mMax * bsdfTable.nChannels * sizeof(float));
 			//  Accumulate weighted sums of nearby ak coefficients
 			int mMax = 0;

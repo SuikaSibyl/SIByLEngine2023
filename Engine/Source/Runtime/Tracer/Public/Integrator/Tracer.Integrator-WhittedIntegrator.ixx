@@ -12,11 +12,18 @@ import Tracer.Interactable;
 
 namespace SIByL::Tracer
 {
+	/**
+	* A simple implementation of SamplerIntegrator with Whitted's ray-tracing algorithm.
+	* It accurately computes reflected and transmitted light from specular surfaces, but
+	* it doesn't account for other types of indirect lighting effects.
+	*/
 	export struct WhittedIntegrator :public SamplerIntegrator
 	{
 		WhittedIntegrator(int maxDepth, Camera const* camera, Sampler* sample);
 
-		virtual auto Li(RayDifferential const& ray, Scene const& scene, Sampler& sampler, Core::MemoryArena& arena, int depth = 0) const noexcept -> Spectrum override;
+		/** Given a ray, determine the amount of light arriving at the image plane along the ray. */
+		virtual auto Li(RayDifferential const& ray, Scene const& scene, Sampler& sampler,
+			Core::MemoryArena& arena, int depth = 0) const noexcept -> Spectrum override;
 
 	private:
 		int const maxDepth;

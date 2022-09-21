@@ -91,9 +91,10 @@ namespace SIByL::Tracer
 	}
 
 	auto SurfaceInteraction::computeDifferentials(RayDifferential const& ray) const noexcept -> void {
+		// check hasDifferentials field to avoid some rays (e.g. rays starting from light sourcces)
 		if (ray.hasDifferentials) {
 			// estimate screen space change in p and (u.v)
-			// compute auxiliary intersection points with plane
+			//  compute auxiliary intersection points with plane
 			float d = Math::dot(n, Math::vec3(p.x, p.y, p.z));
 			float tx = -(Math::dot(n, Math::vec3(ray.rxOrigin)) - d) / Math::dot(n, ray.rxDirection);
 			Math::point3 px = ray.rxOrigin + tx * ray.rxDirection;
@@ -101,8 +102,8 @@ namespace SIByL::Tracer
 			Math::point3 py = ray.ryOrigin + ty * ray.ryDirection;
 			dpdx = px - p;
 			dpdy = py - p;
-			// compute (u,v) offsets at auxiliary points
-			// choose two dimensions to use for ray offset computation
+			//  compute (u,v) offsets at auxiliary points
+			// ─ choose two dimensions to use for ray offset computation
 			int dim[2];
 			if (std::abs(n.x) > std::abs(n.y) && std::abs(n.x) > std::abs(n.z)) {
 				dim[0] = 1; dim[1] = 2;
@@ -113,7 +114,7 @@ namespace SIByL::Tracer
 			else {
 				dim[0] = 0; dim[1] = 1;
 			}
-			// initialize A,Bx, and By matrices for offset computation
+			// ─ initialize A,Bx, and By matrices for offset computation
 			float A[2][2] = {
 				{dpdu[dim[0]],dpdv[dim[0]]},
 			};
@@ -125,6 +126,8 @@ namespace SIByL::Tracer
 				dudy = dvdy = 0;
 		}
 		else {
+			// if the differentials are not present, then the derivatives are all set to zero, 
+			// which will eventually lead to unfiltered point sampling of textures.
 			dudx = dvdx = 0;
 			dudy = dvdy = 0;
 			dpdx = dpdy = Math::vec3(0, 0, 0);

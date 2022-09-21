@@ -15,11 +15,9 @@ namespace SIByL::Core
 	* Alloca could allocate memory from system stack, which is useful for scoped new objects.
 	* The memory allocated by Alloca will be automatically freed after scope is end.
 	*/
-	export template<class T>
-	inline auto Alloca() noexcept -> T* { return (T*)alloca(sizeof(T)); }
 
-	export template<class T>
-	inline auto Alloca(size_t count) noexcept -> T* { return (T*)alloca(count * sizeof(T)); }
+	// However Alloca could not be implemented/warpped as function, as it allocate memory on stack,
+	// which would be release right after the function returns, so the memory will be invalid.
 
 	/**
 	* Aligned Allocation & Deallocation could query aligned memory, the impl is platform specific.

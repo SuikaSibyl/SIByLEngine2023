@@ -1,6 +1,7 @@
 module;
 #include <cmath>
 #include <vector>
+#include <memory>
 module Tracer.Sampler:StratifiedSampler;
 import Tracer.Sampler;
 import Math.Limits;
@@ -44,6 +45,12 @@ namespace SIByL::Tracer
 		PixelSampler::startPixel(p);
 	}
 
+	auto StratifiedSampler::clone(int seed) noexcept -> Scope<Sampler> {
+		StratifiedSampler* ss = new StratifiedSampler(*this);
+		ss->rng.setSequence(seed);
+		return std::unique_ptr<Sampler>(ss);
+	}
+
 	inline auto stratifiedSample1D(float* samp, int nSamples, Math::RNG& rng, bool jitter) noexcept -> void {
 		float const invNSamples = 1.f / nSamples;
 		for (int i = 0; i < nSamples; ++i) {
@@ -63,5 +70,4 @@ namespace SIByL::Tracer
 				++samp;
 			}
 	}
-
 }

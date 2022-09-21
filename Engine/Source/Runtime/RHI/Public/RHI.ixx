@@ -1,4 +1,4 @@
-export module RHI.Device;
+export module RHI;
 
 export import :Interface;
 export import :GL;

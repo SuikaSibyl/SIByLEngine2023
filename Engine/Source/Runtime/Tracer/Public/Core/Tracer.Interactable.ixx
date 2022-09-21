@@ -108,6 +108,10 @@ namespace SIByL::Tracer
 
 		auto computeScatteringFunctions(RayDifferential const& ray, Core::MemoryArena& arena, bool allowMultipleLobes = false, TransportMode mode = TransportMode::Radiance) noexcept -> void;
 
+		/**
+		* Compute partial derivatives for mipmap-based texture sampling.
+		* It is called by computeScatteringFunctions().
+		*/
 		auto computeDifferentials(RayDifferential const& ray) const noexcept -> void;
 
 		auto Le(Math::vec3 const& w) const noexcept -> Spectrum;
@@ -124,7 +128,9 @@ namespace SIByL::Tracer
 		/** the Primitive that the ray hits */
 		Primitive const* primitive = nullptr;
 
+		/* the partial derivatives of world space positions to pixel position ∂p/∂x & ∂p/∂y*/
 		mutable Math::vec3 dpdx, dpdy;
+		/* the partial derivatives of texture coordinates to pixel position ∂p/∂x & ∂p/∂y*/
 		mutable float dudx = 0, dvdx = 0, dudy = 0, dvdy = 0;
 
 		BSDF* bsdf = nullptr;
@@ -506,9 +512,10 @@ namespace SIByL::Tracer
 		bool const transformSwapsHandedness;
 	};
 
+	/** Texture is a function that maps points in some domain to values in some other domian. */
 	export template <class T>
-	struct Texture
-	{
+	struct Texture {
+		/** Evaluate texture's value at the point being shaded of the SurfaceInteraction.*/
 		virtual auto evaluate(SurfaceInteraction const&) const noexcept -> T = 0;
 	};
 }

@@ -19,6 +19,7 @@ namespace SIByL::Core
 
 		auto log(std::string const& s) noexcept -> void;
 		auto debug(std::string const& s) noexcept -> void;
+		auto warning(std::string const& s) noexcept -> void;
 		auto error(std::string const& s) noexcept -> void;
 
 		auto clear() noexcept -> void;
@@ -53,6 +54,13 @@ namespace SIByL::Core
 		flushLog();
 	}
 
+	auto Logger::warning(std::string const& s) noexcept -> void
+	{
+		auto& stream = beginLog(LogStream::yellow);
+		stream << LogStream::red << s.c_str() << LogStream::white;
+		flushLog();
+	}
+	
 	auto Logger::error(std::string const& s) noexcept -> void
 	{
 		auto& stream = beginLog(LogStream::red);

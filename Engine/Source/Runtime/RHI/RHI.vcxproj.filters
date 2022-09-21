@@ -15,19 +15,19 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Public\Device\RHI.Device.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Private\Device\RHI.Device-VK.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Private\Device\RHI.Device-GL.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\ThirdParty\glad\src\glad.c">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Device\RHI.Device-Interface.ixx">
+    <ClCompile Include="Public\RHI.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\RHI-Interface.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\RHI-VK.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\RHI-GL.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

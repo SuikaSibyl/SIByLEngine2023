@@ -37,15 +37,19 @@ namespace SIByL::Tracer
 		//if (bumpMap)
 		//	Bump(bumpMap, si);
 		// Evaluate textures for MatteMaterial materialand allocate BRDF
+		//si->bsdf = Core::ArenaAlloc<BSDF>(arena, *si, 1.f);
+		//Spectrum r = Kd->evaluate(*si).clamp();
+		//float sig = Math::clamp(sigma->evaluate(*si), 0.f, 90.f);
+		//if (!r.isBlack()) {
+		//	if (sig == 0)
+		//		si->bsdf->add(Core::ArenaAlloc<LambertianReflection>(arena, r));
+		//	else
+		//		si->bsdf->add(Core::ArenaAlloc<OrenNayar>(arena, r, sig));
+		//}
+		
+		// TODO
 		si->bsdf = Core::ArenaAlloc<BSDF>(arena, *si, 1.f);
-		Spectrum r = Kd->evaluate(*si).clamp();
-		float sig = Math::clamp(sigma->evaluate(*si), 0.f, 90.f);
-		if (!r.isBlack()) {
-			if (sig == 0)
-				si->bsdf->add(Core::ArenaAlloc<LambertianReflection>(arena, r));
-			else
-				si->bsdf->add(Core::ArenaAlloc<OrenNayar>(arena, r, sig));
-		}
+		si->bsdf->add(Core::ArenaAlloc<LambertianReflection>(arena, Spectrum{ 1.f }));
 	}
 
 }

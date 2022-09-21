@@ -96,6 +96,9 @@ namespace SIByL::Parallelism
 						loop.func1D(index);
 					}
 					// handle other types of loops
+					else if (loop.func2D) {
+						loop.func2D(Math::ipoint2{ index % loop.nX, index / loop.nX });
+					}
 				}
 				lock.lock();
 				// - update loop to reflect completion of itertaions
@@ -196,7 +199,7 @@ namespace SIByL::Parallelism
 			lock.unlock();
 			for (int index = indexStart; index < indexEnd; ++index) {
 				if (loop.func2D) {
-					loop.func2D(Math::ipoint2{ index % loop.nX,index / loop.nX });
+					loop.func2D(Math::ipoint2{ index % loop.nX, index / loop.nX });
 				}
 				// handle other types of loops
 			}

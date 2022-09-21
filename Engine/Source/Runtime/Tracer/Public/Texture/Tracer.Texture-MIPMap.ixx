@@ -2,7 +2,7 @@ export module Tracer.Texture:MIPMap;
 
 namespace SIByL::Tracer
 {
-	export struct MIPMap
+	export template <class T> struct MIPMap
 	{
 
 	};

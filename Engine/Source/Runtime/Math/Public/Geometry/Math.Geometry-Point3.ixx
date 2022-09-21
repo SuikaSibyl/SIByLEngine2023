@@ -10,8 +10,13 @@ namespace SIByL::Math
 	{
 		Point3(T const& _x, T const& _y, T const& _z = 0)
 			:Vector3<T>(_x, _y, _z) {}
+
 		Point3(Vector3<T> const& v = { 0,0,0 })
 			:Vector3<T>(v) {}
+
+		template<class U>
+		Point3(Vector3<U> const& v = { 0,0,0 })
+			:Vector3<T>((T)v.x, (T)v.y, (T)v.z) {}
 
 		template <typename U>
 		explicit Point3(Point3<U> const& p)

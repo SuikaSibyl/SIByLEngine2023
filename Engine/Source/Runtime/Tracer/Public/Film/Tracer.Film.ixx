@@ -11,6 +11,8 @@ import Math.Geometry;
 import Tracer.Filter;
 import Tracer.Spectrum;
 import Parallelism.Atomic;
+import Image.Image;
+import Image.Color;
 
 namespace SIByL::Tracer
 {
@@ -61,7 +63,7 @@ namespace SIByL::Tracer
 
 		auto addSplat(Math::point2 const& p, Spectrum const& v) noexcept -> void;
 
-		auto writeImage(float splatScale = 1.f) noexcept -> void;
+		auto writeImage(Image::Image<Image::COLOR_R8G8B8_UINT>& image, float splatScale = 1.f) noexcept -> void;
 
 		/** Length of the diagnoal of the film's physical area in meters*/
 		float const diagonal;
@@ -94,7 +96,7 @@ namespace SIByL::Tracer
 	export struct FilmTile {
 		FilmTile(Math::ibounds2 const& pixelBounds, Math::vec2 const& filterRadius, float const* filterTable, int filterTableSize);
 
-		auto addSample(Math::point2 const& pFilm, Spectrum const& L, float sampleWeight = 1.f) noexcept -> void;
+		auto addSample(Math::point2 const& pFilm, Spectrum const& L, float sampleWeight) noexcept -> void;
 		auto getPixel(Math::ipoint2 const& p) noexcept -> FilmTilePixel&;
 		auto getPixelBounds() const noexcept -> Math::ibounds2;
 

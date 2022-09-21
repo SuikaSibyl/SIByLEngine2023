@@ -45,8 +45,9 @@ namespace SIByL::Platform
 		wndHandle = glfwCreateWindow(width, height, Core::string_cast(uniName).c_str(), nullptr, nullptr);
 		glfwSetWindowUserPointer(wndHandle, this);
 
-		// create context
-		glfwMakeContextCurrent(wndHandle);
+		// create context if need
+		if (properties & WindowProperties::OPENGL_CONTEX)
+			glfwMakeContextCurrent(wndHandle);
 
 		return true;
 	}
@@ -62,7 +63,8 @@ namespace SIByL::Platform
 	}
 	
 	auto Window_GLFW::endFrame() noexcept -> void {
-		glfwSwapBuffers(wndHandle);
+		if (properties & WindowProperties::OPENGL_CONTEX)
+			glfwSwapBuffers(wndHandle);
 	}
 
 	auto Window_GLFW::destroy() noexcept -> void {

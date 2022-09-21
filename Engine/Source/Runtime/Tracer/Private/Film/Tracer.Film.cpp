@@ -3,12 +3,16 @@ module;
 #include <cmath>
 #include <memory>
 #include <mutex>
+#include <Core.h>
 module Tracer.Film;
 import Core.Memory;
 import Math.Vector;
 import Math.Geometry;
 import Tracer.Filter;
+import Tracer.Spectrum;
 import Parallelism.Atomic;
+import Image.Image;
+import Image.Color;
 
 namespace SIByL::Tracer
 {
@@ -107,7 +111,7 @@ namespace SIByL::Tracer
 			pixel.splatXYZ[i].add(xyz[i]);
 	}
 
-	auto Film::writeImage(float splatScale) noexcept -> void {
+	auto Film::writeImage(Image::Image<Image::COLOR_R8G8B8_UINT>& image, float splatScale) noexcept -> void {
 		// convert image to RGBand compute final pixel values
 		std::unique_ptr<float[]> rgb(new float[3 * croppedPixelBounds.surfaceArea()]);
 		int offset = 0;
@@ -116,9 +120,9 @@ namespace SIByL::Tracer
 			Pixel& pixel = getPixel(p);
 			XYZToRGB(pixel.xyz, &rgb[3 * offset]);
 			// Normalize pixel with weight sum 
-			float filterWeightSum = pixel.filterWeightSum;
+			float const filterWeightSum = pixel.filterWeightSum;
 			if (filterWeightSum != 0) {
-				float invWt = 1.f / filterWeightSum;
+				float const invWt = 1.f / filterWeightSum;
 				rgb[3 * offset + 0] = std::max(0.f, rgb[3 * offset + 0] * invWt);
 				rgb[3 * offset + 1] = std::max(0.f, rgb[3 * offset + 1] * invWt);
 				rgb[3 * offset + 2] = std::max(0.f, rgb[3 * offset + 2] * invWt);
@@ -137,7 +141,14 @@ namespace SIByL::Tracer
 			++offset;
 		}
 		// write RGB image
-		// TODO
+		offset = 0;
+		for (Math::ipoint2 p : croppedPixelBounds) {
+			image[p.y][p.x] = Image::COLOR_R8G8B8_UINT{ 
+				(uint8_t)(255 * rgb[3 * offset + 0]),
+				(uint8_t)(255 * rgb[3 * offset + 1]),
+				(uint8_t)(255 * rgb[3 * offset + 2])};
+			++offset;
+		}
 	}
 
 	FilmTile::FilmTile(Math::ibounds2 const& pixelBounds, Math::vec2 const& filterRadius, float const* filterTable, int filterTableSize)
@@ -152,24 +163,22 @@ namespace SIByL::Tracer
 		// compute sample's raster bounds
 		Math::point2 pFilmDiscrete = pFilm - Math::vec2{ 0.5f,0.5f };
 		Math::ipoint2 p0 = (Math::ipoint2)Math::ceil(pFilmDiscrete - filterRadius);
-		Math::ipoint2 p1 = (Math::ipoint2)Math::ceil(pFilmDiscrete + filterRadius) + Math::ipoint2{ 1,1 };
+		Math::ipoint2 p1 = (Math::ipoint2)Math::floor(pFilmDiscrete + filterRadius) + Math::ipoint2{ 1,1 };
 		p0 = Math::max(p0, pixelBounds.pMin);
 		p1 = Math::min(p1, pixelBounds.pMax);
 		// loop over filter support and add sample to pixel arrays
-		// precompute x and y filter table offsets
-		int* ifx = Core::Alloca<int>(p1.x - p0.x);
+		//  precompute x and y filter table offsets
+		int* ifx = (int*)Alloca(int, size_t(p1.x - p0.x));
 		for (int x = p0.x; x < p1.x; ++x) {
-			float fx = std::abs((x - pFilmDiscrete.x) *
-				invFilterRadius.x * filterTableSize);
+			float fx = std::abs((x - pFilmDiscrete.x) * invFilterRadius.x * filterTableSize);
 			ifx[x - p0.x] = std::min((int)std::floor(fx), filterTableSize - 1);
 		}
-		int* ify = Core::Alloca<int>(p1.y - p0.y);
+		int* ify = (int*)Alloca(int, size_t(p1.y - p0.y));
 		for (int y = p0.y; y < p1.y; ++y) {
-			float fy = std::abs((y - pFilmDiscrete.y) *
-				invFilterRadius.y * filterTableSize);
+			float fy = std::abs((y - pFilmDiscrete.y) * invFilterRadius.y * filterTableSize);
 			ify[y - p0.y] = std::min((int)std::floor(fy), filterTableSize - 1);
 		}
-
+		//  loop over filter support
 		for (int y = p0.y; y < p1.y; ++y)
 			for (int x = p0.x; x < p1.x; ++x) {
 				// evaluate filter values at (x,y) pixel

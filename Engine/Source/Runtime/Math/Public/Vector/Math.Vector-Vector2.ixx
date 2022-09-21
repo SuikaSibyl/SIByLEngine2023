@@ -71,20 +71,20 @@ namespace SIByL::Math
 		return result;
 	}
 
-	export template <class T> inline auto floor(Vector2<T> const& v) noexcept -> T
+	export template <class T> inline auto floor(Vector2<T> const& v) noexcept -> Vector2<T>
 	{
-		T result;
+		Vector2<T> result;
 		for (size_t i = 0; i < 2; ++i) {
-			result = std::floor(v.data[i]);
+			result.data[i] = std::ceil(v.data[i]);
 		}
 		return result;
 	}
 
-	export template <class T> inline auto ceil(Vector2<T> const& v) noexcept -> T
+	export template <class T> inline auto ceil(Vector2<T> const& v) noexcept -> Vector2<T>
 	{
-		T result;
+		Vector2<T> result;
 		for (size_t i = 0; i < 2; ++i) {
-			result = std::ceil(v.data[i]);
+			result.data[i] = std::ceil(v.data[i]);
 		}
 		return result;
 	}

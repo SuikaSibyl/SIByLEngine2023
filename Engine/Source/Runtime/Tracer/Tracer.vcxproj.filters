@@ -357,5 +357,8 @@
     <ClCompile Include="Private\Core\Tracer.Ray.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Texture\Tracer.Texture-TextureMapping.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

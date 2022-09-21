@@ -73,12 +73,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(SolutionDir)Engine\Source\\Runtime\Tracer\Private;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)Engine\Source\\Runtime\Tracer\Private;$(SolutionDir)Engine\Source\Runtime\Core\Public;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(SolutionDir)Engine\Source\\Runtime\Tracer\Private;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)Engine\Source\\Runtime\Tracer\Private;$(SolutionDir)Engine\Source\Runtime\Core\Public;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -249,6 +249,7 @@
     <ClCompile Include="Public\Texture\Tracer.Texture-MarbleTexture.ixx" />
     <ClCompile Include="Public\Texture\Tracer.Texture-MixTexture.ixx" />
     <ClCompile Include="Public\Texture\Tracer.Texture-ScaleTexture.ixx" />
+    <ClCompile Include="Public\Texture\Tracer.Texture-TextureMapping.ixx" />
     <ClCompile Include="Public\Texture\Tracer.Texture-UVTexture.ixx" />
     <ClCompile Include="Public\Texture\Tracer.Texture-WindyTexture.ixx" />
     <ClCompile Include="Public\Texture\Tracer.Texture.ixx" />
@@ -260,6 +261,9 @@
     </ProjectReference>
     <ProjectReference Include="..\GFX\GFX.vcxproj">
       <Project>{587f5443-b048-4a7a-b773-fe5b6ba0728a}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\Image\Image.vcxproj">
+      <Project>{0fc8b275-7514-4117-93a1-7e9c112b4b70}</Project>
     </ProjectReference>
     <ProjectReference Include="..\Math\Math.vcxproj">
       <Project>{0eec40c7-807a-4d99-99a6-e3d329aea25d}</Project>

@@ -2,18 +2,25 @@ module;
 #include <cmath>
 #include <algorithm>
 #include <limits>
+#include <string>
+#include <format>
 module Tracer.Integrator:SamplerIntegrator;
 import Tracer.Integrator;
 import Core.Memory;
+import Core.Log;
+import Math.Limits;
 import Math.Vector;
 import Math.Geometry;
 import Parallelism.Parallel;
+import Image.Image;
 import Tracer.Ray;
+import Tracer.Base;
+import Tracer.Film;
+import Tracer.BxDF;
 import Tracer.Camera;
 import Tracer.Sampler;
 import Tracer.Spectrum;
-import Tracer.Film;
-import Tracer.BxDF;
+import Tracer.Interactable;
 
 namespace SIByL::Tracer
 {
@@ -21,53 +28,72 @@ namespace SIByL::Tracer
 	{
 		preprocess(scene);
 		// render image tiles in parallel
-		// compute number of tiles, nTiles, to use for parallel rendering
-		Math::ibounds2 sampleBounds = camera->film->getSampleBounds();
-		Math::ivec2 sampleExtent = sampleBounds.diagonal();
+		//  compute number of tiles, nTiles, to use for parallel rendering
+		Math::ibounds2 const sampleBounds = camera->film->getSampleBounds();
+		Math::ivec2 const sampleExtent = sampleBounds.diagonal();
 		int const tileSize = 16;
-		Math::ipoint2 nTiles((sampleExtent.x + tileSize - 1) / tileSize,
-							 (sampleExtent.y + tileSize - 1) / tileSize);
-
+		Math::ipoint2 const nTiles((sampleExtent.x + tileSize - 1) / tileSize,
+								   (sampleExtent.y + tileSize - 1) / tileSize);
+		//  render tiles in parallel with respect to nTiles
 		Parallelism::ParallelFor2D([&](Math::ipoint2 tile) {
 			// Render section of image corresponding to tile
-			// allocate MemoryArena for tile
-			Core::MemoryArena arena;
-			// get sampler instance for tile
-			int seed = tile.y * nTiles.x + tile.x;
+			//  allocate MemoryArena for tile
+			Core::MemoryArena arena(262144);
+			//  get sampler instance for tile
+			int const seed = tile.y * nTiles.x + tile.x;
 			Scope<Sampler> tileSampler = sampler->clone(seed);
-			// compute sample bounds for tile
+			//  compute sample bounds for tile
 			int x0 = sampleBounds.pMin.x + tile.x * tileSize;
 			int x1 = std::min(x0 + tileSize, sampleBounds.pMax.x);
 			int y0 = sampleBounds.pMin.y + tile.y * tileSize;
 			int y1 = std::min(y0 + tileSize, sampleBounds.pMax.y);
-			Math::ibounds2 tileBounds(Math::ipoint2{ x0,y0 }, Math::ipoint2{ x1,y1 });
-			// get FilmTile for tile
+			Math::ibounds2 const tileBounds(Math::ipoint2{ x0,y0 }, Math::ipoint2{ x1,y1 });
+			//  get FilmTile for tile
 			Scope<FilmTile> filmTile = camera->film->getFilmTile(tileBounds);
-			// loop over pixels in tile to render them
-			for (Math::ipoint2 pixel : tileBounds) {
+			//  compute differential scalar
+			float const rayDiffScalar = 1.f / (float)std::sqrt(tileSampler->samplesPerPixel);
+			//  loop over pixels in tile to render them
+			for (Math::ipoint2 const pixel : tileBounds) {
 				tileSampler->startPixel(pixel);
 				do {
 					// initialzie CameraSample for current sample
-					CameraSample cameraSample = tileSampler->getCameraSample(pixel);
+					CameraSample const cameraSample = tileSampler->getCameraSample(pixel);
 					// generate camera ray for current sample
 					RayDifferential ray;
-					float rayWeight = camera->generateRayDifferential(cameraSample, &ray);
-					ray.scaleDifferentials(1.f / (float)std::sqrt(tileSampler->samplesPerPixel));
+					float const rayWeight = camera->generateRayDifferential(cameraSample, &ray);
+					ray.scaleDifferentials(rayDiffScalar);
 					// evaluate radiance along camera ray
 					Spectrum L(0.f);
 					if (rayWeight > 0)
 						L = Li(ray, scene, *tileSampler, arena, 0);
+					// issue warning if unexpected radiance value returned
+					if (L.hasNaNs()) {
+						Core::LogManager::Error(std::format("Tracer ::Not-a-number radiance value returned\n\
+							for pixel (%d, %d), sample %d. Setting to black.",
+							pixel.x, pixel.y, (int)tileSampler->currentSampleNumber()));
+						L = Spectrum(0.f);
+					}
+					else if (L.y() < -1e-5) {
+						Core::LogManager::Error(std::format("Tracer ::Negative luminance value, %f, returned\n\
+							for pixel (%d, %d), sample %d. Setting to black.",
+							pixel.x, pixel.y, (int)tileSampler->currentSampleNumber()));
+						L = Spectrum(0.f);
+					}
+					else if (std::isinf(L.y())) {
+						Core::LogManager::Error(std::format("Tracer ::Infinite luminance value returned, %f, returned\n\
+							for pixel (%d, %d), sample %d. Setting to black.",
+							pixel.x, pixel.y, (int)tileSampler->currentSampleNumber()));
+						L = Spectrum(0.f);
+					}
 					// add camera ray's contribution to image
 					filmTile->addSample(cameraSample.pFilm, L, rayWeight);
 					// free MemoryArena memory from computing image sample value
 					arena.reset();
 				} while (tileSampler->startNextSample());
 			}
-			// merge image tiles into Film
+			//  merge image tiles into Film
 			camera->film->mergeFilmTile(std::move(filmTile));
 			}, nTiles);
-		// save final image after rendering
-		camera->film->writeImage();
 	}
 
 	auto SamplerIntegrator::specularReflect(RayDifferential const& ray, SurfaceInteraction const& isect, Scene const& scene, Sampler& sampler, Core::MemoryArena& arena, int depth) const noexcept -> Spectrum {

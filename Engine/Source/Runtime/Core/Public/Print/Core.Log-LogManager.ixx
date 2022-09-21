@@ -21,6 +21,7 @@ namespace SIByL::Core
 
 		static auto Debug(std::string const& s) noexcept -> void;
 		static auto Log(std::string const& s) noexcept -> void;
+		static auto Warning(std::string const& s) noexcept -> void;
 		static auto Error(std::string const& s) noexcept -> void;
 
 	private:
@@ -56,6 +57,12 @@ namespace SIByL::Core
 #endif 
 	}
 
+	auto LogManager::Warning(std::string const& s) noexcept -> void {
+#ifdef _NEED_LOG 
+		getLogger().warning(s);
+#endif 
+	}
+	
 	auto LogManager::Error(std::string const& s) noexcept -> void {
 #ifdef _NEED_LOG 
 		getLogger().error(s);

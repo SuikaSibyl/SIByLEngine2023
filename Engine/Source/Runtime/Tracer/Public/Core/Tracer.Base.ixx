@@ -47,7 +47,7 @@ namespace SIByL::Tracer
 		virtual auto startNextSample() noexcept -> bool;
 		/**
 		* Allows integrators to set the index of the samples in
-		* the current pixels to generate next
+		* the current pixels to generate next sample
 		*/
 		virtual auto setSampleNumber(int64_t sampleNum) noexcept -> bool;
 
@@ -76,6 +76,9 @@ namespace SIByL::Tracer
 		auto get1DArray(int n) noexcept -> float const*;
 		auto get2DArray(int n) noexcept -> Math::point2 const*;
 
+		/** get current sampler number */
+		auto currentSampleNumber() const noexcept -> int64_t { return currentPixelSampleIndex; }
+
 		/**
 		* Adjust the number of samples to a better number,
 		* which could result in better distribution.
@@ -102,7 +105,7 @@ namespace SIByL::Tracer
 
 	/** Randomly permutes an array of count sample values, each of which has nDimensions dimensions. */
 	export template<class T>
-		inline auto shuffle(T* samp, int count, int nDimensions, Math::RNG& rng) noexcept -> void {
+	inline auto shuffle(T* samp, int count, int nDimensions, Math::RNG& rng) noexcept -> void {
 		for (int i = 0; i < count; ++i) {
 			int other = i + rng.uniformUInt32(count - i);
 			for (int j = 0; j < nDimensions; ++j)

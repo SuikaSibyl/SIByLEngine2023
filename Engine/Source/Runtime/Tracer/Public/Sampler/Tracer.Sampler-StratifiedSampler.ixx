@@ -12,6 +12,8 @@ namespace SIByL::Tracer
 
 		virtual auto startPixel(Math::ipoint2 const& p) noexcept -> void override;
 
+		/** Get a new instance of an initial Sampler */
+		virtual auto clone(int seed) noexcept -> Scope<Sampler> override;
 		
 		int const xPixelSamples, yPixelSamples;
 		bool const jitterSamples;

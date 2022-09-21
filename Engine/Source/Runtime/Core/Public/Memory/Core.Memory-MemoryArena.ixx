@@ -2,7 +2,7 @@ module;
 #include <new>
 #include <cstdint>
 #include <list>
-//#include <utility>
+#include <utility>
 export module Core.Memory:MemoryArena;
 
 namespace SIByL::Core
