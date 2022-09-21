@@ -7,7 +7,7 @@ namespace SIByL::Core
 	* 2D array with better spatial memory locality.
 	* The 2D array is represented by square blocks of a small fixed size that is a power of 2.
 	*/
-	export template<class T, int logBlockSize>
+	export template<class T, int logBlockSize = 2>
 	struct BlockedArray
 	{
 		/** @para d: a standard c++ array to initialize, which is optional */

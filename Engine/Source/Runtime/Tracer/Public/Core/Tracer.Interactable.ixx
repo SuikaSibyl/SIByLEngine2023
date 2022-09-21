@@ -332,7 +332,7 @@ namespace SIByL::Tracer
 
 		MediumInterface const mediumInterface;
 
-		auto Le(RayDifferential const& ray) const noexcept -> Spectrum { return Spectrum{ 0.f }; }
+		virtual auto Le(RayDifferential const& ray) const noexcept -> Spectrum { return Spectrum{ 0.f }; }
 
 		virtual auto preprocess(Scene const& scene) noexcept -> void {}
 
@@ -453,7 +453,7 @@ namespace SIByL::Tracer
 		* @param testAlphaTexture: indicate whether perfirm a texture base surface cutting;
 		*/
 		virtual auto intersect(
-			Math::ray3 const& ray,
+			Ray const& ray,
 			float* tHit,
 			SurfaceInteraction* isect,
 			bool testAlphaTexture = true) const -> bool = 0;
@@ -465,7 +465,7 @@ namespace SIByL::Tracer
 		* @see intersect()
 		*/
 		virtual auto intersectP(
-			Math::ray3 const& ray,
+			Ray const& ray,
 			bool testAlphaTexture = true) const  -> bool;
 
 		/**

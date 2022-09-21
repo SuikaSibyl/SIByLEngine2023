@@ -1,3 +1,5 @@
+module;
+#include <cmath>
 module Tracer.Integrator:WhittedIntegrator;
 import Tracer.Integrator;
 import Core.Memory;
@@ -36,11 +38,6 @@ namespace SIByL::Tracer
 		isect.computeScatteringFunctions(ray, arena);
 		//  compute emitted light if ray hit an area light source
 		L += isect.Le(wo);
-		Spectrum rgb;
-		rgb[0] = 1.f;
-		rgb[1] = .5f;
-		rgb[2] = .5f;
-		L += rgb;
 		//  add contribution of each light source
 		for (auto const& light : scene.lights) {
 			Math::vec3 wi;
@@ -49,8 +46,14 @@ namespace SIByL::Tracer
 			Spectrum Li = light->sample_Li(isect, sampler.get2D(), &wi, &pdf, &visibility);
 			if (Li.isBlack() || pdf == 0) continue;
 			Spectrum f = isect.bsdf->f(wo, wi);
-			if (!f.isBlack() && visibility.unoccluded(scene))
+			if (!f.isBlack() && visibility.unoccluded(scene)) {
 				L += f * Li * Math::absDot(wi, n) / pdf;
+			}				
+			//Spectrum normal;
+			//normal[0] = std::abs(wi.x);
+			//normal[1] = std::abs(wi.y);
+			//normal[2] = std::abs(wi.z);
+			//L += normal;
 		}
 		if (depth + 1 < maxDepth) {
 			// trace rays for specular reflection and refraction

@@ -9,6 +9,7 @@ import Tracer.Interactable;
 import Tracer.Medium;
 import Tracer.Spectrum;
 import Tracer.Shape;
+import Tracer.Sampling;
 
 namespace SIByL::Tracer
 {
@@ -41,6 +42,28 @@ namespace SIByL::Tracer
 			return Spectrum{};
 		}
 
+		virtual auto Le(RayDifferential const& ray) const noexcept -> Spectrum override { 
+			Math::vec3 w = Math::normalize(worldToLight * ray.d);
+			Math::point2 st(Math::sphericalPhi(w) * Math::float_Inv2Pi, Math::sphericalTheta(w) * Math::float_InvPi);
+			return Spectrum{ 1.f };
+		}
+		
+		virtual auto sample_Li(Interaction const& ref, Math::point2 const& u,
+			Math::vec3* wi, float* pdf, VisibilityTester* vis) const noexcept -> Spectrum 
+		{
+			*pdf = Math::float_Inv2Pi;
+			*wi = uniformSampleSphere(u);
+			*vis = VisibilityTester(ref, Interaction(ref.p + *wi * (2 * worldRadius), ref.time, mediumInterface));
+			return Spectrum{ 1.f };
+		}
+
+		virtual auto pdf_Li(Interaction const& ref, Math::vec3 const& wi) const noexcept -> float {
+			return 1.f;
+		}
+
+		virtual auto sample_Le() const noexcept -> Spectrum override {
+			return Spectrum{ 1.f };
+		}
 
 	private:
 		/** scene world bounding information */

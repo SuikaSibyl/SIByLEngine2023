@@ -27,6 +27,7 @@ import Tracer.Material;
 import Tracer.Integrator;
 import Tracer.Sampler;
 import Tracer.Texture;
+import Tracer.Light;
 
 import Image.Color;
 import Image.Image;
@@ -108,26 +109,37 @@ int main()
 	//	Math::bounds2{ {-1.f * 720.f / 480.f,-1.f}, {1.f * 720.f / 480.f, 1.f} } , 
 	//	0, 0, 0, 0, &film, nullptr);
 
-	//Math::Transform objectToWorld = Math::translate({ 0,0,5 });
-	//Math::Transform worldToObject = Math::translate({ 0,0,-5 });
-
-	//Tracer::Sphere sphere(&objectToWorld, &worldToObject, false, 1, -1, 1, 360);
+	//float const radius = 0.5f;
+	//float const radius_2 = 3.f;
+	//Math::Transform objectToWorld = Math::translate({ 0,0,radius_2 });
+	//Math::Transform worldToObject = Math::translate({ 0,0,-radius_2 });
+	//Tracer::Sphere sphere(&objectToWorld, &worldToObject, false, radius, -radius, radius, 360);
 	//Tracer::MatteMaterial material(nullptr, nullptr, nullptr);
 	//Tracer::GeometricPrimitive primitve;
 	//primitve.shape = &sphere;
 	//primitve.material = &material;
-	//Tracer::Scene scene(&primitve, {});
-	//Tracer::StratifiedSampler sampler(1, 1, false, 10);
+
+	//Math::Transform objectToWorld_2 = Math::translate({ 0,radius_2+ radius,radius_2 });
+	//Math::Transform worldToObject_2 = Math::translate({ 0,-radius_2- radius,-radius_2 });
+
+	//Tracer::Sphere sphere_2(&objectToWorld_2, &worldToObject_2, false, radius_2, -radius_2, radius_2, 360);
+	//Tracer::GeometricPrimitive ground;
+	//ground.shape = &sphere_2;
+	//ground.material = &material;
+	//Tracer::DummyAggregate aggregate{ std::vector<Tracer::Primitive*>{&primitve,& ground} };
+	//Tracer::InfiniteAreaLight areaLight(Math::Transform{}, Tracer::Spectrum{ 1.f }, 1, "");
+	//Tracer::Scene scene(&aggregate, { &areaLight });
+	//Tracer::StratifiedSampler sampler(50, 1, true, 6);
 	//Tracer::WhittedIntegrator integrator(5, &camera, &sampler);
+
+	//integrator.render(scene);
+	////  save final image after rendering
+	//camera.film->writeImage(image, 1.f);
 
 	//int i = 0;
 	//while (window->isRunning()) {
 	//	auto startPoint = std::chrono::high_resolution_clock::now();
 	//	
-	//	integrator.render(scene);
-	//	//  save final image after rendering
-	//	camera.film->writeImage(image, 1.f);
-
 	//	//// Clear background to black
 	//	//std::fill((Image::COLOR_R8G8B8_UINT*)&((reinterpret_cast<char*>(image.data.data))[0]),
 	//	//	(Image::COLOR_R8G8B8_UINT*)&((reinterpret_cast<char*>(image.data.data))[image.data.size]),

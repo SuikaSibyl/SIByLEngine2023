@@ -35,7 +35,7 @@ namespace SIByL::Tracer
 
 		/** @see Shape::intersect() */
 		virtual auto intersect(
-			Math::ray3 const& ray,
+			Ray const& ray,
 			float* tHit,
 			SurfaceInteraction* isect,
 			bool testAlphaTexture = true) const -> bool override;
@@ -103,7 +103,7 @@ namespace SIByL::Tracer
 	}
 
 	auto Sphere::intersect(
-		Math::ray3 const& r,
+		Ray const& r,
 		float* tHit,
 		SurfaceInteraction* isect,
 		bool testAlphaTexture) const -> bool
@@ -159,11 +159,33 @@ namespace SIByL::Tracer
 		float theta = std::acos(Math::clamp(pHit.z / radius, -1.f, 1.f));
 		float v = (theta - thetaMin) / (thetaMax - thetaMin);
 		//		compute sphere ∂p/∂u and ∂p/∂v
+		float zRadius = std::sqrt(pHit.x * pHit.x + pHit.y * pHit.y);
+		float invZRadius = 1 / zRadius;
+		float cosPhi = pHit.x * invZRadius;
+		float sinPhi = pHit.y * invZRadius;
+		Math::vec3 dpdu(-phiMax * pHit.y, phiMax * pHit.x, 0);
+		Math::vec3 dpdv = (thetaMax - thetaMin) * Math::vec3(pHit.z * cosPhi, pHit.z * sinPhi, -radius * std::sin(theta));
 		//		compute sphere ∂n/∂u and ∂n/∂v
+		Math::vec3 d2Pduu = -phiMax * phiMax * Math::vec3(pHit.x, pHit.y, 0);
+		Math::vec3 d2Pduv = (thetaMax - thetaMin) * pHit.z * phiMax * Math::vec3(-sinPhi, cosPhi, 0.);
+		Math::vec3 d2Pdvv = -(thetaMax - thetaMin) * (thetaMax - thetaMin) * Math::vec3(pHit.x, pHit.y, pHit.z);
+		//  Compute coefficients for fundamental forms
+		float E = Math::dot(dpdu, dpdu);
+		float F = Math::dot(dpdu, dpdv);
+		float G = Math::dot(dpdv, dpdv);
+		Math::vec3 N = Math::normalize(Math::cross(dpdu, dpdv));
+		float e = Math::dot(N, d2Pduu);
+		float f = Math::dot(N, d2Pduv);
+		float g = Math::dot(N, d2Pdvv);
+		//  Compute ∂n / ∂u and ∂n / ∂v from fundamental form coefficients
+		float invEGF2 = 1 / (E * G - F * F);
+		Math::normal3 dndu = Math::normal3((f * F - e * G) * invEGF2 * dpdu + (e * F - f * E) * invEGF2 * dpdv);
+		Math::normal3 dndv = Math::normal3((g * F - f * G) * invEGF2 * dpdu + (f * F - g * E) * invEGF2 * dpdv);
 		// compute error bounds for sphere intersection
-
+		Math::vec3 pError;
 		// initialize SurfaceInteraction from parametric information
-
+		*isect = (*objectToWorld) * (SurfaceInteraction(pHit, pError, Math::point2(u, v), -ray.d, dpdu, dpdv,
+				dndu, dndv, r.time, this));
 		// update tHit for quadric intersection
 		*tHit = (float)tShapeHit;
 		return true;

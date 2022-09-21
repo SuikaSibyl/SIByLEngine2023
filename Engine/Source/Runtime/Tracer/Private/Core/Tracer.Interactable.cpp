@@ -36,6 +36,13 @@ namespace SIByL::Tracer
 		return Ray(o, d, Math::float_infinity, time, getMedium(d));
 	}
 
+	auto Interaction::spawnRayTo(Interaction const& it) const noexcept -> Ray {
+		Math::point3 origin = offsetRayOrigin(p, pError, n, it.p - p);
+		Math::point3 target = offsetRayOrigin(it.p, it.pError, it.n, origin - it.p);
+		Math::vec3 d = target - origin;
+		return Ray(origin, d, 1 - Math::shadow_epsilon, time, getMedium(d));
+	}
+
 	auto Interaction::spawnRayTo(Math::point3 const& p2) const noexcept -> Ray {
 		float const shadowEpsilon = 0.0001f;
 		Math::point3 origin = offsetRayOrigin(p, pError, n, p2 - p);
@@ -319,7 +326,7 @@ namespace SIByL::Tracer
 		return (*objectToWorld) * (objectBound());
 	}
 
-	auto Shape::intersectP(Math::ray3 const& ray, bool testAlphaTexture) const  -> bool {
+	auto Shape::intersectP(Ray const& ray, bool testAlphaTexture) const  -> bool {
 		float tHit = ray.tMax;
 		SurfaceInteraction isect;
 		return intersect(ray, &tHit, &isect, testAlphaTexture);

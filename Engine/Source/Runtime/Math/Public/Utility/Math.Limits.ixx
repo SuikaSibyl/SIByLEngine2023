@@ -9,6 +9,8 @@ namespace SIByL::Math
 	export constexpr inline float float_max = std::numeric_limits<float>::max();
 	export constexpr inline float one_minus_epsilon = 0x1.fffffep-1;
 
+	export constexpr inline float shadow_epsilon = 0.0001f;
+
 	export struct Limits {
 		static float float_min;
 	};
