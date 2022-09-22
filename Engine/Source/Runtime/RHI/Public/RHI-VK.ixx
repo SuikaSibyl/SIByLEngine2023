@@ -3,13 +3,21 @@ module;
 #include <vector>
 #include <format>
 #include <vulkan/vulkan.h>
-#include <glfw3.h>
 #include <memory>
 #include <optional>
+#include <limits>
+#include <cstdint>
 #include <algorithm>
+#define VK_USE_PLATFORM_WIN32_KHR
+#define GLFW_INCLUDE_VULKAN
+#include <glfw3.h>
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <glfw3native.h>
+#include <vulkan/vulkan_win32.h>
 export module RHI:VK;
 import :Interface;
 import Core.Log;
+import Math.Limits;
 import Platform.Window;
 
 namespace SIByL::RHI
@@ -30,7 +38,10 @@ namespace SIByL::RHI
 	struct ExternalTexture_VK;	
 	// **************************
 	// Samplers				    |
-	struct Sampler_VK;			
+	struct Sampler_VK;
+	// **************************
+	// SwapChain				|
+	struct SwapChain_VK;
 	// **************************
 	// Resource Binding		    |
 	struct BindGroupLayout_VK;	
@@ -53,12 +64,16 @@ namespace SIByL::RHI
 	//
 
 	export struct Context_VK final :public Context {
+		/** virtual destructor */
+		virtual ~Context_VK() { destroy(); }
 		/** initialize the context */
 		virtual auto init(Platform::Window* window = nullptr, ContextExtensionsFlags ext = 0) noexcept -> bool override;
 		/** Request an adapter */
 		virtual auto requestAdapter(RequestAdapterOptions const& options) noexcept -> std::unique_ptr<Adapter> override;
 		/** Get the binded window */
 		virtual auto getBindedWindow() const noexcept -> Platform::Window* override;
+		/** clean up context resources */
+		virtual auto destroy() noexcept -> void override;
 	public:
 		/** get VkInstance */
 		auto getVkInstance() noexcept -> VkInstance& { return instance; }
@@ -113,10 +128,14 @@ namespace SIByL::RHI
 		/** Requests the AdapterInfo for this Adapter. */
 		virtual auto requestAdapterInfo() const noexcept -> AdapterInfo override;
 	public:
+		/** get context the adapter is on */
+		auto getContext() noexcept -> Context_VK* { return context; }
 		/** get VkPhysicalDevice */
 		auto getVkPhysicalDevice() noexcept -> VkPhysicalDevice& { return physicalDevice; }
 		/** get TimestampPeriod */
 		auto getTimestampPeriod() const noexcept -> float { return timestampPeriod; }
+		/** get QueueFamilyIndices_VK */
+		auto getQueueFamilyIndices() const noexcept -> QueueFamilyIndices_VK const& { return queueFamilyIndices; }
 		/** get All Device Extensions required */
 		auto getDeviceExtensions() noexcept -> std::vector<const char*>& { return context->getDeviceExtensions(); }
 		/** get All Device Extensions required */
@@ -149,6 +168,14 @@ namespace SIByL::RHI
 		virtual ~Device_VK();
 		/** destroy the device */
 		virtual auto destroy() noexcept -> void override;
+		// Read-only fields
+		// ---------------------------
+		/** the graphics queue for this device */
+		virtual auto getGraphicsQueue() noexcept -> Queue* { return &graphicsQueue; }
+		/** the compute queue for this device */
+		virtual auto getComputeQueue() noexcept -> Queue* { return &computeQueue; }
+		/** the present queue for this device */
+		virtual auto getPresentQueue() noexcept -> Queue* { return &presentQueue; }
 		// Create resources on device
 		// ---------------------------
 		/** create a buffer on the device */
@@ -159,6 +186,8 @@ namespace SIByL::RHI
 		virtual auto createSampler(SamplerDescriptor const& desc) noexcept -> std::unique_ptr<Sampler> override;
 		/** create a external texture on the device */
 		virtual auto importExternalTexture(ExternalTextureDescriptor const& desc) noexcept -> std::unique_ptr<ExternalTexture> override;
+		/* create a swapchain on the device */
+		virtual auto createSwapChain(SwapChainDescriptor const& desc) noexcept -> std::unique_ptr<SwapChain> override;
 		// Create resources binding objects
 		// ---------------------------
 		/** create a bind group layout on the device */
@@ -196,11 +225,11 @@ namespace SIByL::RHI
 		/** get vulkan logical device handle */
 		auto getVkDevice() noexcept -> VkDevice& { return device; }
 		/** get graphics queue handle */
-		auto getGraphicsQueue() noexcept -> Queue_VK& { return graphicsQueue; }
+		auto getVkGraphicsQueue() noexcept -> Queue_VK& { return graphicsQueue; }
 		/** get compute queue handle */
-		auto getComputeQueue() noexcept -> Queue_VK& { return computeQueue; }
+		auto getVkComputeQueue() noexcept -> Queue_VK& { return computeQueue; }
 		/** get present queue handle */
-		auto getPresentQueue() noexcept -> Queue_VK& { return presentQueue; }
+		auto getVkPresentQueue() noexcept -> Queue_VK& { return presentQueue; }
 		/** get the adapter from which this device was created */
 		auto getAdapterVk() noexcept -> Adapter_VK*& { return adapter; }
 	private:
@@ -234,19 +263,19 @@ namespace SIByL::RHI
 		{
 		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
 			if (enableValidationLayerVerboseOutput)
-				Core::LogManager::Log(std::format("VULKAN :: VALIDATION :: %s", pCallbackData->pMessage));
+				Core::LogManager::Log(std::format("VULKAN :: VALIDATION :: {}", pCallbackData->pMessage));
 			break;
 		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-			Core::LogManager::Log(std::format("VULKAN :: VALIDATION :: %s", pCallbackData->pMessage));
+			Core::LogManager::Log(std::format("VULKAN :: VALIDATION :: {}", pCallbackData->pMessage));
 			break;
 		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-			Core::LogManager::Warning(std::format("VULKAN :: VALIDATION :: %s", pCallbackData->pMessage));
+			Core::LogManager::Warning(std::format("VULKAN :: VALIDATION :: {}", pCallbackData->pMessage));
 			break;
 		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-			Core::LogManager::Error(std::format("VULKAN :: VALIDATION :: %s", pCallbackData->pMessage));
+			Core::LogManager::Error(std::format("VULKAN :: VALIDATION :: {}", pCallbackData->pMessage));
 			break;
 		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_FLAG_BITS_MAX_ENUM_EXT:
-			Core::LogManager::Error(std::format("VULKAN :: VALIDATION :: %s", pCallbackData->pMessage));
+			Core::LogManager::Error(std::format("VULKAN :: VALIDATION :: {}", pCallbackData->pMessage));
 			break;
 		default:
 			break;
@@ -401,6 +430,16 @@ namespace SIByL::RHI
 			if (glfwCreateWindowSurface(contexVk->getVkInstance(), (GLFWwindow*)contexVk->getBindedWindow()->getHandle(), 
 				nullptr, &contexVk->getVkSurfaceKHR()) != VK_SUCCESS) {
 				Core::LogManager::Error("Vulkan :: glfwCreateWindowSurface failed!");
+			}
+		}
+		else if (contexVk->getBindedWindow()->getVendor() == Platform::WindowVendor::WIN_64) {
+			VkWin32SurfaceCreateInfoKHR createInfo{};
+			createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+			createInfo.hwnd = (HWND)contexVk->getBindedWindow()->getHandle();
+			createInfo.hinstance = GetModuleHandle(nullptr);
+			if (vkCreateWin32SurfaceKHR(contexVk->getVkInstance(), &createInfo, 
+				nullptr, &contexVk->getVkSurfaceKHR()) != VK_SUCCESS) {
+				Core::LogManager::Error("Vulkan :: failed to create WIN_64 window surface!");
 			}
 		}
 	}
@@ -591,6 +630,22 @@ namespace SIByL::RHI
 		return bindedWindow;
 	}
 
+	auto inline destroyDebugUtilsMessengerEXT(
+		VkInstance instance, 
+		VkDebugUtilsMessengerEXT debugMessenger, 
+		VkAllocationCallbacks const* pAllocator) noexcept -> void
+	{
+		auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+		if (func != nullptr) func(instance, debugMessenger, pAllocator);
+	}
+
+	auto Context_VK::destroy() noexcept -> void {
+		if (enableValidationLayers)
+			destroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
+		if (surface) vkDestroySurfaceKHR(instance, surface, nullptr);
+		vkDestroyInstance(instance, nullptr);
+	}
+
 #pragma endregion
 
 #pragma region VK_ADAPTER_IMPL
@@ -688,9 +743,9 @@ namespace SIByL::RHI
 			Core::LogManager::Log("VULKAN :: failed to create logical device!");
 		}
 		// get queue handlevul		
-		vkGetDeviceQueue(device->getVkDevice(), queueFamilyIndices.graphicsFamily.value(), 0, &device->getGraphicsQueue().queue);
-		vkGetDeviceQueue(device->getVkDevice(), queueFamilyIndices.presentFamily.value(), 0, &device->getPresentQueue().queue);
-		vkGetDeviceQueue(device->getVkDevice(), queueFamilyIndices.computeFamily.value(), 0, &device->getComputeQueue().queue);
+		vkGetDeviceQueue(device->getVkDevice(), queueFamilyIndices.graphicsFamily.value(), 0, &device->getVkGraphicsQueue().queue);
+		vkGetDeviceQueue(device->getVkDevice(), queueFamilyIndices.presentFamily.value(), 0, &device->getVkPresentQueue().queue);
+		vkGetDeviceQueue(device->getVkDevice(), queueFamilyIndices.computeFamily.value(), 0, &device->getVkComputeQueue().queue);
 		return std::move(device);
 	}
 
@@ -714,7 +769,7 @@ namespace SIByL::RHI
 	Device_VK::~Device_VK() { destroy(); }
 
 	auto Device_VK::destroy() noexcept -> void {
-
+		if (device) vkDestroyDevice(device, nullptr);
 	}
 
 	auto Device_VK::createBuffer(BufferDescriptor const& desc) noexcept -> std::unique_ptr<Buffer> {
@@ -964,6 +1019,9 @@ namespace SIByL::RHI
 		virtual auto dimension() const noexcept -> TextureDimension override;
 		/** readonly format of the texture */
 		virtual auto format() const noexcept -> TextureFormat override;
+	public:
+		/** get the VkImage */
+		auto getVkImage() noexcept -> VkImage& { return image; }
 	private:
 		/** vulkan image */
 		VkImage image;
@@ -975,6 +1033,21 @@ namespace SIByL::RHI
 		Device_VK* device = nullptr;
 	};
 
+	export struct TextureView_VK :public TextureView {
+		/** create textureviw */
+		TextureView_VK(Device_VK* device, Texture_VK* texture, TextureViewDescriptor const& descriptor);
+		/** virtual destructor */
+		virtual ~TextureView_VK();
+		/** Vulkan texture view */
+		VkImageView imageView;
+		/** Texture view descriptor */
+		TextureViewDescriptor descriptor;
+		/** The texture this view is pointing to */
+		Texture_VK* texture = nullptr;
+		/** The device that the pointed texture is created on */
+		Device_VK* device = nullptr;
+	};
+
 #pragma region VK_TEXTURE_IMPL
 
 	Texture_VK::~Texture_VK() {
@@ -982,7 +1055,7 @@ namespace SIByL::RHI
 	}
 
 	auto Texture_VK::createView(TextureViewDescriptor const& desc) noexcept -> std::unique_ptr<TextureView> {
-		return nullptr;
+		return std::make_unique<TextureView_VK>(device, this, desc);
 	}
 
 	auto Texture_VK::destroy() noexcept -> void {
@@ -1019,14 +1092,109 @@ namespace SIByL::RHI
 
 #pragma endregion
 
-	export struct TextureView_VK :public TextureView {
-		/** Vulkan texture view */
-		VkImageView imageView;
-		/** Texture view descriptor */
-		TextureViewDescriptor descriptor;
-		/** The device that the pointed texture is created on */
-		Device_VK* device = nullptr;
-	};
+#pragma region VK_TEXTUREVIEW_IMPL
+
+	inline auto getVkFormat(TextureFormat format) noexcept -> VkFormat {
+		switch (format)
+		{
+		case SIByL::RHI::TextureFormat::DEPTH32STENCIL8:	return VK_FORMAT_D32_SFLOAT_S8_UINT; break;
+		case SIByL::RHI::TextureFormat::DEPTH32_FLOAT:		return VK_FORMAT_D32_SFLOAT; break;
+		case SIByL::RHI::TextureFormat::DEPTH24STENCIL8:	return VK_FORMAT_D24_UNORM_S8_UINT; break;
+		case SIByL::RHI::TextureFormat::DEPTH24:			return VK_FORMAT_X8_D24_UNORM_PACK32; break;
+		case SIByL::RHI::TextureFormat::DEPTH16_UNORM:		return VK_FORMAT_D16_UNORM; break;
+		case SIByL::RHI::TextureFormat::STENCIL8:			return VK_FORMAT_S8_UINT; break;
+		case SIByL::RHI::TextureFormat::RGBA32_FLOAT:		return VK_FORMAT_R32G32B32A32_SFLOAT; break;
+		case SIByL::RHI::TextureFormat::RGBA32_SINT:		return VK_FORMAT_R32G32B32A32_SINT; break;
+		case SIByL::RHI::TextureFormat::RGBA32_UINT:		return VK_FORMAT_R32G32B32A32_UINT; break;
+		case SIByL::RHI::TextureFormat::RGBA16_FLOAT:		return VK_FORMAT_R16G16B16A16_SFLOAT; break;
+		case SIByL::RHI::TextureFormat::RGBA16_SINT:		return VK_FORMAT_R16G16B16A16_SINT; break;
+		case SIByL::RHI::TextureFormat::RGBA16_UINT:		return VK_FORMAT_R16G16B16A16_UINT; break;
+		case SIByL::RHI::TextureFormat::RG32_FLOAT:			return VK_FORMAT_R32G32_SFLOAT; break;
+		case SIByL::RHI::TextureFormat::RG32_SINT:			return VK_FORMAT_R32G32_SINT; break;
+		case SIByL::RHI::TextureFormat::RG32_UINT:			return VK_FORMAT_R32G32_UINT; break;
+		case SIByL::RHI::TextureFormat::RG11B10_UFLOAT:		return VK_FORMAT_B10G11R11_UFLOAT_PACK32;  break;
+		case SIByL::RHI::TextureFormat::RGB10A2_UNORM:		return VK_FORMAT_A2R10G10B10_UNORM_PACK32; break;
+		case SIByL::RHI::TextureFormat::RGB9E5_UFLOAT:		return VK_FORMAT_E5B9G9R9_UFLOAT_PACK32; break;
+		case SIByL::RHI::TextureFormat::BGRA8_UNORM_SRGB:	return VK_FORMAT_B8G8R8A8_SRGB; break;
+		case SIByL::RHI::TextureFormat::BGRA8_UNORM:		return VK_FORMAT_B8G8R8A8_UNORM; break;
+		case SIByL::RHI::TextureFormat::RGBA8_SINT:			return VK_FORMAT_B8G8R8A8_SINT; break;
+		case SIByL::RHI::TextureFormat::RGBA8_UINT:			return VK_FORMAT_B8G8R8A8_UINT; break;
+		case SIByL::RHI::TextureFormat::RGBA8_SNORM:		return VK_FORMAT_R8G8B8A8_SNORM; break;
+		case SIByL::RHI::TextureFormat::RGBA8_UNORM_SRGB:	return VK_FORMAT_R8G8B8A8_SRGB; break;
+		case SIByL::RHI::TextureFormat::RGBA8_UNORM:		return VK_FORMAT_R8G8B8A8_UNORM; break;
+		case SIByL::RHI::TextureFormat::RG16_FLOAT:			return VK_FORMAT_R16G16_SFLOAT; break;
+		case SIByL::RHI::TextureFormat::RG16_SINT:			return VK_FORMAT_R16G16_SINT; break;
+		case SIByL::RHI::TextureFormat::RG16_UINT:			return VK_FORMAT_R16G16_UINT; break;
+		case SIByL::RHI::TextureFormat::R32_FLOAT:			return VK_FORMAT_R32_SFLOAT; break;
+		case SIByL::RHI::TextureFormat::R32_SINT:			return VK_FORMAT_R32_SINT; break;
+		case SIByL::RHI::TextureFormat::R32_UINT:			return VK_FORMAT_R32_UINT; break;
+		case SIByL::RHI::TextureFormat::RG8_SINT:			return VK_FORMAT_R8G8_SINT; break;
+		case SIByL::RHI::TextureFormat::RG8_UINT:			return VK_FORMAT_R8G8_UINT; break;
+		case SIByL::RHI::TextureFormat::RG8_SNORM:			return VK_FORMAT_R8G8_SNORM; break;
+		case SIByL::RHI::TextureFormat::RG8_UNORM:			return VK_FORMAT_R8G8_UNORM; break;
+		case SIByL::RHI::TextureFormat::R16_FLOAT:			return VK_FORMAT_R16_SFLOAT; break;
+		case SIByL::RHI::TextureFormat::R16_SINT:			return VK_FORMAT_R16_SINT; break;
+		case SIByL::RHI::TextureFormat::R16_UINT: 			return VK_FORMAT_R16_UINT; break;
+		case SIByL::RHI::TextureFormat::R8_SINT:			return VK_FORMAT_R8_SINT; break;
+		case SIByL::RHI::TextureFormat::R8_UINT:			return VK_FORMAT_R8_UINT; break;
+		case SIByL::RHI::TextureFormat::R8_SNORM:			return VK_FORMAT_R8_SNORM; break;
+		case SIByL::RHI::TextureFormat::R8_UNORM:			return VK_FORMAT_R8_UNORM; break;
+		default: return VK_FORMAT_UNDEFINED; break;
+		}
+	}
+
+	inline auto getVkImageViewType(TextureViewDimension const& dim) noexcept -> VkImageViewType {
+		switch (dim)
+		{
+		case TextureViewDimension::TEX1D:		return VkImageViewType::VK_IMAGE_VIEW_TYPE_1D; break;
+		case TextureViewDimension::TEX2D:		return VkImageViewType::VK_IMAGE_VIEW_TYPE_2D; break;
+		case TextureViewDimension::TEX2D_ARRAY:	return VkImageViewType::VK_IMAGE_VIEW_TYPE_2D_ARRAY; break;
+		case TextureViewDimension::CUBE:		return VkImageViewType::VK_IMAGE_VIEW_TYPE_CUBE; break;
+		case TextureViewDimension::CUBE_ARRAY:	return VkImageViewType::VK_IMAGE_VIEW_TYPE_CUBE_ARRAY; break;
+		case TextureViewDimension::TEX3D:		return VkImageViewType::VK_IMAGE_VIEW_TYPE_3D; break;
+		default:
+			break;
+		}
+	}
+
+	inline auto getVkImageAspectFlags(TextureAspect aspect) noexcept -> VkImageAspectFlags {
+		switch (aspect)
+		{
+		case SIByL::RHI::TextureAspect::DEPTH_ONLY:		return VK_IMAGE_ASPECT_DEPTH_BIT; break;
+		case SIByL::RHI::TextureAspect::STENCIL_ONLY:	return VK_IMAGE_ASPECT_STENCIL_BIT; break;
+		case SIByL::RHI::TextureAspect::ALL: 
+		default: return VK_IMAGE_ASPECT_COLOR_BIT | VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT; break;
+		}
+	}
+
+	TextureView_VK::TextureView_VK(Device_VK* device, Texture_VK* texture, TextureViewDescriptor const& descriptor)
+		: device(device), texture(texture), descriptor(descriptor)
+	{
+		VkImageViewCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		createInfo.image = texture->getVkImage();
+		createInfo.viewType = getVkImageViewType(descriptor.dimension);
+		createInfo.format = getVkFormat(descriptor.format);
+		createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.subresourceRange.aspectMask = getVkImageAspectFlags(descriptor.aspect);
+		createInfo.subresourceRange.baseMipLevel = descriptor.baseMipLevel;
+		createInfo.subresourceRange.levelCount = descriptor.mipLevelCount;
+		createInfo.subresourceRange.baseArrayLayer = descriptor.baseArrayLayer;
+		createInfo.subresourceRange.layerCount = descriptor.arrayLayerCount;
+		if (vkCreateImageView(device->getVkDevice(), &createInfo, nullptr, &imageView) != VK_SUCCESS) {
+			Core::LogManager::Error("VULKAN :: failed to create image views!");
+		}
+	}
+
+	TextureView_VK::~TextureView_VK() {
+		if (imageView) vkDestroyImageView(device->getVkDevice(), imageView, nullptr);
+	}
+
+#pragma endregion
+
 
 	export struct ExternalTexture_VK :public ExternalTexture {
 		/** virtual destructor */
@@ -1056,6 +1224,128 @@ namespace SIByL::RHI
 	};
 
 	// Samplers Interface
+	// ===========================================================================
+	// SwapChain Interface
+
+	struct SwapChain_VK :public SwapChain {
+		/** virtual destructor */
+		virtual ~SwapChain_VK();
+		/** intialize the swapchin */
+		auto init(Device_VK* device, SwapChainDescriptor const& desc) noexcept -> void;
+		/** vulkan SwapChain */
+		VkSwapchainKHR swapChain;
+		/** vulkan SwapChain Extent */
+		VkExtent2D swapChainExtend;
+		/** vulkan SwapChain format */
+		VkFormat swapChainImageFormat;
+		/** vulkan SwapChain fetched images */
+		std::vector<VkImage> swapChainImages;
+		/** the device this sampler is created on */
+		Device_VK* device = nullptr;
+	};
+
+#pragma region VK_SWAPCHAIN_IMPL
+
+	inline auto chooseSwapSurfaceFormat(std::vector<VkSurfaceFormatKHR> const& availableFormats) noexcept -> VkSurfaceFormatKHR {
+		for (auto const& availableFormat : availableFormats) {
+			if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && 
+				availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+				return availableFormat;
+			}
+		}
+		return availableFormats[0];
+	}
+	
+	inline auto chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) noexcept -> VkPresentModeKHR {
+		for (const auto& availablePresentMode : availablePresentModes) {
+			if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
+				return availablePresentMode;
+			}
+		}
+		return VK_PRESENT_MODE_FIFO_KHR;
+	}
+
+	inline auto chooseSwapExtent(
+		VkSurfaceCapabilitiesKHR const& capabilities, 
+		Platform::Window* bindedWindow) noexcept -> VkExtent2D 
+	{
+		if (capabilities.currentExtent.width != Math::uint32_max)
+			return capabilities.currentExtent;
+		else {
+			int width, height;
+			bindedWindow->getFramebufferSize(&width, &height);
+			VkExtent2D actualExtent = {
+				static_cast<uint32_t>(width),
+				static_cast<uint32_t>(height)
+			};
+			actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+			actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+			return actualExtent;
+		}
+	}
+
+	void createSwapChain(Device_VK* device, SwapChain_VK* swapchain) {
+		Adapter_VK* adapater = device->getAdapterVk();
+		SwapChainSupportDetails swapChainSupport = querySwapChainSupport(adapater->getContext(), adapater->getVkPhysicalDevice());
+		VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
+		VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
+		VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities, adapater->getContext()->getBindedWindow());
+		swapchain->swapChainExtend = extent;
+		swapchain->swapChainImageFormat = surfaceFormat.format;
+		uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
+		if (swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount) {
+			imageCount = swapChainSupport.capabilities.maxImageCount;
+		}
+		VkSwapchainCreateInfoKHR createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+		createInfo.surface = adapater->getContext()->getVkSurfaceKHR();
+		createInfo.minImageCount = imageCount;
+		createInfo.imageFormat = surfaceFormat.format;
+		createInfo.imageColorSpace = surfaceFormat.colorSpace;
+		createInfo.imageExtent = extent;
+		createInfo.imageArrayLayers = 1;
+		createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		QueueFamilyIndices_VK const& indices = adapater->getQueueFamilyIndices();
+		uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value(), indices.presentFamily.value() };
+		if (indices.graphicsFamily != indices.presentFamily) {
+			createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+			createInfo.queueFamilyIndexCount = 2;
+			createInfo.pQueueFamilyIndices = queueFamilyIndices;
+		}
+		else {
+			createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+			createInfo.queueFamilyIndexCount = 0; // Optional
+			createInfo.pQueueFamilyIndices = nullptr; // Optional
+		}
+		createInfo.preTransform = swapChainSupport.capabilities.currentTransform;
+		createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+		createInfo.presentMode = presentMode;
+		createInfo.clipped = VK_TRUE;
+		createInfo.oldSwapchain = VK_NULL_HANDLE;
+		if (vkCreateSwapchainKHR(device->getVkDevice(), &createInfo, nullptr, &swapchain->swapChain) != VK_SUCCESS) {
+			Core::LogManager::Error("VULKAN :: failed to create swap chain!");
+		}
+	}
+	
+	SwapChain_VK::~SwapChain_VK() {
+		if (swapChain)
+			vkDestroySwapchainKHR(device->getVkDevice(), swapChain, nullptr);
+	}
+
+	auto SwapChain_VK::init(Device_VK* device, SwapChainDescriptor const& desc) noexcept -> void {
+		this->device = device;
+		createSwapChain(device, this);
+	}
+
+	auto Device_VK::createSwapChain(SwapChainDescriptor const& desc) noexcept -> std::unique_ptr<SwapChain> {
+		std::unique_ptr<SwapChain_VK> swapChain = std::make_unique<SwapChain_VK>();
+		swapChain->init(this, desc);
+		return std::move(swapChain);
+	}
+
+#pragma endregion
+
+	// SwapChain Interface
 	// ===========================================================================
 	// Resource Binding Interface
 

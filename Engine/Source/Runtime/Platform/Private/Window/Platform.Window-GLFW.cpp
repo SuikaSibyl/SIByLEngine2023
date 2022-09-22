@@ -89,4 +89,7 @@ namespace SIByL::Platform
 		Core::LogManager::Error("Error|TODO :: Window_GLFW does not support func { bindPaintingBitmapRGB8 } for now!");
 	}
 
+	auto Window_GLFW::getFramebufferSize(int* width, int* height) noexcept -> void {
+		glfwGetFramebufferSize(wndHandle, width, height);
+	}
 }

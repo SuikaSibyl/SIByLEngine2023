@@ -44,6 +44,8 @@ namespace SIByL::Platform
 		virtual auto getVendor() noexcept -> WindowVendor { return WindowVendor::WIN_64; }
 		/** return window handle */
 		virtual auto getHandle() noexcept -> void* { return (void*)wndHandle; }
+		/* return window framebuffer size */
+		virtual auto getFramebufferSize(int* width, int* height) noexcept -> void override;
 
 	private:
 		std::wstring const	uniName;

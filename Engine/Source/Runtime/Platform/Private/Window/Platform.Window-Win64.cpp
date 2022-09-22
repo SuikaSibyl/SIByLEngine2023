@@ -226,6 +226,11 @@ namespace SIByL::Platform
 		auto paintbitmap = std::bind(paintRGB8Bitmap, std::placeholders::_1, width, height, data);
 		onPaintSignal.connect(paintbitmap);
 	}
+	
+	auto Window_Win64::getFramebufferSize(int* w, int* h) noexcept -> void {
+		*w = width;
+		*h = height;
+	}
 
 	auto paintRGB8Bitmap(HDC& hdc, size_t width, size_t height, char* data) -> void
 	{

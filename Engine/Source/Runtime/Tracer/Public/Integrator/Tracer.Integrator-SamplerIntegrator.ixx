@@ -1,3 +1,5 @@
+module;
+#include <cstdint>
 export module Tracer.Integrator:SamplerIntegrator;
 import :Integrator;
 import Core.Memory;
@@ -60,5 +62,11 @@ namespace SIByL::Tracer
 		* inside camera handles iamge storage.
 		*/
 		Camera const* camera;
+
+		/** Indicate progressive rendering intermediate status */
+		struct {
+			uint64_t sampleTaken = 0;
+
+		} progressiveState;
 	};
 } 

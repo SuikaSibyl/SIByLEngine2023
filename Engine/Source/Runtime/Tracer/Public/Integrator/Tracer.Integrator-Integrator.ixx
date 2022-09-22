@@ -1,3 +1,5 @@
+module;
+#include <cstdint>
 export module Tracer.Integrator:Integrator;
 import Tracer.Interactable;
 

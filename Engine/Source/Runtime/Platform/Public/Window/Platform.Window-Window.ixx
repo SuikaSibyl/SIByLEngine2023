@@ -63,5 +63,7 @@ namespace SIByL::Platform
 		virtual auto getVendor() noexcept -> WindowVendor = 0;
 		/** return window handle */
 		virtual auto getHandle() noexcept -> void* = 0;
+		/* return window framebuffer size */
+		virtual auto getFramebufferSize(int* width, int* height) noexcept -> void = 0;
 	};
 }

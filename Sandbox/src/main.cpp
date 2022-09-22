@@ -69,105 +69,104 @@ int main()
 {
 	Application::Root root;
 	
-	SandBoxApplication app;
-	app.createMainWindow({
-			Platform::WindowVendor::GLFW,
-			L"SIByL Engine 2022.0",
-			720, 480,
-			Platform::WindowProperties::VULKAN_CONTEX
-		});
-
-	RHI::Context_VK context;
-	bool initialized = context.init(app.mainWindow.get(), (uint32_t)RHI::ContextExtension::NONE);
-
-	std::unique_ptr<RHI::Adapter> adapter = context.requestAdapter(RHI::RequestAdapterOptions{});
-	std::unique_ptr<RHI::Device> device = adapter->requestDevice();
-
-	app.run();
-
-	//Scope<Platform::Window> window = Platform::Window::create({
-	//		Platform::WindowVendor::WIN_64,
-	//		L"Ray Trace Viewer",
+	//SandBoxApplication app;
+	//app.createMainWindow({
+	//		Platform::WindowVendor::GLFW,
+	//		L"SIByL Engine 2022.0",
 	//		720, 480,
-	//		Platform::WindowProperties::OPENGL_CONTEX
+	//		Platform::WindowProperties::VULKAN_CONTEX
 	//	});
 
-	//int ncores = Platform::getNumSystemCores();
-	//Image::Image<Image::COLOR_R8G8B8_UINT> image(720, 480);
-	//std::fill((Image::COLOR_R8G8B8_UINT*) & ((reinterpret_cast<char*>(image.data.data))[0]), 
-	//	(Image::COLOR_R8G8B8_UINT*)&((reinterpret_cast<char*>(image.data.data))[image.data.size]), 
-	//	Image::COLOR_R8G8B8_UINT{255,255,0});
+	//RHI::Context_VK context;
+	//bool initialized = context.init(app.mainWindow.get(), (uint32_t)RHI::ContextExtension::NONE);
+	//std::unique_ptr<RHI::Adapter> adapter = context.requestAdapter(RHI::RequestAdapterOptions{});
+	//std::unique_ptr<RHI::Device> device = adapter->requestDevice();
+	//std::unique_ptr<RHI::SwapChain> swapChain = device->createSwapChain({});
 
-	//window->bindPaintingBitmapRGB8(size_t(720), size_t(480), (char*)image.data.data);
-	//window->resize(720.f, 480);
+	//app.run();
 
-	//Math::Transform defaultTransform(mat4{});
-	//Math::AnimatedTransform animatedDefaultTransform(&defaultTransform, 0, &defaultTransform, 0);
-	//Tracer::Film film(Math::ipoint2{ 720, 480 }, Math::bounds2{ {0,0}, {1,1} }, 
-	//	std::make_unique<Tracer::BoxFilter>(Math::vec2{1.f,1.f}), 1, "what.c", 1);
-	//Tracer::OrthographicCamera camera(animatedDefaultTransform, 
-	//	Math::bounds2{ {-1.f * 720.f / 480.f,-1.f}, {1.f * 720.f / 480.f, 1.f} } , 
-	//	0, 0, 0, 0, &film, nullptr);
+	Scope<Platform::Window> window = Platform::Window::create({
+			Platform::WindowVendor::WIN_64,
+			L"Ray Trace Viewer",
+			720, 480,
+			Platform::WindowProperties::OPENGL_CONTEX
+		});
 
-	//float const radius = 0.5f;
-	//float const radius_2 = 3.f;
-	//Math::Transform objectToWorld = Math::translate({ 0,0,radius_2 });
-	//Math::Transform worldToObject = Math::translate({ 0,0,-radius_2 });
-	//Tracer::Sphere sphere(&objectToWorld, &worldToObject, false, radius, -radius, radius, 360);
-	//Tracer::MatteMaterial material(nullptr, nullptr, nullptr);
-	//Tracer::GeometricPrimitive primitve;
-	//primitve.shape = &sphere;
-	//primitve.material = &material;
+	int ncores = Platform::getNumSystemCores();
+	Image::Image<Image::COLOR_R8G8B8_UINT> image(720, 480);
+	std::fill((Image::COLOR_R8G8B8_UINT*) & ((reinterpret_cast<char*>(image.data.data))[0]), 
+		(Image::COLOR_R8G8B8_UINT*)&((reinterpret_cast<char*>(image.data.data))[image.data.size]), 
+		Image::COLOR_R8G8B8_UINT{255,255,0});
 
-	//Math::Transform objectToWorld_2 = Math::translate({ 0,radius_2+ radius,radius_2 });
-	//Math::Transform worldToObject_2 = Math::translate({ 0,-radius_2- radius,-radius_2 });
+	window->bindPaintingBitmapRGB8(size_t(720), size_t(480), (char*)image.data.data);
+	window->resize(720.f, 480);
 
-	//Tracer::Sphere sphere_2(&objectToWorld_2, &worldToObject_2, false, radius_2, -radius_2, radius_2, 360);
-	//Tracer::GeometricPrimitive ground;
-	//ground.shape = &sphere_2;
-	//ground.material = &material;
-	//Tracer::DummyAggregate aggregate{ std::vector<Tracer::Primitive*>{&primitve,& ground} };
-	//Tracer::InfiniteAreaLight areaLight(Math::Transform{}, Tracer::Spectrum{ 1.f }, 1, "");
-	//Tracer::Scene scene(&aggregate, { &areaLight });
-	//Tracer::StratifiedSampler sampler(50, 1, true, 6);
-	//Tracer::WhittedIntegrator integrator(5, &camera, &sampler);
+	Math::Transform defaultTransform(mat4{});
+	Math::AnimatedTransform animatedDefaultTransform(&defaultTransform, 0, &defaultTransform, 0);
+	Tracer::Film film(Math::ipoint2{ 720, 480 }, Math::bounds2{ {0,0}, {1,1} }, 
+		std::make_unique<Tracer::BoxFilter>(Math::vec2{1.f,1.f}), 1, "what.c", 1);
+	Tracer::OrthographicCamera camera(animatedDefaultTransform, 
+		Math::bounds2{ {-1.f * 720.f / 480.f,-1.f}, {1.f * 720.f / 480.f, 1.f} } , 
+		0, 0, 0, 0, &film, nullptr);
 
-	//integrator.render(scene);
-	////  save final image after rendering
-	//camera.film->writeImage(image, 1.f);
+	float const radius = 0.5f;
+	float const radius_2 = 3.f;
+	Math::Transform objectToWorld = Math::translate({ 0,0,radius_2 });
+	Math::Transform worldToObject = Math::translate({ 0,0,-radius_2 });
+	Tracer::Sphere sphere(&objectToWorld, &worldToObject, false, radius, -radius, radius, 360);
+	Tracer::MatteMaterial material(nullptr, nullptr, nullptr);
+	Tracer::GeometricPrimitive primitve;
+	primitve.shape = &sphere;
+	primitve.material = &material;
 
-	//int i = 0;
-	//while (window->isRunning()) {
-	//	auto startPoint = std::chrono::high_resolution_clock::now();
-	//	
-	//	//// Clear background to black
-	//	//std::fill((Image::COLOR_R8G8B8_UINT*)&((reinterpret_cast<char*>(image.data.data))[0]),
-	//	//	(Image::COLOR_R8G8B8_UINT*)&((reinterpret_cast<char*>(image.data.data))[image.data.size]),
-	//	//	Image::COLOR_R8G8B8_UINT{ 0 ,0 ,0 });
+	Math::Transform objectToWorld_2 = Math::translate({ 0,radius_2+ radius,radius_2 });
+	Math::Transform worldToObject_2 = Math::translate({ 0,-radius_2- radius,-radius_2 });
 
-	//	//float tHit;
-	//	//Math::ivec2 sampleExtent{ 720,480 };
-	//	//int const tileSize = 16;
-	//	//Math::ipoint2 nTiles((sampleExtent.x + tileSize - 1) / tileSize,
-	//	//	(sampleExtent.y + tileSize - 1) / tileSize);
+	Tracer::Sphere sphere_2(&objectToWorld_2, &worldToObject_2, false, radius_2, -radius_2, radius_2, 360);
+	Tracer::GeometricPrimitive ground;
+	ground.shape = &sphere_2;
+	ground.material = &material;
+	Tracer::DummyAggregate aggregate{ std::vector<Tracer::Primitive*>{&primitve,& ground} };
+	Tracer::InfiniteAreaLight areaLight(Math::Transform{}, Tracer::Spectrum{ 1.f }, 1, "");
+	Tracer::Scene scene(&aggregate, { &areaLight });
+	Tracer::StratifiedSampler sampler(10, 10, true, 50);
+	Tracer::WhittedIntegrator integrator(5, &camera, &sampler);
 
-	//	//Parallelism::ParallelFor2D([&](Math::ipoint2 tile)->void {
-	//	//	Tracer::Ray ray;
-	//	//	for (int i = 0; i < tileSize; ++i)
-	//	//		for (int j = 0; j < tileSize; ++j) {
-	//	//			image[tile.y * tileSize + j][tile.x * tileSize + i] = Image::COLOR_R8G8B8_UINT{  0,0 ,255 };
-	//	//		}
-	//	//}, nTiles);
+	std::thread render(std::bind(&Tracer::WhittedIntegrator::render, &integrator, scene));
 
-	//	window->fetchEvents();
-	//	window->invalid();
+	int i = 0;
+	while (window->isRunning()) {
+		auto startPoint = std::chrono::high_resolution_clock::now();
+		camera.film->writeImage(image, 1.f);
+		//// Clear background to black
+		//std::fill((Image::COLOR_R8G8B8_UINT*)&((reinterpret_cast<char*>(image.data.data))[0]),
+		//	(Image::COLOR_R8G8B8_UINT*)&((reinterpret_cast<char*>(image.data.data))[image.data.size]),
+		//	Image::COLOR_R8G8B8_UINT{ 0 ,0 ,0 });
 
-	//	auto endPoint = std::chrono::high_resolution_clock::now();
-	//	long long start = std::chrono::time_point_cast<std::chrono::microseconds>(startPoint).time_since_epoch().count();
-	//	long long end = std::chrono::time_point_cast<std::chrono::microseconds>(endPoint).time_since_epoch().count();
-	//	long long time = end - start;
-	//	std::cout << "Time each frame: " << (time * 1. / 1000000) << std::endl;
-	//}
-	//window->destroy();
-	//Parallelism::clearThreadPool();
+		//float tHit;
+		//Math::ivec2 sampleExtent{ 720,480 };
+		//int const tileSize = 16;
+		//Math::ipoint2 nTiles((sampleExtent.x + tileSize - 1) / tileSize,
+		//	(sampleExtent.y + tileSize - 1) / tileSize);
+
+		//Parallelism::ParallelFor2D([&](Math::ipoint2 tile)->void {
+		//	Tracer::Ray ray;
+		//	for (int i = 0; i < tileSize; ++i)
+		//		for (int j = 0; j < tileSize; ++j) {
+		//			image[tile.y * tileSize + j][tile.x * tileSize + i] = Image::COLOR_R8G8B8_UINT{  0,0 ,255 };
+		//		}
+		//}, nTiles);
+
+		window->fetchEvents();
+		window->invalid();
+
+		auto endPoint = std::chrono::high_resolution_clock::now();
+		long long start = std::chrono::time_point_cast<std::chrono::microseconds>(startPoint).time_since_epoch().count();
+		long long end = std::chrono::time_point_cast<std::chrono::microseconds>(endPoint).time_since_epoch().count();
+		long long time = end - start;
+		std::cout << "Time each frame: " << (time * 1. / 1000000) << std::endl;
+	}
+	render.join();
+	window->destroy();
+	Parallelism::clearThreadPool();
 }

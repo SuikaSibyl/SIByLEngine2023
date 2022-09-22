@@ -27,6 +27,9 @@ namespace SIByL::RHI
 	// Samplers					|   Samplers							|
 	struct Sampler;					struct SamplerDescriptor;
 	// *************************|****************************************
+	// Swapchain				|   Swapchain							|
+	struct SwapChain;				struct SwapChainDescriptor;
+	// *************************|****************************************
 	// Pipeline					|   Pipeline							|
 	struct ShaderModule;			struct ShaderModuleDescriptor;
 	struct ComputePipeline;			struct ComputePipelineDescriptor;
@@ -73,12 +76,16 @@ namespace SIByL::RHI
 
 	/** Context Interface for multiple-Graphics-API */
 	export struct Context {
+		/** virtual destructor */
+		virtual ~Context() = default;
 		/** Initialize the context */
 		virtual auto init(Platform::Window* window = nullptr, ContextExtensionsFlags ext = 0) noexcept -> bool = 0;
 		/** Request an adapter */
 		virtual auto requestAdapter(RequestAdapterOptions const& options) noexcept -> std::unique_ptr<Adapter> = 0;
 		/** Get the binded window */
 		virtual auto getBindedWindow() const noexcept -> Platform::Window* = 0;
+		/** clean up context resources */
+		virtual auto destroy() noexcept -> void = 0;
 	};
 
 	////////////////////////////////////
@@ -128,6 +135,14 @@ namespace SIByL::RHI
 		virtual ~Device() = default;
 		/** destroy the device */
 		virtual auto destroy() noexcept -> void = 0;
+		// Read-only fields
+		// ---------------------------
+		/** the graphics queue for this device */
+		virtual auto getGraphicsQueue() noexcept -> Queue* = 0;
+		/** the compute queue for this device */
+		virtual auto getComputeQueue() noexcept -> Queue* = 0;
+		/** the present queue for this device */
+		virtual auto getPresentQueue() noexcept -> Queue* = 0;
 		// Create resources on device
 		// ---------------------------
 		/** create a buffer on the device */
@@ -138,6 +153,8 @@ namespace SIByL::RHI
 		virtual auto createSampler(SamplerDescriptor const& desc) noexcept -> std::unique_ptr<Sampler> = 0;
 		/** create a external texture on the device */
 		virtual auto importExternalTexture(ExternalTextureDescriptor const& desc) noexcept -> std::unique_ptr<ExternalTexture> = 0;
+		/* create a swapchain on the device */
+		virtual auto createSwapChain(SwapChainDescriptor const& desc) noexcept -> std::unique_ptr<SwapChain> = 0;
 		// Create resources binding objects
 		// ---------------------------
 		/** create a bind group layout on the device */
@@ -413,7 +430,10 @@ namespace SIByL::RHI
 		DEPTH_ONLY,
 	};
 
-	export struct TextureView {};
+	export struct TextureView {
+		/** virtual destructor */
+		virtual ~TextureView() = default;
+	};
 
 	export struct TextureViewDescriptor {
 		TextureFormat format;
@@ -486,6 +506,17 @@ namespace SIByL::RHI
 	};
 
 	// Samplers Interface
+	// ===========================================================================
+	// SwapChain Interface
+	
+	export struct SwapChain {
+		/** virtual destructor */
+		virtual ~SwapChain() = default;
+	};
+	
+	export struct SwapChainDescriptor {};
+
+	// SwapChain Interface
 	// ===========================================================================
 	// Resource Binding Interface
 

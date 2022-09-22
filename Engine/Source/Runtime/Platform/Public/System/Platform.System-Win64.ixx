@@ -7,7 +7,6 @@ namespace SIByL::Platform
 	export inline auto getNumSystemCores() noexcept -> int {
 		SYSTEM_INFO sysInfo;
 		GetSystemInfo(&sysInfo);
-		//return sysInfo.dwNumberOfProcessors;
-		return 1;
+		return sysInfo.dwNumberOfProcessors;
 	}
 }
