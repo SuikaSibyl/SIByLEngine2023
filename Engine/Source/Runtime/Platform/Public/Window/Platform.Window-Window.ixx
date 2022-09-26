@@ -1,5 +1,6 @@
 module;
 #include <string>
+#include <functional>
 export module Platform.Window:Window;
 import Core.Memory;
 
@@ -53,6 +54,8 @@ namespace SIByL::Platform
 		virtual auto resize(size_t x, size_t y) noexcept -> void = 0;
 		/* bind a block of CPU bitmap data to be drawn on the window */
 		virtual auto bindPaintingBitmapRGB8(size_t width, size_t height, char* data) noexcept -> void = 0;
+		/** connect resize signal events */
+		virtual auto connectResizeEvent(std::function<void(size_t, size_t)> const& func) noexcept -> void = 0;
 
 		// ---------------------------------
 		// Fetch Properties

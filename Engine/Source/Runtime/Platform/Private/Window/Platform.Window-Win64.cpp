@@ -5,6 +5,7 @@ module;
 #include <WinUser.h>
 module Platform.Window:WindowWin64;
 import Platform.Window;
+import Core.Log;
 
 namespace SIByL::Platform
 {
@@ -227,6 +228,10 @@ namespace SIByL::Platform
 		onPaintSignal.connect(paintbitmap);
 	}
 	
+	auto Window_Win64::connectResizeEvent(std::function<void(size_t, size_t)> const& func) noexcept -> void {
+		Core::LogManager::Error("Error|TODO :: Window_Win64 does not support func { connectResizeEvent } for now!");
+	}
+
 	auto Window_Win64::getFramebufferSize(int* w, int* h) noexcept -> void {
 		*w = width;
 		*h = height;

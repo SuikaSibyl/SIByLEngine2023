@@ -37,6 +37,7 @@
     <ClCompile Include="Public\Memory\Core.Memory-MemoryArena.ixx" />
     <ClCompile Include="Public\Memory\Core.Memory-StackAllocator.ixx" />
     <ClCompile Include="Public\Misc\Core.String.ixx" />
+    <ClCompile Include="Public\Misc\Core.Timer.ixx" />
     <ClCompile Include="Public\Print\Core.Log-Logger.ixx" />
     <ClCompile Include="Public\Print\Core.Log-LogManager.ixx" />
     <ClCompile Include="Public\Print\Core.Log-LogStream.ixx" />
@@ -167,7 +168,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;_NEED_LOG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>

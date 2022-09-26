@@ -9,8 +9,7 @@ namespace SIByL::Core
 {
 	struct BufferStream;
 
-	export struct Buffer
-	{
+	export struct Buffer {
 		Buffer();
 		Buffer(size_t size);
 		Buffer(Buffer const& b);

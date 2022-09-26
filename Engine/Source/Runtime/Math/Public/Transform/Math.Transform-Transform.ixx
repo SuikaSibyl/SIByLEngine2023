@@ -59,6 +59,7 @@ namespace SIByL::Math
 	
 	export inline auto orthographic(float zNear, float zFar) noexcept -> Transform;
 	export inline auto perspective(float fov, float n, float f) noexcept -> Transform;
+	export inline auto perspective(float fov, float aspect, float n, float f) noexcept -> Transform;
 
 	/** Decompose an affine transformation into Translation x Rotation x Scaling */
 	export inline auto decompose(mat4 const& m, vec3* t, Quaternion* rquat, mat4* s) noexcept -> void;

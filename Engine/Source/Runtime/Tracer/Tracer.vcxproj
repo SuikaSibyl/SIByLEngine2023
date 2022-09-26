@@ -233,6 +233,7 @@
     <ClCompile Include="Public\Sampling\Tracer.Sampling-Sampling.ixx" />
     <ClCompile Include="Public\Sampling\Tracer.Sampling.ixx" />
     <ClCompile Include="Public\Shape\Tracer.Shape-Sphere.ixx" />
+    <ClCompile Include="Public\Shape\Tracer.Shape-Triangle.ixx" />
     <ClCompile Include="Public\Shape\Tracer.Shape.ixx" />
     <ClCompile Include="Public\Spectrum\Tracer.Spectrum-CoefficientSpectrum.ixx" />
     <ClCompile Include="Public\Spectrum\Tracer.Spectrum-Common.ixx" />

@@ -57,7 +57,7 @@ namespace SIByL::Core
 	auto Logger::warning(std::string const& s) noexcept -> void
 	{
 		auto& stream = beginLog(LogStream::yellow);
-		stream << LogStream::red << s.c_str() << LogStream::white;
+		stream << LogStream::yellow << s.c_str() << LogStream::white;
 		flushLog();
 	}
 	

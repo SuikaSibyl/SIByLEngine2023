@@ -360,5 +360,8 @@
     <ClCompile Include="Public\Texture\Tracer.Texture-TextureMapping.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Shape\Tracer.Shape-Triangle.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

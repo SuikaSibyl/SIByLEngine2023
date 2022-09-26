@@ -49,6 +49,12 @@ namespace SIByL::Platform
 		if (properties & WindowProperties::OPENGL_CONTEX)
 			glfwMakeContextCurrent(wndHandle);
 
+		// Set GLFW Callbacks
+		glfwSetWindowSizeCallback(wndHandle, [](GLFWwindow* window, int width, int height) {
+			Window_GLFW* this_window = (Window_GLFW*)glfwGetWindowUserPointer(window);
+			this_window->onResizeSignal.emit(width, height);
+			});
+
 		return true;
 	}
 
@@ -88,7 +94,11 @@ namespace SIByL::Platform
 	auto Window_GLFW::bindPaintingBitmapRGB8(size_t width, size_t height, char* data) noexcept -> void {
 		Core::LogManager::Error("Error|TODO :: Window_GLFW does not support func { bindPaintingBitmapRGB8 } for now!");
 	}
-
+	
+	auto Window_GLFW::connectResizeEvent(std::function<void(size_t, size_t)> const& func) noexcept -> void {
+		onResizeSignal.connect(func);
+	}
+	
 	auto Window_GLFW::getFramebufferSize(int* width, int* height) noexcept -> void {
 		glfwGetFramebufferSize(wndHandle, width, height);
 	}

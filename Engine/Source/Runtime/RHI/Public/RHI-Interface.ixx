@@ -41,14 +41,22 @@ namespace SIByL::RHI
 	struct BindGroupLayout;			struct BindGroupLayoutDescriptor;
 	// *************************|****************************************
 	// Command Encoder			|   Command Encoder						|
+	struct CommandBuffer;
+	struct MultiFrameFlights;		struct MultiFrameFlightsDescriptor;
 	struct CommandEncoder;			struct CommandEncoderDescriptor;
 	struct RenderBundleEncoder;		struct RenderBundleEncoderDescriptor;
 	// *************************|****************************************
 	// Queue					|   Queue								|
-	struct Queue;				struct QueueDescriptor;
+	struct Queue;					struct QueueDescriptor;
 	// *************************|****************************************
 	// Queries					|   Queries								|
-	struct QuerySet;			struct QuerySetDescriptor;
+	struct QuerySet;				struct QuerySetDescriptor;
+	// *************************|****************************************
+	// Synchronize				|   Synchronize							|
+	struct Fence;
+	struct Barrier;					struct BarrierDescriptor;
+	struct MemoryBarrier;			struct MemoryBarrierDescriptor;
+	struct Semaphore;
 	// *************************|****************************************
 
 	// 
@@ -74,6 +82,16 @@ namespace SIByL::RHI
 		SAMPLER_FILTER_MIN_MAX	= 1 << 3,
 	};
 
+	export enum struct PowerPreference {
+		LOW_POWER,
+		HIGH_PERFORMANCE,
+	};
+
+	export struct RequestAdapterOptions {
+		PowerPreference powerPerference = PowerPreference::HIGH_PERFORMANCE;
+		bool forceFallbackAdapter = false;
+	};
+
 	/** Context Interface for multiple-Graphics-API */
 	export struct Context {
 		/** virtual destructor */
@@ -81,7 +99,7 @@ namespace SIByL::RHI
 		/** Initialize the context */
 		virtual auto init(Platform::Window* window = nullptr, ContextExtensionsFlags ext = 0) noexcept -> bool = 0;
 		/** Request an adapter */
-		virtual auto requestAdapter(RequestAdapterOptions const& options) noexcept -> std::unique_ptr<Adapter> = 0;
+		virtual auto requestAdapter(RequestAdapterOptions const& options = RequestAdapterOptions{}) noexcept -> std::unique_ptr<Adapter> = 0;
 		/** Get the binded window */
 		virtual auto getBindedWindow() const noexcept -> Platform::Window* = 0;
 		/** clean up context resources */
@@ -111,16 +129,6 @@ namespace SIByL::RHI
 		std::string description;
 	};
 
-	export enum struct PowerPreference {
-		LOW_POWER,
-		HIGH_PERFORMANCE,
-	};
-
-	export struct RequestAdapterOptions {
-		PowerPreference powerPerference;
-		bool forceFallbackAdapter = false;
-	};
-
 	////////////////////////////////////
 	//
 	// Device
@@ -135,6 +143,8 @@ namespace SIByL::RHI
 		virtual ~Device() = default;
 		/** destroy the device */
 		virtual auto destroy() noexcept -> void = 0;
+		/** wait until idle */
+		virtual auto waitIdle() noexcept -> void = 0;
 		// Read-only fields
 		// ---------------------------
 		/** the graphics queue for this device */
@@ -173,12 +183,15 @@ namespace SIByL::RHI
 		virtual auto createRenderPipeline(RenderPipelineDescriptor const& desc) noexcept -> std::unique_ptr<RenderPipeline> = 0;
 		/** create a compute pipeline on the device in async way */
 		virtual auto createComputePipelineAsync(ComputePipelineDescriptor const& desc) noexcept
-			-> std::promise<std::unique_ptr<ComputePipeline>> = 0;
+			-> std::future<std::unique_ptr<ComputePipeline>> = 0;
 		/** create a render pipeline on the device in async way */
 		virtual auto createRenderPipelineAsync(RenderPipelineDescriptor const& desc) noexcept
-			-> std::promise<std::unique_ptr<RenderPipeline>> = 0;
+			-> std::future<std::unique_ptr<RenderPipeline>> = 0;
 		// Create command encoders
 		// ---------------------------
+		/** create a multi frame flights */
+		virtual auto createMultiFrameFlights(MultiFrameFlightsDescriptor const& desc) noexcept
+			-> std::unique_ptr<MultiFrameFlights> = 0;
 		/** create a command encoder */
 		virtual auto createCommandEncoder(CommandEncoderDescriptor const& desc) noexcept 
 			-> std::unique_ptr<CommandEncoder> = 0;
@@ -190,8 +203,32 @@ namespace SIByL::RHI
 		virtual auto createQuerySet(QuerySetDescriptor const& desc) noexcept -> std::unique_ptr<QuerySet> = 0;
 	};
 
-	struct DeviceDescriptor {
+	struct DeviceDescriptor {};
 
+	export struct MultiFrameFlights {
+		/** virtual destructor */
+		virtual ~MultiFrameFlights() = default;
+		/** start frame */
+		virtual auto frameStart() noexcept -> void = 0;
+		/** end frame */
+		virtual auto frameEnd() noexcept -> void = 0;
+		/** get current flight id */
+		virtual auto getFlightIndex() noexcept -> uint32_t = 0;
+		/** get current swapchain id */
+		virtual auto getSwapchainIndex() noexcept -> uint32_t = 0;
+		/** get current command buffer */
+		virtual auto getCommandBuffer() noexcept -> CommandBuffer* = 0;
+		/** get current Image Available Semaphore */
+		virtual auto getImageAvailableSeamaphore() noexcept -> Semaphore* = 0;
+		/** get current Render Finished Semaphore */
+		virtual auto getRenderFinishedSeamaphore() noexcept -> Semaphore* = 0;
+		/** get current fence */
+		virtual auto getFence() noexcept -> Fence* = 0;
+	};
+
+	export struct MultiFrameFlightsDescriptor {
+		int maxFlightNum = 1;
+		SwapChain* swapchain = nullptr;
 	};
 
 	// Initialization Interface
@@ -199,34 +236,34 @@ namespace SIByL::RHI
 	// Buffers Interface
 
 	/** An object that holds a pointer (which can be null) to a buffer of a fixed number of bytes */
-	export using ArrayBuffer = Core::Buffer;
+	export using ArrayBuffer = void*;
 
 	/** Determine how a GPUBuffer may be used after its creation. */
 	export using BufferUsagesFlags = uint32_t;
 	/** Determine how a GPUBuffer may be used after its creation. */
 	export enum struct BufferUsage {
-		MAP_READ		= 1 < 0,
-		MAP_WRITE		= 1 < 1,
-		COPY_SRC		= 1 < 2,
-		COPY_DST		= 1 < 3,
-		INDEX			= 1 < 4,
-		VERTEX			= 1 < 5,
-		UNIFORM			= 1 < 6,
-		STORAGE			= 1 < 7,
-		INDIRECT		= 1 < 8,
-		QUERY_RESOLVE	= 1 < 9,
+		MAP_READ		= 1 << 0,
+		MAP_WRITE		= 1 << 1,
+		COPY_SRC		= 1 << 2,
+		COPY_DST		= 1 << 3,
+		INDEX			= 1 << 4,
+		VERTEX			= 1 << 5,
+		UNIFORM			= 1 << 6,
+		STORAGE			= 1 << 7,
+		INDIRECT		= 1 << 8,
+		QUERY_RESOLVE	= 1 << 9,
 	};
 
 	/** Determine the memory properties. */
 	export using MemoryPropertiesFlags = uint32_t;
 	/** Determine the memory properties. */
 	export enum class MemoryProperty {
-		DEVICE_LOCAL_BIT		= 1 < 0,
-		HOST_VISIBLE_BIT		= 1 < 1,
-		HOST_COHERENT_BIT		= 1 < 2,
-		HOST_CACHED_BIT			= 1 < 3,
-		LAZILY_ALLOCATED_BIT	= 1 < 4,
-		PROTECTED_BIT			= 1 < 5,
+		DEVICE_LOCAL_BIT		= 1 << 0,
+		HOST_VISIBLE_BIT		= 1 << 1,
+		HOST_COHERENT_BIT		= 1 << 2,
+		HOST_CACHED_BIT			= 1 << 3,
+		LAZILY_ALLOCATED_BIT	= 1 << 4,
+		PROTECTED_BIT			= 1 << 5,
 		FLAG_BITS_MAX_ENUM		= 0x7FFFFFFF
 	};
 
@@ -269,7 +306,7 @@ namespace SIByL::RHI
 		// Map methods
 		// ---------------------------
 		/** Maps the given range of the GPUBuffer */
-		virtual auto mapAsync(MapModeFlags mode, size_t offset = 0, size_t size = 0) noexcept -> std::promise<bool> = 0;
+		virtual auto mapAsync(MapModeFlags mode, size_t offset = 0, size_t size = 0) noexcept -> std::future<bool> = 0;
 		/** Returns an ArrayBuffer with the contents of the GPUBuffer in the given mapped range */
 		virtual auto getMappedRange(size_t offset = 0, size_t size = 0) noexcept -> ArrayBuffer = 0;
 		/** Unmaps the mapped range of the GPUBuffer and makes it’s contents available for use by the GPU again. */
@@ -360,11 +397,11 @@ namespace SIByL::RHI
 	export using TextureUsagesFlags = uint32_t;
 	/** Determine how a Texture may be used after its creation. */
 	export enum struct TextureUsage {
-		COPY_SRC = 1 < 0,
-		COPY_DST = 1 < 1,
-		TEXTURE_BINDING = 1 < 2,
-		STORAGE_BINDING = 1 < 3,
-		RENDER_ATTACHMENT = 1 < 4,
+		COPY_SRC			= 1 << 0,
+		COPY_DST			= 1 << 1,
+		TEXTURE_BINDING		= 1 << 2,
+		STORAGE_BINDING		= 1 << 3,
+		RENDER_ATTACHMENT	= 1 << 4,
 	};
 
 	export struct Extend3D {
@@ -402,9 +439,9 @@ namespace SIByL::RHI
 
 	export struct TextureDescriptor {
 		Extend3D size;
-		uint32_t mipLevelCount;
-		uint32_t sampleCount;
-		TextureDimension dimension;
+		uint32_t mipLevelCount = 1;
+		uint32_t sampleCount = 1;
+		TextureDimension dimension = TextureDimension::TEX2D;
 		TextureFormat format;
 		/** The allowed usages for the texture. */
 		TextureUsagesFlags usage;
@@ -424,25 +461,30 @@ namespace SIByL::RHI
 		TEX3D,
 	};
 
+	/** Determine how a texture is used in command. */
+	export using TextureAspectFlags = uint32_t;
+	/** Determine how a texture is used in command. */
 	export enum struct TextureAspect {
-		ALL,
-		STENCIL_ONLY,
-		DEPTH_ONLY,
+		COLOR_BIT	= 1 << 0,
+		STENCIL_BIT = 1 << 1,
+		DEPTH_BIT	= 1 << 2,
 	};
 
 	export struct TextureView {
 		/** virtual destructor */
 		virtual ~TextureView() = default;
+		/** get binded texture */
+		virtual auto getTexture() noexcept -> Texture* = 0;
 	};
 
 	export struct TextureViewDescriptor {
 		TextureFormat format;
-		TextureViewDimension dimension;
-		TextureAspect aspect = TextureAspect::ALL;
+		TextureViewDimension dimension = TextureViewDimension::TEX2D;
+		TextureAspectFlags aspect;
 		uint32_t baseMipLevel = 0;
-		uint32_t mipLevelCount;
+		uint32_t mipLevelCount = 1;
 		uint32_t baseArrayLayer = 0;
-		uint32_t arrayLayerCount;
+		uint32_t arrayLayerCount = 1;
 	};
 
 	/**
@@ -512,6 +554,10 @@ namespace SIByL::RHI
 	export struct SwapChain {
 		/** virtual destructor */
 		virtual ~SwapChain() = default;
+		/** get texture view */
+		virtual auto getTextureView(int i) noexcept -> TextureView* = 0;
+		/** invalid swapchain */
+		virtual auto recreate() noexcept -> void = 0;
 	};
 	
 	export struct SwapChainDescriptor {};
@@ -524,15 +570,23 @@ namespace SIByL::RHI
 	* Defines the interface between a set of resources bound
 	* in a BindGroup and their accessibility in shader stages.
 	*/
-	export struct BindGroupLayout {};
+	export struct BindGroupLayout {
+		/** virtual destructor */
+		virtual ~BindGroupLayout() = default;
+	};
 
 	/** Determine how a Texture may be used after its creation. */
 	export using ShaderStagesFlags = uint32_t;
 	/** Determine how a Texture may be used after its creation. */
 	export enum struct ShaderStages {
-		VERTEX = 1 < 0,
-		FRAGMENT = 1 < 1,
-		COMPUTE = 1 < 2,
+		VERTEX		 = 1 << 0,
+		FRAGMENT	 = 1 << 1,
+		COMPUTE		 = 1 << 2,
+		RAYGEN		 = 1 << 3,
+		MISS		 = 1 << 4,
+		CLOSEST_HIT  = 1 << 5,
+		INTERSECTION = 1 << 6,
+		ANY_HIT		 = 1 << 7,
 	};
 
 	export enum struct BindingResourceType {
@@ -641,7 +695,7 @@ namespace SIByL::RHI
 	};
 
 	export struct BindGroupDescriptor {
-		BindGroupLayout layout;
+		BindGroupLayout* layout;
 		std::vector<BindGroupEntry> entries;
 	};
 
@@ -650,10 +704,13 @@ namespace SIByL::RHI
 	* during command encoding in setBindGroup(), and the shaders of the pipeline
 	* set by RenderCommandsMixin.setPipeline or ComputePassEncoder.setPipeline.
 	*/
-	export struct PipelineLayout {};
+	export struct PipelineLayout {
+		/** virtual destructor */
+		virtual ~PipelineLayout() = default;
+	};
 
 	export struct PipelineLayoutDescriptor {
-		std::vector<BindGroupLayout> bindGroupLayouts;
+		std::vector<BindGroupLayout*> bindGroupLayouts;
 	};
 
 	// Resource Binding Interface
@@ -661,11 +718,18 @@ namespace SIByL::RHI
 	// Shader Modules Interface
 
 	/** An internal shader module object */
-	export struct ShaderModule {};
+	export struct ShaderModule {
+		/** virtual destrucor */
+		virtual ~ShaderModule() = default;
+	};
 
 	export struct ShaderModuleDescriptor {
 		/** The shader source code for the shader module. */
-		char const* code;
+		Core::Buffer * code;
+		/** stage */
+		ShaderStages stage;
+		/** name of entry point */
+		std::string name = "main";
 	};
 
 	export struct ShaderModuleCompilationHint {
@@ -692,13 +756,13 @@ namespace SIByL::RHI
 	* controls one of the programmable stages of a pipeline.
 	*/
 	export struct ProgrammableStage {
-		ShaderModule module;
+		ShaderModule* module;
 		std::string entryPoint;
 	};
 
 	export struct PipelineDescriptorBase {
 		/** The definition of the layout of resources which can be used with this */
-		std::optional<PipelineLayout> layout;
+		PipelineLayout* layout = nullptr;
 	};
 	
 	export struct ComputePipeline {};
@@ -728,6 +792,7 @@ namespace SIByL::RHI
 		NONE,
 		FRONT,
 		BACK,
+		BOTH,
 	};
 
 	export using SampleMask = uint32_t;
@@ -771,6 +836,15 @@ namespace SIByL::RHI
 	export struct BlendState {
 		BlendComponent color;
 		BlendComponent alpha;
+		/** check whether the blend should be enabled */
+		inline auto blendEnable() const noexcept -> bool {
+			return !((color.operation == BlendOperation::ADD)
+				&& (color.srcFactor == BlendFactor::ONE)
+				&& (color.dstFactor == BlendFactor::ZERO)
+				&& (alpha.operation == BlendOperation::ADD)
+				&& (alpha.srcFactor == BlendFactor::ONE)
+				&& (alpha.dstFactor == BlendFactor::ZERO));
+		}
 	};
 
 	export using ColorWriteFlags = uint32_t;
@@ -781,7 +855,7 @@ namespace SIByL::RHI
 		ColorWriteFlags writeMask = 0xF;
 	};
 
-	export struct FragmentState {
+	export struct FragmentState :public ProgrammableStage {
 		std::vector<ColorTargetState> targets;
 	};
 
@@ -872,8 +946,8 @@ namespace SIByL::RHI
 
 	export struct VertexAttribute {
 		VertexFormat format;
-		size_t offset;
-		uint32_t shaderLocation;
+		size_t		 offset;
+		uint32_t	 shaderLocation;
 	};
 
 	export struct VertexBufferLayout {
@@ -882,11 +956,14 @@ namespace SIByL::RHI
 		std::vector<VertexAttribute> attributes;
 	};
 
-	export struct VertexState {
+	export struct VertexState :public ProgrammableStage {
 		std::vector<VertexBufferLayout> buffers;
 	};
 
-	export struct RenderPipeline {};
+	export struct RenderPipeline {
+		/** virtual destructor */
+		virtual ~RenderPipeline() = default;
+	};
 
 	/** Describes a render pipeline by configuring each of the render stages. */
 	export struct RenderPipelineDescriptor :public PipelineDescriptorBase {
@@ -933,54 +1010,69 @@ namespace SIByL::RHI
 	export struct CommandsMixin {};
 
 	export struct CommandEncoder {
-
-		auto beginRenderPass(RenderPassDescriptor const& desc) noexcept -> RenderPassEncoder;
-
-		auto beginComputePass(ComputePassDescriptor const& desc) noexcept -> ComputePassEncoder;
-
-		auto copyBufferToBuffer(
+		/** virtual descructor */
+		virtual ~CommandEncoder() = default;
+		/** Begins encoding a render pass described by descriptor. */
+		virtual auto beginRenderPass(RenderPassDescriptor const& desc) noexcept -> std::unique_ptr<RenderPassEncoder> = 0;
+		/** Begins encoding a compute pass described by descriptor. */
+		virtual auto beginComputePass(ComputePassDescriptor const& desc) noexcept -> std::unique_ptr<ComputePassEncoder> = 0;
+		/**
+		* Encode a command into the CommandEncoder that copies data from 
+		* a sub-region of a GPUBuffer to a sub-region of another Buffer.
+		*/
+		virtual auto copyBufferToBuffer(
 			Buffer* source,
 			size_t	sourceOffset,
 			Buffer* destination,
 			size_t	destinationOffset,
-			size_t	size) noexcept -> void;
-
-		auto copyBufferToTexture(
+			size_t	size) noexcept -> void = 0;
+		/** Encode a command into the CommandEncoder that fills a sub-region of a Buffer with zeros. */
+		virtual auto clearBuffer(Buffer* buffer, size_t	offset, size_t	size) noexcept -> void = 0;
+		/**
+		* Encode a command into the CommandEncoder that copies data from a sub-region of a Buffer 
+		* to a sub-region of one or multiple continuous texture subresources.
+		*/
+		virtual auto copyBufferToTexture(
 			ImageCopyBuffer  const& source,
 			ImageCopyTexture const& destination,
-			Extend3D		 const& copySize) noexcept -> void;
-
-		auto copyTextureToBuffer(
+			Extend3D		 const& copySize) noexcept -> void = 0;
+		/**
+		* Encode a command into the CommandEncoder that copies data from a sub-region of 
+		* one or multiple continuous texture subresourcesto a sub-region of a Buffer.
+		*/
+		virtual auto copyTextureToBuffer(
 			ImageCopyTexture const& source,
 			ImageCopyBuffer  const& destination,
-			Extend3D		 const& copySize) noexcept -> void;
-
-		auto copyTextureToTexture(
+			Extend3D		 const& copySize) noexcept -> void = 0;
+		/**
+		* Encode a command into the CommandEncoder that copies data from 
+		* a sub-region of one or multiple contiguous texture subresources to
+		* another sub-region of one or multiple continuous texture subresources.
+		*/
+		virtual auto copyTextureToTexture(
 			ImageCopyTexture const& source,
 			ImageCopyTexture const& destination,
-			Extend3D		 const& copySize) noexcept -> void;
-
-		auto clearBuffer(
-			Buffer& buffer,
-			size_t offset = 0,
-			size_t size = 0) noexcept -> void;
-
-		auto writeTimestamp(
-			QuerySet querySet, 
-			uint32_t queryIndex) noexcept -> void;
-
-		auto resolveQuerySet(
-			QuerySet querySet,
-			uint32_t firstQuery,
-			uint32_t queryCount,
-			Buffer&  destination,
-			uint64_t destinationOffset) noexcept -> void;
-
-		auto finish(std::optional<CommandBufferDescriptor> const& descriptor = {}) noexcept -> CommandBuffer;
+			Extend3D		 const& copySize) noexcept -> void = 0;
+		/**
+		* Writes a timestamp value into a querySet when all 
+		* previous commands have completed executing.
+		*/
+		virtual auto writeTimestamp(
+			QuerySet* querySet,
+			uint32_t  queryIndex) noexcept -> void = 0;
+		/** Resolves query results from a QuerySet out into a range of a Buffer. */
+		virtual auto resolveQuerySet(
+			QuerySet* querySet,
+			uint32_t  firstQuery,
+			uint32_t  queryCount,
+			Buffer&   destination,
+			uint64_t  destinationOffset) noexcept -> void = 0;
+		/** Completes recording of the commands sequence and returns a corresponding GPUCommandBuffer. */
+		virtual auto finish(std::optional<CommandBufferDescriptor> const& descriptor = {}) noexcept -> CommandBuffer* = 0;
 	};
 
 	export struct CommandEncoderDescriptor {
-
+		CommandBuffer* externalCommandBuffer = nullptr;
 	};
 
 	export struct ImageDataLayout {
@@ -1011,7 +1103,7 @@ namespace SIByL::RHI
 		Texture* texutre;
 		uint32_t mipLevel = 0;
 		Origin3D origin = {};
-		TextureAspect aspect = TextureAspect::ALL;
+		TextureAspect aspect;
 	};
 
 	export struct ImageCopyTextureTagged :public ImageCopyTexture {
@@ -1035,11 +1127,14 @@ namespace SIByL::RHI
 	export using BufferDynamicOffset = uint32_t;
 
 	export struct BindingCommandMixin {
-		auto setBindGroup(uint32_t index, BindGroup* bindgroup,
-			std::vector<BufferDynamicOffset> const& dynamicOffsets = {}) noexcept -> void;
-
-		auto setBindGroup(uint32_t index, BindGroup* bindgroup,
-			uint64_t dynamicOffsetDataStart, uint32_t dynamicOffsetDataLength) noexcept -> void;
+		/** virtual destructor */
+		virtual ~BindingCommandMixin() = default;
+		/** Sets the current GPUBindGroup for the given index. */
+		virtual auto setBindGroup(uint32_t index, BindGroup* bindgroup,
+			std::vector<BufferDynamicOffset> const& dynamicOffsets = {}) noexcept -> void = 0;
+		/** Sets the current GPUBindGroup for the given index. */
+		virtual auto setBindGroup(uint32_t index, BindGroup* bindgroup,
+			uint64_t dynamicOffsetDataStart, uint32_t dynamicOffsetDataLength) noexcept -> void = 0;
 	};
 
 	// Programmable Passes Interface
@@ -1087,27 +1182,64 @@ namespace SIByL::RHI
 	struct RenderPassColorAttachment;
 	struct RenderPassDepthStencilAttachment;
 
-	export struct RenderPassEncoder {
-		auto setViewport(
+	/**
+	* RenderCommandsMixin defines rendering commands common to
+	* RenderPassEncoder and RenderBundleEncoder.
+	*/
+	export struct RenderCommandsMixin {
+		/** virtual descructor */
+		virtual ~RenderCommandsMixin() = default;
+		/** Sets the current GPURenderPipeline. */
+		virtual auto setPipeline(RenderPipeline* pipeline) noexcept -> void = 0;
+		/** Sets the current index buffer. */
+		virtual auto setIndexBuffer(Buffer* buffer, IndexFormat indexFormat,
+			uint64_t offset = 0, uint64_t size = 0) noexcept -> void = 0;
+		/** Sets the current vertex buffer for the given slot. */
+		virtual auto setVertexBuffer(uint32_t slot, Buffer* buffer,
+			uint64_t offset = 0, uint64_t size = 0) noexcept -> void = 0;
+		/** Draws primitives. */
+		virtual auto draw(uint32_t vertexCount, uint32_t instanceCount = 1,
+			uint32_t firstVertex = 0, uint32_t firstInstance = 0) noexcept -> void = 0;
+		/** Draws indexed primitives. */
+		virtual auto drawIndexed(uint32_t indexCount, uint32_t instanceCount = 1,
+			uint32_t firstIndex = 0,
+			int32_t  baseVertex = 0,
+			uint32_t firstInstance = 0) noexcept -> void = 0;
+		/** Draws primitives using parameters read from a GPUBuffer. */
+		virtual auto drawIndirect(Buffer* indirectBuffer, uint64_t indirectOffset) noexcept -> void = 0;
+		/** Draws indexed primitives using parameters read from a GPUBuffer. */
+		virtual auto drawIndexedIndirect(Buffer* indirectBuffer, uint64_t indirectOffset) noexcept -> void = 0;
+	};
+
+	export struct RenderPassEncoder :public RenderCommandsMixin, public BindingCommandMixin {
+		/** virtual descructor */
+		virtual ~RenderPassEncoder() = default;
+		/** Sets the viewport used during the rasterization stage to linearly map 
+		* from normalized device coordinates to viewport coordinates. */
+		virtual auto setViewport(
 			float x, float y,
 			float width, float height,
-			float minDepth, float maxDepth) noexcept -> void;
-
-		auto setScissorRect(
+			float minDepth, float maxDepth) noexcept -> void = 0;
+		/** Sets the scissor rectangle used during the rasterization stage. 
+		* After transformation into viewport coordinates any fragments
+		* which fall outside the scissor rectangle will be discarded. */
+		virtual auto setScissorRect(
 			IntegerCoordinate x, IntegerCoordinate y,
-			IntegerCoordinate width, IntegerCoordinate height) noexcept -> void;
-
-		auto setBlendConstant(Color color) noexcept -> void;
-
-		auto setStencilReference(StencilValue reference) noexcept -> void;
-
-		auto beginOcclusionQuery(uint32_t queryIndex) noexcept -> void;
-
-		auto endOcclusionQuery() noexcept -> void;
-
-		auto executeBundles(std::vector<RenderBundle> const& bundles) noexcept -> void;
-
-		auto end() noexcept -> void;
+			IntegerCoordinate width, IntegerCoordinate height) noexcept -> void = 0;
+		/** Sets the constant blend color and alpha values used with 
+		* "constant" and "one-minus-constant" GPUBlendFactors. */
+		virtual auto setBlendConstant(Color color) noexcept -> void = 0;
+		/** Sets the [[stencil_reference]] value used during 
+		* stencil tests with the "replace" GPUStencilOperation. */
+		virtual auto setStencilReference(StencilValue reference) noexcept -> void = 0;
+		/** begin occlusion query */
+		virtual auto beginOcclusionQuery(uint32_t queryIndex) noexcept -> void = 0;
+		/** end occlusion query */
+		virtual auto endOcclusionQuery() noexcept -> void = 0;
+		/** Executes the commands previously recorded into the given GPURenderBundles as part of this render pass. */
+		virtual auto executeBundles(std::vector<RenderBundle> const& bundles) noexcept -> void = 0;
+		/** Completes recording of the render pass commands sequence. */
+		virtual auto end() noexcept -> void = 0;
 	};
 
 	export enum struct RenderPassTimestampLocation {
@@ -1124,8 +1256,9 @@ namespace SIByL::RHI
 	export using RenderPassTimestampWrites = std::vector<RenderPassTimestampWrite>;
 
 	export enum struct LoadOp {
+		DONT_CARE,
 		LOAD,
-		CLEAR
+		CLEAR,
 	};
 
 	export enum struct StoreOp {
@@ -1135,8 +1268,7 @@ namespace SIByL::RHI
 
 	export struct RenderPassColorAttachment {
 		TextureView* view;
-		TextureView* resolveTarget;
-
+		TextureView* resolveTarget = nullptr;
 		Color	clearValue;
 		LoadOp	loadOp;
 		StoreOp storeOp;
@@ -1157,7 +1289,7 @@ namespace SIByL::RHI
 	export struct RenderPassDescriptor {
 		std::vector<RenderPassColorAttachment> colorAttachments;
 		RenderPassDepthStencilAttachment depthStencilAttachment;
-		std::unique_ptr<QuerySet> occlusionQuerySet;
+		std::unique_ptr<QuerySet> occlusionQuerySet = nullptr;
 		RenderPassTimestampWrites timestampWrites = {};
 		uint64_t maxDrawCount = 50000000;
 	};
@@ -1167,28 +1299,7 @@ namespace SIByL::RHI
 		TextureFormat depthStencilFormat;
 		uint32_t sampleCount = 1;
 	};
-
-	export struct RenderCommandsMimin {
-		auto setPipeline(RenderPipeline const& pipeline) noexcept -> void;
-
-		auto setIndexBuffer(Buffer* buffer, IndexFormat indexFormat, 
-			uint64_t offset = 0, uint64_t size = 0) noexcept -> void;
-
-		auto setVertexBuffer(uint32_t slot, Buffer* buffer, 
-			uint64_t offset = 0, uint64_t size = 0) noexcept -> void;
-
-		auto draw(uint32_t vertexCount, uint32_t instanceCount = 1,
-			uint32_t firstVertex = 0, uint32_t firstInstance = 0) noexcept -> void;
-
-		auto drawIndexed(uint32_t indexCount, uint32_t instanceCount = 1,
-			uint32_t firstIndex = 0,
-			int32_t  baseVertex = 0,
-			uint32_t firstInstance = 0) noexcept -> void;
-
-		auto drawIndirect(Buffer* indirectBuffer, uint64_t indirectOffset) noexcept -> void;
-		auto drawIndexedIndirect(Buffer* indirectBuffer, uint64_t indirectOffset) noexcept -> void;
-	};
-
+	
 	// Render Passes Interface
 	// ===========================================================================
 	// Bundles Interface
@@ -1211,27 +1322,42 @@ namespace SIByL::RHI
 	// Queue Interface
 
 	export struct Queue {
-		auto submit(std::vector<CommandBuffer&> const& commandBuffers) noexcept -> void;
-
-		auto onSubmittedWorkDone() noexcept -> std::promise<bool>;
-
-		auto writeBuffer(
+		/** virtual destructor */
+		virtual ~Queue() = default;
+		/** Schedules the execution of the command buffers by the GPU on this queue. */
+		virtual auto submit(std::vector<CommandBuffer*> const& commandBuffers) noexcept -> void = 0;
+		/** Schedules the execution of the command buffers by the GPU on this queue. With sync objects */
+		virtual auto submit(std::vector<CommandBuffer*> const& commandBuffers,
+			Semaphore* wait, Semaphore* signal, Fence* fence) noexcept -> void = 0;
+		/** Returns a Promise that resolves once this queue finishes 
+		* processing all the work submitted up to this moment. */
+		virtual auto onSubmittedWorkDone() noexcept -> std::future<bool> = 0;
+		/** Issues a write operation of the provided data into a Buffer. */
+		virtual auto writeBuffer(
 			Buffer* buffer,
 			uint64_t bufferOffset,
 			ArrayBuffer* data,
 			uint64_t dataOffset,
-			Extend3D const& size) noexcept -> void;
-
-		auto writeTexture(
+			Extend3D const& size) noexcept -> void = 0;
+		/** Issues a write operation of the provided data into a Texture. */
+		virtual auto writeTexture(
 			ImageCopyTexture const& destination,
 			ArrayBuffer* data,
 			ImageDataLayout const& layout,
-			Extend3D const& size) noexcept -> void;
-
-		auto copyExternalImageToTexture(
+			Extend3D const& size) noexcept -> void = 0;
+		/** Issues a copy operation of the contents of a platform 
+		* image/canvas into the destination texture. */
+		virtual auto copyExternalImageToTexture(
 			ImageCopyExternalImage const& source,
 			ImageCopyExternalImage const& destination,
-			Extend3D const& copySize) noexcept -> void;
+			Extend3D const& copySize) noexcept -> void = 0;
+		/** Present swap chain. */
+		virtual auto presentSwapChain(
+			SwapChain* swapchain,
+			uint32_t imageIndex,
+			Semaphore* semaphore) noexcept -> void = 0;
+		/** wait until idle */
+		virtual auto waitIdle() noexcept -> void = 0;
 	};
 
 	/** Describes a queue request */
@@ -1256,4 +1382,333 @@ namespace SIByL::RHI
 		QueryType type;
 		uint32_t  count;
 	};
+
+	// Queries Interface
+	// ===========================================================================
+	// Synchronization Interface
+
+	/**
+	* ╔═════════════════╗
+	* ║      Fence      ║
+	* ╚═════════════════╝
+	* Fences are objects used to synchronize the CPU and GPU.
+	* Both the CPU and GPU can be instructed to wait at a fence so that the other can catch up.
+	* This can be used to manage resource allocation and deallocation,
+	* making it easier to manage overall graphics memory usage.
+	* 
+	* To signal a fence, all previously submitted commands to the queue must complete.
+	* We will also get a full memory barrier that all pending writes are made available
+	* 
+	* However, fence would not make memory available to th CPU
+	* Therefore if we do a CPU read, an extra barrier with ACCESS_HOST_READ_BIT flag should be used.
+	* In mental model, we can think this as flushing GPU L2 cache out to GPU main memory
+	* 
+	* ╭──────────────┬──────────────────╮
+	* │  Vulkan		 │   vk::Fence      │
+	* │  DirectX 12  │   ID3D12Fence    │
+	* │  OpenGL      │   glFenceSync    │
+	* ╰──────────────┴──────────────────╯
+	*/
+	export struct Fence {
+		/** virtual desctructor */
+		virtual ~Fence() = default;
+		/* wait the fence */
+		virtual auto wait() noexcept -> void = 0;
+		/* reset the fence */
+		virtual auto reset() noexcept -> void = 0;
+	};
+
+	/**
+	* ╔════════════════════╗
+	* ║      Barriers      ║
+	* ╚════════════════════╝
+	* Barrier is a more granular form of synchronization, inside command buffers.
+	* It is not a "resource" but a "command", 
+	* it divide all commands on queue into two parts: "before" and "after", 
+	* and indicate dependency of {a subset of "after"} on {another subset of "before"}
+	* 
+	* As a command, input parameters are:
+	*  ► PipelineStageFlags    - srcStageMask
+	*  ► PipelineStageFlags    - dstStageMask
+	*  ► DependencyFlags       - dependencyFlags
+	*  ► [MemoryBarrier]       - pBufferMemoryBarriers
+	*  ► [BufferMemoryBarrier] - pBufferMemoryBarriers
+	*  ► [ImageMemoryBarrier]  - pImageMemoryBarriers
+	* 
+	* In cmdPipelineBarrier, we are specifying 4 things to happen in order:
+	* 1. Wait for srcStageMask to complete
+	* 2. Make all writes performed in possible combinations of srcStageMasks + srcAccessMask available
+	* 3. Make available memory visible to possible combination of dstStageMask + dstAccessMask
+	* 4. Unblock work in dstStageMask
+	* 
+	* ╭──────────────┬───────────────────────────╮
+	* │  Vulkan		 │   vkCmdPipelineBarrier    │
+	* │  DirectX 12  │   D3D12_RESOURCE_BARRIER  │
+	* │  OpenGL      │   glMemoryBarrier         │
+	* ╰──────────────┴───────────────────────────╯
+	* 
+	*  ╭╱─────────────────────────────────────────╲╮
+	*  ╳   Execution Barrier - Source Stage Mask   ╳
+	*  ╰╲─────────────────────────────────────────╱╯
+	* This present what we are waiting for.
+	* Essentially, it is every commands before this one.
+	* The mask can restrict the scrope of what we are waiting for.
+	*
+	*  ╭╱─────────────────────────────────────────╲╮
+	*  ╳    Execution Barrier - Dst Stage Mask     ╳
+	*  ╰╲─────────────────────────────────────────╱╯
+	* Any work submitted after this barrier will need to wait for 
+	* the work represented by srcStageMask before it can execute.
+	* For example, FRAGMENT_SHADER_BIT, then vertex shading could be executed ealier.
+	*
+	*  ╭╱────────────────────╲╮
+	*  ╳    Memory Barrier    ╳
+	*  ╰╲────────────────────╱╯
+	* Execution order and memory order are two different things
+	* because of multiple & incoherent caches, 
+	* synchronizing execution alone is not enough to ensure the different units
+	* on GPU can transfer data between themselves.
+	*
+	* GPU memory write is fistly "available", and only "visible" after cache flushing
+	* That is where we should use a MemoryBarrier
+	*/
+	export struct Barrier {
+		/** virtual desctructor */
+		virtual ~Barrier() = default;
+	};
+
+	// ╔══════════════════════════╗
+	// ║      Memory Barrier      ║
+	// ╚══════════════════════════╝
+	// Memory barrier is a structure specifying a global memory barrier
+	// A global memory barrier deals with access to any resource, 
+	// and it’s the simplest form of a memory barrier. 
+	// 
+	// Description includes:
+	//  ► AccessFlags - srcAccessMask
+	//  ► AccessFlags - dstAccessMask
+
+	export class MemoryBarrier {
+		/** virtual desctructor */
+		virtual ~MemoryBarrier() = default;
+	};
+
+	// ╔════════════════════════════════╗
+	// ║     Buffer Memory Barrier      ║
+	// ╚════════════════════════════════╝
+	// It is quite similar to Memory Barrier
+	// Memory availability and visibility are restricted to a specific buffer.
+
+	export class BufferMemoryBarrier {
+		/** virtual desctructor */
+		virtual ~BufferMemoryBarrier() = default;
+	};
+
+	// ╔═══════════════════════════════╗
+	// ║     Image Memory Barrier      ║
+	// ╚═══════════════════════════════╝
+	// Beyond the memory barrier,
+	// Image Memory Barrier also take cares about layout change,
+	// The layout transition happens in-between the make available and make visible stages
+	// The layout transition itself is considered a read/write operation,
+	// the memory for image must be available before transition takes place,
+	// After a layout transition, the memory is automatically made available.
+	//
+	// Could think of the layout transition
+	// as some kind of in-place data munging which happens in L2 cache
+	//
+	// It can also be used to transfer queue family ownership when SHARING_MODE_EXCLUSIVE is used
+
+	export class ImageMemoryBarrier {
+		/** virtual desctructor */
+		virtual ~ImageMemoryBarrier() = default;
+	};
+
+	/**
+	* < Access Flags >
+	* Access Flags describe the access need for barrier.
+	* In memory barrier, Access Flags are combined with Stage Flags.
+	* 
+	* Warning: do not use AccessMask!=0 with TOP_OF_PIPE/BOTTOM_OF_PIPE
+	* Because these stages do not perform memory accesses,
+	* they are purely used for execution barriers
+	*/
+	export using AccessFlags = uint32_t;
+	export enum class AccessFlagBits :uint32_t {
+		INDIRECT_COMMAND_READ_BIT = 0x00000001,
+		INDEX_READ_BIT = 0x00000002,
+		VERTEX_ATTRIBUTE_READ_BIT = 0x00000004,
+		UNIFORM_READ_BIT = 0x00000008,
+		INPUT_ATTACHMENT_READ_BIT = 0x00000010,
+		SHADER_READ_BIT = 0x00000020,
+		SHADER_WRITE_BIT = 0x00000040,
+		COLOR_ATTACHMENT_READ_BIT = 0x00000080,
+		COLOR_ATTACHMENT_WRITE_BIT = 0x00000100,
+		DEPTH_STENCIL_ATTACHMENT_READ_BIT = 0x00000200,
+		DEPTH_STENCIL_ATTACHMENT_WRITE_BIT = 0x00000400,
+		TRANSFER_READ_BIT = 0x00000800,
+		TRANSFER_WRITE_BIT = 0x00001000,
+		HOST_READ_BIT = 0x00002000,
+		HOST_WRITE_BIT = 0x00004000,
+		MEMORY_READ_BIT = 0x00008000,
+		MEMORY_WRITE_BIT = 0x00010000,
+		TRANSFORM_FEEDBACK_WRITE_BIT = 0x02000000,
+		TRANSFORM_FEEDBACK_COUNTER_READ_BIT = 0x04000000,
+		TRANSFORM_FEEDBACK_COUNTER_WRITE_BIT = 0x08000000,
+		CONDITIONAL_RENDERING_READ_BIT = 0x00100000,
+		COLOR_ATTACHMENT_READ_NONCOHERENT_BIT = 0x00080000,
+		ACCELERATION_STRUCTURE_READ_BIT = 0x00200000,
+		ACCELERATION_STRUCTURE_WRITE_BIT = 0x00400000,
+		FRAGMENT_DENSITY_MAP_READ_BIT = 0x01000000,
+		FRAGMENT_SHADING_RATE_ATTACHMENT_READ_BIT = 0x00800000,
+		COMMAND_PREPROCESS_READ_BIT = 0x00020000,
+		COMMAND_PREPROCESS_WRITE_BIT = 0x00040000,
+		NONE = 0,
+	};
+	
+	export struct MemoryBarrierDesc {
+		// memory barrier mask
+		AccessFlags srcAccessMask;
+		AccessFlags dstAccessMask;
+	};
+
+	export struct BufferMemoryBarrierDesc {
+		// buffer memory barrier mask
+		Buffer* buffer;
+		AccessFlags srcAccessMask;
+		AccessFlags dstAccessMask;
+		// only if queue transition is need
+		Queue* srcQueue = nullptr;
+		Queue* dstQueue = nullptr;
+	};
+
+	export struct ImageSubresourceRange {
+		TextureAspectFlags aspectMask;
+		uint32_t baseMipLevel;
+		uint32_t levelCount;
+		uint32_t baseArrayLayer;
+		uint32_t layerCount;
+	};
+
+	export enum class ImageLayout :uint32_t {
+		UNDEFINED,
+		GENERAL,
+		COLOR_ATTACHMENT_OPTIMAL,
+		DEPTH_STENCIL_ATTACHMENT_OPTIMA,
+		DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+		SHADER_READ_ONLY_OPTIMAL,
+		TRANSFER_SRC_OPTIMAL,
+		TRANSFER_DST_OPTIMAL,
+		PREINITIALIZED,
+		DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL,
+		DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL,
+		DEPTH_ATTACHMENT_OPTIMAL,
+		DEPTH_READ_ONLY_OPTIMAL,
+		STENCIL_ATTACHMENT_OPTIMAL,
+		STENCIL_READ_ONLY_OPTIMAL,
+		PRESENT_SRC,
+		SHARED_PRESENT,
+		FRAGMENT_DENSITY_MAP_OPTIMAL,
+		FRAGMENT_SHADING_RATE_ATTACHMENT_OPTIMAL,
+		READ_ONLY_OPTIMAL,
+		ATTACHMENT_OPTIMAL,
+	};
+
+	export struct ImageMemoryBarrierDesc {
+		// specify image object
+		Texture* image;
+		ImageSubresourceRange subresourceRange;
+		// memory barrier mask
+		AccessFlags srcAccessMask;
+		AccessFlags dstAccessMask;
+		// only if layout transition is need
+		ImageLayout oldLayout;
+		ImageLayout newLayout;
+		// only if queue transition is need
+		Queue* srcQueue = nullptr;
+		Queue* dstQueue = nullptr;
+	};
+
+	/**
+	* ╔═════════════════════════════╗
+	* ║      BarrierDescriptor      ║
+	* ╚═════════════════════════════╝
+	* 
+	* < Pipeline Stages >
+	* Pipeline Stage, is a sub-stage of a command.
+	* They are used in the barrier command,
+	* In a barrier it wait the "before" parts to complete and then execute the "after" part
+	* However, using pipeline stages, we only need to wait certain stages of the "before" part 
+	* 
+	* < Common Stages >
+	* ┌───────────────────────────────┐ ┌─────────────────────────────┐
+	* │      COMPUTE / TRANSFER       │ │      RENDER - Fragment      │
+	* ├───────────────────────────────┤ ├─────────────────────────────┤
+	* │  TOP_OF_PIPE				  │ │  EARLY_FRAGMENT_TESTS       │
+	* │  DRAW_INDIRECT				  │ │  FRAGMENT_SHADER		      │
+	* │  COMPUTE / TRANSFER           │ │  LATE_FRAGMENT_TESTS        │
+	* │  BOTTOM_OF_PIPE				  │ │  COLOR_ATTACHMENT_OUTPUT    │
+	* └───────────────────────────────┘ └─────────────────────────────┘
+	* ┌───────────────────────────────────────────────────────────────┐
+	* │                    RENDER - Geometry		     	          │
+	* ├───────────────────────────────────────────────────────────────┤
+	* │  DRAW_INDIRECT - Parses indirect buffers				      │
+	* │  VERTEX_INPUT - Consumes fixed function VBOs and IBOs	      │
+	* │  VERTEX_SHADER - Actual vertex shader					      │
+	* │  TESSELLATION_CONTROL_SHADER							      │
+	* │  TESSELLATION_EVALUATION_SHADER								  │
+	* │  GEOMETRY_SHADER										      │
+	* └───────────────────────────────────────────────────────────────┘
+	* < Dependency Flags >
+	* Basically, we could use the NONE flag.
+	*/
+
+	/** dependency of barriers */
+	export using DependencyTypeFlags = uint32_t;
+	/** dependency of barriers */
+	export enum class DependencyType :uint32_t {
+		NONE			 = 0 << 0,
+		BY_REGION_BIT	 = 1 << 0,
+		VIEW_LOCAL_BIT	 = 1 << 1,
+		DEVICE_GROUP_BIT = 1 << 2,
+	};
+
+	export struct BarrierDescriptor {
+		// Necessary (Execution Barrier)
+		ShaderStagesFlags	srcStageMask;
+		ShaderStagesFlags	dstStageMask;
+		DependencyTypeFlags dependencyType;
+		// Optional (Memory Barriers)
+		std::vector<MemoryBarrier*> memoryBarriers;
+		std::vector<BufferMemoryBarrier*> bufferMemoryBarriers;
+		std::vector<ImageMemoryBarrier*> imageMemoryBarriers;
+	};
+
+	/**
+	* ╔═════════════════════╗
+	* ║      Semaphore      ║
+	* ╚═════════════════════╝
+	* Semaphores are objects used introduce dependencies between operations, 
+	* it actually facilitate GPU <-> GPU synchronization,
+	* such as waiting before acquiring the next image in the swapchain 
+	* before submitting command buffers to your device queue.
+	* 
+	* To signal a semaphore, all previously submitted commands to the queue must complete.
+	* We will also get a full memory barrier that all pending writes are made available
+	* 
+	* While signaling a semaphore makes all memory abailable
+	* waiting for a semaphore makes memory visible.
+	* Therefore, no extra barrier is need if we use a semaphore.
+	* 
+	* Vulkan is unique in that semaphores are a part of the API, 
+	* with DirectX and Metal delegating that to OS calls.
+	*
+	* ╭──────────────┬───────────────────╮
+	* │  Vulkan	  │   vk::Semaphore   │
+	* │  DirectX 12  │   HANDLE          │
+	* │  OpenGL      │   Varies by OS    │
+	* ╰──────────────┴───────────────────╯
+	*/
+	export struct Semaphore {};
+
 }

@@ -8,6 +8,7 @@ module;
 #include <limits>
 #include <cstdint>
 #include <algorithm>
+#include <future>
 #define VK_USE_PLATFORM_WIN32_KHR
 #define GLFW_INCLUDE_VULKAN
 #include <glfw3.h>
@@ -44,8 +45,14 @@ namespace SIByL::RHI
 	struct SwapChain_VK;
 	// **************************
 	// Resource Binding		    |
+	struct BindGroupPool_VK;
 	struct BindGroupLayout_VK;	
 	struct BindGroup_VK;		
+	// **************************
+	// Command				    |
+	struct CommandBuffer_VK;
+	struct CommandPool_VK;
+	struct MultiFrameFlights_VK;
 	// **************************
 	// Queue				    |
 	struct Queue_VK;			
@@ -69,7 +76,7 @@ namespace SIByL::RHI
 		/** initialize the context */
 		virtual auto init(Platform::Window* window = nullptr, ContextExtensionsFlags ext = 0) noexcept -> bool override;
 		/** Request an adapter */
-		virtual auto requestAdapter(RequestAdapterOptions const& options) noexcept -> std::unique_ptr<Adapter> override;
+		virtual auto requestAdapter(RequestAdapterOptions const& options = {}) noexcept -> std::unique_ptr<Adapter> override;
 		/** Get the binded window */
 		virtual auto getBindedWindow() const noexcept -> Platform::Window* override;
 		/** clean up context resources */
@@ -159,15 +166,91 @@ namespace SIByL::RHI
 	//
 
 	export struct Queue_VK :public Queue {
+		/** virtual destructor */
+		virtual ~Queue_VK() = default;
+		/** Schedules the execution of the command buffers by the GPU on this queue. */
+		virtual auto submit(std::vector<CommandBuffer*> const& commandBuffers) noexcept -> void override;
+		/** Schedules the execution of the command buffers by the GPU on this queue. With sync objects */
+		virtual auto submit(std::vector<CommandBuffer*> const& commandBuffers,
+			Semaphore* wait, Semaphore* signal, Fence* fence) noexcept -> void override;
+		/** Returns a Promise that resolves once this queue finishes
+		* processing all the work submitted up to this moment. */
+		virtual auto onSubmittedWorkDone() noexcept -> std::future<bool> override;
+		/** Issues a write operation of the provided data into a Buffer. */
+		virtual auto writeBuffer(
+			Buffer* buffer,
+			uint64_t bufferOffset,
+			ArrayBuffer* data,
+			uint64_t dataOffset,
+			Extend3D const& size) noexcept -> void override;
+		/** Issues a write operation of the provided data into a Texture. */
+		virtual auto writeTexture(
+			ImageCopyTexture const& destination,
+			ArrayBuffer* data,
+			ImageDataLayout const& layout,
+			Extend3D const& size) noexcept -> void override;
+		/** Issues a copy operation of the contents of a platform
+		* image/canvas into the destination texture. */
+		virtual auto copyExternalImageToTexture(
+			ImageCopyExternalImage const& source,
+			ImageCopyExternalImage const& destination,
+			Extend3D const& copySize) noexcept -> void override;
+		/** Present swap chain. */
+		virtual auto presentSwapChain(
+			SwapChain* swapchain,
+			uint32_t imageIndex,
+			Semaphore* semaphore) noexcept -> void override;
+		/** wait until idle */
+		virtual auto waitIdle() noexcept -> void override;
 		/** Vulkan queue handle */
 		VkQueue queue;
+		/* the device this buffer is created on */
+		Device_VK* device = nullptr;
 	};
+
+#pragma region VK_QUEUE_IMPL
+
+	auto Queue_VK::onSubmittedWorkDone() noexcept -> std::future<bool> {
+		return std::future<bool>{};
+	}
+
+	auto Queue_VK::writeBuffer(
+		Buffer* buffer,
+		uint64_t bufferOffset,
+		ArrayBuffer* data,
+		uint64_t dataOffset,
+		Extend3D const& size) noexcept -> void {
+
+	}
+
+	auto Queue_VK::writeTexture(
+		ImageCopyTexture const& destination,
+		ArrayBuffer* data,
+		ImageDataLayout const& layout,
+		Extend3D const& size) noexcept -> void {
+
+	}
+
+	auto Queue_VK::copyExternalImageToTexture(
+		ImageCopyExternalImage const& source,
+		ImageCopyExternalImage const& destination,
+		Extend3D const& copySize) noexcept -> void {
+
+	}
+	
+	auto Queue_VK::waitIdle() noexcept -> void {
+		vkQueueWaitIdle(queue);
+	}
+
+#pragma endregion
 
 	export struct Device_VK final :public Device {
 		/** virtual destructor */
 		virtual ~Device_VK();
 		/** destroy the device */
 		virtual auto destroy() noexcept -> void override;
+		/** wait until idle */
+		virtual auto waitIdle() noexcept -> void { vkDeviceWaitIdle(device); }
 		// Read-only fields
 		// ---------------------------
 		/** the graphics queue for this device */
@@ -206,12 +289,15 @@ namespace SIByL::RHI
 		virtual auto createRenderPipeline(RenderPipelineDescriptor const& desc) noexcept -> std::unique_ptr<RenderPipeline> override;
 		/** create a compute pipeline on the device in async way */
 		virtual auto createComputePipelineAsync(ComputePipelineDescriptor const& desc) noexcept
-			-> std::promise<std::unique_ptr<ComputePipeline>> override;
+			-> std::future<std::unique_ptr<ComputePipeline>> override;
 		/** create a render pipeline on the device in async way */
 		virtual auto createRenderPipelineAsync(RenderPipelineDescriptor const& desc) noexcept
-			-> std::promise<std::unique_ptr<RenderPipeline>> override;
+			-> std::future<std::unique_ptr<RenderPipeline>> override;
 		// Create command encoders
 		// ---------------------------
+		/** create a multi frame flights */
+		virtual auto createMultiFrameFlights(MultiFrameFlightsDescriptor const& desc) noexcept
+			-> std::unique_ptr<MultiFrameFlights> override;
 		/** create a command encoder */
 		virtual auto createCommandEncoder(CommandEncoderDescriptor const& desc) noexcept
 			-> std::unique_ptr<CommandEncoder> override;
@@ -232,13 +318,27 @@ namespace SIByL::RHI
 		auto getVkPresentQueue() noexcept -> Queue_VK& { return presentQueue; }
 		/** get the adapter from which this device was created */
 		auto getAdapterVk() noexcept -> Adapter_VK*& { return adapter; }
+		/** get bind group pool */
+		auto getBindGroupPool() noexcept -> BindGroupPool_VK* { return bindGroupPool.get(); }
+		/** create command pools */
+		auto createCommandPools() noexcept -> void;
+		/** create bind group pool */
+		auto createBindGroupPool() noexcept -> void;
+		/** create command pools */
+		auto allocateCommandBuffer() noexcept -> std::unique_ptr<CommandBuffer_VK>;
 	private:
 		/** vulkan logical device handle */
 		VkDevice device;
 		/** various queue handles */
 		Queue_VK graphicsQueue, computeQueue, presentQueue;
+		/** various queue command pools */
+		std::unique_ptr<CommandPool_VK> graphicPool = nullptr, computePool = nullptr, presentPool = nullptr;
 		/** the adapter from which this device was created */
 		Adapter_VK* adapter = nullptr;
+		/** bind group pool */
+		std::unique_ptr<BindGroupPool_VK> bindGroupPool = nullptr;
+		/** multiframe flights */
+		std::unique_ptr<MultiFrameFlights_VK> multiFrameFlights = nullptr;
 	};
 
 #pragma region VK_CONTEXT_IMPL
@@ -746,6 +846,11 @@ namespace SIByL::RHI
 		vkGetDeviceQueue(device->getVkDevice(), queueFamilyIndices.graphicsFamily.value(), 0, &device->getVkGraphicsQueue().queue);
 		vkGetDeviceQueue(device->getVkDevice(), queueFamilyIndices.presentFamily.value(), 0, &device->getVkPresentQueue().queue);
 		vkGetDeviceQueue(device->getVkDevice(), queueFamilyIndices.computeFamily.value(), 0, &device->getVkComputeQueue().queue);
+		device->getVkGraphicsQueue().device = device.get();
+		device->getVkPresentQueue().device = device.get();
+		device->getVkComputeQueue().device = device.get();
+		device->createCommandPools();
+		device->createBindGroupPool();
 		return std::move(device);
 	}
 
@@ -769,11 +874,22 @@ namespace SIByL::RHI
 	Device_VK::~Device_VK() { destroy(); }
 
 	auto Device_VK::destroy() noexcept -> void {
+		graphicPool = nullptr, computePool = nullptr, presentPool = nullptr;
+		bindGroupPool = nullptr;
 		if (device) vkDestroyDevice(device, nullptr);
 	}
 
-	auto Device_VK::createBuffer(BufferDescriptor const& desc) noexcept -> std::unique_ptr<Buffer> {
-		return nullptr;
+	inline auto getVkBufferUsageFlags(BufferUsagesFlags usage) noexcept -> VkBufferUsageFlags {
+		VkBufferUsageFlags flags = 0;
+		if (usage & (uint32_t)BufferUsage::COPY_SRC		)	flags |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+		if (usage & (uint32_t)BufferUsage::COPY_DST		)	flags |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+		if (usage & (uint32_t)BufferUsage::INDEX		)	flags |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+		if (usage & (uint32_t)BufferUsage::VERTEX		)	flags |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+		if (usage & (uint32_t)BufferUsage::UNIFORM		)	flags |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+		if (usage & (uint32_t)BufferUsage::STORAGE		)	flags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+		if (usage & (uint32_t)BufferUsage::INDIRECT		)	flags |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+		if (usage & (uint32_t)BufferUsage::QUERY_RESOLVE)	flags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+		return flags;
 	}
 
 	auto Device_VK::createTexture(TextureDescriptor const& desc) noexcept -> std::unique_ptr<Texture> {
@@ -787,48 +903,21 @@ namespace SIByL::RHI
 	auto Device_VK::importExternalTexture(ExternalTextureDescriptor const& desc) noexcept -> std::unique_ptr<ExternalTexture> {
 		return nullptr;
 	}
-
-	auto Device_VK::createBindGroupLayout(BindGroupLayoutDescriptor const& desc) noexcept -> std::unique_ptr<BindGroupLayout> {
-		return nullptr;
-	}
-
-	auto Device_VK::createPipelineLayout(PipelineLayoutDescriptor const& desc) noexcept -> std::unique_ptr<PipelineLayout> {
-		return nullptr;
-	}
-
-	auto Device_VK::createBindGroup(BindGroupDescriptor const& desc) noexcept -> std::unique_ptr<BindGroup> {
-		return nullptr;
-	}
-
-	auto Device_VK::createShaderModule(ShaderModuleDescriptor const& desc) noexcept -> std::unique_ptr<ShaderModule> {
-		return nullptr;
-	}
-
+	
 	auto Device_VK::createComputePipeline(ComputePipelineDescriptor const& desc) noexcept -> std::unique_ptr<ComputePipeline> {
 		return nullptr;
 	}
 
-	auto Device_VK::createRenderPipeline(RenderPipelineDescriptor const& desc) noexcept -> std::unique_ptr<RenderPipeline> {
-		return nullptr;
-	}
-
 	auto Device_VK::createComputePipelineAsync(ComputePipelineDescriptor const& desc) noexcept
-		-> std::promise<std::unique_ptr<ComputePipeline>> {
-		std::promise<std::unique_ptr<ComputePipeline>> r;
-		r.set_value(nullptr);
+		-> std::future<std::unique_ptr<ComputePipeline>> {
+		std::future<std::unique_ptr<ComputePipeline>> r;
 		return r;
 	}
 
 	auto Device_VK::createRenderPipelineAsync(RenderPipelineDescriptor const& desc) noexcept
-		-> std::promise<std::unique_ptr<RenderPipeline>> {
-		std::promise<std::unique_ptr<RenderPipeline>> r;
-		r.set_value(nullptr);
+		-> std::future<std::unique_ptr<RenderPipeline>> {
+		std::future<std::unique_ptr<RenderPipeline>> r;
 		return r;
-	}
-
-	auto Device_VK::createCommandEncoder(CommandEncoderDescriptor const& desc) noexcept
-		-> std::unique_ptr<CommandEncoder> {
-		return nullptr;
 	}
 
 	auto Device_VK::createRenderBundleEncoder(CommandEncoderDescriptor const& desc) noexcept
@@ -840,6 +929,10 @@ namespace SIByL::RHI
 		return nullptr;
 	}
 
+	auto Device_VK::createCommandPools() noexcept -> void {
+		graphicPool = std::make_unique<CommandPool_VK>(this);
+	}
+
 #pragma endregion
 
 	// Initialization Interface
@@ -847,23 +940,31 @@ namespace SIByL::RHI
 	// Buffers Interface
 
 	export struct Buffer_VK :public Buffer {
+		/** constructor */
+		Buffer_VK(Device_VK* device) :device(device) {}
+		/** virtual destructor */
 		virtual ~Buffer_VK();
+		/** copy functions */
+		Buffer_VK(Buffer_VK const& buffer) = delete;
+		Buffer_VK(Buffer_VK&& buffer);
+		auto operator=(Buffer_VK const& buffer) -> Buffer_VK & = delete;
+		auto operator=(Buffer_VK&& buffer) -> Buffer_VK&;
 		// Readonly Attributes
 		// ---------------------------
 		/** readonly get buffer size on GPU */
 		virtual auto size() const noexcept -> size_t override { return _size; }
 		/** readonly get buffer usage flags on GPU */
-		virtual auto bufferUsageFlags() const noexcept -> BufferUsagesFlags = 0;
+		virtual auto bufferUsageFlags() const noexcept -> BufferUsagesFlags override { return descriptor.usage; }
 		/** readonly get map state on GPU */
-		virtual auto bufferMapState() const noexcept -> BufferMapState = 0;
+		virtual auto bufferMapState() const noexcept -> BufferMapState override { return mapState; }
 		// Map methods
 		// ---------------------------
 		/** Maps the given range of the GPUBuffer */
-		virtual auto mapAsync(MapModeFlags mode, size_t offset = 0, size_t size = 0) noexcept -> std::promise<bool> = 0;
+		virtual auto mapAsync(MapModeFlags mode, size_t offset = 0, size_t size = 0) noexcept -> std::future<bool> override;
 		/** Returns an ArrayBuffer with the contents of the GPUBuffer in the given mapped range */
-		virtual auto getMappedRange(size_t offset = 0, size_t size = 0) noexcept -> ArrayBuffer = 0;
+		virtual auto getMappedRange(size_t offset = 0, size_t size = 0) noexcept -> ArrayBuffer override;
 		/** Unmaps the mapped range of the GPUBuffer and makes it’s contents available for use by the GPU again. */
-		virtual auto unmap() noexcept -> void = 0;
+		virtual auto unmap() noexcept -> void override;
 		// Lifecycle methods
 		// ---------------------------
 		/** destroy the buffer */
@@ -875,11 +976,19 @@ namespace SIByL::RHI
 		auto getVkBuffer() noexcept -> VkBuffer& { return buffer; }
 		/** get vulkan buffer device memory */
 		auto getVkDeviceMemory() noexcept -> VkDeviceMemory& { return bufferMemory; }
+		/** set buffer state */
+		auto setBufferMapState(BufferMapState const& state) noexcept -> void { mapState = state; }
 	protected:
 		/** vulkan buffer */
 		VkBuffer buffer = {};
 		/** vulkan buffer device memory */
 		VkDeviceMemory bufferMemory = {};
+		/** buffer creation desc */
+		BufferDescriptor descriptor = {};
+		/** buffer creation desc */
+		BufferMapState mapState = BufferMapState::UNMAPPED;
+		/** mapped address of the buffer */
+		void* mappedData = nullptr;
 		/** size of the buffer */
 		size_t _size = 0;
 		/* the device this buffer is created on */
@@ -923,25 +1032,6 @@ namespace SIByL::RHI
 			flags |= VK_BUFFER_USAGE_##USAGE;\
 		}\
 
-	inline auto getVkBufferUsage(BufferUsagesFlags usage) noexcept -> VkBufferUsageFlags {
-		uint32_t flags{};
-		if ((uint32_t)usage & (uint32_t)BufferUsage::COPY_SRC)
-			flags |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-		if ((uint32_t)usage & (uint32_t)BufferUsage::COPY_DST)
-			flags |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-		if ((uint32_t)usage & (uint32_t)BufferUsage::INDEX)
-			flags |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-		if ((uint32_t)usage & (uint32_t)BufferUsage::VERTEX)
-			flags |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-		if ((uint32_t)usage & (uint32_t)BufferUsage::UNIFORM)
-			flags |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-		if ((uint32_t)usage & (uint32_t)BufferUsage::STORAGE)
-			flags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-		if ((uint32_t)usage & (uint32_t)BufferUsage::INDIRECT)
-			flags |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
-		return (VkBufferUsageFlags)flags;
-	}
-
 	inline auto getVkBufferShareMode(BufferShareMode shareMode) noexcept -> VkSharingMode {
 		if (shareMode == SIByL::RHI::BufferShareMode::CONCURRENT) return VK_SHARING_MODE_CONCURRENT;
 		else if (shareMode == SIByL::RHI::BufferShareMode::EXCLUSIVE) return VK_SHARING_MODE_EXCLUSIVE;
@@ -969,23 +1059,108 @@ namespace SIByL::RHI
 		destroy();
 	}
 
+	Buffer_VK::Buffer_VK(Buffer_VK&& x)
+		: buffer(x.buffer), bufferMemory(x.bufferMemory), _size(x._size)
+	{
+		x.buffer = nullptr;
+		x.bufferMemory = nullptr;
+	}
+	
+	auto Buffer_VK::operator=(Buffer_VK&& x) -> Buffer_VK& {
+		buffer = x.buffer;
+		bufferMemory = x.bufferMemory;
+		_size = x._size;
+		x.buffer = nullptr;
+		x.bufferMemory = nullptr;
+		return *this;
+	}
+
 	auto Buffer_VK::init(Device_VK* device, size_t size, BufferDescriptor const& desc) noexcept -> void {
 		this->_size = size;
 		this->device = device;
-		createBuffer(
-			_size,
-			getVkBufferUsage(desc.usage),
-			getVkBufferShareMode(desc.shareMode),
-			getVkMemoryProperty(desc.memoryProperties), 
-			buffer,
-			bufferMemory,
-			device
-		);
+		//createBuffer(
+		//	_size,
+		//	getVkBufferUsage(desc.usage),
+		//	getVkBufferShareMode(desc.shareMode),
+		//	getVkMemoryProperty(desc.memoryProperties), 
+		//	buffer,
+		//	bufferMemory,
+		//	device
+		//);
+	}
+	
+	inline auto mapMemory(Device_VK* device, Buffer_VK* buffer, size_t offset, size_t size, void*& mappedData) noexcept-> bool {
+		VkResult result = vkMapMemory(device->getVkDevice(), buffer->getVkDeviceMemory(), offset, size, 0, &mappedData);
+		if (result) buffer->setBufferMapState(BufferMapState::MAPPED);
+		return result == VkResult::VK_SUCCESS ? true : false;
+	}
+
+	auto Buffer_VK::mapAsync(MapModeFlags mode, size_t offset, size_t size) noexcept -> std::future<bool> {
+		mapState = BufferMapState::PENDING;
+		return std::async(mapMemory, device, this, offset, size, std::ref(mappedData));
+	}
+
+	auto Buffer_VK::getMappedRange(size_t offset, size_t size) noexcept -> ArrayBuffer {
+		return (void*)&(((char*)mappedData)[offset]);
+	}
+
+	auto Buffer_VK::unmap() noexcept -> void {
+		vkUnmapMemory(device->getVkDevice(), bufferMemory);
+		mappedData = nullptr;
+		BufferMapState mapState = BufferMapState::UNMAPPED;
 	}
 
 	auto Buffer_VK::destroy() const noexcept -> void {
 		if (buffer)		  vkDestroyBuffer(device->getVkDevice(), buffer, nullptr);
 		if (bufferMemory) vkFreeMemory(device->getVkDevice(), bufferMemory, nullptr);
+	}
+
+	inline auto findMemoryType(Device_VK* device, uint32_t typeFilter, VkMemoryPropertyFlags properties) noexcept -> uint32_t {
+		VkPhysicalDeviceMemoryProperties memProperties;
+		vkGetPhysicalDeviceMemoryProperties(device->getAdapterVk()->getVkPhysicalDevice(), &memProperties);
+		for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
+			if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
+				return i;
+		Core::LogManager::Log("VULKAN :: failed to find suitable memory type!");
+		return 0;
+	}
+
+	inline auto getVkMemoryPropertyFlags(MemoryPropertiesFlags memoryProperties) noexcept -> VkMemoryPropertyFlags {
+		VkMemoryPropertyFlags flags = 0;
+		if (memoryProperties & (uint32_t)MemoryProperty::DEVICE_LOCAL_BIT)		flags |= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+		if (memoryProperties & (uint32_t)MemoryProperty::HOST_VISIBLE_BIT)		flags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+		if (memoryProperties & (uint32_t)MemoryProperty::HOST_COHERENT_BIT)		flags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+		if (memoryProperties & (uint32_t)MemoryProperty::HOST_CACHED_BIT)		flags |= VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+		if (memoryProperties & (uint32_t)MemoryProperty::LAZILY_ALLOCATED_BIT)	flags |= VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT;
+		if (memoryProperties & (uint32_t)MemoryProperty::PROTECTED_BIT)			flags |= VK_MEMORY_PROPERTY_PROTECTED_BIT;
+		if (memoryProperties == (uint32_t)MemoryProperty::FLAG_BITS_MAX_ENUM)	flags |= VK_MEMORY_PROPERTY_FLAG_BITS_MAX_ENUM;
+		return flags;
+	}
+	
+	auto Device_VK::createBuffer(BufferDescriptor const& desc) noexcept -> std::unique_ptr<Buffer> {
+		VkBufferCreateInfo bufferInfo{};
+		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		bufferInfo.size = desc.size;
+		bufferInfo.usage = getVkBufferUsageFlags(desc.usage);
+		bufferInfo.sharingMode = desc.shareMode == BufferShareMode::EXCLUSIVE ? 
+			VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT;
+		std::unique_ptr<Buffer_VK> buffer = std::make_unique<Buffer_VK>(this);
+		buffer->init(this, desc.size, desc);
+		if (vkCreateBuffer(device, &bufferInfo, nullptr, &buffer->getVkBuffer()) != VK_SUCCESS) {
+			Core::LogManager::Log("VULKAN :: failed to create vertex buffer!");
+		}
+		// assign memory to buffer
+		VkMemoryRequirements memRequirements;
+		vkGetBufferMemoryRequirements(device, buffer->getVkBuffer(), &memRequirements);
+		VkMemoryAllocateInfo allocInfo{};
+		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		allocInfo.allocationSize = memRequirements.size;
+		allocInfo.memoryTypeIndex = findMemoryType(this, memRequirements.memoryTypeBits, getVkMemoryPropertyFlags(desc.memoryProperties));
+		if (vkAllocateMemory(device, &allocInfo, nullptr, &buffer->getVkDeviceMemory()) != VK_SUCCESS) {
+			Core::LogManager::Log("VULKAN :: failed to allocate vertex buffer memory!");
+		}
+		vkBindBufferMemory(device, buffer->getVkBuffer(), buffer->getVkDeviceMemory(), 0);
+		return buffer;
 	}
 
 #pragma endregion
@@ -997,6 +1172,9 @@ namespace SIByL::RHI
 	export struct Texture_VK :public Texture {
 		// Texture Behaviors
 		// ---------------------------
+		/** constructor */
+		Texture_VK(Device_VK* device, TextureDescriptor const& desc);
+		Texture_VK(Device_VK* device, VkImage image, TextureDescriptor const& desc);
 		/** virtual descructor */
 		virtual ~Texture_VK();
 		/** create texture view of this texture */
@@ -1026,7 +1204,7 @@ namespace SIByL::RHI
 		/** vulkan image */
 		VkImage image;
 		/** vulkan image device memory */
-		VkDeviceMemory deviceMemory;
+		VkDeviceMemory deviceMemory = nullptr;
 		/** Texture Descriptor */
 		TextureDescriptor descriptor;
 		/** the device this texture is created on */
@@ -1036,8 +1214,15 @@ namespace SIByL::RHI
 	export struct TextureView_VK :public TextureView {
 		/** create textureviw */
 		TextureView_VK(Device_VK* device, Texture_VK* texture, TextureViewDescriptor const& descriptor);
+		/* copy functions */
+		TextureView_VK(TextureView_VK const& view) = delete;
+		TextureView_VK(TextureView_VK&& view);
+		auto operator=(TextureView_VK const& view) -> TextureView_VK& = delete;
+		auto operator=(TextureView_VK&& view) -> TextureView_VK&;
 		/** virtual destructor */
 		virtual ~TextureView_VK();
+		/** get binded texture */
+		virtual auto getTexture() noexcept -> Texture* { return texture; }
 		/** Vulkan texture view */
 		VkImageView imageView;
 		/** Texture view descriptor */
@@ -1050,6 +1235,14 @@ namespace SIByL::RHI
 
 #pragma region VK_TEXTURE_IMPL
 
+	Texture_VK::Texture_VK(Device_VK* device, TextureDescriptor const& desc)
+		: device(device), descriptor{desc}
+	{}
+
+	Texture_VK::Texture_VK(Device_VK* device, VkImage image, TextureDescriptor const& desc)
+		: device(device), image(image), descriptor{ desc }
+	{}
+
 	Texture_VK::~Texture_VK() {
 		destroy();
 	}
@@ -1059,7 +1252,8 @@ namespace SIByL::RHI
 	}
 
 	auto Texture_VK::destroy() noexcept -> void {
-
+		if (image && deviceMemory) vkDestroyImage(device->getVkDevice(), image, nullptr);
+		if (deviceMemory) vkFreeMemory(device->getVkDevice(), deviceMemory, nullptr);
 	}
 
 	auto Texture_VK::width() const noexcept -> uint32_t {
@@ -1143,6 +1337,55 @@ namespace SIByL::RHI
 		}
 	}
 
+	inline auto getTextureFormat(VkFormat format) noexcept -> TextureFormat {
+		switch (format)
+		{
+		case VK_FORMAT_D32_SFLOAT_S8_UINT:		 return SIByL::RHI::TextureFormat::DEPTH32STENCIL8;
+		case VK_FORMAT_D32_SFLOAT:				 return SIByL::RHI::TextureFormat::DEPTH32_FLOAT;
+		case VK_FORMAT_D24_UNORM_S8_UINT:		 return SIByL::RHI::TextureFormat::DEPTH24STENCIL8;
+		case VK_FORMAT_X8_D24_UNORM_PACK32:		 return SIByL::RHI::TextureFormat::DEPTH24;
+		case VK_FORMAT_D16_UNORM:				 return SIByL::RHI::TextureFormat::DEPTH16_UNORM;
+		case VK_FORMAT_S8_UINT:					 return SIByL::RHI::TextureFormat::STENCIL8;
+		case VK_FORMAT_R32G32B32A32_SFLOAT:		 return SIByL::RHI::TextureFormat::RGBA32_FLOAT;
+		case VK_FORMAT_R32G32B32A32_SINT:		 return SIByL::RHI::TextureFormat::RGBA32_SINT;
+		case VK_FORMAT_R32G32B32A32_UINT:		 return SIByL::RHI::TextureFormat::RGBA32_UINT;
+		case VK_FORMAT_R16G16B16A16_SFLOAT:		 return SIByL::RHI::TextureFormat::RGBA16_FLOAT;
+		case VK_FORMAT_R16G16B16A16_SINT:		 return SIByL::RHI::TextureFormat::RGBA16_SINT;
+		case VK_FORMAT_R16G16B16A16_UINT:		 return SIByL::RHI::TextureFormat::RGBA16_UINT;
+		case VK_FORMAT_R32G32_SFLOAT:			 return SIByL::RHI::TextureFormat::RG32_FLOAT;
+		case VK_FORMAT_R32G32_SINT:				 return SIByL::RHI::TextureFormat::RG32_SINT;
+		case VK_FORMAT_R32G32_UINT:				 return SIByL::RHI::TextureFormat::RG32_UINT;
+		case VK_FORMAT_B10G11R11_UFLOAT_PACK32:	 return SIByL::RHI::TextureFormat::RG11B10_UFLOAT;
+		case VK_FORMAT_A2R10G10B10_UNORM_PACK32: return SIByL::RHI::TextureFormat::RGB10A2_UNORM;
+		case VK_FORMAT_E5B9G9R9_UFLOAT_PACK32:	 return SIByL::RHI::TextureFormat::RGB9E5_UFLOAT;
+		case VK_FORMAT_B8G8R8A8_SRGB:			 return SIByL::RHI::TextureFormat::BGRA8_UNORM_SRGB;
+		case VK_FORMAT_B8G8R8A8_UNORM:			 return SIByL::RHI::TextureFormat::BGRA8_UNORM;
+		case VK_FORMAT_B8G8R8A8_SINT:			 return SIByL::RHI::TextureFormat::RGBA8_SINT;
+		case VK_FORMAT_B8G8R8A8_UINT:			 return SIByL::RHI::TextureFormat::RGBA8_UINT;
+		case VK_FORMAT_R8G8B8A8_SNORM:			 return SIByL::RHI::TextureFormat::RGBA8_SNORM;
+		case VK_FORMAT_R8G8B8A8_SRGB:			 return SIByL::RHI::TextureFormat::RGBA8_UNORM_SRGB;
+		case VK_FORMAT_R8G8B8A8_UNORM:			 return SIByL::RHI::TextureFormat::RGBA8_UNORM;
+		case VK_FORMAT_R16G16_SFLOAT:			 return SIByL::RHI::TextureFormat::RG16_FLOAT;
+		case VK_FORMAT_R16G16_SINT:				 return SIByL::RHI::TextureFormat::RG16_SINT;
+		case VK_FORMAT_R16G16_UINT:				 return SIByL::RHI::TextureFormat::RG16_UINT;
+		case VK_FORMAT_R32_SFLOAT:				 return SIByL::RHI::TextureFormat::R32_FLOAT;
+		case VK_FORMAT_R32_SINT:				 return SIByL::RHI::TextureFormat::R32_SINT;
+		case VK_FORMAT_R32_UINT:				 return SIByL::RHI::TextureFormat::R32_UINT;
+		case VK_FORMAT_R8G8_SINT:				 return SIByL::RHI::TextureFormat::RG8_SINT;
+		case VK_FORMAT_R8G8_UINT:				 return SIByL::RHI::TextureFormat::RG8_UINT;
+		case VK_FORMAT_R8G8_SNORM:				 return SIByL::RHI::TextureFormat::RG8_SNORM;
+		case VK_FORMAT_R8G8_UNORM:				 return SIByL::RHI::TextureFormat::RG8_UNORM;
+		case VK_FORMAT_R16_SFLOAT:				 return SIByL::RHI::TextureFormat::R16_FLOAT;
+		case VK_FORMAT_R16_SINT:				 return SIByL::RHI::TextureFormat::R16_SINT;
+		case VK_FORMAT_R16_UINT:				 return SIByL::RHI::TextureFormat::R16_UINT;
+		case VK_FORMAT_R8_SINT:					 return SIByL::RHI::TextureFormat::R8_SINT;
+		case VK_FORMAT_R8_UINT:					 return SIByL::RHI::TextureFormat::R8_UINT;
+		case VK_FORMAT_R8_SNORM:				 return SIByL::RHI::TextureFormat::R8_SNORM;
+		case VK_FORMAT_R8_UNORM:				 return SIByL::RHI::TextureFormat::R8_UNORM;
+		default: return SIByL::RHI::TextureFormat(0); break;
+		}
+	}
+
 	inline auto getVkImageViewType(TextureViewDimension const& dim) noexcept -> VkImageViewType {
 		switch (dim)
 		{
@@ -1157,14 +1400,12 @@ namespace SIByL::RHI
 		}
 	}
 
-	inline auto getVkImageAspectFlags(TextureAspect aspect) noexcept -> VkImageAspectFlags {
-		switch (aspect)
-		{
-		case SIByL::RHI::TextureAspect::DEPTH_ONLY:		return VK_IMAGE_ASPECT_DEPTH_BIT; break;
-		case SIByL::RHI::TextureAspect::STENCIL_ONLY:	return VK_IMAGE_ASPECT_STENCIL_BIT; break;
-		case SIByL::RHI::TextureAspect::ALL: 
-		default: return VK_IMAGE_ASPECT_COLOR_BIT | VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT; break;
-		}
+	inline auto getVkImageAspectFlags(TextureAspectFlags aspect) noexcept -> VkImageAspectFlags {
+		VkImageAspectFlags ret = 0;
+		if (aspect & (uint32_t)TextureAspect::COLOR_BIT) ret |= VK_IMAGE_ASPECT_COLOR_BIT;
+		if (aspect & (uint32_t)TextureAspect::DEPTH_BIT) ret |= VK_IMAGE_ASPECT_DEPTH_BIT;
+		if (aspect & (uint32_t)TextureAspect::STENCIL_BIT) ret |= VK_IMAGE_ASPECT_STENCIL_BIT;
+		return ret;
 	}
 
 	TextureView_VK::TextureView_VK(Device_VK* device, Texture_VK* texture, TextureViewDescriptor const& descriptor)
@@ -1189,12 +1430,26 @@ namespace SIByL::RHI
 		}
 	}
 
+	TextureView_VK::TextureView_VK(TextureView_VK&& view)
+		: imageView(view.imageView), descriptor(view.descriptor)
+		, texture(view.texture), device(view.device)
+	{
+		view.imageView = nullptr;
+	}
+
+	auto TextureView_VK::operator=(TextureView_VK&& view) ->TextureView_VK& {
+		imageView = view.imageView;
+		descriptor = view.descriptor;
+		texture = view.texture;
+		device = view.device;
+		view.imageView = nullptr; return *this;
+	}
+
 	TextureView_VK::~TextureView_VK() {
 		if (imageView) vkDestroyImageView(device->getVkDevice(), imageView, nullptr);
 	}
 
 #pragma endregion
-
 
 	export struct ExternalTexture_VK :public ExternalTexture {
 		/** virtual destructor */
@@ -1232,6 +1487,10 @@ namespace SIByL::RHI
 		virtual ~SwapChain_VK();
 		/** intialize the swapchin */
 		auto init(Device_VK* device, SwapChainDescriptor const& desc) noexcept -> void;
+		/** get texture view */
+		virtual auto getTextureView(int i) noexcept -> TextureView* override { return &textureViews[i]; }
+		/** invalid swapchain */
+		virtual auto recreate() noexcept -> void override;
 		/** vulkan SwapChain */
 		VkSwapchainKHR swapChain;
 		/** vulkan SwapChain Extent */
@@ -1239,7 +1498,9 @@ namespace SIByL::RHI
 		/** vulkan SwapChain format */
 		VkFormat swapChainImageFormat;
 		/** vulkan SwapChain fetched images */
-		std::vector<VkImage> swapChainImages;
+		std::vector<Texture_VK> swapChainTextures;
+		/** vulkan SwapChain fetched images views */
+		std::vector<TextureView_VK> textureViews;
 		/** the device this sampler is created on */
 		Device_VK* device = nullptr;
 	};
@@ -1334,7 +1595,36 @@ namespace SIByL::RHI
 
 	auto SwapChain_VK::init(Device_VK* device, SwapChainDescriptor const& desc) noexcept -> void {
 		this->device = device;
+		recreate();
+	}
+	
+	auto SwapChain_VK::recreate() noexcept -> void {
+		device->waitIdle();
+		// clean up swap chain
+		swapChainTextures.clear();
+		textureViews.clear();
+		if(swapChain) vkDestroySwapchainKHR(device->getVkDevice(), swapChain, nullptr);
+		// recreate swap chain
 		createSwapChain(device, this);
+		// retrieving the swap chian image
+		uint32_t imageCount = 0;
+		vkGetSwapchainImagesKHR(device->getVkDevice(), swapChain, &imageCount, nullptr);
+		std::vector<VkImage> swapChainImages;
+		swapChainImages.resize(imageCount);
+		vkGetSwapchainImagesKHR(device->getVkDevice(), swapChain, &imageCount, swapChainImages.data());
+		// create Image views for images
+		TextureDescriptor textureDesc;
+		textureDesc.dimension = TextureDimension::TEX2D;
+		textureDesc.format = getTextureFormat(swapChainImageFormat);
+		textureDesc.size = { swapChainExtend.width, swapChainExtend.height };
+		textureDesc.usage = 0;
+		TextureViewDescriptor viewDesc;
+		viewDesc.format = getTextureFormat(swapChainImageFormat);
+		viewDesc.aspect = (uint32_t)TextureAspect::COLOR_BIT;
+		for (size_t i = 0; i < swapChainImages.size(); i++)
+			swapChainTextures.push_back(Texture_VK{ device, swapChainImages[i], textureDesc });
+		for (size_t i = 0; i < swapChainImages.size(); i++)
+			textureViews.push_back(TextureView_VK{ device, &swapChainTextures[i], viewDesc });
 	}
 
 	auto Device_VK::createSwapChain(SwapChainDescriptor const& desc) noexcept -> std::unique_ptr<SwapChain> {
@@ -1350,20 +1640,121 @@ namespace SIByL::RHI
 	// Resource Binding Interface
 
 	export struct BindGroupLayout_VK :public BindGroupLayout {
+		/** contructor */
+		BindGroupLayout_VK(Device_VK* device, BindGroupLayoutDescriptor const& desc);
+		/** destructor */
+		~BindGroupLayout_VK();
 		/** vulkan Descriptor Set Layout */
 		VkDescriptorSetLayout layout;
+		/** Bind Group Layout Descriptor */
+		BindGroupLayoutDescriptor descriptor;
 		/** the device this bind group layout is created on */
 		Device_VK* device = nullptr;
 	};
 
+#pragma region VK_BINDGROUPLAYOUT_IMPL
+
+	inline auto getVkDecriptorType(BindGroupLayoutEntry const& entry) -> VkDescriptorType {
+		if (entry.buffer.has_value()) {
+			switch (entry.buffer.value().type)
+			{
+			case BufferBindingType::UNIFORM: return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			case BufferBindingType::STORAGE: return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+			case BufferBindingType::READ_ONLY_STORAGE: return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;	
+			default: return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+			}
+		}
+		if (entry.sampler.has_value()) return VK_DESCRIPTOR_TYPE_SAMPLER;
+		if (entry.texture.has_value()) return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+		if (entry.storageTexture.has_value()) return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+		if (entry.externalTexture.has_value()) return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+	}
+
+	inline auto getVkShaderStageFlags(ShaderStagesFlags flags) noexcept ->  VkShaderStageFlags {
+		VkShaderStageFlags ret = 0;
+		if (flags & (uint32_t)ShaderStages::VERTEX) ret |= VkShaderStageFlagBits::VK_SHADER_STAGE_VERTEX_BIT;
+		if (flags & (uint32_t)ShaderStages::FRAGMENT) ret |= VkShaderStageFlagBits::VK_SHADER_STAGE_FRAGMENT_BIT;
+		if (flags & (uint32_t)ShaderStages::COMPUTE) ret |= VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT;
+		if (flags & (uint32_t)ShaderStages::RAYGEN) ret |= VkShaderStageFlagBits::VK_SHADER_STAGE_RAYGEN_BIT_NV;
+		if (flags & (uint32_t)ShaderStages::MISS) ret |= VkShaderStageFlagBits::VK_SHADER_STAGE_MISS_BIT_NV;
+		if (flags & (uint32_t)ShaderStages::CLOSEST_HIT) ret |= VkShaderStageFlagBits::VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV;
+		if (flags & (uint32_t)ShaderStages::INTERSECTION) ret |= VkShaderStageFlagBits::VK_SHADER_STAGE_INTERSECTION_BIT_NV;
+		if (flags & (uint32_t)ShaderStages::ANY_HIT) ret |= VkShaderStageFlagBits::VK_SHADER_STAGE_ANY_HIT_BIT_NV;
+		return ret;
+	}
+
+	BindGroupLayout_VK::BindGroupLayout_VK(Device_VK* device, BindGroupLayoutDescriptor const& desc)
+		:device(device), descriptor(desc) 
+	{
+		std::vector<VkDescriptorSetLayoutBinding> bindings(desc.entries.size());
+		for (int i = 0; i < desc.entries.size(); i++) {
+			bindings[i].binding = desc.entries[i].binding;
+			bindings[i].descriptorType = getVkDecriptorType(desc.entries[i]);
+			bindings[i].descriptorCount = 1;
+			bindings[i].stageFlags = getVkShaderStageFlags(desc.entries[i].visibility);
+			bindings[i].pImmutableSamplers = nullptr;
+		}
+		VkDescriptorSetLayoutCreateInfo layoutInfo{};
+		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		layoutInfo.bindingCount = bindings.size();
+		layoutInfo.pBindings = bindings.data();
+		if (vkCreateDescriptorSetLayout(device->getVkDevice(), &layoutInfo, nullptr, &layout) != VK_SUCCESS) {
+			Core::LogManager::Error("VULKAN :: failed to create descriptor set layout!");
+		}
+	}
+
+	BindGroupLayout_VK::~BindGroupLayout_VK() {
+		if (layout) vkDestroyDescriptorSetLayout(device->getVkDevice(), layout, nullptr);
+	}
+
+	auto Device_VK::createBindGroupLayout(BindGroupLayoutDescriptor const& desc) noexcept -> std::unique_ptr<BindGroupLayout> {
+		return std::make_unique<BindGroupLayout_VK>(this, desc);
+	}
+
+#pragma endregion
+
 	export struct BindGroupPool_VK {
+		/** initialzier */
+		BindGroupPool_VK(Device_VK* device);
+		/** destructor */
+		~BindGroupPool_VK();
 		/** vulkan Bind Group Pool */
 		VkDescriptorPool  descriptorPool;
 		/** the device this bind group pool is created on */
 		Device_VK* device = nullptr;
 	};
 
+#pragma region VK_BINDGROUPPOOL_IMPL
+
+	BindGroupPool_VK::BindGroupPool_VK(Device_VK* device)
+		: device(device)
+	{
+		VkDescriptorPoolSize poolSize{};
+		poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		poolSize.descriptorCount = static_cast<uint32_t>(999);
+		VkDescriptorPoolCreateInfo poolInfo{};
+		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+		poolInfo.poolSizeCount = 1;
+		poolInfo.pPoolSizes = &poolSize;
+		poolInfo.maxSets = static_cast<uint32_t>(999);
+		if (vkCreateDescriptorPool(device->getVkDevice(), &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
+			Core::LogManager::Error("VULKAN :: failed to create descriptor pool!");
+		}
+	}
+
+	BindGroupPool_VK::~BindGroupPool_VK() {
+		if(descriptorPool) vkDestroyDescriptorPool(device->getVkDevice(), descriptorPool, nullptr);
+	}
+
+	auto Device_VK::createBindGroupPool() noexcept -> void {
+		bindGroupPool = std::make_unique<BindGroupPool_VK>(this);
+	}
+
+#pragma endregion
+
 	export struct BindGroup_VK :public BindGroup {
+		/** initialzie */
+		BindGroup_VK(Device_VK* device, BindGroupDescriptor const& desc);
 		/** vulkan Descriptor Set */
 		VkDescriptorSet set;
 		/** the bind group set this bind group is created on */
@@ -1372,7 +1763,56 @@ namespace SIByL::RHI
 		Device_VK* device = nullptr;
 	};
 
+#pragma region VK_BINDGROUP_IMPL
+
+	BindGroup_VK::BindGroup_VK(Device_VK* device, BindGroupDescriptor const& desc) {
+		VkDescriptorSetAllocateInfo allocInfo{};
+		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+		allocInfo.descriptorPool = device->getBindGroupPool()->descriptorPool;
+		allocInfo.descriptorSetCount = 1;
+		allocInfo.pSetLayouts = &static_cast<BindGroupLayout_VK*>(desc.layout)->layout;
+		if (vkAllocateDescriptorSets(device->getVkDevice(), &allocInfo, &set) != VK_SUCCESS) {
+			Core::LogManager::Error("VULKAN :: failed to allocate descriptor sets!");
+		}
+		// configure the descriptors
+		for (auto& entry : desc.entries) {
+			if (entry.resource.bufferBinding.has_value()) {
+				VkDescriptorBufferInfo bufferInfo{};
+				bufferInfo.buffer = static_cast<Buffer_VK*>(entry.resource.bufferBinding.value().buffer)->getVkBuffer();
+				bufferInfo.offset = entry.resource.bufferBinding.value().offset;
+				bufferInfo.range = entry.resource.bufferBinding.value().size;
+				VkWriteDescriptorSet descriptorWrite{};
+				descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrite.dstSet = set;
+				descriptorWrite.dstBinding = entry.binding;
+				descriptorWrite.dstArrayElement = 0;
+				descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+				descriptorWrite.descriptorCount = 1;
+				descriptorWrite.pBufferInfo = &bufferInfo;
+				descriptorWrite.pImageInfo = nullptr;
+				descriptorWrite.pTexelBufferView = nullptr;
+				vkUpdateDescriptorSets(device->getVkDevice(), 1, &descriptorWrite, 0, nullptr);
+			}
+		}
+	}
+
+	auto Device_VK::createBindGroup(BindGroupDescriptor const& desc) noexcept -> std::unique_ptr<BindGroup> {
+		return std::make_unique<BindGroup_VK>(this, desc);
+	}
+
+#pragma endregion
+
+
 	export struct PipelineLayout_VK :public PipelineLayout {
+		/** intializer */
+		PipelineLayout_VK(Device_VK* device, PipelineLayoutDescriptor const& desc);
+		/** virtual destructor */
+		virtual ~PipelineLayout_VK();
+		/** copy functions */
+		PipelineLayout_VK(PipelineLayout_VK const& layout) = delete;
+		PipelineLayout_VK(PipelineLayout_VK&& layout);
+		auto operator=(PipelineLayout_VK const& layout) -> PipelineLayout_VK & = delete;
+		auto operator=(PipelineLayout_VK&& layout) -> PipelineLayout_VK&;
 		/** vulkan pipeline layout */
 		VkPipelineLayout pipelineLayout;
 		/** the push constans on pipeline layouts */
@@ -1381,20 +1821,130 @@ namespace SIByL::RHI
 		Device_VK* device = nullptr;
 	};
 
+#pragma region VK_PIPELINELAYOUT_IMPL
+
+	PipelineLayout_VK::PipelineLayout_VK(Device_VK* device, PipelineLayoutDescriptor const& desc)
+		: device(device) 
+	{
+		std::vector<VkDescriptorSetLayout> descriptorSets;
+		for (auto& bindgroupLayout : desc.bindGroupLayouts) {
+			descriptorSets.push_back(static_cast<BindGroupLayout_VK*>(bindgroupLayout)->layout);
+		}
+		VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		pipelineLayoutInfo.setLayoutCount = descriptorSets.size();
+		pipelineLayoutInfo.pSetLayouts = descriptorSets.data();
+		pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
+		pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
+		if (vkCreatePipelineLayout(device->getVkDevice(), &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
+			Core::LogManager::Error("failed to create pipeline layout!");
+		}
+	}
+
+	PipelineLayout_VK::~PipelineLayout_VK() {
+		if (pipelineLayout) vkDestroyPipelineLayout(device->getVkDevice(), pipelineLayout, nullptr);
+	}
+
+	PipelineLayout_VK::PipelineLayout_VK(PipelineLayout_VK&& layout)
+		: pipelineLayout(layout.pipelineLayout)
+		, pushConstants(layout.pushConstants)
+		, device(layout.device) {
+		layout.pipelineLayout = nullptr;
+	}
+
+	auto PipelineLayout_VK::operator=(PipelineLayout_VK&& layout) -> PipelineLayout_VK& {
+		pipelineLayout = layout.pipelineLayout;
+		pushConstants = layout.pushConstants;
+		device = layout.device;
+		layout.pipelineLayout = nullptr;
+		return *this;
+	}
+
+	auto Device_VK::createPipelineLayout(PipelineLayoutDescriptor const& desc) noexcept -> std::unique_ptr<PipelineLayout> {
+		return std::make_unique<PipelineLayout_VK>(this, desc);
+	}
+
+#pragma endregion
+
+
 	// Resource Binding Interface
 	// ===========================================================================
 	// Shader Modules Interface
 
 	export struct ShaderModule_VK :public ShaderModule {
+		/** initalize shader module */
+		ShaderModule_VK(Device_VK* device, ShaderModuleDescriptor const& desc);
+		/** virtual descructor */
+		~ShaderModule_VK();
+		/** copy functions */
+		ShaderModule_VK(ShaderModule_VK const& shader) = delete;
+		ShaderModule_VK(ShaderModule_VK&& shader);
+		auto operator=(ShaderModule_VK const& shader) -> ShaderModule_VK & = delete;
+		auto operator=(ShaderModule_VK&& shader) -> ShaderModule_VK&;
 		/** the shader stages included in this module */
 		ShaderStagesFlags stages;
 		/** vulkan shader module */
-		VkShaderModule shaderModule;
+		VkShaderModule shaderModule = {};
 		/** vulkan shader stage create info */
 		VkPipelineShaderStageCreateInfo shaderStageInfo{};
 		/** the device this shader module is created on */
 		Device_VK* device = nullptr;
 	};
+
+#pragma region VK_SHADERMODULE_IMPL
+
+	inline auto getVkShaderStageFlagBits(ShaderStages flag) noexcept -> VkShaderStageFlagBits {
+		switch (flag)
+		{
+		case SIByL::RHI::ShaderStages::COMPUTE:		return VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT; break;
+		case SIByL::RHI::ShaderStages::FRAGMENT:	return VkShaderStageFlagBits::VK_SHADER_STAGE_FRAGMENT_BIT; break;
+		case SIByL::RHI::ShaderStages::VERTEX:		return VkShaderStageFlagBits::VK_SHADER_STAGE_VERTEX_BIT; break;
+		default: return VkShaderStageFlagBits::VK_SHADER_STAGE_ALL; break;
+			break;
+		}
+	}
+
+	ShaderModule_VK::ShaderModule_VK(Device_VK* device, ShaderModuleDescriptor const& desc)
+		: device(device), stages((uint32_t)desc.stage) {
+		VkShaderModuleCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+		createInfo.codeSize = desc.code->size;
+		createInfo.pCode = reinterpret_cast<const uint32_t*>(desc.code->data);
+		if (vkCreateShaderModule(device->getVkDevice(), &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
+			Core::LogManager::Error("VULKAN :: failed to create shader module!");
+		}
+		// create info
+		shaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		shaderStageInfo.stage = getVkShaderStageFlagBits(desc.stage);
+		shaderStageInfo.module = shaderModule;
+		shaderStageInfo.pName = "main";
+	}
+
+	ShaderModule_VK::ShaderModule_VK(ShaderModule_VK&& shader)
+		: device(shader.device), stages(shader.stages), shaderModule(shader.shaderModule)
+		, shaderStageInfo(shader.shaderStageInfo) {
+		shader.shaderModule = nullptr;
+	}
+
+	auto ShaderModule_VK::operator=(ShaderModule_VK&& shader) -> ShaderModule_VK& {
+		device = shader.device;
+		stages = shader.stages;
+		shaderModule = shader.shaderModule;
+		shaderStageInfo = shader.shaderStageInfo;
+		shader.shaderModule = nullptr;
+		return *this;
+	}
+
+	ShaderModule_VK::~ShaderModule_VK() {
+		if (shaderModule) vkDestroyShaderModule(device->getVkDevice(), shaderModule, nullptr);
+	}
+
+	auto Device_VK::createShaderModule(ShaderModuleDescriptor const& desc) noexcept -> std::unique_ptr<ShaderModule> {
+		std::unique_ptr<ShaderModule_VK> shadermodule = std::make_unique<ShaderModule_VK>(this, desc);
+		return shadermodule;
+	}
+
+#pragma endregion
 
 	// Shader Modules Interface
 	// ===========================================================================
@@ -1407,38 +1957,1229 @@ namespace SIByL::RHI
 		Device_VK* device = nullptr;
 	};
 
+	export struct RenderPass_VK {
+		/** render pass initialize */
+		RenderPass_VK(Device_VK* device, RenderPassDescriptor const& desc);
+		/** virtual destructor */
+		virtual ~RenderPass_VK();
+		/** copy functions */
+		RenderPass_VK(RenderPass_VK const& pass) = delete;
+		RenderPass_VK(RenderPass_VK&& pass);
+		auto operator=(RenderPass_VK const& pass) -> RenderPass_VK & = delete;
+		auto operator=(RenderPass_VK&& pass) -> RenderPass_VK&;
+		/** vulkan render pass */
+		VkRenderPass renderPass;
+		/** vulkan render pass clear value */
+		std::vector<VkClearValue> clearValues;
+		/** the device this render pass is created on */
+		Device_VK* device = nullptr;
+	};
+
+#pragma region VK_RENDERPASS_IMPL
+
+	inline auto getVkAttachmentLoadOp(LoadOp op) noexcept -> VkAttachmentLoadOp {
+		switch (op)
+		{
+		case SIByL::RHI::LoadOp::DONT_CARE: return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		case SIByL::RHI::LoadOp::CLEAR: return VK_ATTACHMENT_LOAD_OP_CLEAR;
+		case SIByL::RHI::LoadOp::LOAD: return VK_ATTACHMENT_LOAD_OP_LOAD;
+		default: return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		}
+	}
+
+	inline auto getVkAttachmentStoreOp(StoreOp op) noexcept -> VkAttachmentStoreOp {
+		switch (op)
+		{
+		case SIByL::RHI::StoreOp::DISCARD: return VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		case SIByL::RHI::StoreOp::STORE: return VK_ATTACHMENT_STORE_OP_STORE;
+		default: return VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		}
+	}
+
+	RenderPass_VK::RenderPass_VK(Device_VK* device, RenderPassDescriptor const& desc)
+		: device(device) 
+	{
+		std::vector<VkAttachmentDescription> attachments;
+		for (auto const& colorAttach : desc.colorAttachments) {
+			VkAttachmentDescription colorAttachment{};
+			colorAttachment.format = getVkFormat(static_cast<TextureView_VK*>(colorAttach.view)->descriptor.format);
+			colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+			colorAttachment.loadOp = getVkAttachmentLoadOp(colorAttach.loadOp);
+			colorAttachment.storeOp = getVkAttachmentStoreOp(colorAttach.storeOp);
+			colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+			colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+			attachments.emplace_back(colorAttachment);
+		}
+		VkAttachmentReference colorAttachmentRef{};
+		colorAttachmentRef.attachment = 0;
+		colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		VkSubpassDescription subpass{};
+		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+		subpass.colorAttachmentCount = 1;
+		subpass.pColorAttachments = &colorAttachmentRef;
+		VkRenderPassCreateInfo renderPassInfo{};
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+		renderPassInfo.attachmentCount = 1;
+		renderPassInfo.pAttachments = attachments.data();
+		renderPassInfo.subpassCount = 1;
+		renderPassInfo.pSubpasses = &subpass;
+		if (vkCreateRenderPass(device->getVkDevice(), &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
+			Core::LogManager::Error("VULKAN :: failed to create render pass!");
+		}
+	}
+
+	RenderPass_VK::~RenderPass_VK() {
+		if (renderPass) vkDestroyRenderPass(device->getVkDevice(), renderPass, nullptr);
+	}
+
+	RenderPass_VK::RenderPass_VK(RenderPass_VK&& pass)
+		: device(pass.device), renderPass(pass.renderPass), clearValues(pass.clearValues) {
+		pass.renderPass = nullptr;
+	}
+
+	auto RenderPass_VK::operator=(RenderPass_VK&& pass) -> RenderPass_VK& {
+		device = pass.device;
+		renderPass = pass.renderPass;
+		clearValues = pass.clearValues;
+		pass.renderPass = nullptr;
+		return *this;
+	}
+
+#pragma endregion
+
+
 	export struct RenderPipeline_VK :public RenderPipeline {
+		/** constructor */
+		RenderPipeline_VK(Device_VK* device, RenderPipelineDescriptor const& desc);
+		/** virtual destructor */
+		virtual ~RenderPipeline_VK();
+		/** copy functions */
+		RenderPipeline_VK(RenderPipeline_VK const& pipeline) = delete;
+		RenderPipeline_VK(RenderPipeline_VK&& pipeline);
+		auto operator=(RenderPipeline_VK const& pipeline) -> RenderPipeline_VK & = delete;
+		auto operator=(RenderPipeline_VK&& pipeline) -> RenderPipeline_VK&;
 		/** vulkan render pipeline */
-		VkPipeline pipeline;
+		VkPipeline pipeline = {};
+		/** vulkan render pipeline fixed function settings */
+		struct RenderPipelineFixedFunctionSettings {
+			// shader stages
+			std::vector<VkPipelineShaderStageCreateInfo> shaderStages = {};
+			// dynamic state
+			VkPipelineDynamicStateCreateInfo dynamicState = {};
+			std::vector<VkDynamicState>		 dynamicStates = {};
+			// vertex layout
+			VkPipelineVertexInputStateCreateInfo		   vertexInputState = {};
+			std::vector<VkVertexInputBindingDescription>   vertexBindingDescriptor = {};
+			std::vector<VkVertexInputAttributeDescription> vertexAttributeDescriptions = {};
+			// input assembly
+			VkPipelineInputAssemblyStateCreateInfo	assemblyState = {};
+			// viewport settings
+			VkViewport viewport = {}; VkRect2D scissor = {};
+			VkPipelineViewportStateCreateInfo 		viewportState = {};
+			// multisample
+			VkPipelineMultisampleStateCreateInfo	multisampleState = {};
+			VkPipelineRasterizationStateCreateInfo	rasterizationState = {};
+			VkPipelineDepthStencilStateCreateInfo	depthStencilState = {};
+			std::vector<VkPipelineColorBlendAttachmentState> colorBlendAttachmentStates = {};
+			VkPipelineColorBlendStateCreateInfo		colorBlendState = {};
+			PipelineLayout*							pipelineLayout = {};
+		} fixedFunctionSetttings;
+		/** the reusable create information of the pipeline */
+		VkGraphicsPipelineCreateInfo pipelineInfo{};
+		/** combine the pipelien with a render pass and then re-valid it */
+		auto combineRenderPass(RenderPass_VK* renderpass) noexcept -> void;
 		/** the device this render pipeline is created on */
 		Device_VK* device = nullptr;
 	};
+
+#pragma region VK_RENDERPIPELINE_IMPL
+
+	inline auto getVkPrimitiveTopology(PrimitiveTopology topology) noexcept -> VkPrimitiveTopology {
+		switch (topology)
+		{
+		case SIByL::RHI::PrimitiveTopology::TRIANGLE_STRIP: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP; break;
+		case SIByL::RHI::PrimitiveTopology::TRIANGLE_LIST:	return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; break;
+		case SIByL::RHI::PrimitiveTopology::LINE_STRIP:		return VK_PRIMITIVE_TOPOLOGY_LINE_STRIP; break;
+		case SIByL::RHI::PrimitiveTopology::LINE_LIST:		return VK_PRIMITIVE_TOPOLOGY_LINE_LIST; break;
+		case SIByL::RHI::PrimitiveTopology::POINT_LIST:		return VK_PRIMITIVE_TOPOLOGY_POINT_LIST; break;
+		default: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP; break;
+		}
+	}
+
+	inline auto getVkPipelineInputAssemblyStateCreateInfo(PrimitiveTopology topology) noexcept -> VkPipelineInputAssemblyStateCreateInfo {
+		VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+		inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+		inputAssembly.topology = getVkPrimitiveTopology(topology);
+		inputAssembly.primitiveRestartEnable = VK_FALSE;
+		return inputAssembly;
+	}
+
+	inline auto getVkCullModeFlagBits(CullMode cullmode) noexcept -> VkCullModeFlagBits {
+		switch (cullmode)
+		{
+		case SIByL::RHI::CullMode::BACK: return VkCullModeFlagBits::VK_CULL_MODE_BACK_BIT;
+		case SIByL::RHI::CullMode::FRONT: return VkCullModeFlagBits::VK_CULL_MODE_FRONT_BIT;
+		case SIByL::RHI::CullMode::NONE: return VkCullModeFlagBits::VK_CULL_MODE_NONE;
+		case SIByL::RHI::CullMode::BOTH: return VkCullModeFlagBits::VK_CULL_MODE_FRONT_AND_BACK;
+		default: return VkCullModeFlagBits::VK_CULL_MODE_NONE;
+		}
+	}
+
+	inline auto getVkFrontFace(FrontFace ff) noexcept -> VkFrontFace {
+		switch (ff)
+		{
+		case SIByL::RHI::FrontFace::CW: return VkFrontFace::VK_FRONT_FACE_CLOCKWISE;
+		case SIByL::RHI::FrontFace::CCW: return VkFrontFace::VK_FRONT_FACE_COUNTER_CLOCKWISE;
+		default: return VkFrontFace::VK_FRONT_FACE_CLOCKWISE;
+		}
+	}
+
+	inline auto getVkPipelineRasterizationStateCreateInfo(DepthStencilState const& dsstate, FragmentState const& fstate,
+		PrimitiveState const& pstate) noexcept -> VkPipelineRasterizationStateCreateInfo {
+		VkPipelineRasterizationStateCreateInfo rasterizer{};
+		rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+		rasterizer.depthClampEnable = VK_FALSE;
+		rasterizer.rasterizerDiscardEnable = VK_FALSE;
+		rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+		rasterizer.lineWidth = 1.0f;
+		rasterizer.cullMode = getVkCullModeFlagBits(pstate.cullMode);
+		rasterizer.frontFace = getVkFrontFace(pstate.frontFace);
+		rasterizer.depthBiasEnable = (dsstate.depthBias == 0) ? VK_FALSE : VK_TRUE;
+		rasterizer.depthBiasConstantFactor = dsstate.depthBias;
+		rasterizer.depthBiasClamp = dsstate.depthBiasClamp;
+		rasterizer.depthBiasSlopeFactor = dsstate.depthBiasSlopeScale;
+		return rasterizer;
+	}
+
+	inline auto getVkPipelineViewportStateCreateInfo(VkViewport& viewport, VkRect2D& scissor) noexcept -> VkPipelineViewportStateCreateInfo {
+		viewport.x = 0.0f;
+		viewport.y = 0.0f;
+		viewport.width = (float)720;
+		viewport.height = (float)480;
+		viewport.minDepth = 0.0f;
+		viewport.maxDepth = 1.0f;
+		scissor.offset = { 0, 0 };
+		scissor.extent = { 720,480 };
+		VkPipelineViewportStateCreateInfo viewportState{};
+		viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+		viewportState.viewportCount = 1;
+		viewportState.pViewports = &viewport;
+		viewportState.scissorCount = 1;
+		viewportState.pScissors = &scissor;
+		return viewportState;
+	}
+
+	inline auto getVkPipelineMultisampleStateCreateInfo(MultisampleState const& state) noexcept -> VkPipelineMultisampleStateCreateInfo {
+		VkPipelineMultisampleStateCreateInfo multisampling = {};
+		multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+		multisampling.sampleShadingEnable = VK_FALSE;
+		multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+		multisampling.minSampleShading = 1.0f; // Optional
+		multisampling.pSampleMask = nullptr; // Optional
+		multisampling.alphaToCoverageEnable = state.alphaToCoverageEnabled ? VK_TRUE : VK_FALSE;
+		multisampling.alphaToOneEnable = VK_FALSE; // Optional
+		return multisampling;
+	}
+
+	inline auto getVkCompareOp(CompareFunction compare) noexcept -> VkCompareOp {
+		switch (compare)
+		{
+		case SIByL::RHI::CompareFunction::ALWAYS:			return VK_COMPARE_OP_ALWAYS; break;
+		case SIByL::RHI::CompareFunction::GREATER_EQUAL:	return VK_COMPARE_OP_GREATER_OR_EQUAL; break;
+		case SIByL::RHI::CompareFunction::NOT_EQUAL:		return VK_COMPARE_OP_NOT_EQUAL; break;
+		case SIByL::RHI::CompareFunction::GREATER:			return VK_COMPARE_OP_GREATER; break;
+		case SIByL::RHI::CompareFunction::LESS_EQUAL:		return VK_COMPARE_OP_LESS_OR_EQUAL; break;
+		case SIByL::RHI::CompareFunction::EQUAL:			return VK_COMPARE_OP_EQUAL;  break;
+		case SIByL::RHI::CompareFunction::LESS:				return VK_COMPARE_OP_LESS; break;
+		case SIByL::RHI::CompareFunction::NEVER:			return VK_COMPARE_OP_NEVER; break;
+		default: return VK_COMPARE_OP_ALWAYS; break;
+		}
+	}
+
+	inline auto getVkPipelineDepthStencilStateCreateInfo(DepthStencilState const& state) noexcept -> VkPipelineDepthStencilStateCreateInfo {
+		VkPipelineDepthStencilStateCreateInfo depthStencil = {};
+		depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+		depthStencil.depthTestEnable = state.depthCompare != CompareFunction::ALWAYS ? VK_TRUE : VK_FALSE;
+		depthStencil.depthWriteEnable = state.depthWriteEnabled ? VK_TRUE : VK_FALSE;
+		depthStencil.depthCompareOp = getVkCompareOp(state.depthCompare);
+		depthStencil.depthBoundsTestEnable = VK_FALSE;
+		depthStencil.minDepthBounds = 0.0f;
+		depthStencil.maxDepthBounds = 1.0f;
+		depthStencil.stencilTestEnable = VK_FALSE;
+		depthStencil.front = {};
+		depthStencil.back = {};
+		return depthStencil;
+	}
+
+	inline auto getVkBlendFactor(BlendFactor factor) noexcept -> VkBlendFactor {
+		switch (factor)
+		{
+		case SIByL::RHI::BlendFactor::ONE_MINUS_CONSTANT: return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR; break;
+		case SIByL::RHI::BlendFactor::CONSTANT: return VK_BLEND_FACTOR_CONSTANT_COLOR; break;
+		case SIByL::RHI::BlendFactor::SRC_ALPHA_SATURATED: return VK_BLEND_FACTOR_SRC_ALPHA_SATURATE; break;
+		case SIByL::RHI::BlendFactor::ONE_MINUS_DST_ALPHA: return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA; break;
+		case SIByL::RHI::BlendFactor::DST_ALPHA: return VK_BLEND_FACTOR_DST_ALPHA; break;
+		case SIByL::RHI::BlendFactor::ONE_MINUS_DST: return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR; break;
+		case SIByL::RHI::BlendFactor::DST: return VK_BLEND_FACTOR_DST_COLOR; break;
+		case SIByL::RHI::BlendFactor::ONE_MINUS_SRC_ALPHA: return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA; break;
+		case SIByL::RHI::BlendFactor::SRC_ALPHA: return VK_BLEND_FACTOR_SRC_ALPHA; break;
+		case SIByL::RHI::BlendFactor::ONE_MINUS_SRC: return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR; break;
+		case SIByL::RHI::BlendFactor::SRC: return VK_BLEND_FACTOR_SRC_COLOR; break;
+		case SIByL::RHI::BlendFactor::ONE: return VK_BLEND_FACTOR_ONE; break;
+		case SIByL::RHI::BlendFactor::ZERO: return VK_BLEND_FACTOR_ZERO; break;
+		default: return VK_BLEND_FACTOR_MAX_ENUM; break;
+		}
+	}
+
+	inline auto getVkBlendOp(BlendOperation const& op) noexcept -> VkBlendOp {
+		switch (op)
+		{
+		case BlendOperation::ADD: return VkBlendOp::VK_BLEND_OP_ADD;
+		case BlendOperation::SUBTRACT: return VkBlendOp::VK_BLEND_OP_SUBTRACT;
+		case BlendOperation::REVERSE_SUBTRACT: return VkBlendOp::VK_BLEND_OP_REVERSE_SUBTRACT;
+		case BlendOperation::MIN: return VkBlendOp::VK_BLEND_OP_MIN;
+		case BlendOperation::MAX: return VkBlendOp::VK_BLEND_OP_MAX;
+		default: return VkBlendOp::VK_BLEND_OP_MAX_ENUM;
+		}
+	}
+
+	inline auto getVkPipelineColorBlendAttachmentState(FragmentState const& state) noexcept -> std::vector<VkPipelineColorBlendAttachmentState> {
+		std::vector<VkPipelineColorBlendAttachmentState> attachmentStates;
+		for (ColorTargetState const& attchment : state.targets) {
+			VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+			colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+			colorBlendAttachment.blendEnable = attchment.blend.blendEnable() ? VK_TRUE : VK_FALSE;
+			colorBlendAttachment.srcColorBlendFactor = getVkBlendFactor(attchment.blend.color.srcFactor);
+			colorBlendAttachment.dstColorBlendFactor = getVkBlendFactor(attchment.blend.color.dstFactor);
+			colorBlendAttachment.colorBlendOp = getVkBlendOp(attchment.blend.color.operation);
+			colorBlendAttachment.srcAlphaBlendFactor = getVkBlendFactor(attchment.blend.alpha.srcFactor);
+			colorBlendAttachment.dstAlphaBlendFactor = getVkBlendFactor(attchment.blend.alpha.dstFactor);
+			colorBlendAttachment.alphaBlendOp = getVkBlendOp(attchment.blend.color.operation);
+			attachmentStates.emplace_back(colorBlendAttachment);
+		}
+		return attachmentStates;
+	}
+
+	inline auto getVkPipelineColorBlendStateCreateInfo(
+		std::vector<VkPipelineColorBlendAttachmentState> & colorBlendAttachments
+	) noexcept -> VkPipelineColorBlendStateCreateInfo {
+		VkPipelineColorBlendStateCreateInfo colorBlending{};
+		colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+		colorBlending.logicOpEnable = VK_FALSE;
+		colorBlending.logicOp = VK_LOGIC_OP_COPY;
+		colorBlending.attachmentCount = colorBlendAttachments.size();
+		colorBlending.pAttachments = colorBlendAttachments.data();
+		colorBlending.blendConstants[0] = 0.0f;
+		colorBlending.blendConstants[1] = 0.0f;
+		colorBlending.blendConstants[2] = 0.0f;
+		colorBlending.blendConstants[3] = 0.0f;
+		return colorBlending;
+	}
+
+	auto getVkVertexInputBindingDescription(VertexState const& state) noexcept -> std::vector<VkVertexInputBindingDescription> {
+		std::vector<VkVertexInputBindingDescription> descriptions;
+		for (auto& buffer : state.buffers) {
+			VkVertexInputBindingDescription bindingDescription{};
+			bindingDescription.binding = 0;
+			bindingDescription.stride = buffer.arrayStride;
+			bindingDescription.inputRate = buffer.stepMode == VertexStepMode::VERTEX ?
+				VK_VERTEX_INPUT_RATE_VERTEX : VK_VERTEX_INPUT_RATE_INSTANCE;
+			descriptions.push_back(bindingDescription);
+		}
+		return descriptions;
+	}
+
+	inline auto getVkFormat(VertexFormat format) noexcept -> VkFormat {
+		switch (format)
+		{
+		case SIByL::RHI::VertexFormat::SINT32X4:	return VK_FORMAT_R32G32B32A32_SINT;
+		case SIByL::RHI::VertexFormat::SINT32X3:	return VK_FORMAT_R32G32B32_SINT;
+		case SIByL::RHI::VertexFormat::SINT32X2:	return VK_FORMAT_R32G32_SINT;
+		case SIByL::RHI::VertexFormat::SINT32:		return VK_FORMAT_R32_SINT;
+		case SIByL::RHI::VertexFormat::UINT32X4:	return VK_FORMAT_R32G32B32A32_UINT;
+		case SIByL::RHI::VertexFormat::UINT32X3:	return VK_FORMAT_R32G32B32_UINT;
+		case SIByL::RHI::VertexFormat::UINT32X2:	return VK_FORMAT_R32G32_UINT;
+		case SIByL::RHI::VertexFormat::UINT32:		return VK_FORMAT_R32_UINT;
+		case SIByL::RHI::VertexFormat::FLOAT32X4:	return VK_FORMAT_R32G32B32A32_SFLOAT;
+		case SIByL::RHI::VertexFormat::FLOAT32X3:	return VK_FORMAT_R32G32B32_SFLOAT;
+		case SIByL::RHI::VertexFormat::FLOAT32X2:	return VK_FORMAT_R32G32_SFLOAT;
+		case SIByL::RHI::VertexFormat::FLOAT32:		return VK_FORMAT_R32_SFLOAT;
+		case SIByL::RHI::VertexFormat::FLOAT16X4:	return VK_FORMAT_R16G16B16A16_SFLOAT;
+		case SIByL::RHI::VertexFormat::FLOAT16X2:	return VK_FORMAT_R16G16_SFLOAT;
+		case SIByL::RHI::VertexFormat::SNORM16X4:	return VK_FORMAT_R16G16B16A16_SNORM;
+		case SIByL::RHI::VertexFormat::SNORM16X2:	return VK_FORMAT_R16G16_SNORM;
+		case SIByL::RHI::VertexFormat::UNORM16X4:	return VK_FORMAT_R16G16B16A16_UNORM;
+		case SIByL::RHI::VertexFormat::UNORM16X2:	return VK_FORMAT_R16G16_UNORM;
+		case SIByL::RHI::VertexFormat::SINT16X4:	return VK_FORMAT_R16G16B16A16_SINT;
+		case SIByL::RHI::VertexFormat::SINT16X2:	return VK_FORMAT_R16G16_SINT;
+		case SIByL::RHI::VertexFormat::UINT16X4:	return VK_FORMAT_R16G16B16A16_UINT;
+		case SIByL::RHI::VertexFormat::UINT16X2:	return VK_FORMAT_R16G16_UINT;
+		case SIByL::RHI::VertexFormat::SNORM8X4:	return VK_FORMAT_R8G8B8A8_SNORM;
+		case SIByL::RHI::VertexFormat::SNORM8X2:	return VK_FORMAT_R8G8_SNORM;
+		case SIByL::RHI::VertexFormat::UNORM8X4:	return VK_FORMAT_R8G8B8A8_UNORM;
+		case SIByL::RHI::VertexFormat::UNORM8X2:	return VK_FORMAT_R8G8_UNORM;
+		case SIByL::RHI::VertexFormat::SINT8X4:		return VK_FORMAT_R8G8B8A8_SINT;
+		case SIByL::RHI::VertexFormat::SINT8X2:		return VK_FORMAT_R8G8_SINT;
+		case SIByL::RHI::VertexFormat::UINT8X4:		return VK_FORMAT_R8G8B8A8_UINT;
+		case SIByL::RHI::VertexFormat::UINT8X2:		return VK_FORMAT_R8G8_UINT;
+		default: return VK_FORMAT_MAX_ENUM;
+		}
+	}
+
+	inline auto getAttributeDescriptions(VertexState const& state) noexcept -> std::vector<VkVertexInputAttributeDescription> {
+		std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
+		for (int i = 0; i < state.buffers.size(); ++i) {
+			auto& buffer = state.buffers[i];
+			for (int j = 0; j < buffer.attributes.size(); ++j) {
+				auto& attribute = buffer.attributes[j];
+				VkVertexInputAttributeDescription description = {};
+				description.binding = i;
+				description.location = attribute.shaderLocation;
+				description.format = getVkFormat(attribute.format);
+				description.offset = attribute.offset;
+				attributeDescriptions.push_back(description);
+			}
+		}
+		return attributeDescriptions;
+	}
+
+	inline auto fillFixedFunctionSettingDynamicInfo(
+		RenderPipeline_VK::RenderPipelineFixedFunctionSettings& settings) noexcept -> void {
+		// fill in 2 structure in the settings:
+		// 1. std::vector<VkDynamicState> dynamicStates
+		settings.dynamicStates = {
+			VK_DYNAMIC_STATE_VIEWPORT,
+			VK_DYNAMIC_STATE_SCISSOR
+		};
+		// 2. VkPipelineDynamicStateCreateInfo dynamicState
+		settings.dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+		settings.dynamicState.dynamicStateCount = static_cast<uint32_t>(settings.dynamicStates.size());
+		settings.dynamicState.pDynamicStates = settings.dynamicStates.data();
+	}
+
+	inline auto fillFixedFunctionSettingVertexInfo(VertexState const& state,
+		RenderPipeline_VK::RenderPipelineFixedFunctionSettings& settings) noexcept -> void {
+		// fill in 3 structure in the settings:
+		// 1. std::vector<VkVertexInputBindingDescription>   vertexBindingDescriptor
+		settings.vertexBindingDescriptor = getVkVertexInputBindingDescription(state);
+		// 2. std::vector<VkVertexInputAttributeDescription> vertexAttributeDescriptions{};
+		settings.vertexAttributeDescriptions = getAttributeDescriptions(state);
+		// 3. VkPipelineVertexInputStateCreateInfo		   vertexInputState = {};
+		VkPipelineVertexInputStateCreateInfo& vertexInput = settings.vertexInputState;
+		vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+		vertexInput.vertexBindingDescriptionCount = settings.vertexBindingDescriptor.size();
+		vertexInput.pVertexBindingDescriptions = settings.vertexBindingDescriptor.data();
+		vertexInput.vertexAttributeDescriptionCount = static_cast<uint32_t>(settings.vertexAttributeDescriptions.size());
+		vertexInput.pVertexAttributeDescriptions = settings.vertexAttributeDescriptions.data();
+	}
+
+	inline auto fillFixedFunctionSettingViewportInfo(
+		RenderPipeline_VK::RenderPipelineFixedFunctionSettings& settings) noexcept -> void {
+		// fill in 1 structure in the settings, whose viewport & scisor could be set later
+		VkPipelineViewportStateCreateInfo& viewportState = settings.viewportState;
+		viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+		viewportState.viewportCount = 1;
+		viewportState.scissorCount = 1;
+	}
+
+	RenderPipeline_VK::RenderPipeline_VK(Device_VK* device, RenderPipelineDescriptor const& desc)
+		:device(device) 
+	{
+		if (desc.vertex.module)		fixedFunctionSetttings.shaderStages.push_back(static_cast<ShaderModule_VK*>(desc.vertex.module)->shaderStageInfo);
+		if (desc.fragment.module)	fixedFunctionSetttings.shaderStages.push_back(static_cast<ShaderModule_VK*>(desc.fragment.module)->shaderStageInfo);
+		
+		fillFixedFunctionSettingDynamicInfo(fixedFunctionSetttings);
+		fillFixedFunctionSettingVertexInfo(desc.vertex, fixedFunctionSetttings);
+		fixedFunctionSetttings.assemblyState = getVkPipelineInputAssemblyStateCreateInfo(desc.primitive.topology);
+		fillFixedFunctionSettingViewportInfo(fixedFunctionSetttings);
+		fixedFunctionSetttings.rasterizationState = getVkPipelineRasterizationStateCreateInfo(desc.depthStencil, desc.fragment, desc.primitive);
+
+		fixedFunctionSetttings.multisampleState = getVkPipelineMultisampleStateCreateInfo(desc.multisample);
+		fixedFunctionSetttings.depthStencilState = getVkPipelineDepthStencilStateCreateInfo(desc.depthStencil);
+		fixedFunctionSetttings.colorBlendAttachmentStates = getVkPipelineColorBlendAttachmentState(desc.fragment);
+		fixedFunctionSetttings.colorBlendState = getVkPipelineColorBlendStateCreateInfo(fixedFunctionSetttings.colorBlendAttachmentStates);
+		fixedFunctionSetttings.pipelineLayout = desc.layout;
+
+		pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+		pipelineInfo.stageCount = fixedFunctionSetttings.shaderStages.size();
+		pipelineInfo.pStages = fixedFunctionSetttings.shaderStages.data();
+		pipelineInfo.pVertexInputState = &fixedFunctionSetttings.vertexInputState;
+		pipelineInfo.pInputAssemblyState = &fixedFunctionSetttings.assemblyState;
+		pipelineInfo.pViewportState = &fixedFunctionSetttings.viewportState;
+		pipelineInfo.pRasterizationState = &fixedFunctionSetttings.rasterizationState;
+		pipelineInfo.pMultisampleState = &fixedFunctionSetttings.multisampleState;
+		pipelineInfo.pDepthStencilState = &fixedFunctionSetttings.depthStencilState;
+		pipelineInfo.pColorBlendState = &fixedFunctionSetttings.colorBlendState;
+		pipelineInfo.pDynamicState = &fixedFunctionSetttings.dynamicState;
+		pipelineInfo.layout = static_cast<PipelineLayout_VK*>(fixedFunctionSetttings.pipelineLayout)->pipelineLayout;
+	}
+
+	auto RenderPipeline_VK::combineRenderPass(RenderPass_VK* renderpass) noexcept -> void {
+		// destroy current pipeline
+		if (pipeline) {
+			vkDestroyPipeline(device->getVkDevice(), pipeline, nullptr);
+			pipeline = {};
+		}
+		pipelineInfo.renderPass = renderpass->renderPass;
+		pipelineInfo.subpass = 0;
+		pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+		pipelineInfo.basePipelineIndex = -1;
+
+		if (vkCreateGraphicsPipelines(device->getVkDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline) != VK_SUCCESS) {
+			Core::LogManager::Error("VULKAN :: failed to create graphics pipeline!");
+		}
+	}
+
+	RenderPipeline_VK::~RenderPipeline_VK() {
+		if(pipeline) vkDestroyPipeline(device->getVkDevice(), pipeline, nullptr);
+	}
+
+	RenderPipeline_VK::RenderPipeline_VK(RenderPipeline_VK&& pipeline)
+		: device(pipeline.device), pipeline(pipeline.pipeline) {
+		pipeline.pipeline = nullptr;
+	}
+
+	auto RenderPipeline_VK::operator=(RenderPipeline_VK&& pipeline) -> RenderPipeline_VK& {
+		device = pipeline.device;
+		this->pipeline = pipeline.pipeline;
+		pipeline.pipeline = nullptr;
+		return *this;
+	}
+
+	auto Device_VK::createRenderPipeline(RenderPipelineDescriptor const& desc) noexcept -> std::unique_ptr<RenderPipeline> {
+		return std::make_unique<RenderPipeline_VK>(this, desc);
+	}
+
+#pragma endregion
 
 	// Pipelines Interface
 	// ===========================================================================
 	// Command Buffers Interface
 
 	export struct CommandPool_VK {
+		/** initialize */
+		CommandPool_VK(Device_VK* device);
+		/** destructor */
+		~CommandPool_VK();
+		/** allocate command buffer */
+		auto allocateCommandBuffer() noexcept -> std::unique_ptr<CommandBuffer_VK>;
 		/** vulkan command pool */
 		VkCommandPool commandPool;
 		/** the device this command pool is created on */
 		Device_VK* device = nullptr;
 	};
 
+#pragma region VK_COMMANDPOOL_IMPL
+
+	CommandPool_VK::CommandPool_VK(Device_VK* device)
+		: device(device) 
+	{
+		VkCommandPoolCreateInfo poolInfo{};
+		poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+		poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+		poolInfo.queueFamilyIndex = device->getAdapterVk()->getQueueFamilyIndices().graphicsFamily.value();
+		if (vkCreateCommandPool(device->getVkDevice(), &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
+			Core::LogManager::Error("VULKAN :: failed to create command pool!");
+		}
+	}
+
+	CommandPool_VK::~CommandPool_VK() {
+		if(commandPool) vkDestroyCommandPool(device->getVkDevice(), commandPool, nullptr);
+	}
+
+	auto Device_VK::allocateCommandBuffer() noexcept -> std::unique_ptr<CommandBuffer_VK> { 
+		return graphicPool->allocateCommandBuffer(); 
+	}
+
+#pragma endregion
+
 	export struct CommandBuffer_VK :public CommandBuffer {
 		/** vulkan command buffer */
 		VkCommandBuffer commandBuffer;
+		/** destructor */
+		virtual ~CommandBuffer_VK();
+		/** command pool the buffer is on */
+		CommandPool_VK* commandPool = nullptr;
 		/** the device this command buffer is created on */
 		Device_VK* device = nullptr;
 	};
+
+#pragma region VK_COMMANDBUFFER_IMPL
+
+	CommandBuffer_VK::~CommandBuffer_VK() {
+		vkFreeCommandBuffers(device->getVkDevice(), commandPool->commandPool, 1, &commandBuffer);
+	}
+
+#pragma endregion
+
+	export struct Semaphore_VK :public Semaphore {
+		/** initialize */
+		Semaphore_VK() = default;
+		Semaphore_VK(Device_VK* device);
+		/** virtual destructor */
+		virtual ~Semaphore_VK();
+		/** vulkan semaphore */
+		VkSemaphore semaphore;
+		/** the device this semaphore is created on */
+		Device_VK* device = nullptr;
+	};
+
+#pragma region VK_SEMAPHORE_IMPL
+
+	Semaphore_VK::Semaphore_VK(Device_VK* device)
+		:device(device)
+	{
+		VkSemaphoreCreateInfo semaphoreInfo{};
+		semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+		if (vkCreateSemaphore(device->getVkDevice(), &semaphoreInfo, nullptr, &semaphore) != VK_SUCCESS)
+			Core::LogManager::Error("VULKAN :: failed to create semaphores!");
+	}
+
+	Semaphore_VK::~Semaphore_VK() {
+		if (semaphore) vkDestroySemaphore(device->getVkDevice(), semaphore, nullptr);
+	}
+
+	auto Queue_VK::presentSwapChain(
+		SwapChain* swapchain,
+		uint32_t imageIndex,
+		Semaphore* semaphore) noexcept -> void {
+		VkPresentInfoKHR presentInfo{};
+		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+		presentInfo.waitSemaphoreCount = 1;
+		presentInfo.pWaitSemaphores = &static_cast<Semaphore_VK*>(semaphore)->semaphore;
+		VkSwapchainKHR swapChains[] = { static_cast<SwapChain_VK*>(swapchain)->swapChain };
+		presentInfo.swapchainCount = 1;
+		presentInfo.pSwapchains = swapChains;
+		presentInfo.pImageIndices = &imageIndex;
+		presentInfo.pResults = nullptr;
+		vkQueuePresentKHR(queue, &presentInfo);
+	}
+
+#pragma endregion
+
+	export struct Fence_VK :public Fence {
+		/** initialize */
+		Fence_VK() = default;
+		Fence_VK(Device_VK* device);
+		/** virtual destructor */
+		virtual ~Fence_VK();
+		/* wait the fence */
+		virtual auto wait() noexcept -> void override;
+		/* reset the fence */
+		virtual auto reset() noexcept -> void override;
+		/** vulkan fence */
+		VkFence fence;
+		/** the device this fence is created on */
+		Device_VK* device = nullptr;
+	};
+
+#pragma region VK_FENCE_IMPL
+
+	Fence_VK::Fence_VK(Device_VK* device)
+		: device(device) {
+		VkFenceCreateInfo fenceInfo{};
+		fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+		fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+		if (vkCreateFence(device->getVkDevice(), &fenceInfo, nullptr, &fence) != VK_SUCCESS) {
+			Core::LogManager::Error("VULKAN :: failed to create fence");
+		}
+	}
+
+	Fence_VK::~Fence_VK() {
+		if (fence) vkDestroyFence(device->getVkDevice(), fence, nullptr);
+	}
+	
+	auto Fence_VK::wait() noexcept -> void {
+		vkWaitForFences(device->getVkDevice(), 1, &fence, VK_TRUE, UINT64_MAX);
+	}
+	
+	auto Fence_VK::reset() noexcept -> void {
+		vkResetFences(device->getVkDevice(), 1, &fence);
+	}
+
+#pragma endregion
+
+
+#pragma region VK_COMMANDBUFFER_IMPL
+
+	auto CommandPool_VK::allocateCommandBuffer() noexcept -> std::unique_ptr<CommandBuffer_VK> {
+		std::unique_ptr<CommandBuffer_VK> command = std::make_unique<CommandBuffer_VK>();
+		command->device = device;
+		command->commandPool = this;
+		VkCommandBufferAllocateInfo allocInfo{};
+		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		allocInfo.commandPool = commandPool;
+		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		allocInfo.commandBufferCount = 1;
+		if (vkAllocateCommandBuffers(device->getVkDevice(), &allocInfo, &command->commandBuffer) != VK_SUCCESS) {
+			Core::LogManager::Error("VULKAN :: failed to allocate command buffers!");
+		}
+		return command;
+	}
+
+	auto Queue_VK::submit(std::vector<CommandBuffer*> const& commandBuffers) noexcept -> void {
+		VkSubmitInfo submitInfo{};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		std::vector<VkCommandBuffer> vkCommandBuffers;
+		for (auto buffer : commandBuffers)
+			vkCommandBuffers.push_back((static_cast<CommandBuffer_VK*>(buffer))->commandBuffer);
+		submitInfo.commandBufferCount = vkCommandBuffers.size();
+		submitInfo.pCommandBuffers = vkCommandBuffers.data();
+		vkQueueSubmit(device->getVkGraphicsQueue().queue, 1, &submitInfo, VK_NULL_HANDLE);
+	}
+	
+	auto Queue_VK::submit(std::vector<CommandBuffer*> const& commandBuffers,
+		Semaphore* wait, Semaphore* signal, Fence* fence) noexcept -> void {
+		VkSubmitInfo submitInfo{};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		VkSemaphore waitSemaphores[] = { static_cast<Semaphore_VK*>(wait)->semaphore };
+		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+		if (wait) {
+			submitInfo.waitSemaphoreCount = 1;
+			submitInfo.pWaitSemaphores = waitSemaphores;
+			submitInfo.pWaitDstStageMask = waitStages;
+		}
+		std::vector<VkCommandBuffer> vkCommandBuffers;
+		for (auto buffer : commandBuffers)
+			vkCommandBuffers.push_back((static_cast<CommandBuffer_VK*>(buffer))->commandBuffer);
+		submitInfo.commandBufferCount = vkCommandBuffers.size();
+		submitInfo.pCommandBuffers = vkCommandBuffers.data();
+		VkSemaphore signalSemaphores[] = { static_cast<Semaphore_VK*>(signal)->semaphore };
+		if (signal) {
+			submitInfo.signalSemaphoreCount = 1;
+			submitInfo.pSignalSemaphores = signalSemaphores;
+		}
+		if (vkQueueSubmit(device->getVkGraphicsQueue().queue, 1, &submitInfo, static_cast<Fence_VK*>(fence)->fence) != VK_SUCCESS) {
+			Core::LogManager::Error("VULKAN :: failed to submit draw command buffer!");
+		}
+	}
+
+#pragma endregion
 
 	// Command Buffers Interface
 	// ===========================================================================
 	// Command Encoding Interface
 
-	export struct CommandEncoder_VK :public CommandEncoder {
-		
+	export struct MultiFrameFlights_VK :public MultiFrameFlights {
+		/** initialize */
+		MultiFrameFlights_VK(Device_VK* device, int maxFlightNum = 2, SwapChain* swapchain = nullptr);
+		/** virtual destructor */
+		~MultiFrameFlights_VK() = default;
+		/** start frame */
+		virtual auto frameStart() noexcept -> void override;
+		/** end frame */
+		virtual auto frameEnd() noexcept -> void override;
+		/** get current flight id */
+		virtual auto getFlightIndex() noexcept -> uint32_t { return currentFrame; }
+		/** get current swapchain id */
+		virtual auto getSwapchainIndex() noexcept -> uint32_t { return imageIndex; }
+		/** get current command buffer */
+		virtual auto getCommandBuffer() noexcept -> CommandBuffer* override;
+		/** get current Image Available Semaphore */
+		virtual auto getImageAvailableSeamaphore() noexcept -> Semaphore* override {
+			return &imageAvailableSemaphores[currentFrame];
+		}
+		/** get current Render Finished Semaphore */
+		virtual auto getRenderFinishedSeamaphore() noexcept -> Semaphore* override {
+			return &renderFinishedSemaphores[currentFrame];
+		}
+		/** get current fence */
+		virtual auto getFence() noexcept -> Fence* override { return &inFlightFences[currentFrame]; }
+		std::vector<std::unique_ptr<CommandBuffer_VK>> commandBuffers;
+		std::vector<Semaphore_VK> imageAvailableSemaphores;
+		std::vector<Semaphore_VK> renderFinishedSemaphores;
+		std::vector<Fence_VK> inFlightFences;
+		SwapChain_VK* swapChain = nullptr;
+		uint32_t currentFrame = 0;
+		int maxFlightNum = 0;
+		Device_VK* device = nullptr;
+		uint32_t imageIndex;
 	};
+
+#pragma region VK_MULTIFRAMEFLIGHTS_IMPL
+
+	MultiFrameFlights_VK::MultiFrameFlights_VK(Device_VK* device, int maxFlightNum, SwapChain* swapchain)
+		: device(device), maxFlightNum(maxFlightNum), swapChain(static_cast<SwapChain_VK*>(swapchain))
+	{
+		commandBuffers.resize(maxFlightNum);
+		for (size_t i = 0; i < maxFlightNum; ++i) {
+			commandBuffers[i] = device->allocateCommandBuffer();
+		}
+		// createSyncObjects 
+		imageAvailableSemaphores.resize(maxFlightNum);
+		renderFinishedSemaphores.resize(maxFlightNum);
+		inFlightFences.resize(maxFlightNum);
+		VkSemaphoreCreateInfo semaphoreInfo{};
+		semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+		VkFenceCreateInfo fenceInfo{};
+		fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+		fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+		for (size_t i = 0; i < maxFlightNum; ++i) {
+			if (vkCreateSemaphore(device->getVkDevice(), &semaphoreInfo, nullptr, &imageAvailableSemaphores[i].semaphore) != VK_SUCCESS ||
+				vkCreateSemaphore(device->getVkDevice(), &semaphoreInfo, nullptr, &renderFinishedSemaphores[i].semaphore) != VK_SUCCESS ||
+				vkCreateFence(device->getVkDevice(), &fenceInfo, nullptr, &inFlightFences[i].fence) != VK_SUCCESS) {
+				Core::LogManager::Error("VULKAN :: failed to create synchronization objects for a frame!");
+			}
+			else {
+				imageAvailableSemaphores[i].device = device;
+				renderFinishedSemaphores[i].device = device;
+				inFlightFences[i].device = device;
+			}
+		}
+	}
+
+	auto MultiFrameFlights_VK::frameStart() noexcept -> void {
+		vkWaitForFences(device->getVkDevice(), 1, &inFlightFences[currentFrame].fence, VK_TRUE, UINT64_MAX);
+		vkResetFences(device->getVkDevice(), 1, &inFlightFences[currentFrame].fence);
+		vkAcquireNextImageKHR(device->getVkDevice(), swapChain->swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame].semaphore, VK_NULL_HANDLE, &imageIndex);
+		vkResetCommandBuffer(commandBuffers[currentFrame]->commandBuffer, 0);
+	}
+
+	auto MultiFrameFlights_VK::frameEnd() noexcept -> void {
+		device->getPresentQueue()->presentSwapChain(swapChain, imageIndex, &renderFinishedSemaphores[currentFrame]);
+		currentFrame = (currentFrame + 1) % maxFlightNum;
+	}
+
+	auto MultiFrameFlights_VK::getCommandBuffer() noexcept -> CommandBuffer* {
+		return commandBuffers[currentFrame].get();
+	}
+
+	auto Device_VK::createMultiFrameFlights(MultiFrameFlightsDescriptor const& desc) noexcept
+		-> std::unique_ptr<MultiFrameFlights> 
+	{
+		return std::make_unique<MultiFrameFlights_VK>(this, desc.maxFlightNum, desc.swapchain);
+	}
+
+#pragma endregion
+
+	export struct CommandEncoder_VK :public CommandEncoder {
+		/** virtual descructor */
+		virtual ~CommandEncoder_VK();
+		/** Begins encoding a render pass described by descriptor. */
+		virtual auto beginRenderPass(RenderPassDescriptor const& desc) noexcept -> std::unique_ptr<RenderPassEncoder> override;
+		/** Begins encoding a compute pass described by descriptor. */
+		virtual auto beginComputePass(ComputePassDescriptor const& desc) noexcept -> std::unique_ptr<ComputePassEncoder> override;
+		/**  Encode a command into the CommandEncoder that copies data from
+		* a sub-region of a GPUBuffer to a sub-region of another Buffer. */
+		virtual auto copyBufferToBuffer(
+			Buffer* source,
+			size_t	sourceOffset,
+			Buffer* destination,
+			size_t	destinationOffset,
+			size_t	size) noexcept -> void override;
+		/** Encode a command into the CommandEncoder that fills a sub-region of a Buffer with zeros. */
+		virtual auto clearBuffer(Buffer* buffer, size_t	offset, size_t	size) noexcept -> void override;
+		/** Encode a command into the CommandEncoder that copies data from a sub-region of a Buffer
+		* to a sub-region of one or multiple continuous texture subresources. */
+		virtual auto copyBufferToTexture(
+			ImageCopyBuffer  const& source,
+			ImageCopyTexture const& destination,
+			Extend3D		 const& copySize) noexcept -> void override;
+		/** Encode a command into the CommandEncoder that copies data from a sub-region of
+		* one or multiple continuous texture subresourcesto a sub-region of a Buffer. */
+		virtual auto copyTextureToBuffer(
+			ImageCopyTexture const& source,
+			ImageCopyBuffer  const& destination,
+			Extend3D		 const& copySize) noexcept -> void override;
+		/** Encode a command into the CommandEncoder that copies data from
+		* a sub-region of one or multiple contiguous texture subresources to
+		* another sub-region of one or multiple continuous texture subresources. */
+		virtual auto copyTextureToTexture(
+			ImageCopyTexture const& source,
+			ImageCopyTexture const& destination,
+			Extend3D		 const& copySize) noexcept -> void override;
+		/** Writes a timestamp value into a querySet when all
+		* previous commands have completed executing. */
+		virtual auto writeTimestamp(
+			QuerySet* querySet,
+			uint32_t  queryIndex) noexcept -> void override;
+		/** Resolves query results from a QuerySet out into a range of a Buffer. */
+		virtual auto resolveQuerySet(
+			QuerySet* querySet,
+			uint32_t  firstQuery,
+			uint32_t  queryCount,
+			Buffer&   destination,
+			uint64_t  destinationOffset) noexcept -> void override;
+		/** Completes recording of the commands sequence and returns a corresponding GPUCommandBuffer. */
+		virtual auto finish(std::optional<CommandBufferDescriptor> const& descriptor = {}) noexcept -> CommandBuffer* override;
+		/** underlying command buffer */
+		std::unique_ptr<CommandBuffer_VK> commandBufferOnce = nullptr;
+		/** underlying command buffer */
+		CommandBuffer_VK* commandBuffer = nullptr;
+	};
+
+#pragma region VK_COMMANDENCODER_IMPL
+
+	CommandEncoder_VK::~CommandEncoder_VK() {}
+
+	auto CommandEncoder_VK::beginComputePass(ComputePassDescriptor const& desc) noexcept -> std::unique_ptr<ComputePassEncoder> {
+		return nullptr;
+	}
+	
+	auto CommandEncoder_VK::copyBufferToBuffer(
+		Buffer* source,
+		size_t	sourceOffset,
+		Buffer* destination,
+		size_t	destinationOffset,
+		size_t	size) noexcept -> void
+	{
+		VkBufferCopy copyRegion{};
+		copyRegion.srcOffset = sourceOffset;
+		copyRegion.dstOffset = destinationOffset;
+		copyRegion.size = size;
+		vkCmdCopyBuffer(commandBuffer->commandBuffer, 
+			static_cast<Buffer_VK*>(source)->getVkBuffer(), 
+			static_cast<Buffer_VK*>(destination)->getVkBuffer(), 1, &copyRegion);
+	}
+
+	auto CommandEncoder_VK::clearBuffer(Buffer* buffer, size_t	offset, size_t	size) noexcept -> void {
+
+	}
+	
+	auto CommandEncoder_VK::copyBufferToTexture(
+		ImageCopyBuffer  const& source,
+		ImageCopyTexture const& destination,
+		Extend3D		 const& copySize) noexcept -> void
+	{
+
+	}
+
+	auto CommandEncoder_VK::copyTextureToBuffer(
+		ImageCopyTexture const& source,
+		ImageCopyBuffer  const& destination,
+		Extend3D		 const& copySize) noexcept -> void
+	{
+
+	}
+	
+	auto CommandEncoder_VK::copyTextureToTexture(
+		ImageCopyTexture const& source,
+		ImageCopyTexture const& destination,
+		Extend3D		 const& copySize) noexcept -> void
+	{
+
+	}
+	
+	auto CommandEncoder_VK::writeTimestamp(
+		QuerySet* querySet,
+		uint32_t queryIndex) noexcept -> void
+	{
+
+	}
+	
+	auto CommandEncoder_VK::resolveQuerySet(
+		QuerySet* querySet,
+		uint32_t firstQuery,
+		uint32_t queryCount,
+		Buffer& destination,
+		uint64_t destinationOffset) noexcept -> void
+	{
+
+	}
+	
+	auto CommandEncoder_VK::finish(std::optional<CommandBufferDescriptor> const& descriptor) noexcept -> CommandBuffer* {
+		if (vkEndCommandBuffer(commandBuffer->commandBuffer) != VK_SUCCESS) {
+			Core::LogManager::Error("VULKAN :: failed to record command buffer!");
+		}
+		return commandBuffer;
+	}
+
+	auto Device_VK::createCommandEncoder(CommandEncoderDescriptor const& desc) noexcept
+		-> std::unique_ptr<CommandEncoder> 
+	{
+		std::unique_ptr<CommandEncoder_VK> encoder = std::make_unique<CommandEncoder_VK>();
+		if (desc.externalCommandBuffer) {
+			encoder->commandBuffer = static_cast<CommandBuffer_VK*>(desc.externalCommandBuffer);
+		}
+		else {
+			encoder->commandBufferOnce = graphicPool->allocateCommandBuffer();
+			encoder->commandBuffer = encoder->commandBufferOnce.get();
+		}
+		VkCommandBufferBeginInfo beginInfo{};
+		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		beginInfo.flags = 0;
+		beginInfo.pInheritanceInfo = nullptr;
+		if (vkBeginCommandBuffer(encoder->commandBuffer->commandBuffer, &beginInfo) != VK_SUCCESS) {
+			Core::LogManager::Error("VULKAN :: failed to begin recording command buffer!");
+		}
+		return encoder;
+	}
+
+#pragma endregion
+
+	// Command Encoding Interface
+	// ===========================================================================
+	// Programmable Passes Interface
+
+
+
+	// Programmable Passes Interface
+	// ===========================================================================
+	// Debug Marks Interface
+
+
+
+	// Debug Marks Interface
+	// ===========================================================================
+	// Compute Passes Interface
+
+
+
+	// Compute Passes Interface
+	// ===========================================================================
+	// Render Passes Interface
+
+	export struct FrameBuffer_VK {
+		/** intializer */
+		FrameBuffer_VK(Device_VK* device, RHI::RenderPassDescriptor const& desc, RenderPass_VK* renderpass);
+		/** destructor */
+		~FrameBuffer_VK();
+		/** get width of the framebuffer */
+		auto width() -> uint32_t { return _width; }
+		/** get height of the framebuffer */
+		auto height() -> uint32_t { return _height; }
+		/** vulkan framebuffer */
+		VkFramebuffer framebuffer = {};
+		/** clear values */
+		std::vector<VkClearValue> clearValues = {};
+		/** vulkan device the framebuffer created on */
+		Device_VK* device = nullptr;
+		/** width / height */
+		uint32_t _width = 0, _height = 0;
+	};
+
+#pragma region VK_FRAMEBUFFER_IMPL
+
+	FrameBuffer_VK::FrameBuffer_VK(Device_VK* device, RHI::RenderPassDescriptor const& desc, RenderPass_VK* renderpass)
+		: device(device)
+	{
+		std::vector<VkImageView> attachments;
+		for (int i = 0; i < desc.colorAttachments.size(); ++i) {
+			attachments.push_back(static_cast<TextureView_VK*>(desc.colorAttachments[i].view)->imageView);
+			clearValues.push_back(VkClearValue{ VkClearColorValue{
+				(float)desc.colorAttachments[i].clearValue.r,
+				(float)desc.colorAttachments[i].clearValue.g,
+				(float)desc.colorAttachments[i].clearValue.b,
+				(float)desc.colorAttachments[i].clearValue.a,
+				} });
+		}
+		VkFramebufferCreateInfo framebufferInfo{};
+		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		framebufferInfo.renderPass = renderpass->renderPass;
+		framebufferInfo.attachmentCount = attachments.size();
+		framebufferInfo.pAttachments = attachments.data();
+		framebufferInfo.width = (desc.colorAttachments.size() > 0) ?
+			desc.colorAttachments[0].view->getTexture()->width() : desc.depthStencilAttachment.view->getTexture()->width();
+		framebufferInfo.height = (desc.colorAttachments.size() > 0) ?
+			desc.colorAttachments[0].view->getTexture()->height() : desc.depthStencilAttachment.view->getTexture()->height();
+		_width = framebufferInfo.width;
+		_height = framebufferInfo.height;
+		framebufferInfo.layers = 1;
+		if (vkCreateFramebuffer(device->getVkDevice(), &framebufferInfo, nullptr, &framebuffer) != VK_SUCCESS) {
+			Core::LogManager::Error("VULKAN :: failed to create framebuffer!");
+		}
+	}
+
+	FrameBuffer_VK::~FrameBuffer_VK() {
+		if (framebuffer) vkDestroyFramebuffer(device->getVkDevice(), framebuffer, nullptr);
+	}
+
+#pragma endregion
+
+
+	export struct RenderPassEncoder_VK :public RenderPassEncoder {
+		/** virtual descructor */
+		virtual ~RenderPassEncoder_VK();
+		/** Sets the current GPURenderPipeline. */
+		virtual auto setPipeline(RenderPipeline* pipeline) noexcept -> void override;
+		/** Sets the current index buffer. */
+		virtual auto setIndexBuffer(Buffer* buffer, IndexFormat indexFormat,
+			uint64_t offset = 0, uint64_t size = 0) noexcept -> void override;
+		/** Sets the current vertex buffer for the given slot. */
+		virtual auto setVertexBuffer(uint32_t slot, Buffer* buffer,
+			uint64_t offset = 0, uint64_t size = 0) noexcept -> void override;
+		/** Draws primitives. */
+		virtual auto draw(uint32_t vertexCount, uint32_t instanceCount = 1,
+			uint32_t firstVertex = 0, uint32_t firstInstance = 0) noexcept -> void override;
+		/** Draws indexed primitives. */
+		virtual auto drawIndexed(uint32_t indexCount, uint32_t instanceCount = 1,
+			uint32_t firstIndex = 0,
+			int32_t  baseVertex = 0,
+			uint32_t firstInstance = 0) noexcept -> void override;
+		/** Draws primitives using parameters read from a GPUBuffer. */
+		virtual auto drawIndirect(Buffer* indirectBuffer, uint64_t indirectOffset) noexcept -> void override;
+		/** Draws indexed primitives using parameters read from a GPUBuffer. */
+		virtual auto drawIndexedIndirect(Buffer* indirectBuffer, uint64_t indirectOffset) noexcept -> void override;
+		/** Sets the viewport used during the rasterization stage to linearly map
+		* from normalized device coordinates to viewport coordinates. */
+		virtual auto setViewport(
+			float x, float y,
+			float width, float height,
+			float minDepth, float maxDepth) noexcept -> void override;
+		/** Sets the scissor rectangle used during the rasterization stage.
+		* After transformation into viewport coordinates any fragments
+		* which fall outside the scissor rectangle will be discarded. */
+		virtual auto setScissorRect(
+			IntegerCoordinate x, IntegerCoordinate y,
+			IntegerCoordinate width, IntegerCoordinate height) noexcept -> void override;
+		/** Sets the constant blend color and alpha values used with
+		* "constant" and "one-minus-constant" GPUBlendFactors. */
+		virtual auto setBlendConstant(Color color) noexcept -> void override;
+		/** Sets the [[stencil_reference]] value used during
+		* stencil tests with the "replace" GPUStencilOperation. */
+		virtual auto setStencilReference(StencilValue reference) noexcept -> void override;
+		/** begin occlusion query */
+		virtual auto beginOcclusionQuery(uint32_t queryIndex) noexcept -> void override;
+		/** end occlusion query */
+		virtual auto endOcclusionQuery() noexcept -> void override;
+		/** Executes the commands previously recorded into the given GPURenderBundles as part of this render pass. */
+		virtual auto executeBundles(std::vector<RenderBundle> const& bundles) noexcept -> void override;
+		/** Completes recording of the render pass commands sequence. */
+		virtual auto end() noexcept -> void override;
+		/** Sets the current GPUBindGroup for the given index. */
+		virtual auto setBindGroup(uint32_t index, BindGroup* bindgroup,
+			std::vector<BufferDynamicOffset> const& dynamicOffsets = {}) noexcept -> void override;
+		/** Sets the current GPUBindGroup for the given index. */
+		virtual auto setBindGroup(uint32_t index, BindGroup* bindgroup,
+			uint64_t dynamicOffsetDataStart, uint32_t dynamicOffsetDataLength) noexcept -> void override;
+		/** render pass */
+		std::unique_ptr<RenderPass_VK> renderPass = nullptr;
+		/** frame buffer */
+		std::unique_ptr<FrameBuffer_VK> frameBuffer = nullptr;
+		/* current render pipeline */
+		RenderPipeline_VK* renderPipeline = nullptr;
+		/** command buffer binded */
+		CommandBuffer_VK* commandBuffer = nullptr;
+	};
+	
+	RenderPassEncoder_VK::~RenderPassEncoder_VK() {
+
+	}
+
+	auto RenderPassEncoder_VK::setPipeline(RenderPipeline* pipeline) noexcept -> void {
+		RenderPipeline_VK* vkpipeline = static_cast<RenderPipeline_VK*>(pipeline);
+		renderPipeline = vkpipeline;
+		vkpipeline->combineRenderPass(renderPass.get());
+		vkCmdBindPipeline(commandBuffer->commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vkpipeline->pipeline);
+	}
+
+	auto RenderPassEncoder_VK::setIndexBuffer(Buffer* buffer, IndexFormat indexFormat, uint64_t offset, uint64_t size) noexcept -> void {
+		vkCmdBindIndexBuffer(commandBuffer->commandBuffer, static_cast<Buffer_VK*>(buffer)->getVkBuffer(),
+			offset, indexFormat == IndexFormat::UINT16_t ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);
+	}
+
+	auto RenderPassEncoder_VK::setVertexBuffer(uint32_t slot, Buffer* buffer, uint64_t offset, uint64_t size) noexcept -> void {
+		VkBuffer vertexBuffers[] = { static_cast<Buffer_VK*>(buffer)->getVkBuffer() };
+		VkDeviceSize offsets[] = { offset };
+		vkCmdBindVertexBuffers(commandBuffer->commandBuffer, 0, 1, vertexBuffers, offsets);
+	}
+	
+	auto RenderPassEncoder_VK::draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) noexcept -> void {
+		vkCmdDraw(commandBuffer->commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
+	}
+
+	auto RenderPassEncoder_VK::drawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance) noexcept -> void {
+		vkCmdDrawIndexed(commandBuffer->commandBuffer, indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
+	}
+	
+	auto RenderPassEncoder_VK::drawIndirect(Buffer* indirectBuffer, uint64_t indirectOffset) noexcept -> void {
+
+	}
+	
+	auto RenderPassEncoder_VK::drawIndexedIndirect(Buffer* indirectBuffer, uint64_t indirectOffset) noexcept -> void {
+
+	}
+	
+	auto RenderPassEncoder_VK::setViewport(
+		float x, float y,
+		float width, float height,
+		float minDepth, float maxDepth) noexcept -> void 
+	{
+		VkViewport viewport = {};
+		viewport.x = x;
+		viewport.y = y;
+		viewport.width = width;
+		viewport.height = height;
+		viewport.minDepth = minDepth;
+		viewport.maxDepth = maxDepth;
+		vkCmdSetViewport(commandBuffer->commandBuffer, 0, 1, &viewport);
+	}
+
+	auto RenderPassEncoder_VK::setScissorRect(
+		IntegerCoordinate x, IntegerCoordinate y,
+		IntegerCoordinate width, IntegerCoordinate height) noexcept -> void
+	{
+		VkRect2D scissor;
+		scissor.offset.x = x;
+		scissor.offset.y = y;
+		scissor.extent.width = width;
+		scissor.extent.height = height;
+		vkCmdSetScissor(commandBuffer->commandBuffer, 0, 1, &scissor);
+	}
+
+	auto RenderPassEncoder_VK::setBlendConstant(Color color) noexcept -> void {
+
+	}
+	
+	auto RenderPassEncoder_VK::setStencilReference(StencilValue reference) noexcept -> void {
+
+	}
+	
+	auto RenderPassEncoder_VK::beginOcclusionQuery(uint32_t queryIndex) noexcept -> void {
+
+	}
+
+	auto RenderPassEncoder_VK::endOcclusionQuery() noexcept -> void {
+
+	}
+
+	auto RenderPassEncoder_VK::executeBundles(std::vector<RenderBundle> const& bundles) noexcept -> void {
+
+	}
+	
+	auto RenderPassEncoder_VK::end() noexcept -> void {
+		vkCmdEndRenderPass(commandBuffer->commandBuffer);
+	}
+
+	auto RenderPassEncoder_VK::setBindGroup(uint32_t index, BindGroup* bindgroup,
+		std::vector<BufferDynamicOffset> const& dynamicOffsets) noexcept -> void {
+		vkCmdBindDescriptorSets(commandBuffer->commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, 
+			static_cast<PipelineLayout_VK*>(renderPipeline->fixedFunctionSetttings.pipelineLayout)->pipelineLayout, 
+			index, 1, &static_cast<BindGroup_VK*>(bindgroup)->set, 0, nullptr);
+	}
+
+	auto RenderPassEncoder_VK::setBindGroup(uint32_t index, BindGroup* bindgroup,
+		uint64_t dynamicOffsetDataStart, uint32_t dynamicOffsetDataLength) noexcept -> void {
+		vkCmdBindDescriptorSets(commandBuffer->commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+			static_cast<PipelineLayout_VK*>(renderPipeline->fixedFunctionSetttings.pipelineLayout)->pipelineLayout,
+			index, 1, &static_cast<BindGroup_VK*>(bindgroup)->set, 0, nullptr);
+	}
+
+	auto CommandEncoder_VK::beginRenderPass(RenderPassDescriptor const& desc) noexcept -> std::unique_ptr<RenderPassEncoder> {
+		std::unique_ptr<RenderPassEncoder_VK> renderpassEncoder = std::make_unique<RenderPassEncoder_VK>();
+		renderpassEncoder->renderPass = std::make_unique<RenderPass_VK>(commandBuffer->device, desc);
+		renderpassEncoder->commandBuffer = commandBuffer;
+		renderpassEncoder->frameBuffer = std::make_unique<FrameBuffer_VK>(commandBuffer->device, desc, renderpassEncoder->renderPass.get());
+		// render pass
+		VkRenderPassBeginInfo renderPassInfo{};
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderPassInfo.renderPass = renderpassEncoder->renderPass->renderPass;
+		renderPassInfo.framebuffer = renderpassEncoder->frameBuffer->framebuffer;
+		renderPassInfo.renderArea.offset = { 0, 0 };
+		renderPassInfo.renderArea.extent = VkExtent2D{ renderpassEncoder->frameBuffer->width(), renderpassEncoder->frameBuffer->height() };
+		renderPassInfo.pClearValues = renderpassEncoder->frameBuffer->clearValues.data();
+		renderPassInfo.clearValueCount = renderpassEncoder->frameBuffer->clearValues.size();
+		vkCmdBeginRenderPass(commandBuffer->commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+		return renderpassEncoder;
+	}
+
+	// Render Passes Interface
+	// ===========================================================================
+	// Bundles Interface
+
+
 
 	// Bundles Interface
 	// ===========================================================================

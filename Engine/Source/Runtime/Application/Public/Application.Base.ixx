@@ -1,5 +1,6 @@
 export module Application.Base;
 import Core.Memory;
+import Core.Timer;
 import Application.Root;
 import Platform.Window;
 
@@ -24,9 +25,11 @@ namespace SIByL::Application
 		/** Initialize the application */
 		virtual auto Init() noexcept -> void {};
 		/** Update the application every loop */
-		virtual auto Update() noexcept -> void {};
+		virtual auto Update(double deltaTime) noexcept -> void {};
 		/** Update the application every fixed update timestep */
 		virtual auto FixedUpdate() noexcept -> void {};
+		/** Exit after the main loop ends */
+		virtual auto Exit() noexcept -> void {};
 
 		// --------------------------
 		// Setting Parameters
@@ -40,6 +43,7 @@ namespace SIByL::Application
 		// Data
 		// --------------------------
 		Scope<Platform::Window> mainWindow = nullptr;
+		Core::Timer timer;
 	};
 
 	auto ApplicationBase::createMainWindow(Platform::WindowOptions const& options) noexcept -> void {
@@ -49,6 +53,7 @@ namespace SIByL::Application
 	auto ApplicationBase::run() noexcept -> void {
 		// init the application
 		Init();
+		static double accumulatedTime = 0;
 		// run the main loop
 		while (!ShouldExit) {
 			//if (Root::get()->startFrame()) {
@@ -57,20 +62,20 @@ namespace SIByL::Application
 			//}
 			// fetch main window events
 			mainWindow->fetchEvents();
-			//double deltaTime = Root::get()->timer->deltaTime();
-			//accumulatedTime += deltaTime;
-			//while (accumulatedTime > fixedUpdateDelta) {
-			//	FixedUpdate();
-			//	accumulatedTime -= fixedUpdateDelta;
-			//}
-			//Update(deltaTime);
-			Update();
-			//Root::get()->endFrame();
+			double deltaTime = timer.deltaTime();
+			accumulatedTime += deltaTime;
+			while (accumulatedTime > FixedUpdateDelta) {
+				FixedUpdate();
+				accumulatedTime -= FixedUpdateDelta;
+			}
+			timer.update();
+			Update(timer.deltaTime());
 
 			mainWindow->endFrame();
 			// Update window status, to check whether should exit
 			ShouldExit |= !mainWindow->isRunning();
 		}
+		Exit();
 		mainWindow->destroy();
 	}
 }

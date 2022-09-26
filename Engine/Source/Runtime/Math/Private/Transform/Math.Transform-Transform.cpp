@@ -294,19 +294,19 @@ namespace SIByL::Math
 		float sinTheta = std::sin(Math::radians(theta));
 		float cosTheta = std::cos(Math::radians(theta));
 		mat4 m;
-
+		// Compute rotation of first basis vector
 		m.data[0][0] = a.x * a.x + (1 - a.x * a.x) * cosTheta;
-		m.data[0][1] = a.x * a.y + (1 - cosTheta) - a.z * sinTheta;
-		m.data[0][2] = a.x * a.z + (1 - cosTheta) + a.y * sinTheta;
+		m.data[0][1] = a.x * a.y * (1 - cosTheta) - a.z * sinTheta;
+		m.data[0][2] = a.x * a.z * (1 - cosTheta) + a.y * sinTheta;
 		m.data[0][3] = 0;
-
-		m.data[1][0] = a.x * a.y + (1 - cosTheta) + a.z * sinTheta;
+		// Compute rotations of second and third basis vectors
+		m.data[1][0] = a.x * a.y * (1 - cosTheta) + a.z * sinTheta;
 		m.data[1][1] = a.y * a.y + (1 - a.y * a.y) * cosTheta;
-		m.data[1][2] = a.y * a.z + (1 - cosTheta) - a.x * sinTheta;
+		m.data[1][2] = a.y * a.z * (1 - cosTheta) - a.x * sinTheta;
 		m.data[1][3] = 0;
 
-		m.data[2][0] = a.x * a.z + (1 - cosTheta) - a.y * sinTheta;
-		m.data[2][1] = a.y * a.z + (1 - cosTheta) + a.x * sinTheta;
+		m.data[2][0] = a.x * a.z * (1 - cosTheta) - a.y * sinTheta;
+		m.data[2][1] = a.y * a.z * (1 - cosTheta) + a.x * sinTheta;
 		m.data[2][2] = a.z * a.z + (1 - a.z * a.z) * cosTheta;
 		m.data[2][3] = 0;
 
@@ -315,19 +315,19 @@ namespace SIByL::Math
 
 	inline auto lookAt(point3 const& pos, point3 const& look, vec3 const& up) noexcept -> Transform {
 		mat4 cameraToWorld;
-		// move to position
+		// Initialize fourth column of viewing matrix
 		cameraToWorld.data[0][3] = pos.x;
 		cameraToWorld.data[1][3] = pos.y;
 		cameraToWorld.data[2][3] = pos.z;
 		cameraToWorld.data[3][3] = 1;
-		// change direction
+		// Initialize first three columns of viewing matrix
 		vec3 dir = normalize(look - pos);
 		vec3 left = normalize(cross(normalize(up), dir));
 		vec3 newUp = cross(dir, left);
-		cameraToWorld.data[0][0] = pos.x; cameraToWorld.data[0][1] = newUp.x; cameraToWorld.data[0][2] = dir.x;
-		cameraToWorld.data[1][0] = pos.y; cameraToWorld.data[1][1] = newUp.y; cameraToWorld.data[1][2] = dir.y;
-		cameraToWorld.data[2][0] = pos.z; cameraToWorld.data[2][1] = newUp.z; cameraToWorld.data[2][2] = dir.z;
-		cameraToWorld.data[3][0] = 0;	  cameraToWorld.data[3][1] = 0;       cameraToWorld.data[3][2] = 0;
+		cameraToWorld.data[0][0] = left.x; cameraToWorld.data[0][1] = newUp.x; cameraToWorld.data[0][2] = dir.x;
+		cameraToWorld.data[1][0] = left.y; cameraToWorld.data[1][1] = newUp.y; cameraToWorld.data[1][2] = dir.y;
+		cameraToWorld.data[2][0] = left.z; cameraToWorld.data[2][1] = newUp.z; cameraToWorld.data[2][2] = dir.z;
+		cameraToWorld.data[3][0] = 0;	   cameraToWorld.data[3][1] = 0;       cameraToWorld.data[3][2] = 0;
 		return Transform(inverse(cameraToWorld), cameraToWorld);
 	}
 
@@ -344,8 +344,21 @@ namespace SIByL::Math
 			0.0f, 0.0f, 1.0f, 0.0f
 		};
 		// scale canonical perspective view to specified field of view
-		float invTanAng = 1 / std::tan(radians(fov) / 2);
+		float invTanAng = 1.f / std::tan(radians(fov) / 2);
 		return scale(invTanAng, invTanAng, 1) * Transform(persp);
+	}
+
+	inline auto perspective(float fov, float aspect, float n, float f) noexcept -> Transform {
+		// perform projective divide for perspective projection
+		mat4 persp{
+			1.0f, 0.0f, 0.0f, 0.0f,
+			0.0f, 1.0f, 0.0f, 0.0f,
+			0.0f, 0.0f, f / (f - n), - 2 * f * n / (f - n),
+			0.0f, 0.0f, 1.0f, 0.0f
+		};
+		// scale canonical perspective view to specified field of view
+		float invTanAng = 1.f / std::tan(radians(fov) / 2);
+		return scale(invTanAng / aspect, invTanAng, 1) * Transform(persp);
 	}
 
 	inline auto decompose(mat4 const& m, vec3* t, Quaternion* rquat, mat4* s) noexcept -> void {
