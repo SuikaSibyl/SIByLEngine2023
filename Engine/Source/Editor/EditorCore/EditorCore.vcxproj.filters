@@ -15,28 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Public\Core\GFX.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Resource\GFX.Resources.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Resource\GFX.Resources-Mesh.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Component\GFX.Components.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Component\GFX.Components-MeshReference.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Resource\GFX.Resources-Material.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Resource\GFX.Resources-Texture.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Component\GFX.Components-MeshRenderer.ixx">
+    <ClCompile Include="Public\Editor.Core.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

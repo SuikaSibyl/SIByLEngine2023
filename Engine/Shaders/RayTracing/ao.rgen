@@ -1,0 +1,55 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_GOOGLE_include_directive : require
+#include "ao_shared.h"
+
+layout(..., r8) uniform image2D imageAO; // Output AO image
+layout(...) uniform accelerationStructureEXT scene; // Built AS
+
+// A location for a ray payload (we can have multiple of these)
+layout(location = 0) rayPayloadEXT RayPayload pay;
+float ShadowRay(vec3 orig, vec3 dir)
+{
+    pay.hitSky = 0.0f; // Assume ray is occluded
+    traceRayEXT(
+        scene, // Acceleration structure
+        // Ray flags, here saying "ignore any-hit shaders and
+        // closest -hit shaders , and terminate the ray on the
+        // first found intersection"
+        gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT |
+            gl_RayFlagsTerminateOnFirstHitEXT ,
+        0xFF, // 8-bit instance mask
+        0, // SBT record offset
+        0, // SBT record stride for offset
+        0, // Miss index
+        orig, // Ray origin
+        0.0, // Minimum t-value
+        dir, // Ray direction
+        1000.0, // Maximum t-value
+        0); // Location of payload
+    return pay.hitSky;
+}
+
+void main()
+{
+    // Determine this pixel's world-space position and normal,
+    // whether by using ray tracing or using data from a G-buffer.
+    uvec2 pixel = gl_LaunchIDEXT.xy;
+    bool pixelIsSky; // Does the pixel show the sky (not a mesh)?
+    vec3 pos, norm; // AO rays from where?
+    GetPixelInfo(pixel, pixelIsSky , pos, norm);
+    if(pixelIsSky){
+        // Don't compute ambient occlusion for the sky.
+        imageStore(imageAO , ivec2(pixel), vec4(1.0));
+        return;
+    }
+
+    // Avoid self-intersection.
+    pos = OffsetPositionAlongNormal(pos, norm);
+
+    // Compute ambient occlusion.
+    float aoColor = 0.0;
+    for(uint i = 0; i < 64; i++) // Use 64 rays.
+        aoColor += ShadowRay(pos, GetRandCosDir(norm)) / 64.0;
+    imageStore(imageAO , ivec2(pixel), vec4(aoColor));
+}

@@ -11,6 +11,7 @@ import Core.Memory;
 import Core.IO;
 import Core.Event;
 import Core.Timer;
+import Core.ECS;
 import Math.Vector;
 import Math.Geometry;
 import Math.Matrix;
@@ -57,7 +58,7 @@ struct UniformBufferObject {
 struct SandBoxApplication :public Application::ApplicationBase {
 	/** Initialize the application */
 	virtual auto Init() noexcept -> void override {
-		bool initialized = context.init(mainWindow.get(), (uint32_t)RHI::ContextExtension::NONE);
+		bool initialized = context.init(mainWindow.get(), (uint32_t)RHI::ContextExtension::RAY_TRACING);
 		adapter = context.requestAdapter({});
 		device = adapter->requestDevice();
 		swapChain = device->createSwapChain({});
@@ -69,70 +70,43 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			Math::vec3 color;
 		};
 
+		struct VertexRT {
+			Math::vec3 pos;
+		};
+
 		std::vector<Vertex> const vertices = {
 			{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
 			{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
 			{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
 			{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
 		};
-
-		{
-			RHI::BufferDescriptor vertexDescriptor;
-			vertexDescriptor.size = sizeof(vertices[0]) * vertices.size();
-			vertexDescriptor.usage = (uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::COPY_DST;
-			vertexDescriptor.memoryProperties = (uint32_t)RHI::MemoryProperty::DEVICE_LOCAL_BIT;
-			vertexDescriptor.mappedAtCreation = true;
-			vertexBuffer = device->createBuffer(vertexDescriptor);
-
-			RHI::BufferDescriptor stagingBufferDescriptor;
-			stagingBufferDescriptor.size = sizeof(vertices[0]) * vertices.size();
-			stagingBufferDescriptor.usage = (uint32_t)RHI::BufferUsage::COPY_SRC;
-			stagingBufferDescriptor.memoryProperties = (uint32_t)RHI::MemoryProperty::HOST_VISIBLE_BIT
-				| (uint32_t)RHI::MemoryProperty::HOST_COHERENT_BIT;
-			stagingBufferDescriptor.mappedAtCreation = true;
-			std::unique_ptr<RHI::Buffer> stagingBuffer = device->createBuffer(stagingBufferDescriptor);
-			std::future<bool> mapped = stagingBuffer->mapAsync(0, 0, vertexDescriptor.size);
-			if (mapped.get()) {
-				void* data = stagingBuffer->getMappedRange(0, vertexDescriptor.size);
-				memcpy(data, vertices.data(), (size_t)vertexDescriptor.size);
-				stagingBuffer->unmap();
-			}
-			std::unique_ptr<RHI::CommandEncoder> commandEncoder = device->createCommandEncoder({ nullptr });
-			commandEncoder->copyBufferToBuffer(stagingBuffer.get(), 0, vertexBuffer.get(), 0, vertexDescriptor.size);
-			device->getGraphicsQueue()->submit({ commandEncoder->finish({}) });
-			device->getGraphicsQueue()->waitIdle();
-		}
+		vertexBuffer = device->createDeviceLocalBuffer((void*)vertices.data(), sizeof(vertices[0]) * vertices.size(),
+			(uint32_t)RHI::BufferUsage::VERTEX);
 
 		std::vector<uint16_t> const indices = {
 			0, 1, 2, 2, 3, 0
 		};
+		indexBuffer = device->createDeviceLocalBuffer((void*)indices.data(), sizeof(indices[0]) * indices.size(),
+			(uint32_t)RHI::BufferUsage::INDEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
+			(uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY);
 
-		{
-			RHI::BufferDescriptor indexDescriptor;
-			indexDescriptor.size = sizeof(indices[0]) * indices.size();
-			indexDescriptor.usage = (uint32_t)RHI::BufferUsage::INDEX | (uint32_t)RHI::BufferUsage::COPY_DST;
-			indexDescriptor.memoryProperties = (uint32_t)RHI::MemoryProperty::DEVICE_LOCAL_BIT;
-			indexDescriptor.mappedAtCreation = true;
-			indexBuffer = device->createBuffer(indexDescriptor);
+		std::vector<VertexRT> const verticesRT = {
+			{{-0.5f, -0.5f, 0.0f}},
+			{{0.5f, -0.5f, 0.0f}},
+			{{0.5f, 0.5f, 0.0f}},
+			{{-0.5f, 0.5f, 0.0f}},
+		};
+		vertexBufferRT = device->createDeviceLocalBuffer((void*)verticesRT.data(), sizeof(verticesRT[0]) * verticesRT.size(),
+			(uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
+			(uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY);
 
-			RHI::BufferDescriptor stagingBufferDescriptor;
-			stagingBufferDescriptor.size = sizeof(indices[0]) * indices.size();
-			stagingBufferDescriptor.usage = (uint32_t)RHI::BufferUsage::COPY_SRC;
-			stagingBufferDescriptor.memoryProperties = (uint32_t)RHI::MemoryProperty::HOST_VISIBLE_BIT
-				| (uint32_t)RHI::MemoryProperty::HOST_COHERENT_BIT;
-			stagingBufferDescriptor.mappedAtCreation = true;
-			std::unique_ptr<RHI::Buffer> stagingBuffer = device->createBuffer(stagingBufferDescriptor);
-			std::future<bool> mapped = stagingBuffer->mapAsync(0, 0, indexDescriptor.size);
-			if (mapped.get()) {
-				void* data = stagingBuffer->getMappedRange(0, indexDescriptor.size);
-				memcpy(data, indices.data(), (size_t)indexDescriptor.size);
-				stagingBuffer->unmap();
-			}
-			std::unique_ptr<RHI::CommandEncoder> commandEncoder = device->createCommandEncoder({ nullptr });
-			commandEncoder->copyBufferToBuffer(stagingBuffer.get(), 0, indexBuffer.get(), 0, indexDescriptor.size);
-			device->getGraphicsQueue()->submit({ commandEncoder->finish({}) });
-			device->getGraphicsQueue()->waitIdle();
-		}
+		blas = device->createBLAS(RHI::BLASDescriptor{
+			vertexBufferRT.get(),
+			indexBuffer.get(),
+			(uint32_t)verticesRT.size(),
+			2,
+			RHI::IndexFormat::UINT16_t });
+		tlas = device->createTLAS(RHI::TLASDescriptor{ {blas.get()} });
 
 		Buffer vert, frag;
 		syncReadFile("../Engine/Binaries/Runtime/spirv/Common/test_shader_vert.spv", vert);
@@ -159,12 +133,24 @@ struct SandBoxApplication :public Application::ApplicationBase {
 					} }
 			);
 
+			bindGroupLayout_RT = device->createBindGroupLayout(
+				RHI::BindGroupLayoutDescriptor{ {
+					RHI::BindGroupLayoutEntry{0, (uint32_t)RHI::ShaderStages::RAYGEN, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, RHI::AccelerationStructureBindingLayout{}},
+					RHI::BindGroupLayoutEntry{1, (uint32_t)RHI::ShaderStages::RAYGEN, std::nullopt, std::nullopt, std::nullopt, RHI::StorageTextureBindingLayout{}},
+					} }
+			);
+
 			for (int i = 0; i < 2; ++i) {
 				bindGroup[i] = device->createBindGroup(RHI::BindGroupDescriptor{
 					bindGroupLayout.get(),
 					std::vector<RHI::BindGroupEntry>{
 						{0,RHI::BindingResource{RHI::BindingResourceType::BUFFER_BINDING, nullptr, nullptr, nullptr, RHI::BufferBinding{uniformBuffer[i].get(), 0, uniformBuffer[i]->size()}}}
 				} });
+				//bindGroup_RT[i] = device->createBindGroup(RHI::BindGroupDescriptor{
+				//	bindGroupLayout_RT.get(),
+				//	std::vector<RHI::BindGroupEntry>{
+				//		{0,RHI::BindingResource{RHI::BindingResourceType::BUFFER_BINDING, nullptr, nullptr, nullptr, RHI::BufferBinding{uniformBuffer[i].get(), 0, uniformBuffer[i]->size()}}}
+				//} });
 			}
 		}
 
@@ -254,10 +240,18 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		pipelineLayout[0] = nullptr;
 		pipelineLayout[1] = nullptr;
 
+		bindGroupLayout_RT = nullptr;
+		bindGroup_RT[0] = nullptr;
+		bindGroup_RT[1] = nullptr;
+
 		vertexBuffer = nullptr;
 		indexBuffer = nullptr;
+		vertexBufferRT = nullptr;
+		indexBufferRT = nullptr;
 		vert_module = nullptr;
 		frag_module = nullptr;
+		tlas = nullptr;
+		blas = nullptr;
 
 		bindGroupLayout = nullptr;
 		uniformBuffer[0] = nullptr;
@@ -278,15 +272,23 @@ private:
 	std::unique_ptr<RHI::MultiFrameFlights> multiFrameFlights = nullptr;
 
 	std::unique_ptr<RHI::BindGroupLayout> bindGroupLayout = nullptr;
-	std::unique_ptr<RHI::Buffer> uniformBuffer[2];
 	std::unique_ptr<RHI::BindGroup> bindGroup[2];
+
+	std::unique_ptr<RHI::BindGroupLayout> bindGroupLayout_RT = nullptr;
+	std::unique_ptr<RHI::BindGroup> bindGroup_RT[2];
+
+	std::unique_ptr<RHI::Buffer> uniformBuffer[2];
 	std::unique_ptr<RHI::PipelineLayout> pipelineLayout[2];
 
 	std::unique_ptr<RHI::Buffer> vertexBuffer = nullptr;
 	std::unique_ptr<RHI::Buffer> indexBuffer = nullptr;
+	std::unique_ptr<RHI::Buffer> vertexBufferRT = nullptr;
+	std::unique_ptr<RHI::Buffer> indexBufferRT = nullptr;
 	std::unique_ptr<RHI::ShaderModule> vert_module = nullptr;
 	std::unique_ptr<RHI::ShaderModule> frag_module = nullptr;
 	std::unique_ptr<RHI::RenderPassEncoder> passEncoder[2] = {};
+	std::unique_ptr<RHI::BLAS> blas = nullptr;
+	std::unique_ptr<RHI::TLAS> tlas = nullptr;
 
 	std::unique_ptr<RHI::RenderPipeline> renderPipeline[2];
 
@@ -295,7 +297,27 @@ private:
 int main()
 {
 	Application::Root root;
-	
+
+	struct TestComponent {
+		int i = 0;
+	};
+
+	Core::Entity ett1 = Core::EntityManager::get()->createEntity();
+	Core::Entity ett2 = Core::EntityManager::get()->createEntity();
+	Core::Entity ett3 = Core::EntityManager::get()->createEntity();
+
+	Core::ComponentManager::get()->registerComponent<TestComponent>();
+
+	ett1.addComponent<TestComponent>(3);
+	ett2.addComponent<TestComponent>(2);
+	ett3.addComponent<TestComponent>(1);
+
+	ett2.removeComponent<TestComponent>();
+
+	TestComponent* a = ett2.getComponent<TestComponent>();
+	TestComponent* b = ett1.getComponent<TestComponent>();
+	TestComponent* c = ett3.getComponent<TestComponent>();
+
 	SandBoxApplication app;
 	app.createMainWindow({
 			Platform::WindowVendor::GLFW,

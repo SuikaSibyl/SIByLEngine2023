@@ -85,4 +85,10 @@ namespace SIByL::Math
         }
         return Math::clamp(first - 1, 0, size - 2);
     }
+
+    /** Rounds a up tp multiple of b. */
+    export auto alignUp(uint32_t a, uint32_t b) -> uint32_t {
+        uint32_t res = a + b - 1;
+        return res - res % b;
+    }
 }

@@ -102,6 +102,15 @@
     <ClCompile Include="Public\Misc\Core.Timer.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\ECS\Core.ECS.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\ECS\Core.SparseSet.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\System\Core.System-Layer.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Public\Core.h">

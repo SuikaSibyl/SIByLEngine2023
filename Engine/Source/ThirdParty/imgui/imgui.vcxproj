@@ -18,49 +18,11 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="Private\Memory\Core.Memory-Allocator.cpp" />
-    <ClCompile Include="Private\Memory\Core.Memory-Buffer.cpp" />
-    <ClCompile Include="Private\Memory\Core.Memory-MemoryArena.cpp" />
-    <ClCompile Include="Private\Memory\Core.Memory-MemoryManager.cpp" />
-    <ClCompile Include="Private\Memory\Core.Memory-StackAllocator.cpp" />
-    <ClCompile Include="Public\ECS\Core.ECS.ixx" />
-    <ClCompile Include="Public\ECS\Core.SparseSet.ixx" />
-    <ClCompile Include="Public\Event\Core.Event-Event.ixx" />
-    <ClCompile Include="Public\Event\Core.Event-Signal.ixx" />
-    <ClCompile Include="Public\Event\Core.Event.ixx" />
-    <ClCompile Include="Public\IO\Core.IO-File.ixx" />
-    <ClCompile Include="Public\IO\Core.IO-SyncRW.ixx" />
-    <ClCompile Include="Public\IO\Core.IO.ixx" />
-    <ClCompile Include="Public\Memory\Core.Memory-BlockedArray.ixx" />
-    <ClCompile Include="Public\Memory\Core.Memory-Buffer.ixx" />
-    <ClCompile Include="Public\Memory\Core.Memory-DoubleEndedStackAllocator.ixx" />
-    <ClCompile Include="Public\Memory\Core.Memory-Memory.ixx" />
-    <ClCompile Include="Public\Memory\Core.Memory-MemoryArena.ixx" />
-    <ClCompile Include="Public\Memory\Core.Memory-StackAllocator.ixx" />
-    <ClCompile Include="Public\Misc\Core.String.ixx" />
-    <ClCompile Include="Public\Misc\Core.Timer.ixx" />
-    <ClCompile Include="Public\Print\Core.Log-Logger.ixx" />
-    <ClCompile Include="Public\Print\Core.Log-LogManager.ixx" />
-    <ClCompile Include="Public\Print\Core.Log-LogStream.ixx" />
-    <ClCompile Include="Public\Print\Core.Log.ixx" />
-    <ClCompile Include="Public\Memory\Core.Memory-Allocator.ixx" />
-    <ClCompile Include="Public\Memory\Core.Memory-MemoryManager.ixx" />
-    <ClCompile Include="Public\Memory\Core.Memory-SmartPtr.ixx" />
-    <ClCompile Include="Public\Memory\Core.Memory.ixx" />
-    <ClCompile Include="Public\System\Core.System-Layer.ixx" />
-    <ClCompile Include="Public\System\Core.System-Manager.ixx" />
-    <ClCompile Include="Public\System\Core.System.ixx" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="Public\Core.h" />
-    <ClInclude Include="Public\Memory\Core.Memory.hpp" />
-  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{cadb2da2-56fd-47f9-817b-aafa42378dd9}</ProjectGuid>
-    <RootNamespace>Core</RootNamespace>
+    <ProjectGuid>{558eb959-b88f-4796-b989-c8ab8f43a1b7}</ProjectGuid>
+    <RootNamespace>imgui</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -108,21 +70,15 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <LinkIncremental>true</LinkIncremental>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <LinkIncremental>false</LinkIncremental>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+    <IncludePath>./includes/;$(SolutionDir)Engine\Source\ThirdParty\glfw\include;$(SolutionDir)Engine\Source\ThirdParty\vulkan\Include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+    <IncludePath>./includes/;$(SolutionDir)Engine\Source\ThirdParty\glfw\include;$(SolutionDir)Engine\Source\ThirdParty\vulkan\Include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -156,7 +112,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_NEED_LOG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
@@ -171,7 +127,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;_NEED_LOG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
@@ -182,6 +138,25 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="includes\backends\imgui_impl_glfw.cpp" />
+    <ClCompile Include="includes\backends\imgui_impl_vulkan.cpp" />
+    <ClCompile Include="includes\imgui.cpp" />
+    <ClCompile Include="includes\imgui_demo.cpp" />
+    <ClCompile Include="includes\imgui_draw.cpp" />
+    <ClCompile Include="includes\imgui_tables.cpp" />
+    <ClCompile Include="includes\imgui_widgets.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="includes\backends\imgui_impl_glfw.h" />
+    <ClInclude Include="includes\backends\imgui_impl_vulkan.h" />
+    <ClInclude Include="includes\imconfig.h" />
+    <ClInclude Include="includes\imgui.h" />
+    <ClInclude Include="includes\imgui_internal.h" />
+    <ClInclude Include="includes\imstb_rectpack.h" />
+    <ClInclude Include="includes\imstb_textedit.h" />
+    <ClInclude Include="includes\imstb_truetype.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

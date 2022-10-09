@@ -260,9 +260,6 @@
     <ProjectReference Include="..\Core\Core.vcxproj">
       <Project>{cadb2da2-56fd-47f9-817b-aafa42378dd9}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\GFX\GFX.vcxproj">
-      <Project>{587f5443-b048-4a7a-b773-fe5b6ba0728a}</Project>
-    </ProjectReference>
     <ProjectReference Include="..\Image\Image.vcxproj">
       <Project>{0fc8b275-7514-4117-93a1-7e9c112b4b70}</Project>
     </ProjectReference>

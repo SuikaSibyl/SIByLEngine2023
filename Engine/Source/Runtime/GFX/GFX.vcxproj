@@ -137,12 +137,28 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Core\Core.vcxproj">
+      <Project>{cadb2da2-56fd-47f9-817b-aafa42378dd9}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\Math\Math.vcxproj">
       <Project>{0eec40c7-807a-4d99-99a6-e3d329aea25d}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\RHI\RHI.vcxproj">
+      <Project>{795eb3a2-9f78-4ab8-833f-2b02fbc175f9}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\Tracer\Tracer.vcxproj">
+      <Project>{2b8cdd09-aa57-4f5f-ab1b-6595ba7d1528}</Project>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Public\Component\GFX.Components-MeshReference.ixx" />
+    <ClCompile Include="Public\Component\GFX.Components-MeshRenderer.ixx" />
+    <ClCompile Include="Public\Component\GFX.Components.ixx" />
     <ClCompile Include="Public\Core\GFX.ixx" />
+    <ClCompile Include="Public\Resource\GFX.Resources-Material.ixx" />
+    <ClCompile Include="Public\Resource\GFX.Resources-Mesh.ixx" />
+    <ClCompile Include="Public\Resource\GFX.Resources-Texture.ixx" />
+    <ClCompile Include="Public\Resource\GFX.Resources.ixx" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

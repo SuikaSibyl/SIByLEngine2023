@@ -17,6 +17,7 @@ namespace SIByL::RHI
 	struct Device; 					struct DeviceDescriptor;
 	// *************************|****************************************
 	// Buffers					|	Buffers								|
+	export using BufferUsagesFlags = uint32_t;
 	struct Buffer;					struct BufferDescriptor;
 	// *************************|****************************************
 	// Textures & Views			|   Textures & Views					|
@@ -58,7 +59,16 @@ namespace SIByL::RHI
 	struct MemoryBarrier;			struct MemoryBarrierDescriptor;
 	struct Semaphore;
 	// *************************|****************************************
-
+	// Ray Tracing				|   Ray Tracing							|
+	struct BLAS;					struct BLASDescriptor;
+	struct TLAS;					struct TLASDescriptor;
+	struct RayTracingPipeline;		struct RayTracingPipelineDescriptor;
+	struct RayTracingPassEncoder;	struct RayTracingPassDescriptor;
+	// *************************|****************************************
+	// Extensions				|   Extensions							|
+	struct RayTracingExtension;
+	// *************************|****************************************
+	
 	// 
 	// ===========================================================================
 	// Initialization Interface
@@ -80,6 +90,7 @@ namespace SIByL::RHI
 		MESH_SHADER				= 1 << 1,
 		FRAGMENT_BARYCENTRIC	= 1 << 2,
 		SAMPLER_FILTER_MIN_MAX	= 1 << 3,
+		RAY_TRACING				= 1 << 4,
 	};
 
 	export enum struct PowerPreference {
@@ -193,14 +204,28 @@ namespace SIByL::RHI
 		virtual auto createMultiFrameFlights(MultiFrameFlightsDescriptor const& desc) noexcept
 			-> std::unique_ptr<MultiFrameFlights> = 0;
 		/** create a command encoder */
-		virtual auto createCommandEncoder(CommandEncoderDescriptor const& desc) noexcept 
+		virtual auto createCommandEncoder(CommandEncoderDescriptor const& desc) noexcept
 			-> std::unique_ptr<CommandEncoder> = 0;
 		/** create a render bundle encoder */
-		virtual auto createRenderBundleEncoder(CommandEncoderDescriptor const& desc) noexcept 
+		virtual auto createRenderBundleEncoder(CommandEncoderDescriptor const& desc) noexcept
 			-> std::unique_ptr<RenderBundleEncoder> = 0;
 		// Create query sets
 		// ---------------------------
 		virtual auto createQuerySet(QuerySetDescriptor const& desc) noexcept -> std::unique_ptr<QuerySet> = 0;
+		// Create ray tracing objects
+		// ---------------------------
+		/** create a BLAS */
+		virtual auto createBLAS(BLASDescriptor const& desc) noexcept -> std::unique_ptr<BLAS> = 0;
+		/** create a TLAS */
+		virtual auto createTLAS(TLASDescriptor const& desc) noexcept -> std::unique_ptr<TLAS> = 0;
+		// Get extensions
+		// ---------------------------
+		/** fetch a ray tracing extension is available */
+		virtual auto getRayTracingExtension() noexcept -> RayTracingExtension* = 0;
+		// Create utilities
+		// ---------------------------
+		/** create a device local buffer with initialzie value */
+		auto createDeviceLocalBuffer(void* data, uint32_t size, BufferUsagesFlags usage) noexcept -> std::unique_ptr<Buffer>;
 	};
 
 	struct DeviceDescriptor {};
@@ -239,8 +264,6 @@ namespace SIByL::RHI
 	export using ArrayBuffer = void*;
 
 	/** Determine how a GPUBuffer may be used after its creation. */
-	export using BufferUsagesFlags = uint32_t;
-	/** Determine how a GPUBuffer may be used after its creation. */
 	export enum struct BufferUsage {
 		MAP_READ		= 1 << 0,
 		MAP_WRITE		= 1 << 1,
@@ -252,6 +275,10 @@ namespace SIByL::RHI
 		STORAGE			= 1 << 7,
 		INDIRECT		= 1 << 8,
 		QUERY_RESOLVE	= 1 << 9,
+		SHADER_DEVICE_ADDRESS = 1 << 10,
+		ACCELERATION_STRUCTURE_STORAGE = 1 << 11,
+		ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY = 1 << 12,
+		SHADER_BINDING_TABLE = 1 << 13,
 	};
 
 	/** Determine the memory properties. */
@@ -401,13 +428,40 @@ namespace SIByL::RHI
 		COPY_DST			= 1 << 1,
 		TEXTURE_BINDING		= 1 << 2,
 		STORAGE_BINDING		= 1 << 3,
-		RENDER_ATTACHMENT	= 1 << 4,
+		COLOR_ATTACHMENT	= 1 << 4,
+		DEPTH_ATTACHMENT	= 1 << 5,
+		TRANSIENT_ATTACHMENT= 1 << 6,
+		INPUT_ATTACHMENT	= 1 << 7,
 	};
 
 	export struct Extend3D {
 		uint32_t width;
 		uint32_t height;
 		uint32_t depthOrArrayLayers;
+	};
+
+	export enum struct TextureLayout :uint32_t {
+		UNDEFINED,
+		GENERAL,
+		COLOR_ATTACHMENT_OPTIMAL,
+		DEPTH_STENCIL_ATTACHMENT_OPTIMA,
+		DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+		SHADER_READ_ONLY_OPTIMAL,
+		TRANSFER_SRC_OPTIMAL,
+		TRANSFER_DST_OPTIMAL,
+		PREINITIALIZED,
+		DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL,
+		DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL,
+		DEPTH_ATTACHMENT_OPTIMAL,
+		DEPTH_READ_ONLY_OPTIMAL,
+		STENCIL_ATTACHMENT_OPTIMAL,
+		STENCIL_READ_ONLY_OPTIMAL,
+		PRESENT_SRC,
+		SHARED_PRESENT,
+		FRAGMENT_DENSITY_MAP_OPTIMAL,
+		FRAGMENT_SHADING_RATE_ATTACHMENT_OPTIMAL,
+		READ_ONLY_OPTIMAL,
+		ATTACHMENT_OPTIMAL,
 	};
 
 	export struct Texture {
@@ -573,6 +627,8 @@ namespace SIByL::RHI
 	export struct BindGroupLayout {
 		/** virtual destructor */
 		virtual ~BindGroupLayout() = default;
+		/** get BindGroup Layout Descriptor */
+		virtual auto getBindGroupLayoutDescriptor() const noexcept -> BindGroupLayoutDescriptor const& = 0;
 	};
 
 	/** Determine how a Texture may be used after its creation. */
@@ -587,6 +643,7 @@ namespace SIByL::RHI
 		CLOSEST_HIT  = 1 << 5,
 		INTERSECTION = 1 << 6,
 		ANY_HIT		 = 1 << 7,
+		CALLABLE	 = 1 << 8,
 	};
 
 	export enum struct BindingResourceType {
@@ -646,6 +703,10 @@ namespace SIByL::RHI
 
 	};
 
+	export struct AccelerationStructureBindingLayout {
+
+	};
+
 	/**
 	* Describes a single shader resource binding 
 	* to be included in a GPUBindGroupLayout.
@@ -662,6 +723,7 @@ namespace SIByL::RHI
 		std::optional<TextureBindingLayout>			texture;
 		std::optional<StorageTextureBindingLayout>	storageTexture;
 		std::optional<ExternalTextureBindingLayout> externalTexture;
+		std::optional<AccelerationStructureBindingLayout> accelerationStructure;
 	};
 
 	export struct BindGroupLayoutDescriptor {
@@ -1016,10 +1078,12 @@ namespace SIByL::RHI
 		virtual auto beginRenderPass(RenderPassDescriptor const& desc) noexcept -> std::unique_ptr<RenderPassEncoder> = 0;
 		/** Begins encoding a compute pass described by descriptor. */
 		virtual auto beginComputePass(ComputePassDescriptor const& desc) noexcept -> std::unique_ptr<ComputePassEncoder> = 0;
-		/**
-		* Encode a command into the CommandEncoder that copies data from 
-		* a sub-region of a GPUBuffer to a sub-region of another Buffer.
-		*/
+		/** Begins encoding a ray tracing pass described by descriptor. */
+		virtual auto beginRayTracingPass(RayTracingPassDescriptor const& desc) noexcept -> std::unique_ptr<RayTracingPassEncoder> = 0;
+		/** Insert a barrier. */
+		virtual auto pipelineBarrier(BarrierDescriptor const& desc) noexcept -> void = 0;
+		/** Encode a command into the CommandEncoder that copies data from 
+		* a sub-region of a GPUBuffer to a sub-region of another Buffer. */
 		virtual auto copyBufferToBuffer(
 			Buffer* source,
 			size_t	sourceOffset,
@@ -1028,35 +1092,27 @@ namespace SIByL::RHI
 			size_t	size) noexcept -> void = 0;
 		/** Encode a command into the CommandEncoder that fills a sub-region of a Buffer with zeros. */
 		virtual auto clearBuffer(Buffer* buffer, size_t	offset, size_t	size) noexcept -> void = 0;
-		/**
-		* Encode a command into the CommandEncoder that copies data from a sub-region of a Buffer 
-		* to a sub-region of one or multiple continuous texture subresources.
-		*/
+		/** Encode a command into the CommandEncoder that copies data from a sub-region of a Buffer 
+		* to a sub-region of one or multiple continuous texture subresources. */
 		virtual auto copyBufferToTexture(
 			ImageCopyBuffer  const& source,
 			ImageCopyTexture const& destination,
 			Extend3D		 const& copySize) noexcept -> void = 0;
-		/**
-		* Encode a command into the CommandEncoder that copies data from a sub-region of 
-		* one or multiple continuous texture subresourcesto a sub-region of a Buffer.
-		*/
+		/** Encode a command into the CommandEncoder that copies data from a sub-region of 
+		* one or multiple continuous texture subresourcesto a sub-region of a Buffer. */
 		virtual auto copyTextureToBuffer(
 			ImageCopyTexture const& source,
 			ImageCopyBuffer  const& destination,
 			Extend3D		 const& copySize) noexcept -> void = 0;
-		/**
-		* Encode a command into the CommandEncoder that copies data from 
+		/** Encode a command into the CommandEncoder that copies data from 
 		* a sub-region of one or multiple contiguous texture subresources to
-		* another sub-region of one or multiple continuous texture subresources.
-		*/
+		* another sub-region of one or multiple continuous texture subresources. */
 		virtual auto copyTextureToTexture(
 			ImageCopyTexture const& source,
 			ImageCopyTexture const& destination,
 			Extend3D		 const& copySize) noexcept -> void = 0;
-		/**
-		* Writes a timestamp value into a querySet when all 
-		* previous commands have completed executing.
-		*/
+		/** Writes a timestamp value into a querySet when all 
+		* previous commands have completed executing. */
 		virtual auto writeTimestamp(
 			QuerySet* querySet,
 			uint32_t  queryIndex) noexcept -> void = 0;
@@ -1081,7 +1137,9 @@ namespace SIByL::RHI
 		uint32_t rowsPerImage;
 	};
 
-	export struct ImageCopyBuffer: ImageDataLayout {};
+	export struct ImageCopyBuffer: ImageDataLayout {
+		Buffer* buffer;
+	};
 	
 	export using IntegerCoordinate = uint32_t;
 
@@ -1097,13 +1155,13 @@ namespace SIByL::RHI
 		IntegerCoordinate z = 0;
 	};
 
-	export using Origin3D = std::variant<Origin3DDict, std::vector<IntegerCoordinate>>;
+	export using Origin3D = Origin3DDict;
 	
 	export struct ImageCopyTexture {
 		Texture* texutre;
 		uint32_t mipLevel = 0;
 		Origin3D origin = {};
-		TextureAspect aspect;
+		TextureAspectFlags aspect;
 	};
 
 	export struct ImageCopyTextureTagged :public ImageCopyTexture {
@@ -1318,6 +1376,27 @@ namespace SIByL::RHI
 	};
 
 	// Bundles Interface
+	// ===========================================================================
+	// Ray Tracing Interface
+
+	export struct RayTracingPassEncoder :public BindingCommandMixin {
+		/** virtual destructor */
+		virtual ~RayTracingPassEncoder() = default;
+		/** set a ray tracing pipeline as the current pipeline */
+		virtual auto setPipeline(RayTracingPipeline* pipeline) noexcept -> void = 0;
+		/** trace rays using current ray tracing pipeline */
+		virtual auto traceRays(uint32_t width, uint32_t height, uint32_t depth) noexcept -> void = 0;
+		/** trace rays using current ray tracing pipeline by an indirect buffer */
+		virtual auto traceRaysIndirect(Buffer* indirectBuffer, uint64_t indirectOffset) noexcept -> void = 0;
+		/**  end the ray tracing pass */
+		virtual auto end() noexcept -> void = 0;
+	};
+
+	export struct RayTracingPassDescriptor {
+
+	};
+
+	// Ray Tracing Interface
 	// ===========================================================================
 	// Queue Interface
 
@@ -1572,7 +1651,7 @@ namespace SIByL::RHI
 		AccessFlags dstAccessMask;
 	};
 
-	export struct BufferMemoryBarrierDesc {
+	export struct BufferMemoryBarrierDescriptor {
 		// buffer memory barrier mask
 		Buffer* buffer;
 		AccessFlags srcAccessMask;
@@ -1590,40 +1669,16 @@ namespace SIByL::RHI
 		uint32_t layerCount;
 	};
 
-	export enum class ImageLayout :uint32_t {
-		UNDEFINED,
-		GENERAL,
-		COLOR_ATTACHMENT_OPTIMAL,
-		DEPTH_STENCIL_ATTACHMENT_OPTIMA,
-		DEPTH_STENCIL_READ_ONLY_OPTIMAL,
-		SHADER_READ_ONLY_OPTIMAL,
-		TRANSFER_SRC_OPTIMAL,
-		TRANSFER_DST_OPTIMAL,
-		PREINITIALIZED,
-		DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL,
-		DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL,
-		DEPTH_ATTACHMENT_OPTIMAL,
-		DEPTH_READ_ONLY_OPTIMAL,
-		STENCIL_ATTACHMENT_OPTIMAL,
-		STENCIL_READ_ONLY_OPTIMAL,
-		PRESENT_SRC,
-		SHARED_PRESENT,
-		FRAGMENT_DENSITY_MAP_OPTIMAL,
-		FRAGMENT_SHADING_RATE_ATTACHMENT_OPTIMAL,
-		READ_ONLY_OPTIMAL,
-		ATTACHMENT_OPTIMAL,
-	};
-
-	export struct ImageMemoryBarrierDesc {
+	export struct TextureMemoryBarrierDescriptor {
 		// specify image object
-		Texture* image;
+		Texture* texture;
 		ImageSubresourceRange subresourceRange;
 		// memory barrier mask
 		AccessFlags srcAccessMask;
 		AccessFlags dstAccessMask;
 		// only if layout transition is need
-		ImageLayout oldLayout;
-		ImageLayout newLayout;
+		TextureLayout oldLayout;
+		TextureLayout newLayout;
 		// only if queue transition is need
 		Queue* srcQueue = nullptr;
 		Queue* dstQueue = nullptr;
@@ -1663,25 +1718,58 @@ namespace SIByL::RHI
 	* Basically, we could use the NONE flag.
 	*/
 
+	/** pipeline stage enums */
+	export using PipelineStageFlags = uint32_t;
+	/** pipeline stage enums */
+	export enum class PipelineStages :uint32_t {
+		TOP_OF_PIPE_BIT = 0x00000001,
+		DRAW_INDIRECT_BIT = 0x00000002,
+		VERTEX_INPUT_BIT = 0x00000004,
+		VERTEX_SHADER_BIT = 0x00000008,
+		TESSELLATION_CONTROL_SHADER_BIT = 0x00000010,
+		TESSELLATION_EVALUATION_SHADER_BIT = 0x00000020,
+		GEOMETRY_SHADER_BIT = 0x00000040,
+		FRAGMENT_SHADER_BIT = 0x00000080,
+		EARLY_FRAGMENT_TESTS_BIT = 0x00000100,
+		LATE_FRAGMENT_TESTS_BIT = 0x00000200,
+		COLOR_ATTACHMENT_OUTPUT_BIT = 0x00000400,
+		COMPUTE_SHADER_BIT = 0x00000800,
+		TRANSFER_BIT = 0x00001000,
+		BOTTOM_OF_PIPE_BIT = 0x00002000,
+		HOST_BIT = 0x00004000,
+		ALL_GRAPHICS_BIT = 0x00008000,
+		ALL_COMMANDS_BIT = 0x00010000,
+		TRANSFORM_FEEDBACK_BIT_EXT = 0x01000000,
+		CONDITIONAL_RENDERING_BIT_EXT = 0x00040000,
+		ACCELERATION_STRUCTURE_BUILD_BIT_KHR = 0x02000000,
+		RAY_TRACING_SHADER_BIT_KHR = 0x00200000,
+		TASK_SHADER_BIT_NV = 0x00080000,
+		MESH_SHADER_BIT_NV = 0x00100000,
+		FRAGMENT_DENSITY_PROCESS_BIT = 0x00800000,
+		FRAGMENT_SHADING_RATE_ATTACHMENT_BIT = 0x00400000,
+		COMMAND_PREPROCESS_BIT = 0x00020000,
+	};
+
+
 	/** dependency of barriers */
 	export using DependencyTypeFlags = uint32_t;
 	/** dependency of barriers */
 	export enum class DependencyType :uint32_t {
-		NONE			 = 0 << 0,
-		BY_REGION_BIT	 = 1 << 0,
-		VIEW_LOCAL_BIT	 = 1 << 1,
+		NONE = 0 << 0,
+		BY_REGION_BIT = 1 << 0,
+		VIEW_LOCAL_BIT = 1 << 1,
 		DEVICE_GROUP_BIT = 1 << 2,
 	};
 
 	export struct BarrierDescriptor {
 		// Necessary (Execution Barrier)
-		ShaderStagesFlags	srcStageMask;
-		ShaderStagesFlags	dstStageMask;
+		PipelineStageFlags	srcStageMask;
+		PipelineStageFlags	dstStageMask;
 		DependencyTypeFlags dependencyType;
 		// Optional (Memory Barriers)
 		std::vector<MemoryBarrier*> memoryBarriers;
-		std::vector<BufferMemoryBarrier*> bufferMemoryBarriers;
-		std::vector<ImageMemoryBarrier*> imageMemoryBarriers;
+		std::vector<BufferMemoryBarrierDescriptor> bufferMemoryBarriers;
+		std::vector<TextureMemoryBarrierDescriptor> textureMemoryBarriers;
 	};
 
 	/**
@@ -1709,6 +1797,80 @@ namespace SIByL::RHI
 	* │  OpenGL      │   Varies by OS    │
 	* ╰──────────────┴───────────────────╯
 	*/
+
 	export struct Semaphore {};
 
+	// Synchronization Interface
+	// ===========================================================================
+	// Ray Tracing Interface
+
+	export struct BLAS {
+		/** virtual destructor */
+		virtual ~BLAS() = default;
+	};
+
+	export struct BLASDescriptor {
+		Buffer*		vertexBuffer   = nullptr;
+		Buffer*		indexBuffer    = nullptr;
+		uint32_t	maxVertex	   = 0;
+		uint32_t	primitiveCount = 0;
+		IndexFormat	indexFormat    = IndexFormat::UINT16_t;
+	};
+
+	export struct TLAS {
+		/** virtual destructor */
+		virtual ~TLAS() = default;
+	};
+
+	export struct TLASDescriptor {
+		std::vector<BLAS*> blas;
+	};
+
+	export struct RayTracingPipeline {
+		/** virtual destructor */
+		virtual ~RayTracingPipeline() = default;
+	};
+	
+	export struct RayTracingPipelineDescriptor {
+		std::vector<ShaderModule*> shaders;
+		PipelineLayout* pipelineLayout;
+	};
+
+#pragma region RHI_DEVICE_UTILITY_IMPL
+
+	auto Device::createDeviceLocalBuffer(void* data, uint32_t size, BufferUsagesFlags usage) noexcept -> std::unique_ptr<Buffer> {
+		std::unique_ptr<Buffer> buffer = nullptr;
+		// create vertex buffer
+		RHI::BufferDescriptor descriptor;
+		descriptor.size = size;
+		descriptor.usage = usage | (uint32_t)RHI::BufferUsage::COPY_DST;
+		descriptor.memoryProperties = (uint32_t)RHI::MemoryProperty::DEVICE_LOCAL_BIT;
+		descriptor.mappedAtCreation = true;
+		buffer = createBuffer(descriptor);
+		// create staging buffer
+		RHI::BufferDescriptor stagingBufferDescriptor;
+		stagingBufferDescriptor.size = size;
+		stagingBufferDescriptor.usage = (uint32_t)RHI::BufferUsage::COPY_SRC;
+		stagingBufferDescriptor.memoryProperties = (uint32_t)RHI::MemoryProperty::HOST_VISIBLE_BIT
+			| (uint32_t)RHI::MemoryProperty::HOST_COHERENT_BIT;
+		stagingBufferDescriptor.mappedAtCreation = true;
+		std::unique_ptr<RHI::Buffer> stagingBuffer = createBuffer(stagingBufferDescriptor);
+		std::future<bool> mapped = stagingBuffer->mapAsync(0, 0, descriptor.size);
+		if (mapped.get()) {
+			void* mapdata = stagingBuffer->getMappedRange(0, descriptor.size);
+			memcpy(mapdata, data, (size_t)descriptor.size);
+			stagingBuffer->unmap();
+		}
+		std::unique_ptr<RHI::CommandEncoder> commandEncoder = createCommandEncoder({ nullptr });
+		commandEncoder->copyBufferToBuffer(stagingBuffer.get(), 0, buffer.get(), 0, descriptor.size);
+		getGraphicsQueue()->submit({ commandEncoder->finish({}) });
+		getGraphicsQueue()->waitIdle();
+		return buffer;
+	}
+	
+#pragma endregion
+
+	export struct RayTracingExtension {
+
+	};
 }
