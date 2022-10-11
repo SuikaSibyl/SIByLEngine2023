@@ -11,7 +11,7 @@ namespace SIByL::Image
 		COLOR_R32G32B32_FLOAT,
 	};
 
-	export using COLOR_R8G8B8_UINT = Math::Vector3<uint8_t>;
-	export using COLOR_R8G8B8A8_UINT = Math::Vector4<uint8_t>;
-	export using COLOR_R32G32B32_FLOAT = Math::Vector3<float>;
+	export struct COLOR_R8G8B8_UINT :public Math::Vector3<uint8_t> {};
+	export struct COLOR_R8G8B8A8_UINT :public Math::Vector4<uint8_t> {};
+	export struct COLOR_R32G32B32_FLOAT :public Math::Vector3<float> {};
 }

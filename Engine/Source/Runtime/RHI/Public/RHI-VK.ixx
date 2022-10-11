@@ -255,6 +255,8 @@ namespace SIByL::RHI
 		auto getDeviceExtensions() noexcept -> std::vector<const char*>& { return context->getDeviceExtensions(); }
 		/** get All Device Extensions required */
 		auto findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) noexcept -> uint32_t;
+		/* get VkPhysicalDeviceProperties */
+		auto getVkPhysicalDeviceProperties() const noexcept -> VkPhysicalDeviceProperties const& { return properties; }
 	private:
 		/** the context the adapter is requested from */
 		Context_VK* context = nullptr;
@@ -266,6 +268,8 @@ namespace SIByL::RHI
 		float timestampPeriod = 0.0f;
 		/** QueueFamilyIndices_VK */
 		QueueFamilyIndices_VK queueFamilyIndices;
+		/** vulkan physical device properties */
+		VkPhysicalDeviceProperties properties = {};
 	};
 
 	////////////////////////////////////
@@ -918,7 +922,8 @@ namespace SIByL::RHI
 				info.description = properties.deviceID;
 				return info; }())
 		, timestampPeriod(properties.limits.timestampPeriod)
-					, queueFamilyIndices(findQueueFamilies(context, physicalDevice))
+		, queueFamilyIndices(findQueueFamilies(context, physicalDevice))
+		, properties(properties)
 	{}
 
 	auto Adapter_VK::requestDevice() noexcept -> std::unique_ptr<Device> {
@@ -1071,14 +1076,6 @@ namespace SIByL::RHI
 		if (usage & (uint32_t)BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY)	flags |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
 		if (usage & (uint32_t)BufferUsage::SHADER_BINDING_TABLE)	flags |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
 		return flags;
-	}
-
-	auto Device_VK::createTexture(TextureDescriptor const& desc) noexcept -> std::unique_ptr<Texture> {
-		return nullptr;
-	}
-
-	auto Device_VK::createSampler(SamplerDescriptor const& desc) noexcept -> std::unique_ptr<Sampler> {
-		return nullptr;
 	}
 
 	auto Device_VK::importExternalTexture(ExternalTextureDescriptor const& desc) noexcept -> std::unique_ptr<ExternalTexture> {
@@ -1459,8 +1456,8 @@ namespace SIByL::RHI
 		case SIByL::RHI::TextureFormat::RGB9E5_UFLOAT:		return VK_FORMAT_E5B9G9R9_UFLOAT_PACK32; break;
 		case SIByL::RHI::TextureFormat::BGRA8_UNORM_SRGB:	return VK_FORMAT_B8G8R8A8_SRGB; break;
 		case SIByL::RHI::TextureFormat::BGRA8_UNORM:		return VK_FORMAT_B8G8R8A8_UNORM; break;
-		case SIByL::RHI::TextureFormat::RGBA8_SINT:			return VK_FORMAT_B8G8R8A8_SINT; break;
-		case SIByL::RHI::TextureFormat::RGBA8_UINT:			return VK_FORMAT_B8G8R8A8_UINT; break;
+		case SIByL::RHI::TextureFormat::RGBA8_SINT:			return VK_FORMAT_R8G8B8A8_SINT; break;
+		case SIByL::RHI::TextureFormat::RGBA8_UINT:			return VK_FORMAT_R8G8B8A8_UINT; break;
 		case SIByL::RHI::TextureFormat::RGBA8_SNORM:		return VK_FORMAT_R8G8B8A8_SNORM; break;
 		case SIByL::RHI::TextureFormat::RGBA8_UNORM_SRGB:	return VK_FORMAT_R8G8B8A8_SRGB; break;
 		case SIByL::RHI::TextureFormat::RGBA8_UNORM:		return VK_FORMAT_R8G8B8A8_UNORM; break;
@@ -1575,6 +1572,10 @@ namespace SIByL::RHI
 
 	auto Texture_VK::format() const noexcept -> TextureFormat {
 		return descriptor.format;
+	}
+
+	auto Device_VK::createTexture(TextureDescriptor const& desc) noexcept -> std::unique_ptr<Texture> {
+		return std::make_unique<Texture_VK>(this, desc);
 	}
 
 #pragma endregion
@@ -1716,11 +1717,67 @@ namespace SIByL::RHI
 	// Samplers Interface
 
 	export struct Sampler_VK :public Sampler {
+		/** initialization */
+		Sampler_VK(SamplerDescriptor const& desc, Device_VK* device);
+		/** virtual destructor */
+		virtual ~Sampler_VK();
 		/** vulkan Texture Sampler */
 		VkSampler textureSampler;
 		/** the device this sampler is created on */
 		Device_VK* device = nullptr;
 	};
+
+#pragma region VK_SAMPLER_IMPL
+
+	inline auto getVkFilter(FilterMode mode) noexcept -> VkFilter {
+		switch (mode) {
+		case SIByL::RHI::FilterMode::LINEAR:	return VkFilter::VK_FILTER_LINEAR;
+		case SIByL::RHI::FilterMode::NEAREST:	return VkFilter::VK_FILTER_NEAREST;
+		default: return VkFilter::VK_FILTER_MAX_ENUM; }
+	}
+
+	inline auto getVkSamplerAddressMode(AddressMode address) noexcept -> VkSamplerAddressMode {
+		switch (address) {
+		case SIByL::RHI::AddressMode::MIRROR_REPEAT:	return VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+		case SIByL::RHI::AddressMode::REPEAT:			return VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		case SIByL::RHI::AddressMode::CLAMP_TO_EDGE:	return VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		default: return VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_MAX_ENUM; }
+	}
+
+	Sampler_VK::Sampler_VK(SamplerDescriptor const& desc, Device_VK* device)
+		: device(device) 
+	{
+		VkSamplerCreateInfo samplerInfo = {};
+		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		samplerInfo.magFilter = getVkFilter(desc.magFilter);
+		samplerInfo.minFilter = getVkFilter(desc.minFilter);
+		samplerInfo.addressModeU = getVkSamplerAddressMode(desc.addressModeU);
+		samplerInfo.addressModeV = getVkSamplerAddressMode(desc.addressModeV);
+		samplerInfo.addressModeW = getVkSamplerAddressMode(desc.addressModeW);
+		samplerInfo.anisotropyEnable = VK_TRUE;
+		samplerInfo.maxAnisotropy = device->getAdapterVk()->getVkPhysicalDeviceProperties().limits.maxSamplerAnisotropy;
+		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+		samplerInfo.unnormalizedCoordinates = VK_FALSE;
+		samplerInfo.compareEnable = VK_FALSE;
+		samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		samplerInfo.mipLodBias = 0.0f;
+		samplerInfo.minLod = 0.0f;
+		samplerInfo.maxLod = 0.0f;
+		if (vkCreateSampler(device->getVkDevice(), &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS) {
+			Core::LogManager::Error("VULKAN :: failed to create texture sampler!");
+		}
+	}
+
+	Sampler_VK::~Sampler_VK() {
+		vkDestroySampler(device->getVkDevice(), textureSampler, nullptr);
+	}
+
+	auto Device_VK::createSampler(SamplerDescriptor const& desc) noexcept -> std::unique_ptr<Sampler> {
+		return std::make_unique<Sampler_VK>(desc, this);
+	}
+
+#pragma endregion
 
 	// Samplers Interface
 	// ===========================================================================
@@ -2255,6 +2312,7 @@ namespace SIByL::RHI
 	inline auto getVkAttachmentStoreOp(StoreOp op) noexcept -> VkAttachmentStoreOp {
 		switch (op)
 		{
+		case SIByL::RHI::StoreOp::DONT_CARE: return VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		case SIByL::RHI::StoreOp::DISCARD: return VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		case SIByL::RHI::StoreOp::STORE: return VK_ATTACHMENT_STORE_OP_STORE;
 		default: return VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -2264,6 +2322,7 @@ namespace SIByL::RHI
 	RenderPass_VK::RenderPass_VK(Device_VK* device, RenderPassDescriptor const& desc)
 		: device(device) 
 	{
+		// color attachments
 		std::vector<VkAttachmentDescription> attachments;
 		for (auto const& colorAttach : desc.colorAttachments) {
 			VkAttachmentDescription colorAttachment{};
@@ -2273,20 +2332,38 @@ namespace SIByL::RHI
 			colorAttachment.storeOp = getVkAttachmentStoreOp(colorAttach.storeOp);
 			colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 			colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-			colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-			colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+			colorAttachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			colorAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			attachments.emplace_back(colorAttachment);
 		}
 		VkAttachmentReference colorAttachmentRef{};
 		colorAttachmentRef.attachment = 0;
 		colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		// depth attachment
+		if (desc.depthStencilAttachment.view != nullptr) {
+			VkAttachmentDescription depthAttachment = {};
+			depthAttachment.format = getVkFormat(static_cast<TextureView_VK*>(desc.depthStencilAttachment.view)->descriptor.format);
+			depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+			depthAttachment.loadOp = getVkAttachmentLoadOp(desc.depthStencilAttachment.depthLoadOp);
+			depthAttachment.storeOp = getVkAttachmentStoreOp(desc.depthStencilAttachment.depthStoreOp);
+			depthAttachment.stencilLoadOp = getVkAttachmentLoadOp(desc.depthStencilAttachment.stencilLoadOp);
+			depthAttachment.stencilStoreOp = getVkAttachmentStoreOp(desc.depthStencilAttachment.stencilStoreOp);
+			depthAttachment.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			depthAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			attachments.emplace_back(depthAttachment);
+		}
+		VkAttachmentReference depthAttachmentRef = {};
+		depthAttachmentRef.attachment = 1;
+		depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		// subpass
 		VkSubpassDescription subpass{};
 		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 		subpass.colorAttachmentCount = 1;
 		subpass.pColorAttachments = &colorAttachmentRef;
+		subpass.pDepthStencilAttachment = (desc.depthStencilAttachment.view != nullptr) ? &depthAttachmentRef : nullptr;
 		VkRenderPassCreateInfo renderPassInfo{};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-		renderPassInfo.attachmentCount = 1;
+		renderPassInfo.attachmentCount = attachments.size();
 		renderPassInfo.pAttachments = attachments.data();
 		renderPassInfo.subpassCount = 1;
 		renderPassInfo.pSubpasses = &subpass;
@@ -2899,11 +2976,12 @@ namespace SIByL::RHI
 		Semaphore* wait, Semaphore* signal, Fence* fence) noexcept -> void {
 		VkSubmitInfo submitInfo{};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		VkSemaphore waitSemaphores[] = { static_cast<Semaphore_VK*>(wait)->semaphore };
+		std::vector<VkSemaphore> waitSemaphores;
 		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 		if (wait) {
+			waitSemaphores.push_back(static_cast<Semaphore_VK*>(wait)->semaphore);
 			submitInfo.waitSemaphoreCount = 1;
-			submitInfo.pWaitSemaphores = waitSemaphores;
+			submitInfo.pWaitSemaphores = waitSemaphores.data();
 			submitInfo.pWaitDstStageMask = waitStages;
 		}
 		std::vector<VkCommandBuffer> vkCommandBuffers;
@@ -2911,10 +2989,11 @@ namespace SIByL::RHI
 			vkCommandBuffers.push_back((static_cast<CommandBuffer_VK*>(buffer))->commandBuffer);
 		submitInfo.commandBufferCount = vkCommandBuffers.size();
 		submitInfo.pCommandBuffers = vkCommandBuffers.data();
-		VkSemaphore signalSemaphores[] = { static_cast<Semaphore_VK*>(signal)->semaphore };
+		std::vector<VkSemaphore> signalSemaphores = {};
 		if (signal) {
+			signalSemaphores.push_back(static_cast<Semaphore_VK*>(signal)->semaphore);
 			submitInfo.signalSemaphoreCount = 1;
-			submitInfo.pSignalSemaphores = signalSemaphores;
+			submitInfo.pSignalSemaphores = signalSemaphores.data();
 		}
 		if (vkQueueSubmit(device->getVkGraphicsQueue().queue, 1, &submitInfo, static_cast<Fence_VK*>(fence)->fence) != VK_SUCCESS) {
 			Core::LogManager::Error("VULKAN :: failed to submit draw command buffer!");
@@ -2944,11 +3023,11 @@ namespace SIByL::RHI
 		virtual auto getCommandBuffer() noexcept -> CommandBuffer* override;
 		/** get current Image Available Semaphore */
 		virtual auto getImageAvailableSeamaphore() noexcept -> Semaphore* override {
-			return &imageAvailableSemaphores[currentFrame];
+			return swapChain ? &imageAvailableSemaphores[currentFrame] : nullptr;
 		}
 		/** get current Render Finished Semaphore */
 		virtual auto getRenderFinishedSeamaphore() noexcept -> Semaphore* override {
-			return &renderFinishedSemaphores[currentFrame];
+			return swapChain ? &renderFinishedSemaphores[currentFrame] : nullptr;
 		}
 		/** get current fence */
 		virtual auto getFence() noexcept -> Fence* override { return &inFlightFences[currentFrame]; }
@@ -2998,12 +3077,12 @@ namespace SIByL::RHI
 	auto MultiFrameFlights_VK::frameStart() noexcept -> void {
 		vkWaitForFences(device->getVkDevice(), 1, &inFlightFences[currentFrame].fence, VK_TRUE, UINT64_MAX);
 		vkResetFences(device->getVkDevice(), 1, &inFlightFences[currentFrame].fence);
-		vkAcquireNextImageKHR(device->getVkDevice(), swapChain->swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame].semaphore, VK_NULL_HANDLE, &imageIndex);
+		if(swapChain) vkAcquireNextImageKHR(device->getVkDevice(), swapChain->swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame].semaphore, VK_NULL_HANDLE, &imageIndex);
 		vkResetCommandBuffer(commandBuffers[currentFrame]->commandBuffer, 0);
 	}
 
 	auto MultiFrameFlights_VK::frameEnd() noexcept -> void {
-		device->getPresentQueue()->presentSwapChain(swapChain, imageIndex, &renderFinishedSemaphores[currentFrame]);
+		if (swapChain) device->getPresentQueue()->presentSwapChain(swapChain, imageIndex, &renderFinishedSemaphores[currentFrame]);
 		currentFrame = (currentFrame + 1) % maxFlightNum;
 	}
 
@@ -3087,7 +3166,7 @@ namespace SIByL::RHI
 		return nullptr;
 	}
 
-	inline auto getVkImageLayout(TextureLayout layout) noexcept -> VkImageLayout {
+	export inline auto getVkImageLayout(TextureLayout layout) noexcept -> VkImageLayout {
 		switch (layout)
 		{
 		case SIByL::RHI::TextureLayout::UNDEFINED:									return VK_IMAGE_LAYOUT_UNDEFINED;
@@ -3353,6 +3432,13 @@ namespace SIByL::RHI
 				(float)desc.colorAttachments[i].clearValue.b,
 				(float)desc.colorAttachments[i].clearValue.a,
 				} });
+		}
+		if (desc.depthStencilAttachment.view != nullptr) {
+			attachments.push_back(static_cast<TextureView_VK*>(desc.depthStencilAttachment.view)->imageView);
+			VkClearValue clearValue = {};
+			clearValue.color = { 0.f,0.f,0.f,0.f };
+			clearValue.depthStencil = { (float)desc.depthStencilAttachment.depthClearValue, (uint32_t)0 };
+			clearValues.push_back(clearValue);
 		}
 		VkFramebufferCreateInfo framebufferInfo{};
 		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;

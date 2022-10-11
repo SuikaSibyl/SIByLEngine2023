@@ -143,10 +143,10 @@ namespace SIByL::Tracer
 		// write RGB image
 		offset = 0;
 		for (Math::ipoint2 p : croppedPixelBounds) {
-			image[p.y][p.x] = Image::COLOR_R8G8B8_UINT{ 
+			image[p.y][p.x] = Image::COLOR_R8G8B8_UINT{ {
 				(uint8_t)(255 * rgb[3 * offset + 0]),
 				(uint8_t)(255 * rgb[3 * offset + 1]),
-				(uint8_t)(255 * rgb[3 * offset + 2])};
+				(uint8_t)(255 * rgb[3 * offset + 2])} };
 			++offset;
 		}
 	}

@@ -1,17 +1,22 @@
 #include <iostream>
 #include <chrono>
 #include <format>
+#include <array>
 #include <functional>
 #include <filesystem>
 #include <chrono>
 #include <memory>
+#include <typeinfo>
 #include <glad/glad.h>
+#include <imgui.h>
 import Core.Log;
 import Core.Memory;
 import Core.IO;
 import Core.Event;
 import Core.Timer;
 import Core.ECS;
+import Core.Resource.RuntimeManage;
+
 import Math.Vector;
 import Math.Geometry;
 import Math.Matrix;
@@ -41,9 +46,18 @@ import Platform.System;
 import Parallelism.Parallel;
 
 import RHI;
+import RHI.RHILayer;
+
+import GFX.Resource;
+import GFX.GFXManager;
 
 import Application.Root;
 import Application.Base;
+
+import Editor.Core;
+import Editor.Framework;
+import Editor.GFX;
+import Editor.Config;
 
 using namespace SIByL;
 using namespace SIByL::Core;
@@ -58,12 +72,23 @@ struct UniformBufferObject {
 struct SandBoxApplication :public Application::ApplicationBase {
 	/** Initialize the application */
 	virtual auto Init() noexcept -> void override {
-		bool initialized = context.init(mainWindow.get(), (uint32_t)RHI::ContextExtension::RAY_TRACING);
-		adapter = context.requestAdapter({});
-		device = adapter->requestDevice();
-		swapChain = device->createSwapChain({});
-		multiFrameFlights = device->createMultiFrameFlights({ 2, swapChain.get() });
-		mainWindow->connectResizeEvent([&](size_t w, size_t h)->void {swapChain->recreate(); });
+		// create optional layers: rhi, imgui, editor
+		rhiLayer = std::make_unique<RHI::RHILayer>(RHI::RHILayerDescriptor{
+				RHI::RHIBackend::Vulkan,
+				(uint32_t)RHI::ContextExtension::RAY_TRACING,
+				mainWindow.get(),
+				true
+			});
+		GFX::GFXManager::get()->rhiLayer = rhiLayer.get();
+		imguiLayer = std::make_unique<Editor::ImGuiLayer>(rhiLayer.get());
+		editorLayer = std::make_unique<Editor::EditorLayer>();
+		Editor::Config::buildEditorLayer(editorLayer.get());
+
+		// bind editor layer
+		editorLayer->getWidget<Editor::SceneWidget>()->bindScene(&scene);
+
+		RHI::Device* device = rhiLayer->getDevice();
+		RHI::SwapChain* swapchain = rhiLayer->getSwapChain();
 
 		struct Vertex {
 			Math::vec2 pos;
@@ -80,15 +105,18 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
 			{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
 		};
-		vertexBuffer = device->createDeviceLocalBuffer((void*)vertices.data(), sizeof(vertices[0]) * vertices.size(),
-			(uint32_t)RHI::BufferUsage::VERTEX);
-
 		std::vector<uint16_t> const indices = {
 			0, 1, 2, 2, 3, 0
 		};
-		indexBuffer = device->createDeviceLocalBuffer((void*)indices.data(), sizeof(indices[0]) * indices.size(),
+
+		GFX::Mesh mesh;
+		mesh.vertexBuffer = device->createDeviceLocalBuffer((void*)vertices.data(), sizeof(vertices[0]) * vertices.size(),
+			(uint32_t)RHI::BufferUsage::VERTEX);
+		mesh.indexBuffer = device->createDeviceLocalBuffer((void*)indices.data(), sizeof(indices[0]) * indices.size(),
 			(uint32_t)RHI::BufferUsage::INDEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
 			(uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY);
+		ResourceManager::get()->addResource<GFX::Mesh>(0, std::move(mesh));
+		GFX::Mesh* mesh_resource = ResourceManager::get()->getResource<GFX::Mesh>(0);
 
 		std::vector<VertexRT> const verticesRT = {
 			{{-0.5f, -0.5f, 0.0f}},
@@ -102,12 +130,46 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		blas = device->createBLAS(RHI::BLASDescriptor{
 			vertexBufferRT.get(),
-			indexBuffer.get(),
+			mesh_resource->indexBuffer.get(),
 			(uint32_t)verticesRT.size(),
 			2,
 			RHI::IndexFormat::UINT16_t });
 		tlas = device->createTLAS(RHI::TLASDescriptor{ {blas.get()} });
 
+		{
+			std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> img = Image::JPEG::fromJPEG("./content/texture.jpg");
+			Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
+			GFX::GFXManager::get()->registerTextureResource(guid, img.get());
+			GFX::Texture* texture = Core::ResourceManager::get()->getResource<GFX::Texture>(guid);
+			sampler = device->createSampler(RHI::SamplerDescriptor{});
+			imguiTexture = imguiLayer->createImGuiTexture(sampler.get(), texture->originalView.get(), RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL);
+		
+			//framebufferColorAttaches
+			framebufferColorAttaches[0] = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
+			framebufferColorAttaches[1] = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
+			framebufferDepthAttach = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
+			RHI::TextureDescriptor desc{
+				{720,480,1},
+				1, 1, RHI::TextureDimension::TEX2D,
+				RHI::TextureFormat::RGBA8_UNORM,
+				(uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT | (uint32_t)RHI::TextureUsage::TEXTURE_BINDING,
+				{ RHI::TextureFormat::RGBA8_UNORM }
+			};
+			GFX::GFXManager::get()->registerTextureResource(framebufferColorAttaches[0], desc);
+			GFX::GFXManager::get()->registerTextureResource(framebufferColorAttaches[1], desc);
+			desc.format = RHI::TextureFormat::DEPTH32_FLOAT;
+			desc.usage = (uint32_t)RHI::TextureUsage::DEPTH_ATTACHMENT | (uint32_t)RHI::TextureUsage::TEXTURE_BINDING;
+			desc.viewFormats = { RHI::TextureFormat::DEPTH32_FLOAT };
+			GFX::GFXManager::get()->registerTextureResource(framebufferDepthAttach, desc);
+
+			imguiTextureFB[0] = imguiLayer->createImGuiTexture(sampler.get(), 
+				Core::ResourceManager::get()->getResource<GFX::Texture>(framebufferColorAttaches[0])->originalView.get(), 
+				RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL);
+			imguiTextureFB[1] = imguiLayer->createImGuiTexture(sampler.get(), 
+				Core::ResourceManager::get()->getResource<GFX::Texture>(framebufferColorAttaches[1])->originalView.get(), 
+				RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL);
+
+		}
 		Buffer vert, frag;
 		syncReadFile("../Engine/Binaries/Runtime/spirv/Common/test_shader_vert.spv", vert);
 		syncReadFile("../Engine/Binaries/Runtime/spirv/Common/test_shader_frag.spv", frag);
@@ -169,35 +231,51 @@ struct SandBoxApplication :public Application::ApplicationBase {
 							{ RHI::VertexFormat::FLOAT32X2, 0, 0},
 							{ RHI::VertexFormat::FLOAT32X3, offsetof(Vertex,color), 1},}}}},
 					RHI::PrimitiveState{ RHI::PrimitiveTopology::TRIANGLE_LIST, RHI::IndexFormat::UINT16_t },
-					RHI::DepthStencilState{},
+					RHI::DepthStencilState{ },
 					RHI::MultisampleState{},
 					RHI::FragmentState{
 						// fragment shader
 						frag_module.get(), "main",
-						{{RHI::TextureFormat::RGBA8_UINT}}}
+						{{RHI::TextureFormat::RGBA8_UNORM}}}
 					});
 		}
 	};
 
 	/** Update the application every loop */
 	virtual auto Update(double deltaTime) noexcept -> void override {
+		// start new frame
+		imguiLayer->startNewFrame();
+		// frame start
+		RHI::Device* device = rhiLayer->getDevice();
+		RHI::SwapChain* swapChain = rhiLayer->getSwapChain();
+		RHI::MultiFrameFlights* multiFrameFlights = rhiLayer->getMultiFrameFlights();
 		multiFrameFlights->frameStart();
+
 		std::unique_ptr<RHI::CommandEncoder> commandEncoder = device->createCommandEncoder({ multiFrameFlights->getCommandBuffer() });
 
 		RHI::RenderPassDescriptor renderPassDescriptor = {
-			{ RHI::RenderPassColorAttachment{ swapChain->getTextureView(multiFrameFlights->getSwapchainIndex()), nullptr, {0,0,0,1}, RHI::LoadOp::CLEAR }},
-			RHI::RenderPassDepthStencilAttachment{},
+			{ RHI::RenderPassColorAttachment{
+				Core::ResourceManager::get()->getResource<GFX::Texture>
+				(framebufferColorAttaches[currentAttachmentIndex])->originalView.get(), 
+			nullptr, {0,0,0,1}, RHI::LoadOp::CLEAR }},
+		//	RHI::RenderPassDepthStencilAttachment{
+		//		Core::ResourceManager::get()->getResource<GFX::Texture>(framebufferDepthAttach)->originalView.get(),
+		//		1, RHI::LoadOp::CLEAR, RHI::StoreOp::DONT_CARE, false,
+		//		0, RHI::LoadOp::CLEAR, RHI::StoreOp::DONT_CARE, false
+		//},
 		};
 
 		uint32_t index = multiFrameFlights->getFlightIndex();
 
 		int width, height;
 		mainWindow->getFramebufferSize(&width, &height);
+		width = 720;
+		height = 480;
 
 		UniformBufferObject ubo;
 		ubo.model = Math::transpose(Math::rotate(timer.totalTime() * 80, Math::vec3(0,1,0)).m);
 		ubo.view = Math::transpose(Math::lookAt(Math::vec3(0, 0, -2), Math::vec3(0, 0, 0), Math::vec3(0, 1, 0)).m);
-		ubo.proj = Math::transpose(Math::perspective(45.f, 1.f * width / height, 0.1f, 10.f).m);
+		ubo.proj = Math::transpose(Math::perspective(45.f, 1.f * 720 / 480, 0.1f, 10.f).m);
 		//ubo.proj.data[1][1] *= -1;
 		std::cout << 1.f / timer.deltaTime() << std::endl;
 		//Math::rotate( )
@@ -208,12 +286,44 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			uniformBuffer[index]->unmap();
 		}
 
+		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+			(uint32_t)RHI::PipelineStages::COLOR_ATTACHMENT_OUTPUT_BIT,
+			(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
+			(uint32_t)RHI::DependencyType::NONE,
+			{}, {},
+			{ RHI::TextureMemoryBarrierDescriptor{
+				Core::ResourceManager::get()->getResource<GFX::Texture>(framebufferColorAttaches[currentAttachmentIndex])->texture.get(),
+				RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
+				(uint32_t)RHI::AccessFlagBits::COLOR_ATTACHMENT_WRITE_BIT,
+				(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
+				RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
+				RHI::TextureLayout::COLOR_ATTACHMENT_OPTIMAL
+			}}
+		});
+
+		//commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+		//	(uint32_t)RHI::PipelineStages::COLOR_ATTACHMENT_OUTPUT_BIT,
+		//	(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
+		//	(uint32_t)RHI::DependencyType::NONE,
+		//	{}, {},
+		//	{ RHI::TextureMemoryBarrierDescriptor{
+		//		Core::ResourceManager::get()->getResource<GFX::Texture>(framebufferDepthAttach)->texture.get(),
+		//		RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::DEPTH_BIT, 0,1,0,1},
+		//		(uint32_t)RHI::AccessFlagBits::DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+		//		(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
+		//		RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
+		//		RHI::TextureLayout::DEPTH_ATTACHMENT_OPTIMAL
+		//	}}
+		//});
+
 		passEncoder[index] = commandEncoder->beginRenderPass(renderPassDescriptor);
 		passEncoder[index]->setPipeline(renderPipeline[index].get());
 		passEncoder[index]->setViewport(0, 0, width, height, 0, 1);
 		passEncoder[index]->setScissorRect(0, 0, width, height);
-		passEncoder[index]->setVertexBuffer(0, vertexBuffer.get(), 0, vertexBuffer->size());
-		passEncoder[index]->setIndexBuffer(indexBuffer.get(), RHI::IndexFormat::UINT16_t, 0, indexBuffer->size());
+		passEncoder[index]->setVertexBuffer(0, ResourceManager::get()->getResource<GFX::Mesh>(0)->vertexBuffer.get(), 
+			0, ResourceManager::get()->getResource<GFX::Mesh>(0)->vertexBuffer->size());
+		passEncoder[index]->setIndexBuffer(ResourceManager::get()->getResource<GFX::Mesh>(0)->indexBuffer.get(), 
+			RHI::IndexFormat::UINT16_t, 0, ResourceManager::get()->getResource<GFX::Mesh>(0)->indexBuffer->size());
 		passEncoder[index]->setBindGroup(0, bindGroup[index].get(), 0, 0);
 		passEncoder[index]->drawIndexed(6, 1, 0, 0, 0);
 		passEncoder[index]->end();
@@ -222,6 +332,21 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			multiFrameFlights->getImageAvailableSeamaphore(),
 			multiFrameFlights->getRenderFinishedSeamaphore(),
 			multiFrameFlights->getFence());
+
+		// GUI Recording
+		imguiLayer->startGuiRecording();
+		bool show_demo_window = true;
+		ImGui::ShowDemoWindow(&show_demo_window);
+		ImGui::Begin("Hello");
+		ImGui::Image(
+			imguiTextureFB[currentAttachmentIndex]->getTextureID(),
+			{ (float)width,(float)height },
+			{ 0,0 }, { 1, 1 });
+		ImGui::End();
+		editorLayer->onDrawGui();
+		imguiLayer->render();
+
+		currentAttachmentIndex = (currentAttachmentIndex + 1) % 2;
 
 		multiFrameFlights->frameEnd();
 	};
@@ -232,7 +357,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 	};
 
 	virtual auto Exit() noexcept -> void override {
-		device->waitIdle();
+		rhiLayer->getDevice()->waitIdle();
 		renderPipeline[0] = nullptr;
 		renderPipeline[1] = nullptr;
 		passEncoder[0] = nullptr;
@@ -244,8 +369,6 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		bindGroup_RT[0] = nullptr;
 		bindGroup_RT[1] = nullptr;
 
-		vertexBuffer = nullptr;
-		indexBuffer = nullptr;
 		vertexBufferRT = nullptr;
 		indexBufferRT = nullptr;
 		vert_module = nullptr;
@@ -259,17 +382,28 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		bindGroup[0] = nullptr;
 		bindGroup[1] = nullptr;
 
-		multiFrameFlights = nullptr;
-		swapChain = nullptr;
-		device = nullptr;
+		sampler = nullptr;
+
+		editorLayer = nullptr;
+		imguiLayer = nullptr;
+
+		ResourceManager::get()->clear();
+
+		rhiLayer = nullptr;
 	}
 
 private:
-	RHI::Context_VK context;
-	std::unique_ptr<RHI::Adapter> adapter = nullptr;
-	std::unique_ptr<RHI::Device> device = nullptr;
-	std::unique_ptr<RHI::SwapChain> swapChain = nullptr;
-	std::unique_ptr<RHI::MultiFrameFlights> multiFrameFlights = nullptr;
+	uint32_t currentAttachmentIndex = 0;
+	std::array<Core::GUID, 2> framebufferColorAttaches;
+	Core::GUID framebufferDepthAttach;
+
+	std::unique_ptr<RHI::RHILayer> rhiLayer = nullptr;
+	std::unique_ptr<Editor::ImGuiLayer> imguiLayer = nullptr;
+	std::unique_ptr<Editor::EditorLayer> editorLayer = nullptr;
+
+	std::unique_ptr<RHI::Sampler> sampler = nullptr;
+	std::unique_ptr<Editor::ImGuiTexture> imguiTexture = nullptr;
+	std::unique_ptr<Editor::ImGuiTexture> imguiTextureFB[2];
 
 	std::unique_ptr<RHI::BindGroupLayout> bindGroupLayout = nullptr;
 	std::unique_ptr<RHI::BindGroup> bindGroup[2];
@@ -280,8 +414,6 @@ private:
 	std::unique_ptr<RHI::Buffer> uniformBuffer[2];
 	std::unique_ptr<RHI::PipelineLayout> pipelineLayout[2];
 
-	std::unique_ptr<RHI::Buffer> vertexBuffer = nullptr;
-	std::unique_ptr<RHI::Buffer> indexBuffer = nullptr;
 	std::unique_ptr<RHI::Buffer> vertexBufferRT = nullptr;
 	std::unique_ptr<RHI::Buffer> indexBufferRT = nullptr;
 	std::unique_ptr<RHI::ShaderModule> vert_module = nullptr;
@@ -291,33 +423,15 @@ private:
 	std::unique_ptr<RHI::TLAS> tlas = nullptr;
 
 	std::unique_ptr<RHI::RenderPipeline> renderPipeline[2];
-
+	// the embedded scene, which should be removed in the future
+	GFX::Scene scene;
 };
 
 int main()
 {
+	// application root, control all managers
 	Application::Root root;
-
-	struct TestComponent {
-		int i = 0;
-	};
-
-	Core::Entity ett1 = Core::EntityManager::get()->createEntity();
-	Core::Entity ett2 = Core::EntityManager::get()->createEntity();
-	Core::Entity ett3 = Core::EntityManager::get()->createEntity();
-
-	Core::ComponentManager::get()->registerComponent<TestComponent>();
-
-	ett1.addComponent<TestComponent>(3);
-	ett2.addComponent<TestComponent>(2);
-	ett3.addComponent<TestComponent>(1);
-
-	ett2.removeComponent<TestComponent>();
-
-	TestComponent* a = ett2.getComponent<TestComponent>();
-	TestComponent* b = ett1.getComponent<TestComponent>();
-	TestComponent* c = ett3.getComponent<TestComponent>();
-
+	// run app
 	SandBoxApplication app;
 	app.createMainWindow({
 			Platform::WindowVendor::GLFW,
@@ -338,7 +452,7 @@ int main()
 	//Image::Image<Image::COLOR_R8G8B8_UINT> image(720, 480);
 	//std::fill((Image::COLOR_R8G8B8_UINT*) & ((reinterpret_cast<char*>(image.data.data))[0]), 
 	//	(Image::COLOR_R8G8B8_UINT*)&((reinterpret_cast<char*>(image.data.data))[image.data.size]), 
-	//	Image::COLOR_R8G8B8_UINT{255,255,0});
+	//	Image::COLOR_R8G8B8_UINT{ {255,255,0} });
 
 	//window->bindPaintingBitmapRGB8(size_t(720), size_t(480), (char*)image.data.data);
 	//window->resize(720.f, 480);

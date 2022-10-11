@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Public\Core\GFX.ixx">
+    <ClCompile Include="Public\Core\GFX.GFXManager.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Resource\GFX.Resources.ixx">
@@ -37,6 +37,15 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Component\GFX.Components-MeshRenderer.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Resource\GFX.Resources-Scene.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Resource\GFX.Resources-ShaderModule.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Resource\GFX.Resources-Sampler.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

@@ -5,9 +5,7 @@ import Image.Image;
 
 namespace SIByL::Image
 {
-	export class PFM
-	{
-	public:
+	export struct PFM {
 		static auto toPFM(Image<COLOR_R32G32B32_FLOAT> const& i) noexcept -> Core::Buffer;
 	};
 }

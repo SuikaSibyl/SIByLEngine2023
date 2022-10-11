@@ -140,6 +140,9 @@
     <ProjectReference Include="..\Core\Core.vcxproj">
       <Project>{cadb2da2-56fd-47f9-817b-aafa42378dd9}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\Image\Image.vcxproj">
+      <Project>{0fc8b275-7514-4117-93a1-7e9c112b4b70}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\Math\Math.vcxproj">
       <Project>{0eec40c7-807a-4d99-99a6-e3d329aea25d}</Project>
     </ProjectReference>
@@ -154,9 +157,12 @@
     <ClCompile Include="Public\Component\GFX.Components-MeshReference.ixx" />
     <ClCompile Include="Public\Component\GFX.Components-MeshRenderer.ixx" />
     <ClCompile Include="Public\Component\GFX.Components.ixx" />
-    <ClCompile Include="Public\Core\GFX.ixx" />
+    <ClCompile Include="Public\Core\GFX.GFXManager.ixx" />
+    <ClCompile Include="Public\Resource\GFX.Resources-Sampler.ixx" />
+    <ClCompile Include="Public\Resource\GFX.Resources-Scene.ixx" />
     <ClCompile Include="Public\Resource\GFX.Resources-Material.ixx" />
     <ClCompile Include="Public\Resource\GFX.Resources-Mesh.ixx" />
+    <ClCompile Include="Public\Resource\GFX.Resources-ShaderModule.ixx" />
     <ClCompile Include="Public\Resource\GFX.Resources-Texture.ixx" />
     <ClCompile Include="Public\Resource\GFX.Resources.ixx" />
   </ItemGroup>

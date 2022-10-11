@@ -41,7 +41,7 @@ namespace SIByL::Platform
 		// Fetch Properties
 		// ---------------------------------
 		/** return the high DPI value */
-		virtual auto getHighDPI() noexcept -> float override { return 1.f; }
+		virtual auto getHighDPI() noexcept -> float override;
 		/** return vendor */
 		virtual auto getVendor() noexcept -> WindowVendor { return WindowVendor::GLFW; }
 		/** return window handle */

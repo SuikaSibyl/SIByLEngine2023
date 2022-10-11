@@ -19,10 +19,12 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Private\FileFormat\Image.FileFormat-JPEG.cpp" />
     <ClCompile Include="Private\FileFormat\Image.FileFormat-PFM.cpp" />
     <ClCompile Include="Private\FileFormat\Image.FileFormat-PPM.cpp" />
     <ClCompile Include="Private\Image\Image.Image.cpp" />
     <ClCompile Include="Public\Color\Image.Color.ixx" />
+    <ClCompile Include="Public\FileFormat\Image.FileFormat-JPEG.ixx" />
     <ClCompile Include="Public\FileFormat\Image.FileFormat-PFM.ixx" />
     <ClCompile Include="Public\FileFormat\Image.FileFormat-PPM.ixx" />
     <ClCompile Include="Public\FileFormat\Image.FileFormat.ixx" />
@@ -91,10 +93,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\stb;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\stb;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>

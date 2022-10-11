@@ -99,6 +99,13 @@ namespace SIByL::Platform
 		onResizeSignal.connect(func);
 	}
 	
+	auto Window_GLFW::getHighDPI() noexcept -> float { 
+		float xscale, yscale;
+		GLFWmonitor* primary = glfwGetPrimaryMonitor();
+		glfwGetMonitorContentScale(primary, &xscale, &yscale);
+		return xscale;
+	}
+
 	auto Window_GLFW::getFramebufferSize(int* width, int* height) noexcept -> void {
 		glfwGetFramebufferSize(wndHandle, width, height);
 	}

@@ -5,9 +5,7 @@ import Image.Image;
 
 namespace SIByL::Image
 {
-	export class PPM
-	{
-	public:
+	export struct PPM {
 		static auto toPPM(Image<COLOR_R8G8B8_UINT> const& i) noexcept -> Core::Buffer;
 	};
 }

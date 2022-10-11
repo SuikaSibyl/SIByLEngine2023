@@ -74,13 +74,13 @@
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
     <LibraryPath>$(SolutionDir)Engine\Binaries\ThirdParty\glfw;$(SolutionDir)Engine\Binaries\ThirdParty\vulkan;$(LibraryPath)</LibraryPath>
-    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\glad\include;$(SolutionDir)Engine\Source\Runtime\Core\Public;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\glad\include;$(SolutionDir)Engine\Source\Runtime\Core\Public;$(SolutionDir)Engine\Source\ThirdParty\imgui\includes;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
     <LibraryPath>$(SolutionDir)Engine\Binaries\ThirdParty\glfw;$(SolutionDir)Engine\Binaries\ThirdParty\vulkan;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
-    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\glad\include;$(SolutionDir)Engine\Source\Runtime\Core\Public;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\glad\include;$(SolutionDir)Engine\Source\Runtime\Core\Public;$(SolutionDir)Engine\Source\ThirdParty\imgui\includes;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -143,6 +143,15 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Engine\Source\Editor\EditorCore\EditorCore.vcxproj">
+      <Project>{f7d1709f-e611-4c47-b878-3df3c65fb974}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\Engine\Source\Editor\EditorGFX\EditorGFX.vcxproj">
+      <Project>{7984c6ea-a159-46eb-8645-875c00f2dba5}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\Engine\Source\Editor\Editor\Editor.vcxproj">
+      <Project>{5c249b31-dafc-4968-a25a-537dfe0524d7}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\Engine\Source\Runtime\Application\Application.vcxproj">
       <Project>{b47595dd-25c9-4b07-808a-7cce497a61d1}</Project>
     </ProjectReference>

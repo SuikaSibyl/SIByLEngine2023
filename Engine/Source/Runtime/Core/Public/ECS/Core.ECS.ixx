@@ -62,7 +62,10 @@ namespace SIByL::Core
 		uint64_t livingEntityCount = 0;
 	};
 
-	export struct IComponentPool {};
+	export struct IComponentPool {
+		/** destroy an entity */
+		virtual auto destroyEntity(EntityHandle entity) noexcept -> void = 0;
+	};
 
 	export template<class T> struct ComponentPool :public IComponentPool {
 		/** get the component of an entity */
@@ -90,7 +93,7 @@ namespace SIByL::Core
 			}
 		}
 		/** destroy an entity */
-		auto destroyEntity(EntityHandle entity) noexcept -> void {
+		virtual auto destroyEntity(EntityHandle entity) noexcept -> void override {
 			removeData(entity);
 		}
 	private:
@@ -117,7 +120,7 @@ namespace SIByL::Core
 		template <class T>
 		auto getComponentType() noexcept -> ComponentType {
 			char const* typeName = typeid(T).name();
-			if (componentTypes.find(typeName) == componentPools.end())
+			if (componentTypes.find(typeName) == componentTypes.end())
 				LogManager::Error("ECS :: Component Type not registered.");
 			return componentTypes[typeName];
 		}
@@ -125,6 +128,7 @@ namespace SIByL::Core
 		template <class T>
 		auto addComponent(EntityHandle entt, T const& component) noexcept -> void {
 			this->getComponentPool<T>()->insertData(entt, component);
+			EntityManager::get()->getSignature(entt).set(ComponentManager::get()->getComponentType<T>());
 		}
 		/** remove component */
 		template <class T>
@@ -135,6 +139,12 @@ namespace SIByL::Core
 		template <class T>
 		auto getComponent(EntityHandle entt) noexcept -> T* {
 			return this->getComponentPool<T>()->getData(entt);
+		}
+		/** remove entity */
+		auto destroyEntity(EntityHandle entt) noexcept -> void {
+			for (auto& iter : componentPools)
+				if (EntityManager::get()->getSignature(entt).test(componentTypes[iter.first]))
+					iter.second.get()->destroyEntity(entt);
 		}
 	private:
 		/* singleton */
@@ -216,6 +226,7 @@ namespace SIByL::Core
 		// push an ID back to the queue.
 		--livingEntityCount;
 		availableEntities.push(id);
+		ComponentManager::get()->destroyEntity(id);
 	}
 
 	auto EntityManager::getSignature(EntityHandle id) noexcept -> Signature& {

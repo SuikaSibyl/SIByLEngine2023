@@ -524,6 +524,21 @@ namespace SIByL::RHI
 		DEPTH_BIT	= 1 << 2,
 	};
 
+	/* get aspect from texture format */
+	export inline auto getTextureAspect(TextureFormat format) noexcept -> TextureAspectFlags {
+		switch (format) {
+		case SIByL::RHI::TextureFormat::STENCIL8:
+			return (TextureAspectFlags)TextureAspect::STENCIL_BIT;
+		case SIByL::RHI::TextureFormat::DEPTH16_UNORM:
+		case SIByL::RHI::TextureFormat::DEPTH24:
+		case SIByL::RHI::TextureFormat::DEPTH32_FLOAT:
+			return (TextureAspectFlags)TextureAspect::DEPTH_BIT;
+		case SIByL::RHI::TextureFormat::DEPTH24STENCIL8:
+		case SIByL::RHI::TextureFormat::DEPTH32STENCIL8:
+			return (TextureAspectFlags)TextureAspect::DEPTH_BIT | (TextureAspectFlags)TextureAspect::STENCIL_BIT;
+		default: return (TextureAspectFlags)TextureAspect::COLOR_BIT; }
+	}
+
 	export struct TextureView {
 		/** virtual destructor */
 		virtual ~TextureView() = default;
@@ -534,7 +549,7 @@ namespace SIByL::RHI
 	export struct TextureViewDescriptor {
 		TextureFormat format;
 		TextureViewDimension dimension = TextureViewDimension::TEX2D;
-		TextureAspectFlags aspect;
+		TextureAspectFlags aspect = (uint32_t)TextureAspect::COLOR_BIT;
 		uint32_t baseMipLevel = 0;
 		uint32_t mipLevelCount = 1;
 		uint32_t baseArrayLayer = 0;
@@ -559,7 +574,10 @@ namespace SIByL::RHI
 	// ===========================================================================
 	// Samplers Interface
 
-	export struct Sampler {};
+	export struct Sampler {
+		/** virtual destructor */
+		virtual ~Sampler() = default;
+	};
 
 	export enum struct AddressMode {
 		CLAMP_TO_EDGE,
@@ -597,7 +615,7 @@ namespace SIByL::RHI
 		MipmapFilterMode mipmapFilter = MipmapFilterMode::NEAREST;
 		float lodMinClamp = 0.f;
 		float lodMapClamp = 32.f;
-		CompareFunction comapre;
+		CompareFunction compare = CompareFunction::ALWAYS;
 		uint16_t maxAnisotropy = 1;
 	};
 
@@ -1320,6 +1338,7 @@ namespace SIByL::RHI
 	};
 
 	export enum struct StoreOp {
+		DONT_CARE,
 		STORE,
 		DISCARD
 	};
@@ -1333,7 +1352,7 @@ namespace SIByL::RHI
 	};
 
 	export struct RenderPassDepthStencilAttachment {
-		TextureView* view;
+		TextureView* view = nullptr;
 		float depthClearValue = 0;
 		LoadOp depthLoadOp;
 		StoreOp depthStoreOp;

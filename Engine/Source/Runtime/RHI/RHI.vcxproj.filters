@@ -30,5 +30,8 @@
     <ClCompile Include="Public\RHI-GL.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\RHI.RHILayer.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
