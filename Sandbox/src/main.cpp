@@ -91,7 +91,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		RHI::SwapChain* swapchain = rhiLayer->getSwapChain();
 
 		struct Vertex {
-			Math::vec2 pos;
+			Math::vec3 pos;
 			Math::vec3 color;
 		};
 
@@ -100,13 +100,19 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		};
 
 		std::vector<Vertex> const vertices = {
-			{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-			{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-			{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-			{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+			{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+			{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}},
+			{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+			{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}},
+
+			{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+			{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+			{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}},
+			{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}}
 		};
 		std::vector<uint16_t> const indices = {
-			0, 1, 2, 2, 3, 0
+			0, 1, 2, 2, 3, 0,
+			4, 5, 6, 6, 7, 4
 		};
 
 		GFX::Mesh mesh;
@@ -141,12 +147,12 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
 			GFX::GFXManager::get()->registerTextureResource(guid, img.get());
 			GFX::Texture* texture = Core::ResourceManager::get()->getResource<GFX::Texture>(guid);
-			sampler = device->createSampler(RHI::SamplerDescriptor{});
-			imguiTexture = imguiLayer->createImGuiTexture(sampler.get(), texture->originalView.get(), RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL);
+
+			GFX::GFXManager::get()->commonSampler.defaultSampler = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Sampler>();
+			GFX::GFXManager::get()->registerSamplerResource(GFX::GFXManager::get()->commonSampler.defaultSampler, RHI::SamplerDescriptor{});
 		
 			//framebufferColorAttaches
-			framebufferColorAttaches[0] = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
-			framebufferColorAttaches[1] = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
+			framebufferColorAttach = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
 			framebufferDepthAttach = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
 			RHI::TextureDescriptor desc{
 				{720,480,1},
@@ -155,23 +161,14 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				(uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT | (uint32_t)RHI::TextureUsage::TEXTURE_BINDING,
 				{ RHI::TextureFormat::RGBA8_UNORM }
 			};
-			GFX::GFXManager::get()->registerTextureResource(framebufferColorAttaches[0], desc);
-			GFX::GFXManager::get()->registerTextureResource(framebufferColorAttaches[1], desc);
+			GFX::GFXManager::get()->registerTextureResource(framebufferColorAttach, desc);
 			desc.format = RHI::TextureFormat::DEPTH32_FLOAT;
 			desc.usage = (uint32_t)RHI::TextureUsage::DEPTH_ATTACHMENT | (uint32_t)RHI::TextureUsage::TEXTURE_BINDING;
 			desc.viewFormats = { RHI::TextureFormat::DEPTH32_FLOAT };
 			GFX::GFXManager::get()->registerTextureResource(framebufferDepthAttach, desc);
-
-			imguiTextureFB[0] = imguiLayer->createImGuiTexture(sampler.get(), 
-				Core::ResourceManager::get()->getResource<GFX::Texture>(framebufferColorAttaches[0])->originalView.get(), 
-				RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL);
-			imguiTextureFB[1] = imguiLayer->createImGuiTexture(sampler.get(), 
-				Core::ResourceManager::get()->getResource<GFX::Texture>(framebufferColorAttaches[1])->originalView.get(), 
-				RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL);
-
 		}
 		Buffer vert, frag;
-		syncReadFile("../Engine/Binaries/Runtime/spirv/Common/test_shader_vert.spv", vert);
+		syncReadFile("../Engine/Binaries/Runtime/spirv/Common/test_shader_vert_vert.spv", vert);
 		syncReadFile("../Engine/Binaries/Runtime/spirv/Common/test_shader_frag.spv", frag);
 		vert_module = device->createShaderModule({ &vert, RHI::ShaderStages::VERTEX });
 		frag_module = device->createShaderModule({ &frag, RHI::ShaderStages::FRAGMENT });
@@ -228,10 +225,10 @@ struct SandBoxApplication :public Application::ApplicationBase {
 						vert_module.get(), "main",
 						// vertex attribute layout
 						{ RHI::VertexBufferLayout{sizeof(Vertex), RHI::VertexStepMode::VERTEX, {
-							{ RHI::VertexFormat::FLOAT32X2, 0, 0},
+							{ RHI::VertexFormat::FLOAT32X3, 0, 0},
 							{ RHI::VertexFormat::FLOAT32X3, offsetof(Vertex,color), 1},}}}},
 					RHI::PrimitiveState{ RHI::PrimitiveTopology::TRIANGLE_LIST, RHI::IndexFormat::UINT16_t },
-					RHI::DepthStencilState{ },
+					RHI::DepthStencilState{ RHI::TextureFormat::DEPTH32_FLOAT, true, RHI::CompareFunction::LESS },
 					RHI::MultisampleState{},
 					RHI::FragmentState{
 						// fragment shader
@@ -256,13 +253,13 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		RHI::RenderPassDescriptor renderPassDescriptor = {
 			{ RHI::RenderPassColorAttachment{
 				Core::ResourceManager::get()->getResource<GFX::Texture>
-				(framebufferColorAttaches[currentAttachmentIndex])->originalView.get(), 
-			nullptr, {0,0,0,1}, RHI::LoadOp::CLEAR }},
-		//	RHI::RenderPassDepthStencilAttachment{
-		//		Core::ResourceManager::get()->getResource<GFX::Texture>(framebufferDepthAttach)->originalView.get(),
-		//		1, RHI::LoadOp::CLEAR, RHI::StoreOp::DONT_CARE, false,
-		//		0, RHI::LoadOp::CLEAR, RHI::StoreOp::DONT_CARE, false
-		//},
+				(framebufferColorAttach)->originalView.get(), 
+			nullptr, {0,0,0,1}, RHI::LoadOp::CLEAR, RHI::StoreOp::STORE }},
+			RHI::RenderPassDepthStencilAttachment{
+				Core::ResourceManager::get()->getResource<GFX::Texture>(framebufferDepthAttach)->originalView.get(),
+				1, RHI::LoadOp::CLEAR, RHI::StoreOp::DONT_CARE, false,
+				0, RHI::LoadOp::CLEAR, RHI::StoreOp::DONT_CARE, false
+		},
 		};
 
 		uint32_t index = multiFrameFlights->getFlightIndex();
@@ -287,34 +284,34 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		}
 
 		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
-			(uint32_t)RHI::PipelineStages::COLOR_ATTACHMENT_OUTPUT_BIT,
 			(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
+			(uint32_t)RHI::PipelineStages::COLOR_ATTACHMENT_OUTPUT_BIT,
 			(uint32_t)RHI::DependencyType::NONE,
 			{}, {},
 			{ RHI::TextureMemoryBarrierDescriptor{
-				Core::ResourceManager::get()->getResource<GFX::Texture>(framebufferColorAttaches[currentAttachmentIndex])->texture.get(),
+				Core::ResourceManager::get()->getResource<GFX::Texture>(framebufferColorAttach)->texture.get(),
 				RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
-				(uint32_t)RHI::AccessFlagBits::COLOR_ATTACHMENT_WRITE_BIT,
 				(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
+				(uint32_t)RHI::AccessFlagBits::COLOR_ATTACHMENT_WRITE_BIT,
 				RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
 				RHI::TextureLayout::COLOR_ATTACHMENT_OPTIMAL
 			}}
 		});
 
-		//commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
-		//	(uint32_t)RHI::PipelineStages::COLOR_ATTACHMENT_OUTPUT_BIT,
-		//	(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
-		//	(uint32_t)RHI::DependencyType::NONE,
-		//	{}, {},
-		//	{ RHI::TextureMemoryBarrierDescriptor{
-		//		Core::ResourceManager::get()->getResource<GFX::Texture>(framebufferDepthAttach)->texture.get(),
-		//		RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::DEPTH_BIT, 0,1,0,1},
-		//		(uint32_t)RHI::AccessFlagBits::DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-		//		(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
-		//		RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
-		//		RHI::TextureLayout::DEPTH_ATTACHMENT_OPTIMAL
-		//	}}
-		//});
+		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+			(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
+			(uint32_t)RHI::PipelineStages::COLOR_ATTACHMENT_OUTPUT_BIT,
+			(uint32_t)RHI::DependencyType::NONE,
+			{}, {},
+			{ RHI::TextureMemoryBarrierDescriptor{
+				Core::ResourceManager::get()->getResource<GFX::Texture>(framebufferDepthAttach)->texture.get(),
+				RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::DEPTH_BIT, 0,1,0,1},
+				(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
+				(uint32_t)RHI::AccessFlagBits::DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+				RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
+				RHI::TextureLayout::DEPTH_ATTACHMENT_OPTIMAL
+			}}
+		});
 
 		passEncoder[index] = commandEncoder->beginRenderPass(renderPassDescriptor);
 		passEncoder[index]->setPipeline(renderPipeline[index].get());
@@ -325,7 +322,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		passEncoder[index]->setIndexBuffer(ResourceManager::get()->getResource<GFX::Mesh>(0)->indexBuffer.get(), 
 			RHI::IndexFormat::UINT16_t, 0, ResourceManager::get()->getResource<GFX::Mesh>(0)->indexBuffer->size());
 		passEncoder[index]->setBindGroup(0, bindGroup[index].get(), 0, 0);
-		passEncoder[index]->drawIndexed(6, 1, 0, 0, 0);
+		passEncoder[index]->drawIndexed(12, 1, 0, 0, 0);
 		passEncoder[index]->end();
 
 		device->getGraphicsQueue()->submit({ commandEncoder->finish({}) }, 
@@ -339,14 +336,13 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		ImGui::ShowDemoWindow(&show_demo_window);
 		ImGui::Begin("Hello");
 		ImGui::Image(
-			imguiTextureFB[currentAttachmentIndex]->getTextureID(),
+			Editor::TextureUtils::getImGuiTexture(framebufferColorAttach)->getTextureID(),
 			{ (float)width,(float)height },
 			{ 0,0 }, { 1, 1 });
 		ImGui::End();
 		editorLayer->onDrawGui();
 		imguiLayer->render();
 
-		currentAttachmentIndex = (currentAttachmentIndex + 1) % 2;
 
 		multiFrameFlights->frameEnd();
 	};
@@ -382,8 +378,6 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		bindGroup[0] = nullptr;
 		bindGroup[1] = nullptr;
 
-		sampler = nullptr;
-
 		editorLayer = nullptr;
 		imguiLayer = nullptr;
 
@@ -393,17 +387,12 @@ struct SandBoxApplication :public Application::ApplicationBase {
 	}
 
 private:
-	uint32_t currentAttachmentIndex = 0;
-	std::array<Core::GUID, 2> framebufferColorAttaches;
+	Core::GUID framebufferColorAttach;
 	Core::GUID framebufferDepthAttach;
 
 	std::unique_ptr<RHI::RHILayer> rhiLayer = nullptr;
 	std::unique_ptr<Editor::ImGuiLayer> imguiLayer = nullptr;
 	std::unique_ptr<Editor::EditorLayer> editorLayer = nullptr;
-
-	std::unique_ptr<RHI::Sampler> sampler = nullptr;
-	std::unique_ptr<Editor::ImGuiTexture> imguiTexture = nullptr;
-	std::unique_ptr<Editor::ImGuiTexture> imguiTextureFB[2];
 
 	std::unique_ptr<RHI::BindGroupLayout> bindGroupLayout = nullptr;
 	std::unique_ptr<RHI::BindGroup> bindGroup[2];

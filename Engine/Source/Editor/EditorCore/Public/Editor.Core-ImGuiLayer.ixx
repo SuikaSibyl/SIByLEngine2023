@@ -2,8 +2,10 @@ module;
 #include <imgui.h>
 #include <memory>
 #include <functional>
+#include <unordered_map>
 export module Editor.Core:ImGuiLayer;
 import Core.System;
+import Core.Resource.RuntimeManage;
 import RHI;
 import RHI.RHILayer;
 import :ImGuiBackend;
@@ -17,7 +19,8 @@ namespace SIByL::Editor
 		ImGuiLayer(RHI::RHILayer* rhiLayer);
 		/** virtual destructor*/
 		virtual ~ImGuiLayer();
-
+		/* get singleton */
+		static auto get() noexcept -> ImGuiLayer* { return singleton; }
 		//auto onEvent(Event& e) -> void;
 		auto onWindowResize(size_t x, size_t y) -> void;
 
@@ -35,13 +38,21 @@ namespace SIByL::Editor
 		RHI::RHILayer* rhiLayer = nullptr;
 		/** imgui backend */
 		std::unique_ptr<ImGuiBackend> imguiBackend = nullptr;
+		/** imgui texture pool */
+		std::unordered_map<Core::GUID, std::unique_ptr<ImGuiTexture>> ImGuiTexturePool = {};
+	private:
+		static ImGuiLayer* singleton;
 	};
 
 #pragma region IMGUI_LAYER_IMPL
+	
+	ImGuiLayer* ImGuiLayer::singleton = nullptr;
 
 	ImGuiLayer::ImGuiLayer(RHI::RHILayer* rhiLayer)
 		: rhiLayer(rhiLayer)
 	{
+		singleton = this;
+
 		if (rhiLayer->getRHILayerDescriptor().backend == RHI::RHIBackend::Vulkan) {
 			imguiBackend = std::make_unique<ImGuiBackend_VK>(rhiLayer);
 		}

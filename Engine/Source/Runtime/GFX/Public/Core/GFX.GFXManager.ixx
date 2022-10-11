@@ -35,8 +35,13 @@ namespace SIByL::GFX
 		/** register GFX resources */
 		auto registerTextureResource(Core::GUID guid, Image::Image<Image::COLOR_R8G8B8A8_UINT>* image) noexcept -> void;
 		auto registerTextureResource(Core::GUID guid, RHI::TextureDescriptor const& desc) noexcept -> void;
+		auto registerSamplerResource(Core::GUID guid, RHI::SamplerDescriptor const& desc) noexcept -> void;
 		/** RHI layer */
 		RHI::RHILayer* rhiLayer = nullptr;
+		/** common samplers */
+		struct CommonSampler {
+			Core::GUID defaultSampler;
+		} commonSampler;
 	private:
 		/** singleton */
 		static GFXManager* singleton;
@@ -152,6 +157,12 @@ namespace SIByL::GFX
 		viewDesc.aspect = RHI::getTextureAspect(desc.format);
 		textureResource.originalView = textureResource.texture->createView(viewDesc);
 		Core::ResourceManager::get()->addResource(guid, std::move(textureResource));
+	}
+
+	auto GFXManager::registerSamplerResource(Core::GUID guid, RHI::SamplerDescriptor const& desc) noexcept -> void {
+		GFX::Sampler samplerResource = {};
+		samplerResource.sampler = rhiLayer->getDevice()->createSampler(desc);
+		Core::ResourceManager::get()->addResource(guid, std::move(samplerResource));
 	}
 
 #pragma endregion

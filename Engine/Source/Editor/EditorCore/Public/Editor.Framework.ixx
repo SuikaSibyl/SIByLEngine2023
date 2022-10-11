@@ -23,6 +23,10 @@ namespace SIByL::Editor
 	};
 
 	export struct EditorLayer :public Core::Layer {
+		/** initialize */
+		EditorLayer() { singleton = nullptr; }
+		/** get singleton */
+		static auto get() noexcept -> EditorLayer* { return singleton; }
 		/** draw gui*/
 		auto onDrawGui() noexcept -> void;
 		/** register a widget to editor */
@@ -38,9 +42,12 @@ namespace SIByL::Editor
 			else return static_cast<T*>(iter->second.get());
 		}
 	private:
+		static EditorLayer* singleton;
 		/** all the widgets registered */
 		std::unordered_map<char const*, std::unique_ptr<Widget>> widgets = {};
 	};
+	
+	EditorLayer* EditorLayer::singleton = nullptr;
 
 	auto EditorLayer::onDrawGui() noexcept -> void {
 		for (auto& iter : widgets) {
