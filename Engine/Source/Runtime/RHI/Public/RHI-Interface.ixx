@@ -218,6 +218,8 @@ namespace SIByL::RHI
 		virtual auto createBLAS(BLASDescriptor const& desc) noexcept -> std::unique_ptr<BLAS> = 0;
 		/** create a TLAS */
 		virtual auto createTLAS(TLASDescriptor const& desc) noexcept -> std::unique_ptr<TLAS> = 0;
+		/** create a ray tracing pipeline on the device */
+		virtual auto createRayTracingPipeline(RayTracingPipelineDescriptor const& desc) noexcept -> std::unique_ptr<RayTracingPipeline> = 0;
 		// Get extensions
 		// ---------------------------
 		/** fetch a ray tracing extension is available */
@@ -730,6 +732,20 @@ namespace SIByL::RHI
 	* to be included in a GPUBindGroupLayout.
 	*/
 	export struct BindGroupLayoutEntry {
+		/** initialization */
+		BindGroupLayoutEntry(uint32_t binding, ShaderStagesFlags visibility, BufferBindingLayout const& buffer)
+			: binding(binding), visibility(visibility), buffer(buffer) {}
+		BindGroupLayoutEntry(uint32_t binding, ShaderStagesFlags visibility, SamplerBindingLayout const& sampler)
+			: binding(binding), visibility(visibility), sampler(sampler) {}
+		BindGroupLayoutEntry(uint32_t binding, ShaderStagesFlags visibility, TextureBindingLayout const& texture)
+			: binding(binding), visibility(visibility), texture(texture) {}
+		BindGroupLayoutEntry(uint32_t binding, ShaderStagesFlags visibility, StorageTextureBindingLayout const& storageTexture)
+			: binding(binding), visibility(visibility), storageTexture(storageTexture) {}
+		BindGroupLayoutEntry(uint32_t binding, ShaderStagesFlags visibility, ExternalTextureBindingLayout const& externalTexture)
+			: binding(binding), visibility(visibility), externalTexture(externalTexture) {}
+		BindGroupLayoutEntry(uint32_t binding, ShaderStagesFlags visibility, AccelerationStructureBindingLayout const& accelerationStructure)
+			: binding(binding), visibility(visibility), accelerationStructure(accelerationStructure) {}
+
 		/* A unique identifier for a resource binding within the BindGroupLayout */
 		uint32_t binding;
 		/** indicates whether it will be accessible from the associated shader stage */
@@ -762,11 +778,16 @@ namespace SIByL::RHI
 	};
 
 	export struct BindingResource {
+		BindingResource(Sampler* sampler) : type(BindingResourceType::SAMPLER), sampler(sampler) {}
+		BindingResource(TextureView* view) : type(BindingResourceType::TEXTURE_VIEW), textureView(view) {}
+		BindingResource(BufferBinding const& buffer) : type(BindingResourceType::BUFFER_BINDING), bufferBinding(buffer) {}
+		BindingResource(TLAS* tlas) : tlas(tlas) {}
 		BindingResourceType type;
 		Sampler* sampler = nullptr;
 		TextureView* textureView = nullptr;
 		ExternalTexture* externalTexture = nullptr;
 		std::optional<BufferBinding> bufferBinding;
+		TLAS* tlas = nullptr;
 	};
 
 	export struct BindGroupEntry {
@@ -789,7 +810,14 @@ namespace SIByL::RHI
 		virtual ~PipelineLayout() = default;
 	};
 
+	export struct PushConstantEntry {
+		ShaderStagesFlags shaderStages;
+		uint32_t		  offset;
+		uint32_t		  size;
+	};
+
 	export struct PipelineLayoutDescriptor {
+		std::vector<PushConstantEntry> pushConstants;
 		std::vector<BindGroupLayout*> bindGroupLayouts;
 	};
 
@@ -1211,6 +1239,8 @@ namespace SIByL::RHI
 		/** Sets the current GPUBindGroup for the given index. */
 		virtual auto setBindGroup(uint32_t index, BindGroup* bindgroup,
 			uint64_t dynamicOffsetDataStart, uint32_t dynamicOffsetDataLength) noexcept -> void = 0;
+		/** Push constants */
+		virtual auto pushConstants(void* data, ShaderStagesFlags stages, uint32_t offset, uint32_t size) noexcept -> void = 0;
 	};
 
 	// Programmable Passes Interface
@@ -1849,10 +1879,13 @@ namespace SIByL::RHI
 		/** virtual destructor */
 		virtual ~RayTracingPipeline() = default;
 	};
-	
-	export struct RayTracingPipelineDescriptor {
-		std::vector<ShaderModule*> shaders;
-		PipelineLayout* pipelineLayout;
+
+	export struct RayTracingPipelineDescriptor :public PipelineDescriptorBase {
+		ShaderModule* rayGenShader			= nullptr;
+		ShaderModule* rayMissShader			= nullptr;
+		ShaderModule* closetHitShader		= nullptr;
+		ShaderModule* anyHitShader			= nullptr;
+		ShaderModule* intersectionShader	= nullptr;
 	};
 
 #pragma region RHI_DEVICE_UTILITY_IMPL
@@ -1890,6 +1923,6 @@ namespace SIByL::RHI
 #pragma endregion
 
 	export struct RayTracingExtension {
-
+		virtual ~RayTracingExtension() = default;
 	};
 }

@@ -1,9 +1,12 @@
 module;
 #include <typeinfo>
 #include <memory>
+#include <filesystem>
 export module GFX.GFXManager;
 import Core.System;
 import Core.ECS;
+import Core.Memory;
+import Core.IO;
 import Core.Resource.RuntimeManage;
 import RHI;
 import RHI.RHILayer;
@@ -27,6 +30,7 @@ namespace SIByL::GFX
 			Core::ResourceManager::get()->registerResource<GFX::Mesh>();
 			Core::ResourceManager::get()->registerResource<GFX::Texture>();
 			Core::ResourceManager::get()->registerResource<GFX::Sampler>();
+			Core::ResourceManager::get()->registerResource<GFX::ShaderModule>();
 			Core::ResourceManager::get()->registerResource<GFX::Material>();
 			Core::ResourceManager::get()->registerResource<GFX::Scene>();
 		}
@@ -36,6 +40,8 @@ namespace SIByL::GFX
 		auto registerTextureResource(Core::GUID guid, Image::Image<Image::COLOR_R8G8B8A8_UINT>* image) noexcept -> void;
 		auto registerTextureResource(Core::GUID guid, RHI::TextureDescriptor const& desc) noexcept -> void;
 		auto registerSamplerResource(Core::GUID guid, RHI::SamplerDescriptor const& desc) noexcept -> void;
+		auto registerShaderModuleResource(Core::GUID guid, RHI::ShaderModuleDescriptor const& desc) noexcept -> void;
+		auto registerShaderModuleResource(Core::GUID guid, std::filesystem::path const& path, RHI::ShaderModuleDescriptor const& desc) noexcept -> void;
 		/** RHI layer */
 		RHI::RHILayer* rhiLayer = nullptr;
 		/** common samplers */
@@ -163,6 +169,22 @@ namespace SIByL::GFX
 		GFX::Sampler samplerResource = {};
 		samplerResource.sampler = rhiLayer->getDevice()->createSampler(desc);
 		Core::ResourceManager::get()->addResource(guid, std::move(samplerResource));
+	}
+
+	auto GFXManager::registerShaderModuleResource(Core::GUID guid, RHI::ShaderModuleDescriptor const& desc) noexcept -> void {
+		GFX::ShaderModule shaderModuleResource = {};
+		shaderModuleResource.shaderModule = rhiLayer->getDevice()->createShaderModule(desc);
+		Core::ResourceManager::get()->addResource(guid, std::move(shaderModuleResource));
+	}
+
+	auto GFXManager::registerShaderModuleResource(Core::GUID guid, std::filesystem::path const& path, RHI::ShaderModuleDescriptor const& desc) noexcept -> void {
+		RHI::ShaderModuleDescriptor smDesc = desc;
+		Core::Buffer buffer;
+		Core::syncReadFile(path, buffer);
+		smDesc.code = &buffer;
+		GFX::ShaderModule shaderModuleResource = {};
+		shaderModuleResource.shaderModule = rhiLayer->getDevice()->createShaderModule(smDesc);
+		Core::ResourceManager::get()->addResource(guid, std::move(shaderModuleResource));
 	}
 
 #pragma endregion

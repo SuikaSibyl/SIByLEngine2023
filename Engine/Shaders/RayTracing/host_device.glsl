@@ -1,7 +1,9 @@
 // Uniform buffer set at each frame
 struct GlobalUniforms
 {
-  mat4 viewProj;     // Camera view * projection
+  mat4 model;
+  mat4 view;
+  mat4 proj;
   mat4 viewInverse;  // Camera inverse view matrix
   mat4 projInverse;  // Camera inverse projection matrix
 };

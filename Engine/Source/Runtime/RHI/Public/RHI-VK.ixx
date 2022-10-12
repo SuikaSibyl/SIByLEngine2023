@@ -425,6 +425,8 @@ namespace SIByL::RHI
 		virtual auto createBLAS(BLASDescriptor const& desc) noexcept -> std::unique_ptr<BLAS> override;
 		/** create a TLAS */
 		virtual auto createTLAS(TLASDescriptor const& desc) noexcept -> std::unique_ptr<TLAS> override;
+		/** create a ray tracing pipeline on the device */
+		virtual auto createRayTracingPipeline(RayTracingPipelineDescriptor const& desc) noexcept -> std::unique_ptr<RayTracingPipeline> override;
 		// Get extensions
 		// ---------------------------
 		/** fetch a ray tracing extension is available */
@@ -2084,38 +2086,6 @@ namespace SIByL::RHI
 
 #pragma region VK_BINDGROUP_IMPL
 
-	BindGroup_VK::BindGroup_VK(Device_VK* device, BindGroupDescriptor const& desc) {
-		VkDescriptorSetAllocateInfo allocInfo{};
-		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-		allocInfo.descriptorPool = device->getBindGroupPool()->descriptorPool;
-		allocInfo.descriptorSetCount = 1;
-		allocInfo.pSetLayouts = &static_cast<BindGroupLayout_VK*>(desc.layout)->layout;
-		if (vkAllocateDescriptorSets(device->getVkDevice(), &allocInfo, &set) != VK_SUCCESS) {
-			Core::LogManager::Error("VULKAN :: failed to allocate descriptor sets!");
-		}
-		// configure the descriptors
-		int layoutEntryIdex = 0;
-		for (auto& entry : desc.entries) {
-			if (entry.resource.bufferBinding.has_value()) {
-				VkDescriptorBufferInfo bufferInfo{};
-				bufferInfo.buffer = static_cast<Buffer_VK*>(entry.resource.bufferBinding.value().buffer)->getVkBuffer();
-				bufferInfo.offset = entry.resource.bufferBinding.value().offset;
-				bufferInfo.range = entry.resource.bufferBinding.value().size;
-				VkWriteDescriptorSet descriptorWrite{};
-				descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-				descriptorWrite.dstSet = set;
-				descriptorWrite.dstBinding = entry.binding;
-				descriptorWrite.dstArrayElement = 0;
-				descriptorWrite.descriptorType = getVkDecriptorType(desc.layout->getBindGroupLayoutDescriptor().entries[layoutEntryIdex++]);
-				descriptorWrite.descriptorCount = 1;
-				descriptorWrite.pBufferInfo = &bufferInfo;
-				descriptorWrite.pImageInfo = nullptr;
-				descriptorWrite.pTexelBufferView = nullptr;
-				vkUpdateDescriptorSets(device->getVkDevice(), 1, &descriptorWrite, 0, nullptr);
-			}
-		}
-	}
-
 	auto Device_VK::createBindGroup(BindGroupDescriptor const& desc) noexcept -> std::unique_ptr<BindGroup> {
 		return std::make_unique<BindGroup_VK>(this, desc);
 	}
@@ -2146,6 +2116,11 @@ namespace SIByL::RHI
 	PipelineLayout_VK::PipelineLayout_VK(Device_VK* device, PipelineLayoutDescriptor const& desc)
 		: device(device) 
 	{
+		// push constants
+		for (auto& ps : desc.pushConstants) {
+			pushConstants.push_back(VkPushConstantRange{ getVkShaderStageFlags(ps.shaderStages), ps.offset, ps.size });
+		}
+		// descriptor set layouts
 		std::vector<VkDescriptorSetLayout> descriptorSets;
 		for (auto& bindgroupLayout : desc.bindGroupLayouts) {
 			descriptorSets.push_back(static_cast<BindGroupLayout_VK*>(bindgroupLayout)->layout);
@@ -2154,8 +2129,8 @@ namespace SIByL::RHI
 		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 		pipelineLayoutInfo.setLayoutCount = descriptorSets.size();
 		pipelineLayoutInfo.pSetLayouts = descriptorSets.data();
-		pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
-		pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
+		pipelineLayoutInfo.pushConstantRangeCount = pushConstants.size();
+		pipelineLayoutInfo.pPushConstantRanges = pushConstants.data();
 		if (vkCreatePipelineLayout(device->getVkDevice(), &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
 			Core::LogManager::Error("failed to create pipeline layout!");
 		}
@@ -2216,14 +2191,18 @@ namespace SIByL::RHI
 #pragma region VK_SHADERMODULE_IMPL
 
 	inline auto getVkShaderStageFlagBits(ShaderStages flag) noexcept -> VkShaderStageFlagBits {
-		switch (flag)
-		{
+		switch (flag) {
 		case SIByL::RHI::ShaderStages::COMPUTE:		return VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT; break;
 		case SIByL::RHI::ShaderStages::FRAGMENT:	return VkShaderStageFlagBits::VK_SHADER_STAGE_FRAGMENT_BIT; break;
 		case SIByL::RHI::ShaderStages::VERTEX:		return VkShaderStageFlagBits::VK_SHADER_STAGE_VERTEX_BIT; break;
+		case SIByL::RHI::ShaderStages::RAYGEN:		return VkShaderStageFlagBits::VK_SHADER_STAGE_RAYGEN_BIT_KHR; break;
+		case SIByL::RHI::ShaderStages::MISS:		return VkShaderStageFlagBits::VK_SHADER_STAGE_MISS_BIT_KHR; break;
+		case SIByL::RHI::ShaderStages::INTERSECTION:return VkShaderStageFlagBits::VK_SHADER_STAGE_INTERSECTION_BIT_KHR; break;
+		case SIByL::RHI::ShaderStages::CLOSEST_HIT:	return VkShaderStageFlagBits::VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR; break;
+		case SIByL::RHI::ShaderStages::CALLABLE:	return VkShaderStageFlagBits::VK_SHADER_STAGE_CALLABLE_BIT_KHR; break;
+		case SIByL::RHI::ShaderStages::ANY_HIT:		return VkShaderStageFlagBits::VK_SHADER_STAGE_ANY_HIT_BIT_KHR; break;
 		default: return VkShaderStageFlagBits::VK_SHADER_STAGE_ALL; break;
-			break;
-		}
+			break; }
 	}
 
 	ShaderModule_VK::ShaderModule_VK(Device_VK* device, ShaderModuleDescriptor const& desc)
@@ -3519,6 +3498,8 @@ namespace SIByL::RHI
 		/** Sets the current GPUBindGroup for the given index. */
 		virtual auto setBindGroup(uint32_t index, BindGroup* bindgroup,
 			uint64_t dynamicOffsetDataStart, uint32_t dynamicOffsetDataLength) noexcept -> void override;
+		/** Push constants */
+		virtual auto pushConstants(void* data, ShaderStagesFlags stages, uint32_t offset, uint32_t size) noexcept -> void override;
 		/** render pass */
 		std::unique_ptr<RenderPass_VK> renderPass = nullptr;
 		/** frame buffer */
@@ -3631,6 +3612,12 @@ namespace SIByL::RHI
 			static_cast<PipelineLayout_VK*>(renderPipeline->fixedFunctionSetttings.pipelineLayout)->pipelineLayout,
 			index, 1, &static_cast<BindGroup_VK*>(bindgroup)->set, 0, nullptr);
 	}
+	
+	auto RenderPassEncoder_VK::pushConstants(void* data, ShaderStagesFlags stages, uint32_t offset, uint32_t size) noexcept -> void {
+		vkCmdPushConstants(commandBuffer->commandBuffer,
+			static_cast<PipelineLayout_VK*>(renderPipeline->fixedFunctionSetttings.pipelineLayout)->pipelineLayout,
+			getVkShaderStageFlags(stages), offset, size, data);
+	}
 
 	auto CommandEncoder_VK::beginRenderPass(RenderPassDescriptor const& desc) noexcept -> std::unique_ptr<RenderPassEncoder> {
 		std::unique_ptr<RenderPassEncoder_VK> renderpassEncoder = std::make_unique<RenderPassEncoder_VK>();
@@ -3673,6 +3660,8 @@ namespace SIByL::RHI
 		/** Sets the current GPUBindGroup for the given index. */
 		virtual auto setBindGroup(uint32_t index, BindGroup* bindgroup,
 			uint64_t dynamicOffsetDataStart, uint32_t dynamicOffsetDataLength) noexcept -> void override;
+		/** Push constants */
+		virtual auto pushConstants(void* data, ShaderStagesFlags stages, uint32_t offset, uint32_t size) noexcept -> void override;
 		/** Set a ray tracing pipeline as the current pipeline */
 		virtual auto setPipeline(RayTracingPipeline* pipeline) noexcept -> void override;
 		/** Trace rays using current ray tracing pipeline */
@@ -3942,6 +3931,13 @@ namespace SIByL::RHI
 	
 #pragma endregion
 
+	export struct RayTracingExtension_VK :public RayTracingExtension {
+
+
+		/** device ray tracing properties */
+		VkPhysicalDeviceRayTracingPipelinePropertiesKHR vkRayTracingProperties;
+	};
+
 	export struct RayTracingPipeline_VK :public RayTracingPipeline {
 		/** initialzie */
 		RayTracingPipeline_VK(Device_VK* device, RayTracingPipelineDescriptor const& desc);
@@ -3965,36 +3961,38 @@ namespace SIByL::RHI
 #pragma region VK_RAY_TRACING_PIPELINE_IMPL
 
 	RayTracingPipeline_VK::RayTracingPipeline_VK(Device_VK* device, RayTracingPipelineDescriptor const& desc)
-		:device(device) {
+		:device(device), pipelineLayout(static_cast<PipelineLayout_VK*>(desc.layout)) {
 		// Creating a table of VkPipelineShaderStageCreateInfo objects
-		std::vector<VkPipelineShaderStageCreateInfo> pssci(desc.shaders.size());
-		for (int i = 0; i < desc.shaders.size(); ++i) {
-			ShaderModule_VK* shaderModule = static_cast<ShaderModule_VK*>(desc.shaders[i]);
-			pssci[i] = shaderModule->shaderStageInfo;
-		}
+		std::vector<VkPipelineShaderStageCreateInfo> pssci = {};
+		if (desc.rayGenShader)		pssci.push_back(static_cast<ShaderModule_VK*>(desc.rayGenShader)->shaderStageInfo);
+		if (desc.rayMissShader)		pssci.push_back(static_cast<ShaderModule_VK*>(desc.rayMissShader)->shaderStageInfo);
+		if (desc.closetHitShader)	pssci.push_back(static_cast<ShaderModule_VK*>(desc.closetHitShader)->shaderStageInfo);
+		if (desc.anyHitShader)		pssci.push_back(static_cast<ShaderModule_VK*>(desc.anyHitShader)->shaderStageInfo);
+		if (desc.intersectionShader)pssci.push_back(static_cast<ShaderModule_VK*>(desc.intersectionShader)->shaderStageInfo);
 		// Enumerating the elements of an array of shader groups, which contains one ray
 		// generation group, one miss group, and one hit group.
 		std::vector<VkRayTracingShaderGroupCreateInfoKHR> rtsgci{};
-
-		rtsgci[0].sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
-		rtsgci[0].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-		rtsgci[0].generalShader = 0; // PrimaryRayGenShaderIndex;
-		rtsgci[0].closestHitShader = VK_SHADER_UNUSED_KHR;
-		rtsgci[0].anyHitShader = VK_SHADER_UNUSED_KHR;
-		rtsgci[0].intersectionShader = VK_SHADER_UNUSED_KHR;
-
-		rtsgci[1] = rtsgci[0];
-		rtsgci[1].generalShader = 0; // MissShaderIndex;
-
-		rtsgci[2].sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
-		rtsgci[2].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
-		rtsgci[2].generalShader = VK_SHADER_UNUSED_KHR;
-		rtsgci[2].closestHitShader = 0;// ClosetHitShaderIndex;
-		rtsgci[2].anyHitShader = VK_SHADER_UNUSED_KHR;
-		rtsgci[2].intersectionShader = VK_SHADER_UNUSED_KHR;
-
-		VkPipelineLibraryCreateInfoKHR plci = {};
-		plci.sType = VK_STRUCTURE_TYPE_PIPELINE_LIBRARY_CREATE_INFO_KHR;
+		VkRayTracingShaderGroupCreateInfoKHR rtsgTemplate = {};
+		rtsgTemplate.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+		rtsgTemplate.generalShader = VK_SHADER_UNUSED_KHR;
+		rtsgTemplate.anyHitShader = VK_SHADER_UNUSED_KHR;
+		rtsgTemplate.closestHitShader = VK_SHADER_UNUSED_KHR;
+		rtsgTemplate.intersectionShader = VK_SHADER_UNUSED_KHR;
+		if (desc.rayGenShader) {
+			VkRayTracingShaderGroupCreateInfoKHR rtsg = rtsgTemplate;
+			rtsg.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+			rtsg.generalShader = 0;
+			rtsgci.push_back(rtsg); }
+		if (desc.rayMissShader) {
+			VkRayTracingShaderGroupCreateInfoKHR rtsg = rtsgTemplate;
+			rtsg.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+			rtsg.generalShader = 1;
+			rtsgci.push_back(rtsg); }
+		if (desc.closetHitShader) {
+			VkRayTracingShaderGroupCreateInfoKHR rtsg = rtsgTemplate;
+			rtsg.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
+			rtsg.closestHitShader = 2;
+			rtsgci.push_back(rtsg); }
 
 		VkRayTracingPipelineCreateInfoKHR rtpci = {};
 		rtpci.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
@@ -4003,8 +4001,8 @@ namespace SIByL::RHI
 		rtpci.groupCount = uint32_t(rtsgci.size());
 		rtpci.pGroups = rtsgci.data();
 		rtpci.maxPipelineRayRecursionDepth = 1;
-		rtpci.pLibraryInfo = &plci;
-		rtpci.layout = static_cast<PipelineLayout_VK*>(desc.pipelineLayout)->pipelineLayout;
+		rtpci.pLibraryInfo = nullptr;
+		rtpci.layout = static_cast<PipelineLayout_VK*>(desc.layout)->pipelineLayout;
 
 		device->getAdapterVk()->getContext()->vkCreateRayTracingPipelinesKHR(
 			device->getVkDevice(), // The VkDevice
@@ -4014,14 +4012,12 @@ namespace SIByL::RHI
 			nullptr, // Default host allocator
 			&pipeline); // Output VkPipelines
 
+		// --------------------------------------
+		// create rt shader binding table
+		// we collect information about the groups
 		// Querying physical device ray tracing properties.
-		VkPhysicalDeviceProperties2 physicalDeviceProperties = {};
-		physicalDeviceProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-		VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtPipelineProperties = {};
-		rtPipelineProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
-		physicalDeviceProperties.pNext = &rtPipelineProperties;
-		vkGetPhysicalDeviceProperties2(device->getAdapterVk()->getVkPhysicalDevice(), &physicalDeviceProperties);
-
+		VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtPipelineProperties =
+			static_cast<RayTracingExtension_VK*>(device->getRayTracingExtension())->vkRayTracingProperties;
 		// Computing a valid size and stride for the SBT
 		// The number of groups
 		auto groupCount = uint32_t(rtsgci.size());
@@ -4030,22 +4026,39 @@ namespace SIByL::RHI
 		// Compute the actual size needed per SBT entry by rounding up to the
 		// alignment needed. Nvh::align_up(a,b) rounds a up to a multiple of b.
 		uint32_t groupSizeAligned = Math::alignUp(groupHandleSize, rtPipelineProperties.shaderGroupBaseAlignment);
-		// Bytes needed for the SBT
-		uint32_t sbtSize = groupCount * groupSizeAligned;
+		// ray gen region
+		//rayGenRegion.deviceAddress = SBTBufferAddress;
+		rayGenRegion.stride = Math::alignUp(groupHandleSize, rtPipelineProperties.shaderGroupBaseAlignment);
+		rayGenRegion.size = rayGenRegion.stride; // The size member of pRayGenShaderBindingTable must be equal to its stride member
+		// miss region
+		//missRegion.deviceAddress = SBTBufferAddress;
+		missRegion.stride = groupSizeAligned;
+		uint32_t missCount = 1;
+		missRegion.size = Math::alignUp(missCount * groupSizeAligned, rtPipelineProperties.shaderGroupBaseAlignment);
+		// hit region
+		//hitRegion.deviceAddress = SBTBufferAddress;
+		hitRegion.stride = groupSizeAligned;
+		uint32_t hitCount = 1;
+		hitRegion.size = Math::alignUp(hitCount * groupSizeAligned, rtPipelineProperties.shaderGroupBaseAlignment);
+		// callable region
+		callableRegion.stride = 0;
+		callableRegion.size = 0;
 
 		// Allocating and writing shader handles from the ray tracing pipeline into the SBT
 		// Fetch all the shader handles used in the pipeline.
 		// This is opaque data, so we store it in a vector of bytes.
-		std::vector<uint8_t > shaderHandleStorage(sbtSize);
+		// Bytes needed for the SBT
+		uint32_t dataSize = groupCount * groupHandleSize;
+		std::vector<uint8_t> shaderHandleStorage(dataSize);
 		device->getAdapterVk()->getContext()->vkGetRayTracingShaderGroupHandlesKHR(
 			device->getVkDevice(), // The device
 			pipeline, // The ray tracing pipeline
 			0, // Index of the group to start from
 			groupCount, // The number of groups
-			sbtSize, // Size of the output buffer in bytes
+			dataSize, // Size of the output buffer in bytes
 			shaderHandleStorage.data()); // The output buffer
-
 		// Allocate a buffer for storing the SBT.
+		VkDeviceSize sbtSize = rayGenRegion.size + missRegion.size + hitRegion.size + callableRegion.size;
 		SBTBuffer = device->createBuffer({
 				sbtSize,
 				(uint32_t)BufferUsage::COPY_SRC | (uint32_t)BufferUsage::SHADER_DEVICE_ADDRESS | (uint32_t)BufferUsage::SHADER_BINDING_TABLE,
@@ -4053,37 +4066,27 @@ namespace SIByL::RHI
 				(uint32_t)MemoryProperty::HOST_VISIBLE_BIT | (uint32_t)MemoryProperty::HOST_COHERENT_BIT
 			});
 
+		// struct to query device address infor
+		VkBufferDeviceAddressInfo deviceAddressInfo = {};
+		deviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+		deviceAddressInfo.buffer = static_cast<Buffer_VK*>(SBTBuffer.get())->getVkBuffer();
+		VkDeviceAddress SBTBufferAddress = vkGetBufferDeviceAddress(device->getVkDevice(), &deviceAddressInfo);
+		rayGenRegion.deviceAddress = SBTBufferAddress;
+		missRegion.deviceAddress = SBTBufferAddress + rayGenRegion.size;
+		hitRegion.deviceAddress = SBTBufferAddress + rayGenRegion.size + missRegion.size;
+		// Helper to retrieve the handle data
+		auto getHandle = [&](int i) { return shaderHandleStorage.data() + i * groupHandleSize; };
 		// Map the SBT buffer and write in the handles.
 		std::future<bool> sync = SBTBuffer->mapAsync((uint32_t)MapMode::WRITE, 0, sbtSize);
 		if (sync.get()) {
 			void* mapped = SBTBuffer->getMappedRange(0, sbtSize);
 			auto* pData = reinterpret_cast <uint8_t*>(mapped);
 			for (uint32_t g = 0; g < groupCount; g++) {
-				memcpy(pData,
-					shaderHandleStorage.data() + g * groupHandleSize,
-					groupHandleSize);
+				memcpy(pData, shaderHandleStorage.data() + g * groupHandleSize, groupHandleSize);
 				pData += groupSizeAligned;
 			}
 		}
 		SBTBuffer->unmap();
-
-		// struct to query device address infor
-		//VkDevice& device = commandEncoder->commandBuffer->device->getVkDevice();
-		//deviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-		//deviceAddressInfo.buffer = static_cast<Buffer_VK*>(raytracingPipeline->SBTBuffer.get())->getVkBuffer();
-		//VkDeviceAddress SBTBufferAddress = vkGetBufferDeviceAddress(device, &deviceAddressInfo);
-		// ray gen region
-		//rayGenRegion.deviceAddress = SBTBufferAddress;
-		////rayGenRegion.stride = shaderTableRecordSize * RayGenGroupIndex;
-		////rayGenRegion.size = rayTracingProperties.shaderGroupHandleSize;
-		//// miss region
-		//missRegion.deviceAddress = SBTBufferAddress;
-		////missRegion.stride = shaderTableRecordSize * MissGroupIndex;
-		////missRegion.size = rayTracingProperties.shaderGroupHandleSize;
-		//// hit region
-		//hitRegion.deviceAddress = SBTBufferAddress;
-		//hitRegion.stride = shaderTableRecordSize * HitGroupIndex;
-		//hitRegion.size = shaderTableRecordSize * numHitRecords;
 	}
 
 	RayTracingPipeline_VK::~RayTracingPipeline_VK() {
@@ -4104,6 +4107,7 @@ namespace SIByL::RHI
 	}
 
 	auto RayTracingPassEncoder_VK::setPipeline(RayTracingPipeline* pipeline) noexcept -> void {
+		raytracingPipeline = static_cast<RayTracingPipeline_VK*>(pipeline);
 		vkCmdBindPipeline(commandEncoder->commandBuffer->commandBuffer,
 			VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
 			raytracingPipeline->pipeline);
@@ -4118,9 +4122,15 @@ namespace SIByL::RHI
 
 	auto RayTracingPassEncoder_VK::setBindGroup(uint32_t index, BindGroup* bindgroup,
 		uint64_t dynamicOffsetDataStart, uint32_t dynamicOffsetDataLength) noexcept -> void {
-		vkCmdBindDescriptorSets(commandEncoder->commandBuffer->commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+		vkCmdBindDescriptorSets(commandEncoder->commandBuffer->commandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
 			raytracingPipeline->pipelineLayout->pipelineLayout,
 			index, 1, &static_cast<BindGroup_VK*>(bindgroup)->set, 0, nullptr);
+	}
+	
+	auto RayTracingPassEncoder_VK::pushConstants(void* data, ShaderStagesFlags stages, uint32_t offset, uint32_t size) noexcept -> void {
+		vkCmdPushConstants(commandEncoder->commandBuffer->commandBuffer,
+			raytracingPipeline->pipelineLayout->pipelineLayout,
+			getVkShaderStageFlags(stages), offset, size, data);
 	}
 
 	auto RayTracingPassEncoder_VK::traceRays(uint32_t width, uint32_t height, uint32_t depth) noexcept -> void {
@@ -4160,10 +4170,6 @@ namespace SIByL::RHI
 	export struct ShaderBindingTable_VK {
 	};
 
-	export struct RayTracingExtension_VK :public RayTracingExtension {
-		VkPhysicalDeviceRayTracingPipelinePropertiesKHR vkRayTracingProperties;
-	};
-
 #pragma region VK_RAY_TRACING_EXT_IMPL
 	
 	auto Device_VK::initRayTracingExt() noexcept -> void {
@@ -4177,6 +4183,89 @@ namespace SIByL::RHI
 
 	auto Device_VK::getRayTracingExtension() noexcept -> RayTracingExtension* {
 		return raytracingExt.get();
+	}
+
+	auto Device_VK::createRayTracingPipeline(RayTracingPipelineDescriptor const& desc) noexcept -> std::unique_ptr<RayTracingPipeline> {
+		return std::make_unique<RayTracingPipeline_VK>(this, desc);
+	}
+
+#pragma endregion
+
+#pragma region DELAYED_IMPL
+
+	BindGroup_VK::BindGroup_VK(Device_VK* device, BindGroupDescriptor const& desc) {
+		VkDescriptorSetAllocateInfo allocInfo{};
+		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+		allocInfo.descriptorPool = device->getBindGroupPool()->descriptorPool;
+		allocInfo.descriptorSetCount = 1;
+		allocInfo.pSetLayouts = &static_cast<BindGroupLayout_VK*>(desc.layout)->layout;
+		if (vkAllocateDescriptorSets(device->getVkDevice(), &allocInfo, &set) != VK_SUCCESS) {
+			Core::LogManager::Error("VULKAN :: failed to allocate descriptor sets!");
+		}
+		// configure the descriptors
+		std::vector<VkWriteDescriptorSet>	descriptorWrites = {};
+		std::vector<VkDescriptorBufferInfo> bufferInfos = {};
+		std::vector<VkDescriptorImageInfo>	imageInfos = {};
+		std::vector<VkWriteDescriptorSetAccelerationStructureKHR> accelerationStructureInfos = {};
+		int layoutEntryIdex = 0;
+		for (auto& entry : desc.entries) {
+			if (entry.resource.bufferBinding.has_value()) {
+				bufferInfos.push_back(VkDescriptorBufferInfo{});
+				VkDescriptorBufferInfo& bufferInfo = bufferInfos.back();
+				bufferInfo.buffer = static_cast<Buffer_VK*>(entry.resource.bufferBinding.value().buffer)->getVkBuffer();
+				bufferInfo.offset = entry.resource.bufferBinding.value().offset;
+				bufferInfo.range = entry.resource.bufferBinding.value().size;
+				descriptorWrites.push_back(VkWriteDescriptorSet{});
+				VkWriteDescriptorSet& descriptorWrite = descriptorWrites.back();
+				descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrite.dstSet = set;
+				descriptorWrite.dstBinding = entry.binding;
+				descriptorWrite.dstArrayElement = 0;
+				descriptorWrite.descriptorType = getVkDecriptorType(desc.layout->getBindGroupLayoutDescriptor().entries[layoutEntryIdex++]);
+				descriptorWrite.descriptorCount = 1;
+				descriptorWrite.pBufferInfo = &bufferInfo;
+				descriptorWrite.pImageInfo = nullptr;
+				descriptorWrite.pTexelBufferView = nullptr;
+			}
+			else if (entry.resource.textureView) {
+				imageInfos.push_back({});
+				VkDescriptorImageInfo& imageInfo = imageInfos.back();
+				imageInfo.sampler = {};
+				imageInfo.imageView = static_cast<TextureView_VK*>(entry.resource.textureView)->imageView;
+				imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+				descriptorWrites.push_back(VkWriteDescriptorSet{});
+				VkWriteDescriptorSet& descriptorWrite = descriptorWrites.back();
+				descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrite.dstSet = set;
+				descriptorWrite.dstBinding = entry.binding;
+				descriptorWrite.dstArrayElement = 0;
+				descriptorWrite.descriptorType = getVkDecriptorType(desc.layout->getBindGroupLayoutDescriptor().entries[layoutEntryIdex++]);
+				descriptorWrite.descriptorCount = 1;
+				descriptorWrite.pBufferInfo = nullptr;
+				descriptorWrite.pImageInfo = &imageInfo;
+				descriptorWrite.pTexelBufferView = nullptr;
+			}
+			else if (entry.resource.tlas) {
+				accelerationStructureInfos.push_back({});
+				VkWriteDescriptorSetAccelerationStructureKHR& descASInfo = accelerationStructureInfos.back();
+				descASInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
+				descASInfo.accelerationStructureCount = 1;
+				descASInfo.pAccelerationStructures = &static_cast<TLAS_VK*>(entry.resource.tlas)->tlas;
+				descriptorWrites.push_back(VkWriteDescriptorSet{});
+				VkWriteDescriptorSet& descriptorWrite = descriptorWrites.back();
+				descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrite.dstSet = set;
+				descriptorWrite.dstBinding = entry.binding;
+				descriptorWrite.dstArrayElement = 0;
+				descriptorWrite.descriptorType = getVkDecriptorType(desc.layout->getBindGroupLayoutDescriptor().entries[layoutEntryIdex++]);
+				descriptorWrite.descriptorCount = 1;
+				descriptorWrite.pBufferInfo = nullptr;
+				descriptorWrite.pImageInfo = nullptr;
+				descriptorWrite.pTexelBufferView = nullptr;
+				descriptorWrite.pNext = &descASInfo;
+			}
+			vkUpdateDescriptorSets(device->getVkDevice(), descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
+		}
 	}
 
 #pragma endregion
