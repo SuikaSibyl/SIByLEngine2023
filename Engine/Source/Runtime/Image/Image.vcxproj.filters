@@ -45,5 +45,11 @@
     <ClCompile Include="Private\FileFormat\Image.FileFormat-JPEG.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\FileFormat\Image.FileFormat-PNG.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Private\FileFormat\Image.FileFormat-PNG.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

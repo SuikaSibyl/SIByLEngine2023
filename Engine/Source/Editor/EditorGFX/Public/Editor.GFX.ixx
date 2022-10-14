@@ -1,3 +1,6 @@
+module;
+#include <compare>
+#include <filesystem>
 export module Editor.GFX;
 
 export import :InspectorWidget;

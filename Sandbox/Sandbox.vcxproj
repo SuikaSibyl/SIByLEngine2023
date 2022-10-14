@@ -81,6 +81,8 @@
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
     <LibraryPath>$(SolutionDir)Engine\Binaries\ThirdParty\glfw;$(SolutionDir)Engine\Binaries\ThirdParty\vulkan;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
     <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\glad\include;$(SolutionDir)Engine\Source\Runtime\Core\Public;$(SolutionDir)Engine\Source\ThirdParty\imgui\includes;$(IncludePath)</IncludePath>
+    <LinkIncremental>
+    </LinkIncremental>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>

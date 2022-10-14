@@ -31,6 +31,7 @@ namespace SIByL::Editor
 		auto startGuiRecording() -> void;
 		auto render() -> void;
 
+		auto getDPI() noexcept -> float { return dpi; }
 		auto createImGuiTexture(RHI::Sampler* sampler, RHI::TextureView* view, 
 			RHI::TextureLayout layout) noexcept -> std::unique_ptr<ImGuiTexture>;
 
@@ -41,6 +42,7 @@ namespace SIByL::Editor
 		/** imgui texture pool */
 		std::unordered_map<Core::GUID, std::unique_ptr<ImGuiTexture>> ImGuiTexturePool = {};
 	private:
+		float dpi;
 		static ImGuiLayer* singleton;
 	};
 
@@ -72,7 +74,7 @@ namespace SIByL::Editor
 		ImGui::StyleColorsDark();
 		//ImGui::StyleColorsClassic();
 
-		float dpi = imguiBackend->getWindowDPI();
+		dpi = imguiBackend->getWindowDPI();
 		io.Fonts->AddFontFromFileTTF("../Engine/Binaries/Runtime/fonts/opensans/OpenSans-Bold.ttf", dpi * 15.0f);
 		io.FontDefault = io.Fonts->AddFontFromFileTTF("../Engine/Binaries/Runtime/fonts/opensans/OpenSans-Regular.ttf", dpi * 15.0f);
 

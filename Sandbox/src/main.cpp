@@ -143,6 +143,11 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			{{0.5f, -0.5f, 0.0f}},
 			{{0.5f, 0.5f, 0.0f}},
 			{{-0.5f, 0.5f, 0.0f}},
+
+			{{-0.5f, -0.5f, -0.5f}},
+			{{0.5f, -0.5f, -0.5f}},
+			{{0.5f, 0.5f, -0.5f}},
+			{{-0.5f, 0.5f, -0.5f}}
 		};
 		vertexBufferRT = device->createDeviceLocalBuffer((void*)verticesRT.data(), sizeof(verticesRT[0]) * verticesRT.size(),
 			(uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
@@ -152,7 +157,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			vertexBufferRT.get(),
 			mesh_resource->indexBuffer.get(),
 			(uint32_t)verticesRT.size(),
-			2,
+			4,
 			RHI::IndexFormat::UINT16_t });
 		tlas = device->createTLAS(RHI::TLASDescriptor{ {blas.get()} });
 
@@ -177,6 +182,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				{ RHI::TextureFormat::RGBA8_UNORM }
 			};
 			GFX::GFXManager::get()->registerTextureResource(framebufferColorAttach, desc);
+			desc.format = RHI::TextureFormat::RGBA32_FLOAT;
 			desc.usage |= (uint32_t)RHI::TextureUsage::STORAGE_BINDING;
 			GFX::GFXManager::get()->registerTextureResource(rtTarget, desc);
 			desc.format = RHI::TextureFormat::DEPTH32_FLOAT;
@@ -329,7 +335,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		height = 480;
 
 		UniformBufferObject ubo;
-		ubo.model = Math::transpose(Math::rotate(timer.totalTime() * 80, Math::vec3(0,1,0)).m);
+		//ubo.model = Math::transpose(Math::rotate(timer.totalTime() * 80, Math::vec3(0,1,0)).m);
 		ubo.view = Math::transpose(Math::lookAt(Math::vec3(0, 0, -2), Math::vec3(0, 0, 0), Math::vec3(0, 1, 0)).m);
 		ubo.proj = Math::transpose(Math::perspective(45.f, 1.f * 720 / 480, 0.1f, 10.f).m);
 		ubo.viewInverse = Math::inverse(ubo.view);
@@ -446,6 +452,12 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			{ (float)width,(float)height },
 			{ 0,0 }, { 1, 1 });
 		ImGui::End();
+		ImGui::Begin("Hello2");
+		ImGui::Image(
+			Editor::TextureUtils::getImGuiTexture(framebufferColorAttach)->getTextureID(),
+			{ (float)width,(float)height },
+			{ 0,0 }, { 1, 1 });
+		ImGui::End();
 		editorLayer->onDrawGui();
 		imguiLayer->render();
 
@@ -541,7 +553,7 @@ int main()
 	app.createMainWindow({
 			Platform::WindowVendor::GLFW,
 			L"SIByL Engine 2022.0",
-			720, 480,
+			1280, 720,
 			Platform::WindowProperties::VULKAN_CONTEX
 		});
 	app.run();
