@@ -322,7 +322,7 @@ namespace SIByL::Math
 		cameraToWorld.data[3][3] = 1;
 		// Initialize first three columns of viewing matrix
 		vec3 dir = normalize(look - pos);
-		vec3 left = normalize(cross(normalize(up), dir));
+		vec3 left = normalize(cross(dir, normalize(up)));
 		vec3 newUp = cross(dir, left);
 		cameraToWorld.data[0][0] = left.x; cameraToWorld.data[0][1] = newUp.x; cameraToWorld.data[0][2] = dir.x;
 		cameraToWorld.data[1][0] = left.y; cameraToWorld.data[1][1] = newUp.y; cameraToWorld.data[1][2] = dir.y;

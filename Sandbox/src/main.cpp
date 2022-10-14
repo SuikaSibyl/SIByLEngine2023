@@ -134,16 +134,16 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		GFX::Mesh mesh;
 		mesh.vertexBuffer = device->createDeviceLocalBuffer((void*)vertex_CornellBox.data, vertex_CornellBox.size,
-			(uint32_t)RHI::BufferUsage::VERTEX);
+			(uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::STORAGE);
 		mesh.indexBuffer = device->createDeviceLocalBuffer((void*)index_CornellBox.data, index_CornellBox.size,
 			(uint32_t)RHI::BufferUsage::INDEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
-			(uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY);
+			(uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
 		ResourceManager::get()->addResource<GFX::Mesh>(0, std::move(mesh));
 		GFX::Mesh* mesh_resource = ResourceManager::get()->getResource<GFX::Mesh>(0);
 
 		vertexBufferRT = device->createDeviceLocalBuffer((void*)vertex_CornellBox_POnly.data, vertex_CornellBox_POnly.size,
 			(uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
-			(uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY);
+			(uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
 
 		blas = device->createBLAS(RHI::BLASDescriptor{
 			vertexBufferRT.get(),
@@ -221,6 +221,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				RHI::BindGroupLayoutDescriptor{ {
 					RHI::BindGroupLayoutEntry{0, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE, RHI::AccelerationStructureBindingLayout{}},
 					RHI::BindGroupLayoutEntry{1, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE, RHI::StorageTextureBindingLayout{}},
+					RHI::BindGroupLayoutEntry{2, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
+					RHI::BindGroupLayoutEntry{3, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
 					} }
 			);
 
@@ -234,7 +236,9 @@ struct SandBoxApplication :public Application::ApplicationBase {
 					bindGroupLayout_RT.get(),
 					std::vector<RHI::BindGroupEntry>{
 						{0,RHI::BindingResource{tlas.get()}},
-						{1,RHI::BindingResource{Core::ResourceManager::get()->getResource<GFX::Texture>(rtTarget)->originalView.get()}}
+						{1,RHI::BindingResource{Core::ResourceManager::get()->getResource<GFX::Texture>(rtTarget)->originalView.get()}},
+						{2,RHI::BindingResource{{vertexBufferRT.get(), 0, vertexBufferRT.get()->size()}}},
+						{3,RHI::BindingResource{{mesh_resource->indexBuffer.get(), 0, mesh_resource->indexBuffer->size()}}}
 				} });
 			}
 		}
@@ -323,10 +327,10 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		UniformBufferObject ubo;
 		//ubo.model = Math::transpose(Math::rotate(timer.totalTime() * 80, Math::vec3(0, 1, 0)).m);
-		ubo.view = Math::transpose(Math::lookAt(Math::vec3(0, 1, 4), Math::vec3(0, 1, 0), Math::vec3(0, 1, 0)).m);
+		ubo.view = Math::transpose(Math::lookAt(Math::vec3(0, 1, 3.5), Math::vec3(0, 1, 0), Math::vec3(0, 1, 0)).m);
 		ubo.proj = Math::transpose(Math::perspective(45.f, 1.f * 720 / 480, 0.1f, 10.f).m);
 		ubo.viewInverse = Math::inverse(ubo.view);
-		ubo.proj.data[1][1] *= -1;
+		//ubo.proj.data[1][1] *= -1;
 		ubo.projInverse = Math::inverse(ubo.proj);
 		Math::vec4 originPos = Math::vec4(0.f, 0.f, 0.f, 1.f);
 		Math::mat4 invView = Math::transpose(ubo.viewInverse);
@@ -480,13 +484,13 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		imguiLayer->startGuiRecording();
 		bool show_demo_window = true;
 		ImGui::ShowDemoWindow(&show_demo_window);
-		ImGui::Begin("Hello");
+		ImGui::Begin("Ray Tracer");
 		ImGui::Image(
 			Editor::TextureUtils::getImGuiTexture(rtTarget)->getTextureID(),
 			{ (float)width,(float)height },
 			{ 0,0 }, { 1, 1 });
 		ImGui::End();
-		ImGui::Begin("Hello2");
+		ImGui::Begin("Rasterizer");
 		ImGui::Image(
 			Editor::TextureUtils::getImGuiTexture(framebufferColorAttach)->getTextureID(),
 			{ (float)width,(float)height },

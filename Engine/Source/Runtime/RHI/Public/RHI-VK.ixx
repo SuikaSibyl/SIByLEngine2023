@@ -4339,15 +4339,28 @@ namespace SIByL::RHI
 			Core::LogManager::Error("VULKAN :: failed to allocate descriptor sets!");
 		}
 		// configure the descriptors
+		uint32_t bufferCounts = 0;
+		uint32_t imageCounts = 0;
+		uint32_t accStructCounts = 0;
+		for (auto& entry : desc.entries) {
+			if (entry.resource.bufferBinding.has_value())
+				++bufferCounts;
+			else if (entry.resource.textureView)
+				++imageCounts;
+			else if (entry.resource.tlas)
+				++accStructCounts;
+		}
 		std::vector<VkWriteDescriptorSet>	descriptorWrites = {};
-		std::vector<VkDescriptorBufferInfo> bufferInfos = {};
-		std::vector<VkDescriptorImageInfo>	imageInfos = {};
-		std::vector<VkWriteDescriptorSetAccelerationStructureKHR> accelerationStructureInfos = {};
+		std::vector<VkDescriptorBufferInfo> bufferInfos(bufferCounts);
+		std::vector<VkDescriptorImageInfo>	imageInfos(imageCounts);
+		std::vector<VkWriteDescriptorSetAccelerationStructureKHR> accelerationStructureInfos(accStructCounts);
 		int layoutEntryIdex = 0;
+		uint32_t bufferIndex = 0;
+		uint32_t imageIndex = 0;
+		uint32_t accStructIndex = 0;
 		for (auto& entry : desc.entries) {
 			if (entry.resource.bufferBinding.has_value()) {
-				bufferInfos.push_back(VkDescriptorBufferInfo{});
-				VkDescriptorBufferInfo& bufferInfo = bufferInfos.back();
+				VkDescriptorBufferInfo& bufferInfo = bufferInfos[bufferIndex++];
 				bufferInfo.buffer = static_cast<Buffer_VK*>(entry.resource.bufferBinding.value().buffer)->getVkBuffer();
 				bufferInfo.offset = entry.resource.bufferBinding.value().offset;
 				bufferInfo.range = entry.resource.bufferBinding.value().size;
@@ -4364,8 +4377,7 @@ namespace SIByL::RHI
 				descriptorWrite.pTexelBufferView = nullptr;
 			}
 			else if (entry.resource.textureView) {
-				imageInfos.push_back({});
-				VkDescriptorImageInfo& imageInfo = imageInfos.back();
+				VkDescriptorImageInfo& imageInfo = imageInfos[imageIndex++];
 				imageInfo.sampler = {};
 				imageInfo.imageView = static_cast<TextureView_VK*>(entry.resource.textureView)->imageView;
 				imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -4382,8 +4394,7 @@ namespace SIByL::RHI
 				descriptorWrite.pTexelBufferView = nullptr;
 			}
 			else if (entry.resource.tlas) {
-				accelerationStructureInfos.push_back({});
-				VkWriteDescriptorSetAccelerationStructureKHR& descASInfo = accelerationStructureInfos.back();
+				VkWriteDescriptorSetAccelerationStructureKHR& descASInfo = accelerationStructureInfos[accStructIndex++];
 				descASInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
 				descASInfo.accelerationStructureCount = 1;
 				descASInfo.pAccelerationStructures = &static_cast<TLAS_VK*>(entry.resource.tlas)->tlas;
@@ -4400,8 +4411,8 @@ namespace SIByL::RHI
 				descriptorWrite.pTexelBufferView = nullptr;
 				descriptorWrite.pNext = &descASInfo;
 			}
-			vkUpdateDescriptorSets(device->getVkDevice(), descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
 		}
+		vkUpdateDescriptorSets(device->getVkDevice(), descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
 	}
 
 #pragma endregion

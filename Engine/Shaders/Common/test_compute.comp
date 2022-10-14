@@ -1,7 +1,9 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
 #extension GL_EXT_ray_query : require
+#extension GL_EXT_scalar_block_layout : require
 #extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_shader_16bit_storage : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 
 #include "../RayTracing/host_device.glsl"
@@ -11,6 +13,10 @@ layout(local_size_x = 16, local_size_y = 8, local_size_z = 1) in;
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
 layout(binding = 1, set = 0, rgba32f) uniform image2D image;
+layout(binding = 2, set = 0, scalar) buffer Vertices {
+  vec3 vertices[];
+};
+layout(binding = 3, set = 0, scalar) buffer Indices { uint16_t indices[]; };
 
 layout(binding = 0, set = 1) uniform _GlobalUniforms { GlobalUniforms uni; };
 
@@ -19,11 +25,6 @@ void main()
     const uvec2 resolution = uvec2(720, 480);
     const uvec2 pixel = gl_GlobalInvocationID.xy;
     if(gl_GlobalInvocationID.x >= resolution.x || gl_GlobalInvocationID.y >= resolution.y) return;
-
-    // Create a vector of 3 floats with a different color per pixel.
-    const vec3 pixelColor = vec3(float(pixel.x) / resolution.x,  // Red
-                               float(pixel.y) / resolution.y,  // Green
-                               0.0);                           // Blue
 
     const vec2 pixelCenter = vec2(pixel.xy) + vec2(0.5);
     const vec2 inUV = pixelCenter/vec2(resolution.xy);
@@ -49,9 +50,58 @@ void main()
     while(rayQueryProceedEXT(rayQuery))
     {
     }
-  // Get the t-value of the intersection (if there's no intersection, this will
-  // be tMax = 10000.0). "true" says "get the committed intersection."
-  const float t = rayQueryGetIntersectionTEXT(rayQuery, true);
+    // Get the t-value of the intersection (if there's no intersection, this will
+    // be tMax = 10000.0). "true" says "get the committed intersection."
+    const float t = rayQueryGetIntersectionTEXT(rayQuery, true);
+    vec3 pixelColor;
+    // Get the type of committed (true) intersection - nothing, a triangle, or
+    // a generated object
+    if(rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT) {
+        // // Ray hit a triangle
+        // pixelColor = vec3(t/10);
+        // const int primitiveID = rayQueryGetIntersectionPrimitiveIndexEXT(rayQuery, true);
+        // pixelColor = vec3(primitiveID / 10.0, primitiveID / 100.0, primitiveID / 1000.0);
+        // // Create a vec3(0, b.x, b.y)
+        // pixelColor = vec3(0.0, rayQueryGetIntersectionBarycentricsEXT(rayQuery, true));
+        // // Set the first element to 1 - b.x - b.y, setting pixelColor to
+        // // (1 - b.x - b.y, b.x, b.y).
+        // pixelColor.x = 1 - pixelColor.y - pixelColor.z;
+        // Get the ID of the triangle
+        // const int primitiveID = rayQueryGetIntersectionPrimitiveIndexEXT(rayQuery, true);
+        // // Get the index of the first vertex of the triangle
+        // const uint i0 = indices[3 * primitiveID];
+        // // Get the position of the first vertex
+        // const vec3 v0 = vertices[i0];
+        // // Return it as a color
+        // pixelColor = vec3(0.5) + 0.25 * v0;
+        // Get the ID of the triangle
+        const int primitiveID = rayQueryGetIntersectionPrimitiveIndexEXT(rayQuery, true);
 
-    imageStore(image, ivec2(pixel), vec4(vec3(t/10), 1.0));
+        // Get the indices of the vertices of the triangle
+        const uint i0 = indices[3 * primitiveID + 0];
+        const uint i1 = indices[3 * primitiveID + 1];
+        const uint i2 = indices[3 * primitiveID + 2];
+
+        // Get the vertices of the triangle
+        const vec3 v0 = vertices[i0];
+        const vec3 v1 = vertices[i1];
+        const vec3 v2 = vertices[i2];
+
+        // Get the barycentric coordinates of the intersection
+        vec3 barycentrics = vec3(0.0, rayQueryGetIntersectionBarycentricsEXT(rayQuery, true));
+        barycentrics.x    = 1.0 - barycentrics.y - barycentrics.z;
+
+        // Compute the position of the intersection in object space
+        const vec3 objectSpaceIntersection = barycentrics.x * v0 + barycentrics.y * v1 + barycentrics.z * v2;
+
+        // Return it as a color
+        pixelColor = vec3(0.5) + 0.25 * objectSpaceIntersection;
+
+    }
+    else {
+        // Ray hit the sky
+        pixelColor = vec3(0.0, 0.0, 0.0);
+    }
+
+    imageStore(image, ivec2(pixel), vec4(pixelColor, 1.0));
 }
