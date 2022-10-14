@@ -1,0 +1,57 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_ray_query : require
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+#include "../RayTracing/host_device.glsl"
+#include "../RayTracing/raycommon.glsl"
+
+layout(local_size_x = 16, local_size_y = 8, local_size_z = 1) in;
+
+layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
+layout(binding = 1, set = 0, rgba32f) uniform image2D image;
+
+layout(binding = 0, set = 1) uniform _GlobalUniforms { GlobalUniforms uni; };
+
+void main()
+{  
+    const uvec2 resolution = uvec2(720, 480);
+    const uvec2 pixel = gl_GlobalInvocationID.xy;
+    if(gl_GlobalInvocationID.x >= resolution.x || gl_GlobalInvocationID.y >= resolution.y) return;
+
+    // Create a vector of 3 floats with a different color per pixel.
+    const vec3 pixelColor = vec3(float(pixel.x) / resolution.x,  // Red
+                               float(pixel.y) / resolution.y,  // Green
+                               0.0);                           // Blue
+
+    const vec2 pixelCenter = vec2(pixel.xy) + vec2(0.5);
+    const vec2 inUV = pixelCenter/vec2(resolution.xy);
+    vec2 d = inUV * 2.0 - 1.0;
+
+    vec4 origin    = uni.viewInverse * vec4(0, 0, 0, 1);
+    vec4 target    = uni.projInverse * vec4(d.x, d.y, 1, 1);
+    vec4 direction = uni.viewInverse * vec4(normalize(target.xyz), 0);
+
+    // Trace the ray and see if and where it intersects the scene!
+    // First, initialize a ray query object:
+    rayQueryEXT rayQuery;
+    rayQueryInitializeEXT(rayQuery,              // Ray query
+                          topLevelAS,                  // Top-level acceleration structure
+                            gl_RayFlagsOpaqueEXT,  // Ray flags, here saying "treat all geometry as opaque"
+                            0xFF,                  // 8-bit instance mask, here saying "trace against all instances"
+                            origin.xyz,             // Ray origin
+                            0.0,                   // Minimum t-value
+                            direction.xyz,          // Ray direction
+                            10000.0);              // Maximum t-value
+    // Start traversal, and loop over all ray-scene intersections. When this finishes,
+    // rayQuery stores a "committed" intersection, the closest intersection (if any).
+    while(rayQueryProceedEXT(rayQuery))
+    {
+    }
+  // Get the t-value of the intersection (if there's no intersection, this will
+  // be tMax = 10000.0). "true" says "get the committed intersection."
+  const float t = rayQueryGetIntersectionTEXT(rayQuery, true);
+
+    imageStore(image, ivec2(pixel), vec4(vec3(t/10), 1.0));
+}

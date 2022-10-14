@@ -71,12 +71,12 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\imgui\includes;$(SolutionDir)Engine\Source\ThirdParty\vulkan\Include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\imgui\includes;$(SolutionDir)Engine\Source\ThirdParty\vulkan\Include;$(SolutionDir)Engine\Source\ThirdParty\tinyobjloader;$(IncludePath)</IncludePath>
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\imgui\includes;$(SolutionDir)Engine\Source\ThirdParty\vulkan\Include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\imgui\includes;$(SolutionDir)Engine\Source\ThirdParty\vulkan\Include;$(SolutionDir)Engine\Source\ThirdParty\tinyobjloader;$(IncludePath)</IncludePath>
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
   </PropertyGroup>

@@ -85,12 +85,13 @@ namespace SIByL::RHI
 	export using ContextExtensionsFlags = uint32_t;
 	/** Context Extensions for extending API capability */
 	export enum struct ContextExtension {
-		NONE					= 0 << 0,
-		DEBUG_UTILS				= 1 << 0,
-		MESH_SHADER				= 1 << 1,
-		FRAGMENT_BARYCENTRIC	= 1 << 2,
-		SAMPLER_FILTER_MIN_MAX	= 1 << 3,
-		RAY_TRACING				= 1 << 4,
+		NONE						= 0 << 0,
+		DEBUG_UTILS					= 1 << 0,
+		MESH_SHADER					= 1 << 1,
+		FRAGMENT_BARYCENTRIC		= 1 << 2,
+		SAMPLER_FILTER_MIN_MAX		= 1 << 3,
+		RAY_TRACING					= 1 << 4,
+		SHADER_NON_SEMANTIC_INFO	= 1 << 5,
 	};
 
 	export enum struct PowerPreference {
@@ -873,9 +874,13 @@ namespace SIByL::RHI
 		PipelineLayout* layout = nullptr;
 	};
 	
-	export struct ComputePipeline {};
+	export struct ComputePipeline {
+		/** virtual destructor */
+		virtual ~ComputePipeline() = default;
+	};
 
-	export struct ComputePipelineDescriptor {
+	export struct ComputePipelineDescriptor :public PipelineDescriptorBase {
+		/* the compute shader */
 		ProgrammableStage compute;
 	};
 
@@ -1138,6 +1143,8 @@ namespace SIByL::RHI
 			size_t	size) noexcept -> void = 0;
 		/** Encode a command into the CommandEncoder that fills a sub-region of a Buffer with zeros. */
 		virtual auto clearBuffer(Buffer* buffer, size_t	offset, size_t	size) noexcept -> void = 0;
+		/** Encode a command into the CommandEncoder that fills a sub-region of a Buffer with a value. */
+		virtual auto fillBuffer(Buffer* buffer, size_t	offset, size_t	size, float fillValue) noexcept -> void = 0;
 		/** Encode a command into the CommandEncoder that copies data from a sub-region of a Buffer 
 		* to a sub-region of one or multiple continuous texture subresources. */
 		virtual auto copyBufferToTexture(
@@ -1257,11 +1264,17 @@ namespace SIByL::RHI
 	// ===========================================================================
 	// Compute Passes Interface
 	
-	export struct ComputePassEncoder {
-		auto setPipeline(ComputePipeline* pipeline) noexcept -> void;
-		auto dispatchWorkgroups(uint32_t workgroupCountX, uint32_t workgroupCountY = 1, uint32_t workgroupCountZ = 1) noexcept -> void;
-		auto dispatchWorkgroupsIndirect(Buffer* indirectBuffer, uint64_t indirectOffset) noexcept -> void;
-		auto end() noexcept -> void;
+	export struct ComputePassEncoder :public BindingCommandMixin {
+		/** virtual descructor */
+		virtual ~ComputePassEncoder() = default;
+		/** Sets the current GPUComputePipeline. */
+		virtual auto setPipeline(ComputePipeline* pipeline) noexcept -> void = 0;
+		/** Dispatch work to be performed with the current GPUComputePipeline.*/
+		virtual auto dispatchWorkgroups(uint32_t workgroupCountX, uint32_t workgroupCountY = 1, uint32_t workgroupCountZ = 1) noexcept -> void = 0;
+		/** Dispatch work to be performed with the current GPUComputePipeline using parameters read from a GPUBuffer. */
+		virtual auto dispatchWorkgroupsIndirect(Buffer* indirectBuffer, uint64_t indirectOffset) noexcept -> void = 0;
+		/** Completes recording of the compute pass commands sequence. */
+		virtual auto end() noexcept -> void = 0;
 	};
 
 	export enum struct ComputePassTimestampLocation {

@@ -50,7 +50,7 @@ import RHI.RHILayer;
 
 import GFX.Resource;
 import GFX.GFXManager;
-
+import GFX.MeshLoader;
 import Application.Root;
 import Application.Base;
 
@@ -104,60 +104,52 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		RHI::Device* device = rhiLayer->getDevice();
 		RHI::SwapChain* swapchain = rhiLayer->getSwapChain();
 
+
+		Core::Buffer vertex_CornellBox;
+		Core::Buffer vertex_CornellBox_POnly;
+		Core::Buffer index_CornellBox;
+		GFX::MeshLoader_OBJ::loadOBJ(
+			"./content/CornellBox-Original-Merged.obj",
+			GFX::MeshDataLayout{ 
+				{{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::POSITION},
+				{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::COLOR}},
+				RHI::IndexFormat::UINT16_t },
+			&vertex_CornellBox,
+			&index_CornellBox
+		);
+		GFX::MeshLoader_OBJ::loadOBJ(
+			"./content/CornellBox-Original-Merged.obj",
+			GFX::MeshDataLayout{ 
+				{{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::POSITION}},
+				RHI::IndexFormat::UINT16_t },
+			&vertex_CornellBox_POnly,
+			nullptr
+		);
+		indexCount = index_CornellBox.size / sizeof(uint16_t);
+
 		struct Vertex {
 			Math::vec3 pos;
 			Math::vec3 color;
 		};
 
-		struct VertexRT {
-			Math::vec3 pos;
-		};
-
-		std::vector<Vertex> const vertices = {
-			{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
-			{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}},
-			{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
-			{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}},
-
-			{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-			{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-			{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}},
-			{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}}
-		};
-		std::vector<uint16_t> const indices = {
-			0, 1, 2, 2, 3, 0,
-			4, 5, 6, 6, 7, 4
-		};
-
 		GFX::Mesh mesh;
-		mesh.vertexBuffer = device->createDeviceLocalBuffer((void*)vertices.data(), sizeof(vertices[0]) * vertices.size(),
+		mesh.vertexBuffer = device->createDeviceLocalBuffer((void*)vertex_CornellBox.data, vertex_CornellBox.size,
 			(uint32_t)RHI::BufferUsage::VERTEX);
-		mesh.indexBuffer = device->createDeviceLocalBuffer((void*)indices.data(), sizeof(indices[0]) * indices.size(),
+		mesh.indexBuffer = device->createDeviceLocalBuffer((void*)index_CornellBox.data, index_CornellBox.size,
 			(uint32_t)RHI::BufferUsage::INDEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
 			(uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY);
 		ResourceManager::get()->addResource<GFX::Mesh>(0, std::move(mesh));
 		GFX::Mesh* mesh_resource = ResourceManager::get()->getResource<GFX::Mesh>(0);
 
-		std::vector<VertexRT> const verticesRT = {
-			{{-0.5f, -0.5f, 0.0f}},
-			{{0.5f, -0.5f, 0.0f}},
-			{{0.5f, 0.5f, 0.0f}},
-			{{-0.5f, 0.5f, 0.0f}},
-
-			{{-0.5f, -0.5f, -0.5f}},
-			{{0.5f, -0.5f, -0.5f}},
-			{{0.5f, 0.5f, -0.5f}},
-			{{-0.5f, 0.5f, -0.5f}}
-		};
-		vertexBufferRT = device->createDeviceLocalBuffer((void*)verticesRT.data(), sizeof(verticesRT[0]) * verticesRT.size(),
+		vertexBufferRT = device->createDeviceLocalBuffer((void*)vertex_CornellBox_POnly.data, vertex_CornellBox_POnly.size,
 			(uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
 			(uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY);
 
 		blas = device->createBLAS(RHI::BLASDescriptor{
 			vertexBufferRT.get(),
 			mesh_resource->indexBuffer.get(),
-			(uint32_t)verticesRT.size(),
-			4,
+			(uint32_t)vertex_CornellBox_POnly.size / (sizeof(float) * 3),
+			indexCount / 3,
 			RHI::IndexFormat::UINT16_t });
 		tlas = device->createTLAS(RHI::TLASDescriptor{ {blas.get()} });
 
@@ -196,13 +188,15 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		vert_module = device->createShaderModule({ &vert, RHI::ShaderStages::VERTEX });
 		frag_module = device->createShaderModule({ &frag, RHI::ShaderStages::FRAGMENT });
 
-		Core::GUID rgen, rmiss, rchit;
+		Core::GUID rgen, rmiss, rchit, comp;
 		rgen = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+		comp = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		GFX::GFXManager::get()->registerShaderModuleResource(rgen, "../Engine/Binaries/Runtime/spirv/RayTracing/raytrace_test_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
 		GFX::GFXManager::get()->registerShaderModuleResource(rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/raytrace_test_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
 		GFX::GFXManager::get()->registerShaderModuleResource(rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/raytrace_test_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
+		GFX::GFXManager::get()->registerShaderModuleResource(comp, "../Engine/Binaries/Runtime/spirv/Common/test_compute_comp.spv", { nullptr, RHI::ShaderStages::COMPUTE});
 		
 		// create uniformBuffer
 		{
@@ -219,14 +213,14 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		{
 			bindGroupLayout = device->createBindGroupLayout(
 				RHI::BindGroupLayoutDescriptor{ {
-					RHI::BindGroupLayoutEntry{0, (uint32_t)RHI::ShaderStages::VERTEX | (uint32_t)RHI::ShaderStages::RAYGEN, RHI::BufferBindingLayout{RHI::BufferBindingType::UNIFORM}}
+					RHI::BindGroupLayoutEntry{0, (uint32_t)RHI::ShaderStages::VERTEX | (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE, RHI::BufferBindingLayout{RHI::BufferBindingType::UNIFORM}}
 					} }
 			);
 
 			bindGroupLayout_RT = device->createBindGroupLayout(
 				RHI::BindGroupLayoutDescriptor{ {
-					RHI::BindGroupLayoutEntry{0, (uint32_t)RHI::ShaderStages::RAYGEN, RHI::AccelerationStructureBindingLayout{}},
-					RHI::BindGroupLayoutEntry{1, (uint32_t)RHI::ShaderStages::RAYGEN, RHI::StorageTextureBindingLayout{}},
+					RHI::BindGroupLayoutEntry{0, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE, RHI::AccelerationStructureBindingLayout{}},
+					RHI::BindGroupLayoutEntry{1, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE, RHI::StorageTextureBindingLayout{}},
 					} }
 			);
 
@@ -251,9 +245,14 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				});
 
 			pipelineLayout_RT[i] = device->createPipelineLayout(RHI::PipelineLayoutDescriptor{
-				{ {(uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::CLOSEST_HIT | (uint32_t)RHI::ShaderStages::MISS, 0, sizeof(PushConstantRay)}},
+				{ {(uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::CLOSEST_HIT | (uint32_t)RHI::ShaderStages::MISS | (uint32_t)RHI::ShaderStages::COMPUTE, 0, sizeof(PushConstantRay)}},
 				{ bindGroupLayout_RT.get(), bindGroupLayout.get() }
 				});
+
+			//pipelineLayout_COMP[i] = device->createPipelineLayout(RHI::PipelineLayoutDescriptor{
+			//	{},
+			//	{}
+			//	});
 
 			renderPipeline[i] = device->createRenderPipeline(RHI::RenderPipelineDescriptor{
 				pipelineLayout[i].get(),
@@ -281,23 +280,11 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				nullptr,
 				nullptr
 				});
-			//renderPipeline_RT[i] = device->createRay(RHI::RenderPipelineDescriptor{
-			//	pipelineLayout_RT[i].get(),
-			//		RHI::VertexState{
-			//			// vertex shader
-			//			vert_module.get(), "main",
-			//			// vertex attribute layout
-			//			{ RHI::VertexBufferLayout{sizeof(Vertex), RHI::VertexStepMode::VERTEX, {
-			//				{ RHI::VertexFormat::FLOAT32X3, 0, 0},
-			//				{ RHI::VertexFormat::FLOAT32X3, offsetof(Vertex,color), 1},}}}},
-			//		RHI::PrimitiveState{ RHI::PrimitiveTopology::TRIANGLE_LIST, RHI::IndexFormat::UINT16_t },
-			//		RHI::DepthStencilState{ RHI::TextureFormat::DEPTH32_FLOAT, true, RHI::CompareFunction::LESS },
-			//		RHI::MultisampleState{},
-			//		RHI::FragmentState{
-			//			// fragment shader
-			//			frag_module.get(), "main",
-			//			{{RHI::TextureFormat::RGBA8_UNORM}}}
-			//		});
+
+			computePipeline[i] = device->createComputePipeline(RHI::ComputePipelineDescriptor{
+				pipelineLayout_RT[i].get(),
+				{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(comp)->shaderModule.get(), "main"}
+				});
 		}
 	};
 
@@ -316,7 +303,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		RHI::RenderPassDescriptor renderPassDescriptor = {
 			{ RHI::RenderPassColorAttachment{
 				Core::ResourceManager::get()->getResource<GFX::Texture>
-				(framebufferColorAttach)->originalView.get(), 
+				(framebufferColorAttach)->originalView.get(),
 			nullptr, {0,0,0,1}, RHI::LoadOp::CLEAR, RHI::StoreOp::STORE }},
 			RHI::RenderPassDepthStencilAttachment{
 				Core::ResourceManager::get()->getResource<GFX::Texture>(framebufferDepthAttach)->originalView.get(),
@@ -335,12 +322,16 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		height = 480;
 
 		UniformBufferObject ubo;
-		//ubo.model = Math::transpose(Math::rotate(timer.totalTime() * 80, Math::vec3(0,1,0)).m);
-		ubo.view = Math::transpose(Math::lookAt(Math::vec3(0, 0, -2), Math::vec3(0, 0, 0), Math::vec3(0, 1, 0)).m);
+		//ubo.model = Math::transpose(Math::rotate(timer.totalTime() * 80, Math::vec3(0, 1, 0)).m);
+		ubo.view = Math::transpose(Math::lookAt(Math::vec3(0, 1, 4), Math::vec3(0, 1, 0), Math::vec3(0, 1, 0)).m);
 		ubo.proj = Math::transpose(Math::perspective(45.f, 1.f * 720 / 480, 0.1f, 10.f).m);
 		ubo.viewInverse = Math::inverse(ubo.view);
+		ubo.proj.data[1][1] *= -1;
 		ubo.projInverse = Math::inverse(ubo.proj);
-		//ubo.proj.data[1][1] *= -1;
+		Math::vec4 originPos = Math::vec4(0.f, 0.f, 0.f, 1.f);
+		Math::mat4 invView = Math::transpose(ubo.viewInverse);
+		auto originPost = Math::mul(invView, Math::vec4(0.f, 0.f, 0.f, 1.f));
+
 		std::cout << 1.f / timer.deltaTime() << std::endl;
 		//Math::rotate( )
 		std::future<bool> mapped = uniformBuffer[index]->mapAsync(0, 0, sizeof(UniformBufferObject));
@@ -363,7 +354,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
 				RHI::TextureLayout::COLOR_ATTACHMENT_OPTIMAL
 			}}
-		});
+			});
 
 		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
 			(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
@@ -378,52 +369,95 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
 				RHI::TextureLayout::DEPTH_ATTACHMENT_OPTIMAL
 			}}
-		});
-
-		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
-			(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
-			(uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR,
-			(uint32_t)RHI::DependencyType::NONE,
-			{}, {},
-			{ RHI::TextureMemoryBarrierDescriptor{
-				Core::ResourceManager::get()->getResource<GFX::Texture>(rtTarget)->texture.get(),
-				RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
-				(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
-				(uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
-				RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
-				RHI::TextureLayout::GENERAL
-			}}
 			});
+		//{
 
-		pcRay.clearColor = Math::vec4{ 0.2f, 0.3f, 0.3f, 1.0f };
-		pcRay.lightPosition = Math::vec3{10.f,0.f,0.f};
-		pcRay.lightIntensity = 100;
-		pcRay.lightType = 0;
+		//	commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+		//		(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
+		//		(uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR,
+		//		(uint32_t)RHI::DependencyType::NONE,
+		//		{}, {},
+		//		{ RHI::TextureMemoryBarrierDescriptor{
+		//			Core::ResourceManager::get()->getResource<GFX::Texture>(rtTarget)->texture.get(),
+		//			RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
+		//			(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
+		//			(uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
+		//			RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
+		//			RHI::TextureLayout::GENERAL
+		//		}}
+		//		});
 
-		rtEncoder[index] = commandEncoder->beginRayTracingPass(rayTracingDescriptor);
-		rtEncoder[index]->setPipeline(raytracingPipeline[index].get());
-		rtEncoder[index]->setBindGroup(0, bindGroup_RT[index].get(), 0, 0);
-		rtEncoder[index]->setBindGroup(1, bindGroup[index].get(), 0, 0);
-		rtEncoder[index]->pushConstants(&pcRay, 
-			(uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::CLOSEST_HIT | (uint32_t)RHI::ShaderStages::MISS,
-			0, sizeof(PushConstantRay));
-		rtEncoder[index]->traceRays(720, 480, 1);
-		rtEncoder[index]->end();
+		//	pcRay.clearColor = Math::vec4{ 0.2f, 0.3f, 0.3f, 1.0f };
+		//	pcRay.lightPosition = Math::vec3{ 10.f,0.f,0.f };
+		//	pcRay.lightIntensity = 100;
+		//	pcRay.lightType = 0;
 
-		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
-			(uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR,
-			(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
-			(uint32_t)RHI::DependencyType::NONE,
-			{}, {},
-			{ RHI::TextureMemoryBarrierDescriptor{
-				Core::ResourceManager::get()->getResource<GFX::Texture>(rtTarget)->texture.get(),
-				RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
-				(uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
-				(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
-				RHI::TextureLayout::GENERAL,
-				RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL
-			}}
-			});
+
+		//	rtEncoder[index] = commandEncoder->beginRayTracingPass(rayTracingDescriptor);
+		//	rtEncoder[index]->setPipeline(raytracingPipeline[index].get());
+		//	rtEncoder[index]->setBindGroup(0, bindGroup_RT[index].get(), 0, 0);
+		//	rtEncoder[index]->setBindGroup(1, bindGroup[index].get(), 0, 0);
+		//	rtEncoder[index]->pushConstants(&pcRay,
+		//		(uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::CLOSEST_HIT
+		//		| (uint32_t)RHI::ShaderStages::MISS | (uint32_t)RHI::ShaderStages::COMPUTE,
+		//		0, sizeof(PushConstantRay));
+		//	rtEncoder[index]->traceRays(720, 480, 1);
+		//	rtEncoder[index]->end();
+
+		//	commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+		//		(uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR,
+		//		(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
+		//		(uint32_t)RHI::DependencyType::NONE,
+		//		{}, {},
+		//		{ RHI::TextureMemoryBarrierDescriptor{
+		//			Core::ResourceManager::get()->getResource<GFX::Texture>(rtTarget)->texture.get(),
+		//			RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
+		//			(uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
+		//			(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
+		//			RHI::TextureLayout::GENERAL,
+		//			RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL
+		//		}}
+		//		});
+		//}
+
+		{
+			commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+				(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
+				(uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT,
+				(uint32_t)RHI::DependencyType::NONE,
+				{}, {},
+				{ RHI::TextureMemoryBarrierDescriptor{
+					Core::ResourceManager::get()->getResource<GFX::Texture>(rtTarget)->texture.get(),
+					RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
+					(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
+					(uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
+					RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
+					RHI::TextureLayout::GENERAL
+				}}
+				});
+
+			compEncoder[index] = commandEncoder->beginComputePass({});
+			compEncoder[index]->setPipeline(computePipeline[index].get());
+			compEncoder[index]->setBindGroup(0, bindGroup_RT[index].get(), 0, 0);
+			compEncoder[index]->setBindGroup(1, bindGroup[index].get(), 0, 0);
+			compEncoder[index]->dispatchWorkgroups((720 + 15) / 16, (480 + 7) / 8, 1);
+			compEncoder[index]->end();
+
+			commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+				(uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT,
+				(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
+				(uint32_t)RHI::DependencyType::NONE,
+				{}, {},
+				{ RHI::TextureMemoryBarrierDescriptor{
+					Core::ResourceManager::get()->getResource<GFX::Texture>(rtTarget)->texture.get(),
+					RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
+					(uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
+					(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
+					RHI::TextureLayout::GENERAL,
+					RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL
+				}}
+				});
+		}
 
 		passEncoder[index] = commandEncoder->beginRenderPass(renderPassDescriptor);
 		passEncoder[index]->setPipeline(renderPipeline[index].get());
@@ -434,7 +468,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		passEncoder[index]->setIndexBuffer(ResourceManager::get()->getResource<GFX::Mesh>(0)->indexBuffer.get(), 
 			RHI::IndexFormat::UINT16_t, 0, ResourceManager::get()->getResource<GFX::Mesh>(0)->indexBuffer->size());
 		passEncoder[index]->setBindGroup(0, bindGroup[index].get(), 0, 0);
-		passEncoder[index]->drawIndexed(12, 1, 0, 0, 0);
+		passEncoder[index]->drawIndexed(indexCount, 1, 0, 0, 0);
 		passEncoder[index]->end();
 
 		device->getGraphicsQueue()->submit({ commandEncoder->finish({}) }, 
@@ -474,14 +508,20 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		rhiLayer->getDevice()->waitIdle();
 		renderPipeline[0] = nullptr;
 		renderPipeline[1] = nullptr;
+		computePipeline[0] = nullptr;
+		computePipeline[1] = nullptr;
 		raytracingPipeline[0] = nullptr;
 		raytracingPipeline[1] = nullptr;
 		passEncoder[0] = nullptr;
 		passEncoder[1] = nullptr;
+		compEncoder[1] = nullptr;
+		compEncoder[1] = nullptr;
 		pipelineLayout[0] = nullptr;
 		pipelineLayout[1] = nullptr;
 		pipelineLayout_RT[0] = nullptr;
 		pipelineLayout_RT[1] = nullptr;
+		pipelineLayout_COMP[0] = nullptr;
+		pipelineLayout_COMP[1] = nullptr;
 
 		bindGroupLayout_RT = nullptr;
 		bindGroup_RT[0] = nullptr;
@@ -514,6 +554,7 @@ private:
 	Core::GUID rtTarget;
 
 	PushConstantRay pcRay = {};
+	uint32_t indexCount = 0;
 
 	std::unique_ptr<RHI::RHILayer> rhiLayer = nullptr;
 	std::unique_ptr<Editor::ImGuiLayer> imguiLayer = nullptr;
@@ -528,6 +569,7 @@ private:
 	std::unique_ptr<RHI::Buffer> uniformBuffer[2];
 	std::unique_ptr<RHI::PipelineLayout> pipelineLayout[2];
 	std::unique_ptr<RHI::PipelineLayout> pipelineLayout_RT[2];
+	std::unique_ptr<RHI::PipelineLayout> pipelineLayout_COMP[2];
 
 	std::unique_ptr<RHI::Buffer> vertexBufferRT = nullptr;
 	std::unique_ptr<RHI::Buffer> indexBufferRT = nullptr;
@@ -535,9 +577,11 @@ private:
 	std::unique_ptr<RHI::ShaderModule> frag_module = nullptr;
 	std::unique_ptr<RHI::RenderPassEncoder> passEncoder[2] = {};
 	std::unique_ptr<RHI::RayTracingPassEncoder> rtEncoder[2] = {};
+	std::unique_ptr<RHI::ComputePassEncoder> compEncoder[2] = {};
 	std::unique_ptr<RHI::BLAS> blas = nullptr;
 	std::unique_ptr<RHI::TLAS> tlas = nullptr;
 
+	std::unique_ptr<RHI::ComputePipeline> computePipeline[2];
 	std::unique_ptr<RHI::RenderPipeline> renderPipeline[2];
 	std::unique_ptr<RHI::RayTracingPipeline> raytracingPipeline[2];
 	// the embedded scene, which should be removed in the future

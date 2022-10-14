@@ -476,7 +476,12 @@ namespace SIByL::RHI
 	/** Whether enable validation layer */
 	constexpr bool const enableValidationLayers = true;
 	/** Whether enable validation layer verbose output */
+#ifdef VK_VERBOSE
+	constexpr bool const enableValidationLayerVerboseOutput = true;
+#else
 	constexpr bool const enableValidationLayerVerboseOutput = false;
+#endif // VK_VERBOSE
+
 	/** Possible names of validation layer */
 	std::vector<const char*> const validationLayerNames = {
 		"VK_LAYER_KHRONOS_validation",
@@ -602,17 +607,29 @@ namespace SIByL::RHI
 		createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
 		createInfo.ppEnabledExtensionNames = extensions.data();
 		// determine the global validation layers to enable
+		void const** tail = &createInfo.pNext;
 		VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
 		if (enableValidationLayers) {
 			createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayerNames.size());
 			createInfo.ppEnabledLayerNames = validationLayerNames.data();
 			// add debug messenger for init
 			populateDebugMessengerCreateInfo(debugCreateInfo);
-			createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
+			*tail = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
+			tail = &((VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo)->pNext;
 		}
 		else {
 			createInfo.enabledLayerCount = 0;
 			createInfo.pNext = nullptr;
+		}
+		VkValidationFeaturesEXT validationInfo = {};
+		VkValidationFeatureEnableEXT validationFeatureToEnable = VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT;
+		if (ext & (uint32_t)ContextExtension::SHADER_NON_SEMANTIC_INFO) {
+			validationInfo.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
+			validationInfo.enabledValidationFeatureCount = 1;
+			validationInfo.pEnabledValidationFeatures = &validationFeatureToEnable;
+			//_putenv_s("DEBUG_PRINTF_TO_STDOUT", "1");
+			*tail = &validationInfo;
+			tail = &(validationInfo.pNext);
 		}
 		// Create Vk Instance
 		if (vkCreateInstance(&createInfo, nullptr, &(context->getVkInstance())) != VK_SUCCESS) {
@@ -686,6 +703,10 @@ namespace SIByL::RHI
 			context->getDeviceExtensions().emplace_back(VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME);
 			context->getDeviceExtensions().emplace_back(VK_KHR_SPIRV_1_4_EXTENSION_NAME);
 			context->getDeviceExtensions().emplace_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
+			context->getDeviceExtensions().emplace_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
+		}
+		if (ext & (ContextExtensionsFlags)ContextExtension::SHADER_NON_SEMANTIC_INFO) {
+			context->getDeviceExtensions().emplace_back(VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME);
 		}
 	}
 
@@ -1007,8 +1028,12 @@ namespace SIByL::RHI
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR };
 		VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtPipelineFeatures{
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR };
+		VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures{
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR };
+
 		if (context->getContextExtensionsFlags() & (ContextExtensionsFlags)ContextExtension::RAY_TRACING) {
-			features2.pNext = &features12;
+			features2.pNext = &rayQueryFeatures;
+			rayQueryFeatures.pNext = &features12;
 			features12.pNext = &features11;
 			features11.pNext = &asFeatures;
 			asFeatures.pNext = &rtPipelineFeatures;
@@ -1084,10 +1109,6 @@ namespace SIByL::RHI
 		return nullptr;
 	}
 	
-	auto Device_VK::createComputePipeline(ComputePipelineDescriptor const& desc) noexcept -> std::unique_ptr<ComputePipeline> {
-		return nullptr;
-	}
-
 	auto Device_VK::createComputePipelineAsync(ComputePipelineDescriptor const& desc) noexcept
 		-> std::future<std::unique_ptr<ComputePipeline>> {
 		std::future<std::unique_ptr<ComputePipeline>> r;
@@ -2252,11 +2273,41 @@ namespace SIByL::RHI
 	// Pipelines Interface
 
 	export struct ComputePipeline_VK :public ComputePipeline {
+		/** constructor */
+		ComputePipeline_VK(Device_VK* device, ComputePipelineDescriptor const& desc);
+		/** virtual destructor */
+		virtual ~ComputePipeline_VK();
 		/** vulkan compute pipeline */
 		VkPipeline pipeline;
+		/** compute pipeline layout */
+		PipelineLayout_VK* layout = nullptr;
 		/** the device this compute pipeline is created on */
 		Device_VK* device = nullptr;
 	};
+
+#pragma region VK_COMPUTE_PIPELINE_IMPL
+
+	ComputePipeline_VK::ComputePipeline_VK(Device_VK* device, ComputePipelineDescriptor const& desc)
+		: device(device), layout(static_cast<PipelineLayout_VK*>(desc.layout)) {
+		VkComputePipelineCreateInfo pipelineInfo{};
+		pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+		pipelineInfo.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		pipelineInfo.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+		pipelineInfo.stage.module = (static_cast<ShaderModule_VK*>(desc.compute.module))->shaderModule;
+		pipelineInfo.stage.pName = "main";
+		pipelineInfo.layout = static_cast<PipelineLayout_VK*>(desc.layout)->pipelineLayout;
+		if (vkCreateComputePipelines(device->getVkDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline) != VK_SUCCESS) {
+			Core::LogManager::Error("VULKAN :: failed to create graphics pipeline!");
+		}
+
+	}
+
+	ComputePipeline_VK::~ComputePipeline_VK() {
+		if (pipeline) vkDestroyPipeline(device->getVkDevice(), pipeline, nullptr);
+	}
+
+#pragma endregion
+
 
 	export struct RenderPass_VK {
 		/** render pass initialize */
@@ -2366,6 +2417,10 @@ namespace SIByL::RHI
 		clearValues = pass.clearValues;
 		pass.renderPass = nullptr;
 		return *this;
+	}
+
+	auto Device_VK::createComputePipeline(ComputePipelineDescriptor const& desc) noexcept -> std::unique_ptr<ComputePipeline> {
+		return std::make_unique<ComputePipeline_VK>(this, desc);
 	}
 
 #pragma endregion
@@ -3098,6 +3153,8 @@ namespace SIByL::RHI
 			size_t	size) noexcept -> void override;
 		/** Encode a command into the CommandEncoder that fills a sub-region of a Buffer with zeros. */
 		virtual auto clearBuffer(Buffer* buffer, size_t	offset, size_t	size) noexcept -> void override;
+		/** Encode a command into the CommandEncoder that fills a sub-region of a Buffer with a value. */
+		virtual auto fillBuffer(Buffer* buffer, size_t	offset, size_t	size, float fillValue) noexcept -> void override;
 		/** Encode a command into the CommandEncoder that copies data from a sub-region of a Buffer
 		* to a sub-region of one or multiple continuous texture subresources. */
 		virtual auto copyBufferToTexture(
@@ -3140,10 +3197,6 @@ namespace SIByL::RHI
 #pragma region VK_COMMANDENCODER_IMPL
 
 	CommandEncoder_VK::~CommandEncoder_VK() {}
-
-	auto CommandEncoder_VK::beginComputePass(ComputePassDescriptor const& desc) noexcept -> std::unique_ptr<ComputePassEncoder> {
-		return nullptr;
-	}
 
 	export inline auto getVkImageLayout(TextureLayout layout) noexcept -> VkImageLayout {
 		switch (layout)
@@ -3260,9 +3313,21 @@ namespace SIByL::RHI
 	}
 
 	auto CommandEncoder_VK::clearBuffer(Buffer* buffer, size_t	offset, size_t	size) noexcept -> void {
-
+		float const     fillValueConst = 0;
+		uint32_t const& fillValueU32 = reinterpret_cast<const uint32_t&>(fillValueConst);
+		vkCmdFillBuffer(commandBuffer->commandBuffer,
+			static_cast<Buffer_VK*>(buffer)->getVkBuffer(),
+			offset, size, fillValueU32);
 	}
 	
+	auto CommandEncoder_VK::fillBuffer(Buffer* buffer, size_t	offset, size_t	size, float fillValue) noexcept -> void {
+		float const     fillValueConst = fillValue;
+		uint32_t const& fillValueU32 = reinterpret_cast<const uint32_t&>(fillValueConst);
+		vkCmdFillBuffer(commandBuffer->commandBuffer, 
+			static_cast<Buffer_VK*>(buffer)->getVkBuffer(),
+			offset, size, fillValueU32);
+	}
+
 	auto CommandEncoder_VK::copyBufferToTexture(
 		ImageCopyBuffer  const& source,
 		ImageCopyTexture const& destination,
@@ -3372,6 +3437,82 @@ namespace SIByL::RHI
 	// ===========================================================================
 	// Compute Passes Interface
 
+	export struct ComputePassEncoder_VK :public ComputePassEncoder {
+		/** virtual descructor */
+		virtual ~ComputePassEncoder_VK();
+		/** Sets the current GPUBindGroup for the given index. */
+		virtual auto setBindGroup(uint32_t index, BindGroup* bindgroup,
+			std::vector<BufferDynamicOffset> const& dynamicOffsets = {}) noexcept -> void override;
+		/** Sets the current GPUBindGroup for the given index. */
+		virtual auto setBindGroup(uint32_t index, BindGroup* bindgroup,
+			uint64_t dynamicOffsetDataStart, uint32_t dynamicOffsetDataLength) noexcept -> void override;
+		/** Push constants */
+		virtual auto pushConstants(void* data, ShaderStagesFlags stages, uint32_t offset, uint32_t size) noexcept -> void override;
+		/** Sets the current GPUComputePipeline. */
+		virtual auto setPipeline(ComputePipeline* pipeline) noexcept -> void override;
+		/** Dispatch work to be performed with the current GPUComputePipeline.*/
+		virtual auto dispatchWorkgroups(uint32_t workgroupCountX, uint32_t workgroupCountY = 1, uint32_t workgroupCountZ = 1) noexcept -> void override;
+		/** Dispatch work to be performed with the current GPUComputePipeline using parameters read from a GPUBuffer. */
+		virtual auto dispatchWorkgroupsIndirect(Buffer* indirectBuffer, uint64_t indirectOffset) noexcept -> void override;
+		/** Completes recording of the compute pass commands sequence. */
+		virtual auto end() noexcept -> void override;
+		/** current compute pipeline */
+		ComputePipeline_VK* computePipeline = nullptr;
+		/** command buffer binded */
+		CommandBuffer_VK* commandBuffer = nullptr;
+	};
+
+#pragma region VK_COMPUTE_PASS_ENCODER_IMPL
+	
+	ComputePassEncoder_VK::~ComputePassEncoder_VK() {
+
+	}
+
+	auto ComputePassEncoder_VK::setBindGroup(uint32_t index, BindGroup* bindgroup,
+		std::vector<BufferDynamicOffset> const& dynamicOffsets) noexcept -> void {
+		vkCmdBindDescriptorSets(commandBuffer->commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+			static_cast<PipelineLayout_VK*>(computePipeline->layout)->pipelineLayout,
+			index, 1, &static_cast<BindGroup_VK*>(bindgroup)->set, 0, nullptr);
+	}
+
+	auto ComputePassEncoder_VK::setBindGroup(uint32_t index, BindGroup* bindgroup,
+		uint64_t dynamicOffsetDataStart, uint32_t dynamicOffsetDataLength) noexcept -> void {
+		vkCmdBindDescriptorSets(commandBuffer->commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+			static_cast<PipelineLayout_VK*>(computePipeline->layout)->pipelineLayout,
+			index, 1, &static_cast<BindGroup_VK*>(bindgroup)->set, 0, nullptr);
+	}
+	
+	auto ComputePassEncoder_VK::pushConstants(void* data, ShaderStagesFlags stages, uint32_t offset, uint32_t size) noexcept -> void {
+		vkCmdPushConstants(commandBuffer->commandBuffer,
+			static_cast<PipelineLayout_VK*>(computePipeline->layout)->pipelineLayout,
+			getVkShaderStageFlags(stages), offset, size, data);
+	}
+	
+	auto ComputePassEncoder_VK::setPipeline(ComputePipeline* pipeline) noexcept -> void {
+		ComputePipeline_VK* vkpipeline = static_cast<ComputePipeline_VK*>(pipeline);
+		computePipeline = vkpipeline;
+		vkCmdBindPipeline(commandBuffer->commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, vkpipeline->pipeline);
+	}
+	
+	auto ComputePassEncoder_VK::dispatchWorkgroups(uint32_t workgroupCountX, uint32_t workgroupCountY, uint32_t workgroupCountZ) noexcept -> void {
+		vkCmdDispatch(commandBuffer->commandBuffer, workgroupCountX, workgroupCountY, workgroupCountZ);
+	}
+	
+	auto ComputePassEncoder_VK::dispatchWorkgroupsIndirect(Buffer* indirectBuffer, uint64_t indirectOffset) noexcept -> void {
+
+	}
+	
+	auto ComputePassEncoder_VK::end() noexcept -> void {
+		computePipeline = nullptr;
+	}
+
+	auto CommandEncoder_VK::beginComputePass(ComputePassDescriptor const& desc) noexcept -> std::unique_ptr<ComputePassEncoder> {
+		std::unique_ptr<ComputePassEncoder_VK> computePassEncoder = std::make_unique<ComputePassEncoder_VK>();
+		computePassEncoder->commandBuffer = this->commandBuffer;
+		return computePassEncoder;
+	}
+
+#pragma endregion
 
 
 	// Compute Passes Interface
@@ -3720,7 +3861,7 @@ namespace SIByL::RHI
 		triangles.indexType = descriptor.indexFormat == IndexFormat::UINT16_t ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
 		triangles.indexData.deviceAddress = indexBufferAddress;
 		triangles.maxVertex = descriptor.maxVertex;
-		triangles.transformData = { 0 }; // No transform
+		triangles.transformData.deviceAddress = 0; // No transform
 		VkAccelerationStructureGeometryKHR geometry = {};
 		geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
 		geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
@@ -3824,12 +3965,7 @@ namespace SIByL::RHI
 		//  Zero-initialize.
 		VkAccelerationStructureInstanceKHR instance{};
 		//  Set the instance transform to a 135-degree rotation around the y-axis.
-		const float rcpSqrt2 = sqrtf(0.5f);
-		instance.transform.matrix[0][0] = -rcpSqrt2;
-		instance.transform.matrix[0][2] = rcpSqrt2;
-		instance.transform.matrix[1][1] = 1.0f;
-		instance.transform.matrix[2][0] = -rcpSqrt2;
-		instance.transform.matrix[2][2] = -rcpSqrt2;
+		instance.transform.matrix[0][0] = instance.transform.matrix[1][1] = instance.transform.matrix[2][2] = 1.0f;
 		instance.instanceCustomIndex = 0;
 		instance.mask = 0xFF;
 		instance.instanceShaderBindingTableRecordOffset = 0;

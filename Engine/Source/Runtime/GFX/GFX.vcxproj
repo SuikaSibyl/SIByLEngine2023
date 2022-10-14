@@ -73,10 +73,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\tinyobjloader;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\tinyobjloader;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -157,6 +159,7 @@
     <ClCompile Include="Public\Component\GFX.Components-MeshReference.ixx" />
     <ClCompile Include="Public\Component\GFX.Components-MeshRenderer.ixx" />
     <ClCompile Include="Public\Component\GFX.Components.ixx" />
+    <ClCompile Include="Public\Resource\GFX.MeshLoader.ixx" />
     <ClCompile Include="Public\Core\GFX.GFXManager.ixx" />
     <ClCompile Include="Public\Resource\GFX.Resources-Sampler.ixx" />
     <ClCompile Include="Public\Resource\GFX.Resources-Scene.ixx" />
