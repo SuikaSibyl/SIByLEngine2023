@@ -167,7 +167,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			framebufferDepthAttach = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
 			rtTarget = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
 			RHI::TextureDescriptor desc{
-				{720,480,1},
+				{800,600,1},
 				1, 1, RHI::TextureDimension::TEX2D,
 				RHI::TextureFormat::RGBA8_UNORM,
 				(uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT | (uint32_t)RHI::TextureUsage::TEXTURE_BINDING,
@@ -322,13 +322,14 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		int width, height;
 		mainWindow->getFramebufferSize(&width, &height);
-		width = 720;
-		height = 480;
+		width = 800;
+		height = 600;
 
 		UniformBufferObject ubo;
+		Math::vec4 campos = Math::mul(Math::rotateY(timer.totalTime() * 20).m, Math::vec4(-0.001, 1.0, 6.0, 1));
 		//ubo.model = Math::transpose(Math::rotate(timer.totalTime() * 80, Math::vec3(0, 1, 0)).m);
-		ubo.view = Math::transpose(Math::lookAt(Math::vec3(0, 1, 3.5), Math::vec3(0, 1, 0), Math::vec3(0, 1, 0)).m);
-		ubo.proj = Math::transpose(Math::perspective(45.f, 1.f * 720 / 480, 0.1f, 10.f).m);
+		ubo.view = Math::transpose(Math::lookAt(Math::vec3(campos.x, campos.y, campos.z) , Math::vec3(0, 1, 0), Math::vec3(0, 1, 0)).m);
+		ubo.proj = Math::transpose(Math::perspective(22.f, 1.f * 800 / 600, 0.1f, 10.f).m);
 		ubo.viewInverse = Math::inverse(ubo.view);
 		//ubo.proj.data[1][1] *= -1;
 		ubo.projInverse = Math::inverse(ubo.proj);
@@ -444,7 +445,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			compEncoder[index]->setPipeline(computePipeline[index].get());
 			compEncoder[index]->setBindGroup(0, bindGroup_RT[index].get(), 0, 0);
 			compEncoder[index]->setBindGroup(1, bindGroup[index].get(), 0, 0);
-			compEncoder[index]->dispatchWorkgroups((720 + 15) / 16, (480 + 7) / 8, 1);
+			compEncoder[index]->dispatchWorkgroups((800 + 15) / 16, (600 + 7) / 8, 1);
 			compEncoder[index]->end();
 
 			commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
