@@ -22,8 +22,27 @@ float stepAndOutputRNGFloat(inout uint rngState) {
     return float(word) / 4294967295.0f;
 }
 
+/**
+*  Non-Uniform Sampling
+*/
+
+// Uses the Box-Muller transform to return a normally distributed (centered
+// at 0, standard deviation 1) 2D point.
+vec2 randomGaussian(inout uint rngState) {
+  // Almost uniform in (0,1] - make sure the value is never 0:
+  const float u1    = max(1e-38, stepAndOutputRNGFloat(rngState));
+  const float u2    = stepAndOutputRNGFloat(rngState);  // In [0, 1]
+  const float r     = sqrt(-2.0 * log(u1));
+  const float theta = 2 * k_pi * u2;  // Random in [0, 2pi]
+  return r * vec2(cos(theta), sin(theta));
+}
+
+/**
+* Uniform Random in 3D geometics
+*/
+
 vec3 randomPointInSphere(inout uint rngState) {
-    const float theta = 6.2831853 * stepAndOutputRNGFloat(rngState);   // Random in [0, 2pi]
+    const float theta = 2 * k_pi * stepAndOutputRNGFloat(rngState);   // Random in [0, 2pi]
     const float u     = 2.0 * stepAndOutputRNGFloat(rngState) - 1.0;  // Random in [-1, 1]
     const float r     = sqrt(1.0 - u * u);
     return vec3(r * cos(theta), r * sin(theta), u);

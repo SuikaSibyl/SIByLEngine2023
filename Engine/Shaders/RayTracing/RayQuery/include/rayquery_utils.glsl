@@ -6,12 +6,6 @@ float countIntersection(in rayQueryEXT rayQuery) {
     return numIntersections;
 }
 
-struct HitInfo {
-  vec3 color;
-  vec3 worldPosition;
-  vec3 worldNormal;
-};
-
 HitInfo getObjectHitInfo(rayQueryEXT rayQuery) {
   HitInfo result;
   // Get the ID of the triangle
@@ -30,19 +24,18 @@ HitInfo getObjectHitInfo(rayQueryEXT rayQuery) {
   // Compute the coordinates of the intersection
   const vec3 objectPos = v0 * barycentrics.x + v1 * barycentrics.y + v2 * barycentrics.z;
   // For the main tutorial, object space is the same as world space:
-  result.worldPosition = objectPos;
+  result.objectPosition = objectPos;
+    // Transform from object space to world space:
+  const mat4x3 objectToWorld = rayQueryGetIntersectionObjectToWorldEXT(rayQuery, true);
+  result.worldPosition = objectToWorld * vec4(objectPos, 1.0f);
   // Compute the normal of the triangle in object space, using the right-hand rule:
   const vec3 objectNormal = normalize(cross(v1 - v0, v2 - v0));
-  // For the main tutorial, object space is the same as world space:
-  result.worldNormal = objectNormal;
-  result.color = vec3(0.8f);
-
-  const float dotX = dot(result.worldNormal, vec3(1.0, 0.0, 0.0));
-  if(dotX > 0.99) {
-    result.color = vec3(0.8, 0.0, 0.0);
-  }
-  else if(dotX < -0.99) {
-    result.color = vec3(0.0, 0.8, 0.0);
-  }
+  // Transform normals from object space to world space. These use the transpose of the inverse matrix,
+  // because they're directions of normals, not positions:
+  const mat4x3 objectToWorldInverse = rayQueryGetIntersectionWorldToObjectEXT(rayQuery, true);
+  result.worldNormal                = normalize((objectNormal * objectToWorldInverse).xyz);
+  // Flip the normal so it points against the ray direction:
+  const vec3 rayDirection = rayQueryGetWorldRayDirectionEXT(rayQuery);
+  result.worldNormal      = faceforward(result.worldNormal, rayDirection, result.worldNormal);
   return result;
 }

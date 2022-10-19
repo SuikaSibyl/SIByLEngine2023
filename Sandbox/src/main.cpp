@@ -151,7 +151,18 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			(uint32_t)vertex_CornellBox_POnly.size / (sizeof(float) * 3),
 			indexCount / 3,
 			RHI::IndexFormat::UINT16_t });
-		tlas = device->createTLAS(RHI::TLASDescriptor{ {blas.get()} });
+		tlas = device->createTLAS(RHI::TLASDescriptor{ {
+			{blas.get(), Math::mul(Math::translate(Math::vec3{0,0.00,0}).m, Math::scale(0.2,0.2, 0.2).m),0,0},
+			{blas.get(), Math::mul(Math::translate(Math::vec3{0,0.45,0}).m, Math::scale(0.2,0.2, 0.2).m),0,1},
+			{blas.get(), Math::mul(Math::translate(Math::vec3{0,0.90,0}).m, Math::scale(0.2,0.2, 0.2).m),0,2},
+			{blas.get(), Math::mul(Math::translate(Math::vec3{0,1.35,0}).m, Math::scale(0.2,0.2, 0.2).m),0,3},
+			{blas.get(), Math::mul(Math::translate(Math::vec3{0,1.80,0}).m, Math::scale(0.2,0.2, 0.2).m),0,4},
+			{blas.get(), Math::mul(Math::translate(Math::vec3{0.45,0.00,0}).m, Math::scale(0.2,0.2, 0.2).m),0,5},
+			{blas.get(), Math::mul(Math::translate(Math::vec3{0.45,0.45,0}).m, Math::scale(0.2,0.2, 0.2).m),0,6},
+			{blas.get(), Math::mul(Math::translate(Math::vec3{0.45,0.90,0}).m, Math::scale(0.2,0.2, 0.2).m),0,7},
+			{blas.get(), Math::mul(Math::translate(Math::vec3{0.45,1.35,0}).m, Math::scale(0.2,0.2, 0.2).m),0,8},
+			{blas.get(), Math::mul(Math::translate(Math::vec3{0.45,1.80,0}).m, Math::scale(0.2,0.2, 0.2).m),0,0},
+			}});
 
 		{
 			std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> img = Image::JPEG::fromJPEG("./content/texture.jpg");
@@ -161,7 +172,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 			GFX::GFXManager::get()->commonSampler.defaultSampler = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Sampler>();
 			GFX::GFXManager::get()->registerSamplerResource(GFX::GFXManager::get()->commonSampler.defaultSampler, RHI::SamplerDescriptor{});
-		
+			Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler->setName("DefaultSampler");
 			//framebufferColorAttaches
 			framebufferColorAttach = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
 			framebufferDepthAttach = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
@@ -193,7 +204,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		comp = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-		GFX::GFXManager::get()->registerShaderModuleResource(rgen, "../Engine/Binaries/Runtime/spirv/RayTracing/raytrace_test_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
+		GFX::GFXManager::get()->registerShaderModuleResource(rgen, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/raytrace_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
 		GFX::GFXManager::get()->registerShaderModuleResource(rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/raytrace_test_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
 		GFX::GFXManager::get()->registerShaderModuleResource(rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/raytrace_test_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
 		GFX::GFXManager::get()->registerShaderModuleResource(comp, "../Engine/Binaries/Runtime/spirv/Common/test_compute_comp.spv", { nullptr, RHI::ShaderStages::COMPUTE});
@@ -289,6 +300,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				pipelineLayout_RT[i].get(),
 				{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(comp)->shaderModule.get(), "main"}
 				});
+
+			computePipeline[i]->setName("ComputeShader_RayTracer");
 		}
 	};
 
@@ -326,7 +339,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		height = 600;
 
 		UniformBufferObject ubo;
-		Math::vec4 campos = Math::mul(Math::rotateY(timer.totalTime() * 20).m, Math::vec4(-0.001, 1.0, 6.0, 1));
+		Math::vec4 campos = Math::mul(Math::rotateY(0 * 20).m, Math::vec4(-0.001, 1.0, 6.0, 1));
 		//ubo.model = Math::transpose(Math::rotate(timer.totalTime() * 80, Math::vec3(0, 1, 0)).m);
 		ubo.view = Math::transpose(Math::lookAt(Math::vec3(campos.x, campos.y, campos.z) , Math::vec3(0, 1, 0), Math::vec3(0, 1, 0)).m);
 		ubo.proj = Math::transpose(Math::perspective(22.f, 1.f * 800 / 600, 0.1f, 10.f).m);
@@ -375,60 +388,11 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				RHI::TextureLayout::DEPTH_ATTACHMENT_OPTIMAL
 			}}
 			});
-		//{
-
-		//	commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
-		//		(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
-		//		(uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR,
-		//		(uint32_t)RHI::DependencyType::NONE,
-		//		{}, {},
-		//		{ RHI::TextureMemoryBarrierDescriptor{
-		//			Core::ResourceManager::get()->getResource<GFX::Texture>(rtTarget)->texture.get(),
-		//			RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
-		//			(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
-		//			(uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
-		//			RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
-		//			RHI::TextureLayout::GENERAL
-		//		}}
-		//		});
-
-		//	pcRay.clearColor = Math::vec4{ 0.2f, 0.3f, 0.3f, 1.0f };
-		//	pcRay.lightPosition = Math::vec3{ 10.f,0.f,0.f };
-		//	pcRay.lightIntensity = 100;
-		//	pcRay.lightType = 0;
-
-
-		//	rtEncoder[index] = commandEncoder->beginRayTracingPass(rayTracingDescriptor);
-		//	rtEncoder[index]->setPipeline(raytracingPipeline[index].get());
-		//	rtEncoder[index]->setBindGroup(0, bindGroup_RT[index].get(), 0, 0);
-		//	rtEncoder[index]->setBindGroup(1, bindGroup[index].get(), 0, 0);
-		//	rtEncoder[index]->pushConstants(&pcRay,
-		//		(uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::CLOSEST_HIT
-		//		| (uint32_t)RHI::ShaderStages::MISS | (uint32_t)RHI::ShaderStages::COMPUTE,
-		//		0, sizeof(PushConstantRay));
-		//	rtEncoder[index]->traceRays(720, 480, 1);
-		//	rtEncoder[index]->end();
-
-		//	commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
-		//		(uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR,
-		//		(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
-		//		(uint32_t)RHI::DependencyType::NONE,
-		//		{}, {},
-		//		{ RHI::TextureMemoryBarrierDescriptor{
-		//			Core::ResourceManager::get()->getResource<GFX::Texture>(rtTarget)->texture.get(),
-		//			RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
-		//			(uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
-		//			(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
-		//			RHI::TextureLayout::GENERAL,
-		//			RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL
-		//		}}
-		//		});
-		//}
 
 		{
 			commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
 				(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
-				(uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT,
+				(uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR,
 				(uint32_t)RHI::DependencyType::NONE,
 				{}, {},
 				{ RHI::TextureMemoryBarrierDescriptor{
@@ -441,15 +405,24 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				}}
 				});
 
-			compEncoder[index] = commandEncoder->beginComputePass({});
-			compEncoder[index]->setPipeline(computePipeline[index].get());
-			compEncoder[index]->setBindGroup(0, bindGroup_RT[index].get(), 0, 0);
-			compEncoder[index]->setBindGroup(1, bindGroup[index].get(), 0, 0);
-			compEncoder[index]->dispatchWorkgroups((800 + 15) / 16, (600 + 7) / 8, 1);
-			compEncoder[index]->end();
+			pcRay.clearColor = Math::vec4{ 0.2f, 0.3f, 0.3f, 1.0f };
+			pcRay.lightPosition = Math::vec3{ 10.f,0.f,0.f };
+			pcRay.lightIntensity = 100;
+			pcRay.lightType = 0;
+
+			rtEncoder[index] = commandEncoder->beginRayTracingPass(rayTracingDescriptor);
+			rtEncoder[index]->setPipeline(raytracingPipeline[index].get());
+			rtEncoder[index]->setBindGroup(0, bindGroup_RT[index].get(), 0, 0);
+			rtEncoder[index]->setBindGroup(1, bindGroup[index].get(), 0, 0);
+			rtEncoder[index]->pushConstants(&pcRay,
+				(uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::CLOSEST_HIT
+				| (uint32_t)RHI::ShaderStages::MISS | (uint32_t)RHI::ShaderStages::COMPUTE,
+				0, sizeof(PushConstantRay));
+			rtEncoder[index]->traceRays(800, 600, 1);
+			rtEncoder[index]->end();
 
 			commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
-				(uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT,
+				(uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR,
 				(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
 				(uint32_t)RHI::DependencyType::NONE,
 				{}, {},
@@ -463,6 +436,50 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				}}
 				});
 		}
+
+		//{
+		//	commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+		//		(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
+		//		(uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT,
+		//		(uint32_t)RHI::DependencyType::NONE,
+		//		{}, {},
+		//		{ RHI::TextureMemoryBarrierDescriptor{
+		//			Core::ResourceManager::get()->getResource<GFX::Texture>(rtTarget)->texture.get(),
+		//			RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
+		//			(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
+		//			(uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
+		//			RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
+		//			RHI::TextureLayout::GENERAL
+		//		}}
+		//		});
+
+		//	static uint32_t batchIdx = 0;
+		//	compEncoder[index] = commandEncoder->beginComputePass({});
+		//	compEncoder[index]->setPipeline(computePipeline[index].get());
+		//	compEncoder[index]->setBindGroup(0, bindGroup_RT[index].get(), 0, 0);
+		//	compEncoder[index]->setBindGroup(1, bindGroup[index].get(), 0, 0);
+		//	compEncoder[index]->pushConstants(&batchIdx, (uint32_t)RHI::ShaderStages::COMPUTE
+		//		| (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::CLOSEST_HIT
+		//		| (uint32_t)RHI::ShaderStages::MISS, 0, sizeof(uint32_t));
+		//	compEncoder[index]->dispatchWorkgroups((800 + 15) / 16, (600 + 7) / 8, 1);
+		//	compEncoder[index]->end();
+		//	++batchIdx;
+
+		//	commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+		//		(uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT,
+		//		(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
+		//		(uint32_t)RHI::DependencyType::NONE,
+		//		{}, {},
+		//		{ RHI::TextureMemoryBarrierDescriptor{
+		//			Core::ResourceManager::get()->getResource<GFX::Texture>(rtTarget)->texture.get(),
+		//			RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
+		//			(uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
+		//			(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
+		//			RHI::TextureLayout::GENERAL,
+		//			RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL
+		//		}}
+		//		});
+		//}
 
 		passEncoder[index] = commandEncoder->beginRenderPass(renderPassDescriptor);
 		passEncoder[index]->setPipeline(renderPipeline[index].get());

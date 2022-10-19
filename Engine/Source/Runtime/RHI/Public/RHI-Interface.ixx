@@ -6,6 +6,7 @@ module;
 #include <variant>
 export module RHI:Interface;
 import Core.Memory;
+import Math.Matrix;
 import Platform.Window;
 
 namespace SIByL::RHI
@@ -345,6 +346,8 @@ namespace SIByL::RHI
 		// ---------------------------
 		/** destroy the buffer */
 		virtual auto destroy() const noexcept -> void = 0;
+		/** set debug name */
+		virtual auto setName(std::string const& name) -> void = 0;
 	};
 
 	export struct BufferDescriptor {
@@ -492,6 +495,8 @@ namespace SIByL::RHI
 		virtual auto dimension() const noexcept -> TextureDimension = 0;
 		/** readonly format of the texture */
 		virtual auto format() const noexcept -> TextureFormat = 0;
+		/** set debug name */
+		virtual auto setName(std::string const& name) -> void = 0;
 	};
 
 	export struct TextureDescriptor {
@@ -547,6 +552,8 @@ namespace SIByL::RHI
 		virtual ~TextureView() = default;
 		/** get binded texture */
 		virtual auto getTexture() noexcept -> Texture* = 0;
+		/** set debug name */
+		virtual auto setName(std::string const& name) -> void = 0;
 	};
 
 	export struct TextureViewDescriptor {
@@ -580,6 +587,8 @@ namespace SIByL::RHI
 	export struct Sampler {
 		/** virtual destructor */
 		virtual ~Sampler() = default;
+		/** set debug name */
+		virtual auto setName(std::string const& name) -> void = 0;
 	};
 
 	export enum struct AddressMode {
@@ -830,6 +839,8 @@ namespace SIByL::RHI
 	export struct ShaderModule {
 		/** virtual destrucor */
 		virtual ~ShaderModule() = default;
+		/** set debug name */
+		virtual auto setName(std::string const& name) -> void = 0;
 	};
 
 	export struct ShaderModuleDescriptor {
@@ -877,6 +888,8 @@ namespace SIByL::RHI
 	export struct ComputePipeline {
 		/** virtual destructor */
 		virtual ~ComputePipeline() = default;
+		/** set debug name */
+		virtual auto setName(std::string const& name) -> void = 0;
 	};
 
 	export struct ComputePipelineDescriptor :public PipelineDescriptorBase {
@@ -1076,6 +1089,8 @@ namespace SIByL::RHI
 	export struct RenderPipeline {
 		/** virtual destructor */
 		virtual ~RenderPipeline() = default;
+		/** set debug name */
+		virtual auto setName(std::string const& name) -> void = 0;
 	};
 
 	/** Describes a render pipeline by configuring each of the render stages. */
@@ -1176,6 +1191,10 @@ namespace SIByL::RHI
 			uint32_t  queryCount,
 			Buffer&   destination,
 			uint64_t  destinationOffset) noexcept -> void = 0;
+		/** copy accceleration structure to a new instance */
+		virtual auto cloneBLAS(BLAS* src) noexcept -> std::unique_ptr<BLAS> = 0;
+		/** update blas by refitting, only deformation is allowed */
+		virtual auto updateBLAS(BLAS* src, Buffer* vertexBuffer, Buffer* indexBuffer) noexcept -> void = 0;
 		/** Completes recording of the commands sequence and returns a corresponding GPUCommandBuffer. */
 		virtual auto finish(std::optional<CommandBufferDescriptor> const& descriptor = {}) noexcept -> CommandBuffer* = 0;
 	};
@@ -1499,6 +1518,8 @@ namespace SIByL::RHI
 			Semaphore* semaphore) noexcept -> void = 0;
 		/** wait until idle */
 		virtual auto waitIdle() noexcept -> void = 0;
+		/** set debug name */
+		virtual auto setName(std::string const& name) -> void = 0;
 	};
 
 	/** Describes a queue request */
@@ -1877,6 +1898,8 @@ namespace SIByL::RHI
 		uint32_t	maxVertex	   = 0;
 		uint32_t	primitiveCount = 0;
 		IndexFormat	indexFormat    = IndexFormat::UINT16_t;
+		bool		allowRefitting	= false;
+		bool		allowCompaction = false;
 	};
 
 	export struct TLAS {
@@ -1884,13 +1907,23 @@ namespace SIByL::RHI
 		virtual ~TLAS() = default;
 	};
 
+	export struct BLASInstance {
+		BLAS*		blas		= nullptr;
+		Math::mat4	transform	= {};
+		uint32_t	instanceCustomIndex = 0;
+		uint32_t	instanceShaderBindingTableRecordOffset = 0;
+		uint32_t	mask = 0xFF;
+	};
+
 	export struct TLASDescriptor {
-		std::vector<BLAS*> blas;
+		std::vector<BLASInstance> instances;
 	};
 
 	export struct RayTracingPipeline {
 		/** virtual destructor */
 		virtual ~RayTracingPipeline() = default;
+		/** set debug name */
+		virtual auto setName(std::string const& name) -> void = 0;
 	};
 
 	export struct RayTracingPipelineDescriptor :public PipelineDescriptorBase {

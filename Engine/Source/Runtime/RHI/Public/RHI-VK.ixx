@@ -20,6 +20,7 @@ import :Interface;
 import Core.Log;
 import Math.Limits;
 import Math.Common;
+import Math.Matrix;
 import Platform.Window;
 
 namespace SIByL::RHI
@@ -104,6 +105,10 @@ namespace SIByL::RHI
 		PFN_vkCmdBeginDebugUtilsLabelEXT vkCmdBeginDebugUtilsLabelEXT;
 		typedef void (VKAPI_PTR* PFN_vkCmdEndDebugUtilsLabelEXT)(VkCommandBuffer commandBuffer);
 		PFN_vkCmdEndDebugUtilsLabelEXT vkCmdEndDebugUtilsLabelEXT;
+		typedef VkResult(VKAPI_PTR* PFN_vkSetDebugUtilsObjectNameEXT)(VkDevice device, const VkDebugUtilsObjectNameInfoEXT* pNameInfo);
+		PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT;
+		typedef VkResult(VKAPI_PTR* PFN_vkSetDebugUtilsObjectTagEXT)(VkDevice device, const VkDebugUtilsObjectTagInfoEXT* pTagInfo);
+		PFN_vkSetDebugUtilsObjectTagEXT vkSetDebugUtilsObjectTagEXT;
 		// Mesh Shader Ext Func Pointers
 		typedef void (VKAPI_PTR* PFN_vkCmdDrawMeshTasksNV)(VkCommandBuffer commandBuffer, uint32_t taskCount, uint32_t firstTask);
 		PFN_vkCmdDrawMeshTasksNV vkCmdDrawMeshTasksNV;
@@ -209,6 +214,9 @@ namespace SIByL::RHI
 		typedef VkDeviceAddress(VKAPI_PTR* PFN_vkGetAccelerationStructureDeviceAddressKHR)(VkDevice device, 
 			const VkAccelerationStructureDeviceAddressInfoKHR* pInfo);
 		PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHR;
+		typedef void (VKAPI_PTR* PFN_vkCmdCopyAccelerationStructureKHR)(VkCommandBuffer commandBuffer, 
+			const VkCopyAccelerationStructureInfoKHR* pInfo);
+		PFN_vkCmdCopyAccelerationStructureKHR vkCmdCopyAccelerationStructureKHR;
 
 	private:
 		VkInstance instance;
@@ -314,6 +322,8 @@ namespace SIByL::RHI
 			Semaphore* semaphore) noexcept -> void override;
 		/** wait until idle */
 		virtual auto waitIdle() noexcept -> void override;
+		/** set debug name */
+		virtual auto setName(std::string const& name) -> void override;
 		/** Vulkan queue handle */
 		VkQueue queue;
 		/* the device this buffer is created on */
@@ -665,6 +675,8 @@ namespace SIByL::RHI
 		if (ext & (ContextExtensionsFlags)ContextExtension::DEBUG_UTILS) {
 			context->vkCmdBeginDebugUtilsLabelEXT = (PFN_vkCmdBeginDebugUtilsLabelEXT)vkGetInstanceProcAddrStub(context->getVkInstance(), "vkCmdBeginDebugUtilsLabelEXT");
 			context->vkCmdEndDebugUtilsLabelEXT = (PFN_vkCmdEndDebugUtilsLabelEXT)vkGetInstanceProcAddrStub(context->getVkInstance(), "vkCmdEndDebugUtilsLabelEXT");
+			context->vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddrStub(context->getVkInstance(), "vkSetDebugUtilsObjectNameEXT");
+			context->vkSetDebugUtilsObjectTagEXT = (PFN_vkSetDebugUtilsObjectTagEXT)vkGetInstanceProcAddrStub(context->getVkInstance(), "vkSetDebugUtilsObjectTagEXT");
 		}
 		if (ext & (ContextExtensionsFlags)ContextExtension::MESH_SHADER) {
 			context->vkCmdDrawMeshTasksNV = (PFN_vkCmdDrawMeshTasksNV)vkGetInstanceProcAddrStub(context->getVkInstance(), "vkCmdDrawMeshTasksNV");
@@ -695,6 +707,8 @@ namespace SIByL::RHI
 			context->vkCreateAccelerationStructureKHR = (PFN_vkCreateAccelerationStructureKHR)vkGetInstanceProcAddrStub(context->getVkInstance(), "vkCreateAccelerationStructureKHR");
 			context->vkDestroyAccelerationStructureKHR = (PFN_vkDestroyAccelerationStructureKHR)vkGetInstanceProcAddrStub(context->getVkInstance(), "vkDestroyAccelerationStructureKHR");
 			context->vkGetAccelerationStructureDeviceAddressKHR = (PFN_vkGetAccelerationStructureDeviceAddressKHR)vkGetInstanceProcAddrStub(context->getVkInstance(), "vkGetAccelerationStructureDeviceAddressKHR");
+			context->vkCmdCopyAccelerationStructureKHR = (PFN_vkCmdCopyAccelerationStructureKHR)vkGetInstanceProcAddrStub(context->getVkInstance(), "vkCmdCopyAccelerationStructureKHR");
+
 			// emplace back device extensions 
 			context->getDeviceExtensions().emplace_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
 			context->getDeviceExtensions().emplace_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
@@ -1138,6 +1152,15 @@ namespace SIByL::RHI
 		graphicPool = std::make_unique<CommandPool_VK>(this);
 	}
 
+	auto Queue_VK::setName(std::string const& name) -> void {
+		VkDebugUtilsObjectNameInfoEXT objectNameInfo = {};
+		objectNameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+		objectNameInfo.objectType = VK_OBJECT_TYPE_QUEUE;
+		objectNameInfo.objectHandle = uint64_t(queue);
+		objectNameInfo.pObjectName = name.c_str();
+		device->getAdapterVk()->getContext()->vkSetDebugUtilsObjectNameEXT(device->getVkDevice(), &objectNameInfo);
+	}
+
 #pragma endregion
 
 	// Initialization Interface
@@ -1174,6 +1197,8 @@ namespace SIByL::RHI
 		// ---------------------------
 		/** destroy the buffer */
 		virtual auto destroy() const noexcept -> void override;
+		/** set debug name */
+		virtual auto setName(std::string const& name) -> void override;
 	public:
 		/** initialize the buffer */
 		auto init(Device_VK* device, size_t size, BufferDescriptor const& desc) noexcept -> void;
@@ -1320,6 +1345,15 @@ namespace SIByL::RHI
 		if (bufferMemory) vkFreeMemory(device->getVkDevice(), bufferMemory, nullptr);
 	}
 
+	auto Buffer_VK::setName(std::string const& name) -> void {
+		VkDebugUtilsObjectNameInfoEXT objectNameInfo = {};
+		objectNameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+		objectNameInfo.objectType = VK_OBJECT_TYPE_BUFFER;
+		objectNameInfo.objectHandle = uint64_t(buffer);
+		objectNameInfo.pObjectName = name.c_str();
+		device->getAdapterVk()->getContext()->vkSetDebugUtilsObjectNameEXT(device->getVkDevice(), &objectNameInfo);
+	}
+
 	inline auto findMemoryType(Device_VK* device, uint32_t typeFilter, VkMemoryPropertyFlags properties) noexcept -> uint32_t {
 		VkPhysicalDeviceMemoryProperties memProperties;
 		vkGetPhysicalDeviceMemoryProperties(device->getAdapterVk()->getVkPhysicalDevice(), &memProperties);
@@ -1392,6 +1426,8 @@ namespace SIByL::RHI
 		virtual auto createView(TextureViewDescriptor const& desc) noexcept -> std::unique_ptr<TextureView> override;
 		/** destroy this texture */
 		virtual auto destroy() noexcept -> void override;
+		/** set debug name */
+		virtual auto setName(std::string const& name) -> void override;
 		// Readonly Attributes
 		// ---------------------------
 		/** readonly width of the texture */
@@ -1434,6 +1470,8 @@ namespace SIByL::RHI
 		virtual ~TextureView_VK();
 		/** get binded texture */
 		virtual auto getTexture() noexcept -> Texture* { return texture; }
+		/** set debug name */
+		virtual auto setName(std::string const& name) -> void override;
 		/** Vulkan texture view */
 		VkImageView imageView;
 		/** Texture view descriptor */
@@ -1445,7 +1483,7 @@ namespace SIByL::RHI
 	};
 
 #pragma region VK_TEXTURE_IMPL
-
+	
 	inline auto getVkImageType(TextureDimension const& dim) noexcept -> VkImageType {
 		switch (dim)
 		{
@@ -1597,6 +1635,24 @@ namespace SIByL::RHI
 		return descriptor.format;
 	}
 
+	auto Texture_VK::setName(std::string const& name) -> void {
+		VkDebugUtilsObjectNameInfoEXT objectNameInfo = {};
+		objectNameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+		objectNameInfo.objectType = VK_OBJECT_TYPE_IMAGE;
+		objectNameInfo.objectHandle = uint64_t(image);
+		objectNameInfo.pObjectName = name.c_str();
+		device->getAdapterVk()->getContext()->vkSetDebugUtilsObjectNameEXT(device->getVkDevice(), &objectNameInfo);
+	}
+
+	auto TextureView_VK::setName(std::string const& name) -> void {
+		VkDebugUtilsObjectNameInfoEXT objectNameInfo = {};
+		objectNameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+		objectNameInfo.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
+		objectNameInfo.objectHandle = uint64_t(imageView);
+		objectNameInfo.pObjectName = name.c_str();
+		device->getAdapterVk()->getContext()->vkSetDebugUtilsObjectNameEXT(device->getVkDevice(), &objectNameInfo);
+	}
+
 	auto Device_VK::createTexture(TextureDescriptor const& desc) noexcept -> std::unique_ptr<Texture> {
 		return std::make_unique<Texture_VK>(this, desc);
 	}
@@ -1744,6 +1800,8 @@ namespace SIByL::RHI
 		Sampler_VK(SamplerDescriptor const& desc, Device_VK* device);
 		/** virtual destructor */
 		virtual ~Sampler_VK();
+		/** set debug name */
+		virtual auto setName(std::string const& name) -> void override;
 		/** vulkan Texture Sampler */
 		VkSampler textureSampler;
 		/** the device this sampler is created on */
@@ -1794,6 +1852,15 @@ namespace SIByL::RHI
 
 	Sampler_VK::~Sampler_VK() {
 		vkDestroySampler(device->getVkDevice(), textureSampler, nullptr);
+	}
+
+	auto Sampler_VK::setName(std::string const& name) -> void {
+		VkDebugUtilsObjectNameInfoEXT objectNameInfo = {};
+		objectNameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+		objectNameInfo.objectType = VK_OBJECT_TYPE_SAMPLER;
+		objectNameInfo.objectHandle = uint64_t(textureSampler);
+		objectNameInfo.pObjectName = name.c_str();
+		device->getAdapterVk()->getContext()->vkSetDebugUtilsObjectNameEXT(device->getVkDevice(), &objectNameInfo);
 	}
 
 	auto Device_VK::createSampler(SamplerDescriptor const& desc) noexcept -> std::unique_ptr<Sampler> {
@@ -2197,6 +2264,8 @@ namespace SIByL::RHI
 		ShaderModule_VK(ShaderModule_VK&& shader);
 		auto operator=(ShaderModule_VK const& shader) -> ShaderModule_VK & = delete;
 		auto operator=(ShaderModule_VK&& shader) -> ShaderModule_VK&;
+		/** set debug name */
+		virtual auto setName(std::string const& name) -> void override;
 		/** the shader stages included in this module */
 		ShaderStagesFlags stages;
 		/** vulkan shader module */
@@ -2261,6 +2330,15 @@ namespace SIByL::RHI
 		if (shaderModule) vkDestroyShaderModule(device->getVkDevice(), shaderModule, nullptr);
 	}
 
+	auto ShaderModule_VK::setName(std::string const& name) -> void {
+		VkDebugUtilsObjectNameInfoEXT objectNameInfo = {};
+		objectNameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+		objectNameInfo.objectType = VK_OBJECT_TYPE_SHADER_MODULE;
+		objectNameInfo.objectHandle = uint64_t(shaderModule);
+		objectNameInfo.pObjectName = name.c_str();
+		device->getAdapterVk()->getContext()->vkSetDebugUtilsObjectNameEXT(device->getVkDevice(), &objectNameInfo);
+	}
+
 	auto Device_VK::createShaderModule(ShaderModuleDescriptor const& desc) noexcept -> std::unique_ptr<ShaderModule> {
 		std::unique_ptr<ShaderModule_VK> shadermodule = std::make_unique<ShaderModule_VK>(this, desc);
 		return shadermodule;
@@ -2277,6 +2355,8 @@ namespace SIByL::RHI
 		ComputePipeline_VK(Device_VK* device, ComputePipelineDescriptor const& desc);
 		/** virtual destructor */
 		virtual ~ComputePipeline_VK();
+		/** set debug name */
+		virtual auto setName(std::string const& name) -> void override;
 		/** vulkan compute pipeline */
 		VkPipeline pipeline;
 		/** compute pipeline layout */
@@ -2304,6 +2384,15 @@ namespace SIByL::RHI
 
 	ComputePipeline_VK::~ComputePipeline_VK() {
 		if (pipeline) vkDestroyPipeline(device->getVkDevice(), pipeline, nullptr);
+	}
+
+	auto ComputePipeline_VK::setName(std::string const& name) -> void {
+		VkDebugUtilsObjectNameInfoEXT objectNameInfo = {};
+		objectNameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+		objectNameInfo.objectType = VK_OBJECT_TYPE_PIPELINE;
+		objectNameInfo.objectHandle = uint64_t(pipeline);
+		objectNameInfo.pObjectName = name.c_str();
+		device->getAdapterVk()->getContext()->vkSetDebugUtilsObjectNameEXT(device->getVkDevice(), &objectNameInfo);
 	}
 
 #pragma endregion
@@ -2436,6 +2525,8 @@ namespace SIByL::RHI
 		RenderPipeline_VK(RenderPipeline_VK&& pipeline);
 		auto operator=(RenderPipeline_VK const& pipeline) -> RenderPipeline_VK & = delete;
 		auto operator=(RenderPipeline_VK&& pipeline) -> RenderPipeline_VK&;
+		/** set debug name */
+		virtual auto setName(std::string const& name) -> void override;
 		/** vulkan render pipeline */
 		VkPipeline pipeline = {};
 		/** vulkan render pipeline fixed function settings */
@@ -2824,6 +2915,15 @@ namespace SIByL::RHI
 		return *this;
 	}
 
+	auto RenderPipeline_VK::setName(std::string const& name) -> void {
+		VkDebugUtilsObjectNameInfoEXT objectNameInfo = {};
+		objectNameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+		objectNameInfo.objectType = VK_OBJECT_TYPE_PIPELINE;
+		objectNameInfo.objectHandle = uint64_t(pipeline);
+		objectNameInfo.pObjectName = name.c_str();
+		device->getAdapterVk()->getContext()->vkSetDebugUtilsObjectNameEXT(device->getVkDevice(), &objectNameInfo);
+	}
+
 	auto Device_VK::createRenderPipeline(RenderPipelineDescriptor const& desc) noexcept -> std::unique_ptr<RenderPipeline> {
 		return std::make_unique<RenderPipeline_VK>(this, desc);
 	}
@@ -3186,6 +3286,10 @@ namespace SIByL::RHI
 			uint32_t  queryCount,
 			Buffer&   destination,
 			uint64_t  destinationOffset) noexcept -> void override;
+		/** copy accceleration structure to a new instance */
+		virtual auto cloneBLAS(BLAS* src) noexcept -> std::unique_ptr<BLAS> override;
+		/** update blas by refitting, only deformation is allowed */
+		virtual auto updateBLAS(BLAS* src, Buffer* vertexBuffer, Buffer* indexBuffer) noexcept -> void override;
 		/** Completes recording of the commands sequence and returns a corresponding GPUCommandBuffer. */
 		virtual auto finish(std::optional<CommandBufferDescriptor> const& descriptor = {}) noexcept -> CommandBuffer* override;
 		/** underlying command buffer */
@@ -3832,19 +3936,23 @@ namespace SIByL::RHI
 	export struct BLAS_VK :public BLAS {
 		/** initialzie */
 		BLAS_VK(Device_VK* device, BLASDescriptor const& descriptor);
+		/** only allocate according to another BLAS */
+		BLAS_VK(Device_VK* device, BLAS_VK* descriptor);
 		/** virtual destructor */
 		virtual ~BLAS_VK();
 		/** VULKAN BLAS object*/
 		VkAccelerationStructureKHR blas = {};
 		/** VULKAN BLAS buffer */
 		std::unique_ptr<Buffer> bufferBLAS = nullptr;
+		/** descriptor is remained */
+		BLASDescriptor descriptor;
 		/** vulkan device the BLAS is created on */
 		Device_VK* device = nullptr;
 	};
 
 #pragma region VK_BLAS_IMPL
 
-	BLAS_VK::BLAS_VK(Device_VK* device, BLASDescriptor const& descriptor) : device(device) {
+	BLAS_VK::BLAS_VK(Device_VK* device, BLASDescriptor const& descriptor) : device(device), descriptor(descriptor) {
 		// 1. Get the host or device addresses of the geometry’s buffers
 		VkBufferDeviceAddressInfo deviceAddressInfo = {};
 		deviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
@@ -3882,6 +3990,7 @@ namespace SIByL::RHI
 		buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
 		buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
 		buildInfo.srcAccelerationStructure = VK_NULL_HANDLE;
+		buildInfo.flags = descriptor.allowRefitting ? VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR : 0;
 		// We will set dstAccelerationStructure and scratchData once
 		// we have created those objects.
 		VkAccelerationStructureBuildSizesInfoKHR sizeInfo = {};
@@ -3904,6 +4013,7 @@ namespace SIByL::RHI
 		createInfo.size = sizeInfo.accelerationStructureSize;
 		createInfo.buffer = static_cast<Buffer_VK*>(bufferBLAS.get())->getVkBuffer();
 		createInfo.offset = 0;
+		/*VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR*/
 		device->getAdapterVk()->getContext()->vkCreateAccelerationStructureKHR(device->getVkDevice(), &createInfo, nullptr, &blas);
 		buildInfo.dstAccelerationStructure = blas;
 		// 5. Allocate scratch space.
@@ -3929,12 +4039,165 @@ namespace SIByL::RHI
 		device->getGraphicsQueue()->waitIdle();
 	}
 
+	BLAS_VK::BLAS_VK(Device_VK* device, BLAS_VK* src)
+		:device(device), descriptor(src->descriptor)
+	{
+		// 1. Get the host or device addresses of the geometry’s buffers
+		VkBufferDeviceAddressInfo deviceAddressInfo = {};
+		deviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+		deviceAddressInfo.buffer = static_cast<Buffer_VK*>(descriptor.vertexBuffer)->getVkBuffer();
+		VkDeviceAddress vertexBufferAddress = vkGetBufferDeviceAddress(device->getVkDevice(), &deviceAddressInfo);
+		deviceAddressInfo.buffer = static_cast<Buffer_VK*>(descriptor.indexBuffer)->getVkBuffer();
+		VkDeviceAddress indexBufferAddress = vkGetBufferDeviceAddress(device->getVkDevice(), &deviceAddressInfo);
+		// 2. Describe the instance’s geometry
+		VkAccelerationStructureGeometryTrianglesDataKHR triangles = {};
+		triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+		triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+		triangles.vertexData.deviceAddress = vertexBufferAddress;
+		triangles.vertexStride = 3 * sizeof(float);
+		triangles.indexType = descriptor.indexFormat == IndexFormat::UINT16_t ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
+		triangles.indexData.deviceAddress = indexBufferAddress;
+		triangles.maxVertex = descriptor.maxVertex;
+		triangles.transformData.deviceAddress = 0; // No transform
+		VkAccelerationStructureGeometryKHR geometry = {};
+		geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+		geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+		geometry.geometry.triangles = triangles;
+		geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+		// 3. Determine the worst-case memory requirements for the AS and 
+		//    for scratch storage required when building.
+		VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
+		rangeInfo.firstVertex = 0;
+		rangeInfo.primitiveCount = descriptor.primitiveCount;
+		rangeInfo.primitiveOffset = 0;
+		rangeInfo.transformOffset = 0;
+		VkAccelerationStructureBuildGeometryInfoKHR buildInfo = {};
+		buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+		buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+		buildInfo.geometryCount = 1;
+		buildInfo.pGeometries = &geometry;
+		buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+		buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+		buildInfo.srcAccelerationStructure = VK_NULL_HANDLE;
+		buildInfo.flags = 0;
+		if (descriptor.allowRefitting) buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
+		if (descriptor.allowCompaction) buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR;
+		// We will set dstAccelerationStructure and scratchData once
+		// we have created those objects.
+		VkAccelerationStructureBuildSizesInfoKHR sizeInfo = {};
+		sizeInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
+		device->getAdapterVk()->getContext()->vkGetAccelerationStructureBuildSizesKHR(
+			device->getVkDevice(),
+			VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+			&buildInfo,
+			&rangeInfo.primitiveCount,
+			&sizeInfo);
+		// create blas
+		bufferBLAS = device->createBuffer(BufferDescriptor{
+			sizeInfo.accelerationStructureSize,
+			(uint32_t)BufferUsage::ACCELERATION_STRUCTURE_STORAGE | (uint32_t)BufferUsage::SHADER_DEVICE_ADDRESS | (uint32_t)BufferUsage::STORAGE,
+			BufferShareMode::EXCLUSIVE,
+			(uint32_t)MemoryProperty::DEVICE_LOCAL_BIT });
+		VkAccelerationStructureCreateInfoKHR createInfo = {};
+		createInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+		createInfo.type = buildInfo.type;
+		createInfo.size = sizeInfo.accelerationStructureSize;
+		createInfo.buffer = static_cast<Buffer_VK*>(bufferBLAS.get())->getVkBuffer();
+		createInfo.offset = 0;
+		device->getAdapterVk()->getContext()->vkCreateAccelerationStructureKHR(device->getVkDevice(), &createInfo, nullptr, &blas);
+		buildInfo.dstAccelerationStructure = blas;
+	}
+
 	BLAS_VK::~BLAS_VK() {
 		if (blas) device->getAdapterVk()->getContext()->vkDestroyAccelerationStructureKHR(device->getVkDevice(), blas, nullptr);
 	}
 	
 	auto Device_VK::createBLAS(BLASDescriptor const& desc) noexcept -> std::unique_ptr<BLAS> {
 		return std::make_unique<BLAS_VK>(this, desc);
+	}
+	
+	auto CommandEncoder_VK::cloneBLAS(BLAS* src) noexcept -> std::unique_ptr<BLAS> {
+		BLAS_VK* src_blas = static_cast<BLAS_VK*>(src);
+		std::unique_ptr<BLAS_VK> dst_blas = std::make_unique<BLAS_VK>(src_blas->device, src_blas);
+		VkCopyAccelerationStructureInfoKHR copyInfo = {};
+		copyInfo.sType = VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_INFO_KHR;
+		copyInfo.src = src_blas->blas;
+		copyInfo.dst = dst_blas->blas;
+		copyInfo.mode = VK_COPY_ACCELERATION_STRUCTURE_MODE_CLONE_KHR;
+		dst_blas->device->getAdapterVk()->getContext()->vkCmdCopyAccelerationStructureKHR(commandBuffer->commandBuffer, &copyInfo);
+		return dst_blas;
+	}
+	
+	auto CommandEncoder_VK::updateBLAS(BLAS* src, Buffer* vertexBuffer, Buffer* indexBuffer) noexcept -> void {
+		BLAS_VK* blas = static_cast<BLAS_VK*>(src);
+		blas->descriptor.vertexBuffer = vertexBuffer;
+		blas->descriptor.indexBuffer = indexBuffer;
+		// 1. Get the host or device addresses of the geometry’s buffers
+		VkBufferDeviceAddressInfo deviceAddressInfo = {};
+		deviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+		deviceAddressInfo.buffer = static_cast<Buffer_VK*>(blas->descriptor.vertexBuffer)->getVkBuffer();
+		VkDeviceAddress vertexBufferAddress = vkGetBufferDeviceAddress(blas->device->getVkDevice(), &deviceAddressInfo);
+		deviceAddressInfo.buffer = static_cast<Buffer_VK*>(blas->descriptor.indexBuffer)->getVkBuffer();
+		VkDeviceAddress indexBufferAddress = vkGetBufferDeviceAddress(blas->device->getVkDevice(), &deviceAddressInfo);
+		// 2. Describe the instance’s geometry
+		VkAccelerationStructureGeometryTrianglesDataKHR triangles = {};
+		triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+		triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+		triangles.vertexData.deviceAddress = vertexBufferAddress;
+		triangles.vertexStride = 3 * sizeof(float);
+		triangles.indexType = blas->descriptor.indexFormat == IndexFormat::UINT16_t ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
+		triangles.indexData.deviceAddress = indexBufferAddress;
+		triangles.maxVertex = blas->descriptor.maxVertex;
+		triangles.transformData.deviceAddress = 0; // No transform
+		VkAccelerationStructureGeometryKHR geometry = {};
+		geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+		geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+		geometry.geometry.triangles = triangles;
+		geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+		// 3. Determine the worst-case memory requirements for the AS and 
+		//    for scratch storage required when building.
+		VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
+		rangeInfo.firstVertex = 0;
+		rangeInfo.primitiveCount = blas->descriptor.primitiveCount;
+		rangeInfo.primitiveOffset = 0;
+		rangeInfo.transformOffset = 0;
+		VkAccelerationStructureBuildGeometryInfoKHR buildInfo = {};
+		buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+		buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+		buildInfo.geometryCount = 1;
+		buildInfo.pGeometries = &geometry;
+		buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
+		buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+		buildInfo.srcAccelerationStructure = blas->blas;
+		buildInfo.flags = blas->descriptor.allowRefitting ? VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR : 0;
+		// We will set dstAccelerationStructure and scratchData once
+		// we have created those objects.
+		VkAccelerationStructureBuildSizesInfoKHR sizeInfo = {};
+		sizeInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
+		blas->device->getAdapterVk()->getContext()->vkGetAccelerationStructureBuildSizesKHR(
+			blas->device->getVkDevice(),
+			VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+			&buildInfo,
+			&rangeInfo.primitiveCount,
+			&sizeInfo);
+		buildInfo.dstAccelerationStructure = blas->blas;
+		// 5. Allocate scratch space.
+		std::unique_ptr<Buffer> scratchBuffer = blas->device->createBuffer(BufferDescriptor{
+			sizeInfo.buildScratchSize,
+			(uint32_t)BufferUsage::SHADER_DEVICE_ADDRESS | (uint32_t)BufferUsage::STORAGE,
+			BufferShareMode::EXCLUSIVE,
+			(uint32_t)MemoryProperty::DEVICE_LOCAL_BIT });
+		deviceAddressInfo.buffer = static_cast<Buffer_VK*>(scratchBuffer.get())->getVkBuffer();
+		buildInfo.scratchData.deviceAddress = vkGetBufferDeviceAddress(blas->device->getVkDevice(), &deviceAddressInfo);
+		// 6. Call vkCmdBuildAccelerationStructuresKHR() with a populated
+		//	  VkAccelerationStructureBuildSizesInfoKHR structand range info to
+		//    build the geometry into an acceleration structure.
+		VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
+		blas->device->getAdapterVk()->getContext()->vkCmdBuildAccelerationStructuresKHR(
+			commandBuffer->commandBuffer, // The command buffer to record the command
+			1, // Number of acceleration structures to build
+			&buildInfo, // Array of ...BuildGeometryInfoKHR objects
+			&pRangeInfo); // Array of ...RangeInfoKHR objects
 	}
 
 #pragma endregion
@@ -3955,25 +4218,30 @@ namespace SIByL::RHI
 #pragma region VK_TLAS_IMPL
 
 	TLAS_VK::TLAS_VK(Device_VK* device, TLASDescriptor const& descriptor) : device(device) {
-		// frst get the device address of one or more BLASs
-		VkAccelerationStructureDeviceAddressInfoKHR addressInfo = {};
-		addressInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
-		addressInfo.accelerationStructure = static_cast<BLAS_VK*>(descriptor.blas[0])->blas;
-		VkDeviceAddress blasAddress = device->getAdapterVk()->getContext()->
-			vkGetAccelerationStructureDeviceAddressKHR(device->getVkDevice(), &addressInfo);
 		// specify an instance
 		//  Zero-initialize.
-		VkAccelerationStructureInstanceKHR instance{};
-		//  Set the instance transform to a 135-degree rotation around the y-axis.
-		instance.transform.matrix[0][0] = instance.transform.matrix[1][1] = instance.transform.matrix[2][2] = 1.0f;
-		instance.instanceCustomIndex = 0;
-		instance.mask = 0xFF;
-		instance.instanceShaderBindingTableRecordOffset = 0;
-		instance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
-		instance.accelerationStructureReference = blasAddress;
+		std::vector<VkAccelerationStructureInstanceKHR> instances(descriptor.instances.size());
+		for (int i = 0; i < instances.size(); ++i) {
+			// frst get the device address of one or more BLASs
+			VkAccelerationStructureDeviceAddressInfoKHR addressInfo = {};
+			addressInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
+			addressInfo.accelerationStructure = static_cast<BLAS_VK*>(descriptor.instances[i].blas)->blas;
+			VkDeviceAddress blasAddress = device->getAdapterVk()->getContext()->
+				vkGetAccelerationStructureDeviceAddressKHR(device->getVkDevice(), &addressInfo);
+			VkAccelerationStructureInstanceKHR& instance = instances[i];
+			//  Set the instance transform to given transform.
+			for (int m = 0; m < 3; ++m)
+				for (int n = 0; n < 4; ++n)
+					instance.transform.matrix[m][n] = descriptor.instances[i].transform.data[m][n];
+			instance.instanceCustomIndex = descriptor.instances[i].instanceCustomIndex;
+			instance.mask = 0xFF;
+			instance.instanceShaderBindingTableRecordOffset = descriptor.instances[i].instanceShaderBindingTableRecordOffset;
+			instance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
+			instance.accelerationStructureReference = blasAddress;
+		}
 		// 2. Uploading an instance buffer of one instance to the VkDevice and waiting for it to complete.
 		std::unique_ptr<Buffer> bufferInstances = device->createDeviceLocalBuffer(
-			(void*)&instance, sizeof(instance), (uint32_t)BufferUsage::SHADER_DEVICE_ADDRESS |
+			(void*)instances.data(), sizeof(VkAccelerationStructureInstanceKHR) * instances.size(), (uint32_t)BufferUsage::SHADER_DEVICE_ADDRESS |
 			(uint32_t)BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY);
 		//	  Add a memory barrier to ensure that createBuffer's upload command
 		//	  finishes before starting the TLAS build.
@@ -3981,7 +4249,7 @@ namespace SIByL::RHI
 		// 3. Specifying range information for the TLAS build.
 		VkAccelerationStructureBuildRangeInfoKHR rangeInfo;
 		rangeInfo.primitiveOffset = 0;
-		rangeInfo.primitiveCount = 1; // Number of instances
+		rangeInfo.primitiveCount = instances.size(); // Number of instances
 		rangeInfo.firstVertex = 0;
 		rangeInfo.transformOffset = 0;
 		// 4. Constructing a VkAccelerationStructureGeometryKHR struct of instances
@@ -4079,6 +4347,8 @@ namespace SIByL::RHI
 		RayTracingPipeline_VK(Device_VK* device, RayTracingPipelineDescriptor const& desc);
 		/** destructor */
 		~RayTracingPipeline_VK();
+		/** set debug name */
+		virtual auto setName(std::string const& name) -> void override;
 		/** vulkan ray tracing pipeline */
 		VkPipeline pipeline = {};
 		/** vulkan pipeline layout */
@@ -4098,22 +4368,31 @@ namespace SIByL::RHI
 
 	RayTracingPipeline_VK::RayTracingPipeline_VK(Device_VK* device, RayTracingPipelineDescriptor const& desc)
 		:device(device), pipelineLayout(static_cast<PipelineLayout_VK*>(desc.layout)) {
-		// Creating a table of VkPipelineShaderStageCreateInfo objects
+		// First, we create objects that point to each of our shaders.
+		// These are called "shader stages" in this context.
+		// These are shader module + entry point + stage combinations, because each
+		// shader module can contain multiple entry points (e.g. main1, main2...)
+		// Creating a table of VkPipelineShaderStageCreateInfo objects, containing all shader stages.
 		std::vector<VkPipelineShaderStageCreateInfo> pssci = {};
 		if (desc.rayGenShader)		pssci.push_back(static_cast<ShaderModule_VK*>(desc.rayGenShader)->shaderStageInfo);
 		if (desc.rayMissShader)		pssci.push_back(static_cast<ShaderModule_VK*>(desc.rayMissShader)->shaderStageInfo);
 		if (desc.closetHitShader)	pssci.push_back(static_cast<ShaderModule_VK*>(desc.closetHitShader)->shaderStageInfo);
 		if (desc.anyHitShader)		pssci.push_back(static_cast<ShaderModule_VK*>(desc.anyHitShader)->shaderStageInfo);
 		if (desc.intersectionShader)pssci.push_back(static_cast<ShaderModule_VK*>(desc.intersectionShader)->shaderStageInfo);
-		// Enumerating the elements of an array of shader groups, which contains one ray
-		// generation group, one miss group, and one hit group.
+		// Then we make groups point to the shader stages. Each group can point to
+		// one or two shader stages depending on the type, by specifying the index
+		// in the stages array. These groups of handles then become the most
+		// important part of the entries in the shader binding table.
+		// Stores the indices of stages in each group.
+		// Enumerating the elements of an array of shader groups, which contains one ray generation group, one miss group, and one hit group.
 		std::vector<VkRayTracingShaderGroupCreateInfoKHR> rtsgci{};
 		VkRayTracingShaderGroupCreateInfoKHR rtsgTemplate = {};
-		rtsgTemplate.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
-		rtsgTemplate.generalShader = VK_SHADER_UNUSED_KHR;
-		rtsgTemplate.anyHitShader = VK_SHADER_UNUSED_KHR;
-		rtsgTemplate.closestHitShader = VK_SHADER_UNUSED_KHR;
-		rtsgTemplate.intersectionShader = VK_SHADER_UNUSED_KHR;
+		{	// inita a template rtsgci
+			rtsgTemplate.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+			rtsgTemplate.generalShader = VK_SHADER_UNUSED_KHR;
+			rtsgTemplate.anyHitShader = VK_SHADER_UNUSED_KHR;
+			rtsgTemplate.closestHitShader = VK_SHADER_UNUSED_KHR;
+			rtsgTemplate.intersectionShader = VK_SHADER_UNUSED_KHR;	}
 		if (desc.rayGenShader) {
 			VkRayTracingShaderGroupCreateInfoKHR rtsg = rtsgTemplate;
 			rtsg.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
@@ -4129,17 +4408,17 @@ namespace SIByL::RHI
 			rtsg.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
 			rtsg.closestHitShader = 2;
 			rtsgci.push_back(rtsg); }
-
+		// Now, describe the ray tracing pipeline.
 		VkRayTracingPipelineCreateInfoKHR rtpci = {};
 		rtpci.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
 		rtpci.stageCount = uint32_t(pssci.size());
 		rtpci.pStages = pssci.data();
 		rtpci.groupCount = uint32_t(rtsgci.size());
 		rtpci.pGroups = rtsgci.data();
-		rtpci.maxPipelineRayRecursionDepth = 1;
+		rtpci.maxPipelineRayRecursionDepth = 1; // Depth of call tree
 		rtpci.pLibraryInfo = nullptr;
 		rtpci.layout = static_cast<PipelineLayout_VK*>(desc.layout)->pipelineLayout;
-
+		// create the ray tracing pipeline
 		device->getAdapterVk()->getContext()->vkCreateRayTracingPipelinesKHR(
 			device->getVkDevice(), // The VkDevice
 			VK_NULL_HANDLE, // Don't request deferral
@@ -4149,19 +4428,33 @@ namespace SIByL::RHI
 			&pipeline); // Output VkPipelines
 
 		// --------------------------------------
-		// create rt shader binding table
-		// we collect information about the groups
-		// Querying physical device ray tracing properties.
+		// Now create and write the shader binding table, by getting the shader
+		// group handles from the ray tracing pipeline and writing them into a
+		// Vulkan buffer object.
+		// 
+		// create ray tracing shader binding table
+		// 1. Get the properties of ray tracing pipelines on this device
 		VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtPipelineProperties =
 			static_cast<RayTracingExtension_VK*>(device->getRayTracingExtension())->vkRayTracingProperties;
 		// Computing a valid size and stride for the SBT
 		// The number of groups
 		auto groupCount = uint32_t(rtsgci.size());
 		// The size of a program identifier
-		uint32_t groupHandleSize = rtPipelineProperties.shaderGroupHandleSize;
-		// Compute the actual size needed per SBT entry by rounding up to the
-		// alignment needed. Nvh::align_up(a,b) rounds a up to a multiple of b.
-		uint32_t groupSizeAligned = Math::alignUp(groupHandleSize, rtPipelineProperties.shaderGroupBaseAlignment);
+		uint32_t groupHandleSize	= rtPipelineProperties.shaderGroupHandleSize;
+		uint32_t baseAlignment		= rtPipelineProperties.shaderGroupBaseAlignment;
+		uint32_t handleAlignment	= rtPipelineProperties.shaderGroupHandleAlignment;
+		// Compute the stride between shader binding table (SBT) records / actual size needed per SBT entry.
+		// This must be:
+		// - Greater than rtPipelineProperties.shaderGroupHandleSize (since a record contains a shader group handle)
+		// - A multiple of rtPipelineProperties.shaderGroupHandleAlignment
+		// - Less than or equal to rtPipelineProperties.maxShaderGroupStride
+		// In addition, each SBT must start at a multiple of
+		// rtPipelineProperties.shaderGroupBaseAlignment.
+		// Since we store all records contiguously in a single SBT, we assert that
+		// sbtBaseAlignment is a multiple of sbtHandleAlignment, round sbtHeaderSize
+		// up to a multiple of sbtBaseAlignment, and then assert that the result is
+		// less than or equal to maxShaderGroupStride.
+		uint32_t groupSizeAligned = Math::alignUp(groupHandleSize, baseAlignment);
 		// ray gen region
 		//rayGenRegion.deviceAddress = SBTBufferAddress;
 		rayGenRegion.stride = Math::alignUp(groupHandleSize, rtPipelineProperties.shaderGroupBaseAlignment);
@@ -4182,17 +4475,16 @@ namespace SIByL::RHI
 
 		// Allocating and writing shader handles from the ray tracing pipeline into the SBT
 		// Fetch all the shader handles used in the pipeline.
-		// This is opaque data, so we store it in a vector of bytes.
-		// Bytes needed for the SBT
+		// This is opaque data, so we store it in a vector of bytes. Bytes needed for the SBT.
 		uint32_t dataSize = groupCount * groupHandleSize;
 		std::vector<uint8_t> shaderHandleStorage(dataSize);
 		device->getAdapterVk()->getContext()->vkGetRayTracingShaderGroupHandlesKHR(
-			device->getVkDevice(), // The device
-			pipeline, // The ray tracing pipeline
-			0, // Index of the group to start from
-			groupCount, // The number of groups
-			dataSize, // Size of the output buffer in bytes
-			shaderHandleStorage.data()); // The output buffer
+			device->getVkDevice(),			// The device
+			pipeline,						// The ray tracing pipeline
+			0,								// Index of the group to start from
+			groupCount,						// The number of groups
+			dataSize,						// Size of the output buffer in bytes
+			shaderHandleStorage.data());	// The output buffer
 		// Allocate a buffer for storing the SBT.
 		VkDeviceSize sbtSize = rayGenRegion.size + missRegion.size + hitRegion.size + callableRegion.size;
 		SBTBuffer = device->createBuffer({
@@ -4202,31 +4494,44 @@ namespace SIByL::RHI
 				(uint32_t)MemoryProperty::HOST_VISIBLE_BIT | (uint32_t)MemoryProperty::HOST_COHERENT_BIT
 			});
 
-		// struct to query device address infor
-		VkBufferDeviceAddressInfo deviceAddressInfo = {};
-		deviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-		deviceAddressInfo.buffer = static_cast<Buffer_VK*>(SBTBuffer.get())->getVkBuffer();
-		VkDeviceAddress SBTBufferAddress = vkGetBufferDeviceAddress(device->getVkDevice(), &deviceAddressInfo);
-		rayGenRegion.deviceAddress = SBTBufferAddress;
-		missRegion.deviceAddress = SBTBufferAddress + rayGenRegion.size;
-		hitRegion.deviceAddress = SBTBufferAddress + rayGenRegion.size + missRegion.size;
 		// Helper to retrieve the handle data
 		auto getHandle = [&](int i) { return shaderHandleStorage.data() + i * groupHandleSize; };
-		// Map the SBT buffer and write in the handles.
+		// Copy the shader group handles to the SBT.
 		std::future<bool> sync = SBTBuffer->mapAsync((uint32_t)MapMode::WRITE, 0, sbtSize);
 		if (sync.get()) {
 			void* mapped = SBTBuffer->getMappedRange(0, sbtSize);
 			auto* pData = reinterpret_cast <uint8_t*>(mapped);
 			for (uint32_t g = 0; g < groupCount; g++) {
-				memcpy(pData, shaderHandleStorage.data() + g * groupHandleSize, groupHandleSize);
+				memcpy(&(pData[g * groupSizeAligned]), shaderHandleStorage.data() + g * groupHandleSize, groupHandleSize);
 				pData += groupSizeAligned;
 			}
 		}
 		SBTBuffer->unmap();
+		// VkCmdTraceRaysKHR uses VkStridedDeviceAddressregionKHR objects to say where 
+		// each block of shaders is held in memory. These could change per draw call, 
+		// but let's create them up front since they're the same every time here.
+		// └ first fetch the device address of the SBT buffer
+		VkBufferDeviceAddressInfo deviceAddressInfo = {};
+		deviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+		deviceAddressInfo.buffer = static_cast<Buffer_VK*>(SBTBuffer.get())->getVkBuffer();
+		VkDeviceAddress SBTBufferAddress = vkGetBufferDeviceAddress(device->getVkDevice(), &deviceAddressInfo);
+		// └ then fill the address infos into all kinds of regions
+		rayGenRegion.deviceAddress = SBTBufferAddress;
+		missRegion.deviceAddress = SBTBufferAddress + rayGenRegion.size;
+		hitRegion.deviceAddress = SBTBufferAddress + rayGenRegion.size + missRegion.size;
 	}
 
 	RayTracingPipeline_VK::~RayTracingPipeline_VK() {
 		if (pipeline) vkDestroyPipeline(device->getVkDevice(), pipeline, nullptr);
+	}
+
+	auto RayTracingPipeline_VK::setName(std::string const& name) -> void {
+		VkDebugUtilsObjectNameInfoEXT objectNameInfo = {};
+		objectNameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+		objectNameInfo.objectType = VK_OBJECT_TYPE_PIPELINE;
+		objectNameInfo.objectHandle = uint64_t(pipeline);
+		objectNameInfo.pObjectName = name.c_str();
+		device->getAdapterVk()->getContext()->vkSetDebugUtilsObjectNameEXT(device->getVkDevice(), &objectNameInfo);
 	}
 
 #pragma endregion

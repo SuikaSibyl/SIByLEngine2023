@@ -6,11 +6,22 @@
 #extension GL_EXT_shader_16bit_storage : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 
-#include "../RayTracing/host_device.glsl"
-#include "../RayTracing/raycommon.glsl"
+#include "../Utility/math.glsl"
 #include "../Utility/random.glsl"
 
+#include "../RayTracing/rayCommon.h"
+#include "../RayTracing/host_device.glsl"
+#include "../RayTracing/raycommon.glsl"
+
 layout(local_size_x = 16, local_size_y = 8, local_size_z = 1) in;
+
+struct PushConstants {
+    uint sample_batch;
+};
+
+layout(push_constant) uniform PushConsts {
+  PushConstants pushConstants;
+};
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
 layout(binding = 1, set = 0, rgba32f) uniform image2D image;
@@ -23,22 +34,229 @@ layout(binding = 0, set = 1) uniform _GlobalUniforms { GlobalUniforms uni; };
 
 #include "../RayTracing/RayQuery/include/rayquery_utils.glsl"
 
+// The values returned by a material function to the main path tracing routine.
+struct ReturnedInfo
+{
+  vec3 color;         // The reflectivity of the surface.
+  vec3 rayOrigin;     // The new ray origin in world-space.
+  vec3 rayDirection;  // The new ray direction in world-space.
+};
+
+// Diffuse reflection off a 70% reflective surface (what we've used for most
+// of this tutorial)
+ReturnedInfo material0(rayQueryEXT rayQuery, inout uint rngState)
+{
+  HitInfo hitInfo = getObjectHitInfo(rayQuery);
+
+  ReturnedInfo result;
+  result.color        = vec3(0.7);
+  result.rayOrigin    = offsetPositionAlongNormal(hitInfo.worldPosition, hitInfo.worldNormal);
+  result.rayDirection = diffuseReflection(hitInfo.worldNormal, rngState);
+
+  return result;
+}
+
+// A mirror-reflective material that absorbs 30% of incoming light.
+ReturnedInfo material1(rayQueryEXT rayQuery, inout uint rngState)
+{
+  HitInfo hitInfo = getObjectHitInfo(rayQuery);
+
+  ReturnedInfo result;
+  result.color        = vec3(0.7);
+  result.rayOrigin    = offsetPositionAlongNormal(hitInfo.worldPosition, hitInfo.worldNormal);
+  result.rayDirection = reflect(rayQueryGetWorldRayDirectionEXT(rayQuery), hitInfo.worldNormal);
+
+  return result;
+}
+
+// A diffuse surface with faces colored according to their world-space normal.
+ReturnedInfo material2(rayQueryEXT rayQuery, inout uint rngState)
+{
+  HitInfo hitInfo = getObjectHitInfo(rayQuery);
+
+  ReturnedInfo result;
+  result.color        = vec3(0.5) + 0.5 * hitInfo.worldNormal;
+  result.rayOrigin    = offsetPositionAlongNormal(hitInfo.worldPosition, hitInfo.worldNormal);
+  result.rayDirection = diffuseReflection(hitInfo.worldNormal, rngState);
+
+  return result;
+}
+
+// A linear blend of 20% of a mirror-reflective material and 80% of a perfectly
+// diffuse material.
+ReturnedInfo material3(rayQueryEXT rayQuery, inout uint rngState)
+{
+  HitInfo hitInfo = getObjectHitInfo(rayQuery);
+
+  ReturnedInfo result;
+  result.color     = vec3(0.7);
+  result.rayOrigin = offsetPositionAlongNormal(hitInfo.worldPosition, hitInfo.worldNormal);
+  if(stepAndOutputRNGFloat(rngState) < 0.2)
+  {
+    result.rayDirection = reflect(rayQueryGetWorldRayDirectionEXT(rayQuery), hitInfo.worldNormal);
+  }
+  else
+  {
+    result.rayDirection = diffuseReflection(hitInfo.worldNormal, rngState);
+  }
+
+  return result;
+}
+
+// A material where 50% of incoming rays pass through the surface (treating it
+// as transparent), and the other 50% bounce off using diffuse reflection.
+ReturnedInfo material4(rayQueryEXT rayQuery, inout uint rngState)
+{
+  HitInfo hitInfo = getObjectHitInfo(rayQuery);
+
+  ReturnedInfo result;
+  result.color = vec3(0.7);
+  if(stepAndOutputRNGFloat(rngState) < 0.5)
+  {
+    result.rayOrigin    = offsetPositionAlongNormal(hitInfo.worldPosition, hitInfo.worldNormal);
+    result.rayDirection = diffuseReflection(hitInfo.worldNormal, rngState);
+  }
+  else
+  {
+    result.rayOrigin    = offsetPositionAlongNormal(hitInfo.worldPosition, -hitInfo.worldNormal);
+    result.rayDirection = rayQueryGetWorldRayDirectionEXT(rayQuery);
+  }
+
+  return result;
+}
+
+// A material with diffuse reflection that is transparent whenever
+// (x + y + z) % 0.5 < 0.25 in object-space coordinates.
+ReturnedInfo material5(rayQueryEXT rayQuery, inout uint rngState)
+{
+  HitInfo hitInfo = getObjectHitInfo(rayQuery);
+
+  ReturnedInfo result;
+  if(mod(dot(hitInfo.objectPosition, vec3(1, 1, 1)), 0.5) >= 0.25)
+  {
+    result.color        = vec3(0.7);
+    result.rayOrigin    = offsetPositionAlongNormal(hitInfo.worldPosition, hitInfo.worldNormal);
+    result.rayDirection = diffuseReflection(hitInfo.worldNormal, rngState);
+  }
+  else
+  {
+    result.color        = vec3(1.0);
+    result.rayOrigin    = offsetPositionAlongNormal(hitInfo.worldPosition, -hitInfo.worldNormal);
+    result.rayDirection = rayQueryGetWorldRayDirectionEXT(rayQuery);
+  }
+
+  return result;
+}
+
+// A mirror material that uses normal mapping: we perturb the geometric
+// (triangle) normal to get a shading normal that varies over the surface, and
+// then use the shading normal to get reflections. This is often used with a
+// texture called a normal map in real-time graphics, because it can make it
+// look like an object has details that aren't there in the geometry. In this
+// function, we perturb the normal without textures using a mathematical
+// function instead.
+// There's a lot of depth (no pun intended) in normal mapping; two things to
+// note in this example are:
+// - It's not well-defined what happens when normal mapping produces a
+// direction that goes through the surface. In this function we mirror it so
+// that it doesn't go through the surface; in a different path tracer, we might
+// reject this ray by setting its sample weight to 0, or do something more
+// sophisticated.
+// - When a BRDF (bidirectional reflectance distribution function; describes
+// how much light from direction A bounces off a material in direction B) uses
+// a shading normal instead of a geometric normal for shading, the BRDF has to
+// be corrected in order to make the math physically correct and to avoid
+// errors in bidirectional path tracers. This function ignores that (we don't
+// describe BRDFs or sample weights in this tutorial!), but the authoritative
+// source for how to do this is chapters 5-7 of Eric Veach's Ph.D. thesis,
+// "Robust Monte Carlo Methods for Light Transport Simulation", available for
+// free online.
+ReturnedInfo material6(rayQueryEXT rayQuery, inout uint rngState)
+{
+  HitInfo hitInfo = getObjectHitInfo(rayQuery);
+
+  ReturnedInfo result;
+  result.color     = vec3(0.7);
+  result.rayOrigin = offsetPositionAlongNormal(hitInfo.worldPosition, hitInfo.worldNormal);
+
+  // Perturb the normal:
+  const float scaleFactor        = 80.0;
+  const vec3  perturbationAmount = 0.03
+                                  * vec3(sin(scaleFactor * hitInfo.worldPosition.x),  //
+                                         sin(scaleFactor * hitInfo.worldPosition.y),  //
+                                         sin(scaleFactor * hitInfo.worldPosition.z));
+  const vec3 shadingNormal = normalize(hitInfo.worldNormal + perturbationAmount);
+  if(stepAndOutputRNGFloat(rngState) < 0.4)
+  {
+    result.rayDirection = reflect(rayQueryGetWorldRayDirectionEXT(rayQuery), shadingNormal);
+  }
+  else
+  {
+    result.rayDirection = diffuseReflection(shadingNormal, rngState);
+  }
+  // If the ray now points into the surface, reflect it across:
+  if(dot(result.rayDirection, hitInfo.worldNormal) <= 0.0)
+  {
+    result.rayDirection = reflect(result.rayDirection, hitInfo.worldNormal);
+  }
+
+  return result;
+}
+
+// A diffuse material where the color of each triangle is determined by its
+// primitive ID (the index of the triangle in the BLAS)
+ReturnedInfo material7(rayQueryEXT rayQuery, inout uint rngState)
+{
+  HitInfo hitInfo = getObjectHitInfo(rayQuery);
+
+  ReturnedInfo result;
+  const int    primitiveID = rayQueryGetIntersectionPrimitiveIndexEXT(rayQuery, true);
+  result.color        = clamp(vec3(primitiveID / 36.0, primitiveID / 9.0, primitiveID / 18.0), vec3(0.0), vec3(1.0));
+  result.rayOrigin    = offsetPositionAlongNormal(hitInfo.worldPosition, hitInfo.worldNormal);
+  result.rayDirection = diffuseReflection(hitInfo.worldNormal, rngState);
+
+  return result;
+}
+
+// A diffuse material with transparent cutouts arranged in slices of spheres.
+ReturnedInfo material8(rayQueryEXT rayQuery, inout uint rngState)
+{
+  HitInfo hitInfo = getObjectHitInfo(rayQuery);
+
+  ReturnedInfo result;
+  if(mod(length(hitInfo.objectPosition), 0.2) >= 0.05)
+  {
+    result.color        = vec3(0.7);
+    result.rayOrigin    = offsetPositionAlongNormal(hitInfo.worldPosition, hitInfo.worldNormal);
+    result.rayDirection = diffuseReflection(hitInfo.worldNormal, rngState);
+  }
+  else
+  {
+    result.color        = vec3(1.0);
+    result.rayOrigin    = offsetPositionAlongNormal(hitInfo.worldPosition, -hitInfo.worldNormal);
+    result.rayDirection = rayQueryGetWorldRayDirectionEXT(rayQuery);
+  }
+
+  return result;
+}
+
 void main()
 {  
     const uvec2 resolution = uvec2(800, 600);
     const uvec2 pixel = gl_GlobalInvocationID.xy;
     if(gl_GlobalInvocationID.x >= resolution.x || gl_GlobalInvocationID.y >= resolution.y) return;
     // State of the random number generator.
-    uint rngState = resolution.x * pixel.y + pixel.x;  // Initial seed
+    uint rngState = resolution.x * (pixel.y + pushConstants.sample_batch*resolution.y) + pixel.x;  // Initial seed
 
     vec4 origin    = uni.viewInverse * vec4(0, 0, 0, 1);
 
     // The sum of the colors of all of the samples.
     vec3 summedPixelColor = vec3(0.0);
     // Limit the kernel to trace at most 64 samples.
-    const int NUM_SAMPLES = 32;
+    const int NUM_SAMPLES = 2;
     for(int sampleIdx = 0; sampleIdx < NUM_SAMPLES; sampleIdx++) {
-        const vec2 pixelCenter = vec2(pixel.xy) + vec2(stepAndOutputRNGFloat(rngState), stepAndOutputRNGFloat(rngState));
+        // Use a Gaussian with standard deviation 0.375 centered at the center of the pixel:
+        const vec2 pixelCenter = vec2(pixel.xy) + vec2(0.5) + 0.375 * randomGaussian(rngState);
         const vec2 inUV = pixelCenter/vec2(resolution.xy);
         vec2 d = inUV * 2.0 - 1.0;
         vec4 target    = uni.projInverse * vec4(d.x, d.y, 1, 1);
@@ -69,20 +287,65 @@ void main()
             // Get the type of committed (true) intersection - nothing, a triangle, or
             // a generated object
             if(rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT) {
-                // Ray hit a triangle
-                HitInfo hitInfo = getObjectHitInfo(rayQuery);
+                // // Ray hit a triangle
+                // HitInfo hitInfo = getObjectHitInfo(rayQuery);
+                // // color
+                // vec3 color = vec3(0.8f);
+                // const float dotX = dot(hitInfo.worldNormal, vec3(1.0, 0.0, 0.0));
+                // if(dotX > 0.99) {
+                //   color = vec3(0.8, 0.0, 0.0);
+                // }
+                // else if(dotX < -0.99) {
+                //   color = vec3(0.0, 0.8, 0.0);
+                // }
+                // // Apply color absorption
+                // accumulatedRayColor *= color;
+                // // Start a new ray at the hit position:
+                // rayDirection = diffuseReflection(hitInfo.worldNormal, rngState);
+                // // Start a new ray at the hit position, but offset it slightly along
+                // // the normal:
+                // rayOrigin = offsetPositionAlongNormal(hitInfo.worldPosition, hitInfo.worldNormal);
+                        // Get the ID of the shader:
+                const int sbtOffset = int(rayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetEXT(rayQuery, true));
+
+                // Get information about the absorption, new ray origin, and new ray color:
+                ReturnedInfo returnedInfo;
+                switch(sbtOffset)
+                {
+                case 0:
+                    returnedInfo = material0(rayQuery, rngState);
+                    break;
+                case 1:
+                    returnedInfo = material1(rayQuery, rngState);
+                    break;
+                case 2:
+                    returnedInfo = material2(rayQuery, rngState);
+                    break;
+                case 3:
+                    returnedInfo = material3(rayQuery, rngState);
+                    break;
+                case 4:
+                    returnedInfo = material4(rayQuery, rngState);
+                    break;
+                case 5:
+                    returnedInfo = material5(rayQuery, rngState);
+                    break;
+                case 6:
+                    returnedInfo = material6(rayQuery, rngState);
+                    break;
+                case 7:
+                    returnedInfo = material7(rayQuery, rngState);
+                    break;
+                default:
+                    returnedInfo = material8(rayQuery, rngState);
+                    break;
+                }
                 // Apply color absorption
-                accumulatedRayColor *= hitInfo.color;
-                // Start a new ray at the hit position:
-                rayOrigin = hitInfo.worldPosition;
-                // Flip the normal so it points against the ray direction:
-                hitInfo.worldNormal = faceforward(hitInfo.worldNormal, rayDirection, hitInfo.worldNormal);
-                // Reflect the direction of the ray using the triangle normal:
-                // rayDirection = reflect(rayDirection, hitInfo.worldNormal);
-                rayDirection = hitInfo.worldNormal + randomPointInSphere(rngState);
-                // Start a new ray at the hit position, but offset it slightly along
-                // the normal:
-                rayOrigin = hitInfo.worldPosition + 0.0001 * hitInfo.worldNormal;
+                accumulatedRayColor *= returnedInfo.color;
+
+                // Start a new segment
+                rayOrigin    = returnedInfo.rayOrigin;
+                rayDirection = returnedInfo.rayDirection;
 
             }
             else {
@@ -93,6 +356,11 @@ void main()
         }
         summedPixelColor += pixelColor;
     }
+    vec3 averagePixelColor = summedPixelColor / float(NUM_SAMPLES);
+    if(pushConstants.sample_batch != 0) {
+        vec3 color = imageLoad(image, ivec2(pixel)).rgb;
+        averagePixelColor = (pushConstants.sample_batch * color + averagePixelColor) / (pushConstants.sample_batch + 1);
+    }
 
-    imageStore(image, ivec2(pixel), vec4(summedPixelColor/float(NUM_SAMPLES), 1.0));
+    imageStore(image, ivec2(pixel), vec4(averagePixelColor, 1.0));
 }
