@@ -44,8 +44,7 @@ struct ReturnedInfo
 
 // Diffuse reflection off a 70% reflective surface (what we've used for most
 // of this tutorial)
-ReturnedInfo material0(rayQueryEXT rayQuery, inout uint rngState)
-{
+ReturnedInfo material0(rayQueryEXT rayQuery, inout uint rngState) {
   HitInfo hitInfo = getObjectHitInfo(rayQuery);
 
   ReturnedInfo result;

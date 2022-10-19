@@ -1,3 +1,7 @@
+#ifndef _RANDOM_HEADER_
+#define _RANDOM_HEADER_
+
+#include "math.h"
 
 /**
 * Random Number generator
@@ -47,3 +51,5 @@ vec3 randomPointInSphere(inout uint rngState) {
     const float r     = sqrt(1.0 - u * u);
     return vec3(r * cos(theta), r * sin(theta), u);
 }
+
+#endif

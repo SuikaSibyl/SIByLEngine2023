@@ -1,13 +1,24 @@
 // Common file defining all the functions used for materials.
 // In the next chapter, this file will be shared across closest-hit shaders.
-#ifndef VK_MINI_PATH_TRACER_SHADER_COMMON_H
-#define VK_MINI_PATH_TRACER_SHADER_COMMON_H
+#ifndef _RAYTRACE_COMMON_HEADER_
+#define _RAYTRACE_COMMON_HEADER_
+
+#include "../../../Utility/random.h"
 
 // Info retrieved from a rayQueryEXT by getObjectHitInfo.
 struct HitInfo {
     vec3 objectPosition;  // The intersection position in object-space.
     vec3 worldPosition;   // The intersection position in world-space.
     vec3 worldNormal;     // The double-sided triangle normal in world-space.
+    vec3 color;
+};
+
+struct PassableInfo {
+  vec3 color;         // The reflectivity of the surface.
+  vec3 rayOrigin;     // The new ray origin in world-space.
+  vec3 rayDirection;  // The new ray direction in world-space.
+  uint rngState;      // State of the random number generator.
+  bool rayHitSky;     // True if the ray hit the sky.
 };
 
 // offsetPositionAlongNormal shifts a point on a triangle surface so that a

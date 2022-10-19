@@ -1929,7 +1929,7 @@ namespace SIByL::RHI
 	export struct RayTracingPipelineDescriptor :public PipelineDescriptorBase {
 		ShaderModule* rayGenShader			= nullptr;
 		ShaderModule* rayMissShader			= nullptr;
-		ShaderModule* closetHitShader		= nullptr;
+		std::vector<ShaderModule*> closetHitShaders = {};
 		ShaderModule* anyHitShader			= nullptr;
 		ShaderModule* intersectionShader	= nullptr;
 	};

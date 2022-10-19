@@ -4373,10 +4373,18 @@ namespace SIByL::RHI
 		// These are shader module + entry point + stage combinations, because each
 		// shader module can contain multiple entry points (e.g. main1, main2...)
 		// Creating a table of VkPipelineShaderStageCreateInfo objects, containing all shader stages.
+		int closetHitBegin = 0;
+		int closetHitCount = 0;
 		std::vector<VkPipelineShaderStageCreateInfo> pssci = {};
 		if (desc.rayGenShader)		pssci.push_back(static_cast<ShaderModule_VK*>(desc.rayGenShader)->shaderStageInfo);
 		if (desc.rayMissShader)		pssci.push_back(static_cast<ShaderModule_VK*>(desc.rayMissShader)->shaderStageInfo);
-		if (desc.closetHitShader)	pssci.push_back(static_cast<ShaderModule_VK*>(desc.closetHitShader)->shaderStageInfo);
+		if (desc.closetHitShaders.size()) {
+			closetHitBegin = pssci.size();
+			closetHitCount = desc.closetHitShaders.size();
+			for (auto& chitShader : desc.closetHitShaders) {
+				pssci.push_back(static_cast<ShaderModule_VK*>(chitShader)->shaderStageInfo);
+			}
+		}
 		if (desc.anyHitShader)		pssci.push_back(static_cast<ShaderModule_VK*>(desc.anyHitShader)->shaderStageInfo);
 		if (desc.intersectionShader)pssci.push_back(static_cast<ShaderModule_VK*>(desc.intersectionShader)->shaderStageInfo);
 		// Then we make groups point to the shader stages. Each group can point to
@@ -4403,11 +4411,14 @@ namespace SIByL::RHI
 			rtsg.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
 			rtsg.generalShader = 1;
 			rtsgci.push_back(rtsg); }
-		if (desc.closetHitShader) {
-			VkRayTracingShaderGroupCreateInfoKHR rtsg = rtsgTemplate;
-			rtsg.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
-			rtsg.closestHitShader = 2;
-			rtsgci.push_back(rtsg); }
+		if (desc.closetHitShaders.size()) {
+			for (int i = 0; i < desc.closetHitShaders.size(); ++i) {
+				VkRayTracingShaderGroupCreateInfoKHR rtsg = rtsgTemplate;
+				rtsg.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
+				rtsg.closestHitShader = closetHitBegin + i;
+				rtsgci.push_back(rtsg);
+			}
+		}
 		// Now, describe the ray tracing pipeline.
 		VkRayTracingPipelineCreateInfoKHR rtpci = {};
 		rtpci.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
@@ -4467,8 +4478,7 @@ namespace SIByL::RHI
 		// hit region
 		//hitRegion.deviceAddress = SBTBufferAddress;
 		hitRegion.stride = groupSizeAligned;
-		uint32_t hitCount = 1;
-		hitRegion.size = Math::alignUp(hitCount * groupSizeAligned, rtPipelineProperties.shaderGroupBaseAlignment);
+		hitRegion.size = Math::alignUp(closetHitCount * groupSizeAligned, rtPipelineProperties.shaderGroupBaseAlignment);
 		// callable region
 		callableRegion.stride = 0;
 		callableRegion.size = 0;
@@ -4502,7 +4512,7 @@ namespace SIByL::RHI
 			void* mapped = SBTBuffer->getMappedRange(0, sbtSize);
 			auto* pData = reinterpret_cast <uint8_t*>(mapped);
 			for (uint32_t g = 0; g < groupCount; g++) {
-				memcpy(&(pData[g * groupSizeAligned]), shaderHandleStorage.data() + g * groupHandleSize, groupHandleSize);
+				memcpy(pData, shaderHandleStorage.data() + g * groupHandleSize, groupHandleSize);
 				pData += groupSizeAligned;
 			}
 		}

@@ -153,14 +153,14 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			RHI::IndexFormat::UINT16_t });
 		tlas = device->createTLAS(RHI::TLASDescriptor{ {
 			{blas.get(), Math::mul(Math::translate(Math::vec3{0,0.00,0}).m, Math::scale(0.2,0.2, 0.2).m),0,0},
-			{blas.get(), Math::mul(Math::translate(Math::vec3{0,0.45,0}).m, Math::scale(0.2,0.2, 0.2).m),0,1},
-			{blas.get(), Math::mul(Math::translate(Math::vec3{0,0.90,0}).m, Math::scale(0.2,0.2, 0.2).m),0,2},
-			{blas.get(), Math::mul(Math::translate(Math::vec3{0,1.35,0}).m, Math::scale(0.2,0.2, 0.2).m),0,3},
-			{blas.get(), Math::mul(Math::translate(Math::vec3{0,1.80,0}).m, Math::scale(0.2,0.2, 0.2).m),0,4},
-			{blas.get(), Math::mul(Math::translate(Math::vec3{0.45,0.00,0}).m, Math::scale(0.2,0.2, 0.2).m),0,5},
-			{blas.get(), Math::mul(Math::translate(Math::vec3{0.45,0.45,0}).m, Math::scale(0.2,0.2, 0.2).m),0,6},
-			{blas.get(), Math::mul(Math::translate(Math::vec3{0.45,0.90,0}).m, Math::scale(0.2,0.2, 0.2).m),0,7},
-			{blas.get(), Math::mul(Math::translate(Math::vec3{0.45,1.35,0}).m, Math::scale(0.2,0.2, 0.2).m),0,8},
+			{blas.get(), Math::mul(Math::translate(Math::vec3{0,0.45,0}).m, Math::scale(0.2,0.2, 0.2).m),0,0},
+			{blas.get(), Math::mul(Math::translate(Math::vec3{0,0.90,0}).m, Math::scale(0.2,0.2, 0.2).m),0,0},
+			{blas.get(), Math::mul(Math::translate(Math::vec3{0,1.35,0}).m, Math::scale(0.2,0.2, 0.2).m),0,0},
+			{blas.get(), Math::mul(Math::translate(Math::vec3{0,1.80,0}).m, Math::scale(0.2,0.2, 0.2).m),0,0},
+			{blas.get(), Math::mul(Math::translate(Math::vec3{0.45,0.00,0}).m, Math::scale(0.2,0.2, 0.2).m),0,1},
+			{blas.get(), Math::mul(Math::translate(Math::vec3{0.45,0.45,0}).m, Math::scale(0.2,0.2, 0.2).m),0,0},
+			{blas.get(), Math::mul(Math::translate(Math::vec3{0.45,0.90,0}).m, Math::scale(0.2,0.2, 0.2).m),0,1},
+			{blas.get(), Math::mul(Math::translate(Math::vec3{0.45,1.35,0}).m, Math::scale(0.2,0.2, 0.2).m),0,0},
 			{blas.get(), Math::mul(Math::translate(Math::vec3{0.45,1.80,0}).m, Math::scale(0.2,0.2, 0.2).m),0,0},
 			}});
 
@@ -199,14 +199,16 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		vert_module = device->createShaderModule({ &vert, RHI::ShaderStages::VERTEX });
 		frag_module = device->createShaderModule({ &frag, RHI::ShaderStages::FRAGMENT });
 
-		Core::GUID rgen, rmiss, rchit, comp;
+		Core::GUID rgen, rmiss, mat0_rchit, mat1_rchit, comp;
 		rgen = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-		rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+		mat0_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+		mat1_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		comp = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-		GFX::GFXManager::get()->registerShaderModuleResource(rgen, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/raytrace_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
-		GFX::GFXManager::get()->registerShaderModuleResource(rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/raytrace_test_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
-		GFX::GFXManager::get()->registerShaderModuleResource(rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/raytrace_test_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
+		GFX::GFXManager::get()->registerShaderModuleResource(rgen, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/raytrace_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
+		GFX::GFXManager::get()->registerShaderModuleResource(rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/simple_sky_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
+		GFX::GFXManager::get()->registerShaderModuleResource(mat0_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/diffuseMat_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
+		GFX::GFXManager::get()->registerShaderModuleResource(mat1_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/specularMat_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
 		GFX::GFXManager::get()->registerShaderModuleResource(comp, "../Engine/Binaries/Runtime/spirv/Common/test_compute_comp.spv", { nullptr, RHI::ShaderStages::COMPUTE});
 		
 		// create uniformBuffer
@@ -224,16 +226,16 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		{
 			bindGroupLayout = device->createBindGroupLayout(
 				RHI::BindGroupLayoutDescriptor{ {
-					RHI::BindGroupLayoutEntry{0, (uint32_t)RHI::ShaderStages::VERTEX | (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE, RHI::BufferBindingLayout{RHI::BufferBindingType::UNIFORM}}
+					RHI::BindGroupLayoutEntry{0, (uint32_t)RHI::ShaderStages::VERTEX | (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT, RHI::BufferBindingLayout{RHI::BufferBindingType::UNIFORM}}
 					} }
 			);
 
 			bindGroupLayout_RT = device->createBindGroupLayout(
 				RHI::BindGroupLayoutDescriptor{ {
-					RHI::BindGroupLayoutEntry{0, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE, RHI::AccelerationStructureBindingLayout{}},
-					RHI::BindGroupLayoutEntry{1, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE, RHI::StorageTextureBindingLayout{}},
-					RHI::BindGroupLayoutEntry{2, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
-					RHI::BindGroupLayoutEntry{3, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
+					RHI::BindGroupLayoutEntry{0, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT, RHI::AccelerationStructureBindingLayout{}},
+					RHI::BindGroupLayoutEntry{1, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT, RHI::StorageTextureBindingLayout{}},
+					RHI::BindGroupLayoutEntry{2, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
+					RHI::BindGroupLayoutEntry{3, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
 					} }
 			);
 
@@ -264,11 +266,6 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				{ bindGroupLayout_RT.get(), bindGroupLayout.get() }
 				});
 
-			//pipelineLayout_COMP[i] = device->createPipelineLayout(RHI::PipelineLayoutDescriptor{
-			//	{},
-			//	{}
-			//	});
-
 			renderPipeline[i] = device->createRenderPipeline(RHI::RenderPipelineDescriptor{
 				pipelineLayout[i].get(),
 				RHI::VertexState{
@@ -291,7 +288,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				pipelineLayout_RT[i].get(),
 				Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rgen)->shaderModule.get(),
 				Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rmiss)->shaderModule.get(),
-				Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rchit)->shaderModule.get(),
+				{	Core::ResourceManager::get()->getResource<GFX::ShaderModule>(mat0_rchit)->shaderModule.get(),
+					Core::ResourceManager::get()->getResource<GFX::ShaderModule>(mat1_rchit)->shaderModule.get() },
 				nullptr,
 				nullptr
 				});
@@ -410,16 +408,19 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			pcRay.lightIntensity = 100;
 			pcRay.lightType = 0;
 
+			static uint32_t batchIdx = 0;
 			rtEncoder[index] = commandEncoder->beginRayTracingPass(rayTracingDescriptor);
 			rtEncoder[index]->setPipeline(raytracingPipeline[index].get());
+			//rtEncoder[index]->pushConstants(&batchIdx, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::CLOSEST_HIT);
 			rtEncoder[index]->setBindGroup(0, bindGroup_RT[index].get(), 0, 0);
 			rtEncoder[index]->setBindGroup(1, bindGroup[index].get(), 0, 0);
-			rtEncoder[index]->pushConstants(&pcRay,
+			rtEncoder[index]->pushConstants(&batchIdx,
 				(uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::CLOSEST_HIT
 				| (uint32_t)RHI::ShaderStages::MISS | (uint32_t)RHI::ShaderStages::COMPUTE,
-				0, sizeof(PushConstantRay));
+				0, sizeof(uint32_t));
 			rtEncoder[index]->traceRays(800, 600, 1);
 			rtEncoder[index]->end();
+			++batchIdx;
 
 			commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
 				(uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR,
