@@ -1926,13 +1926,74 @@ namespace SIByL::RHI
 		virtual auto setName(std::string const& name) -> void = 0;
 	};
 
+	export struct RayGenerationShaderBindingTableDescriptor {
+		ShaderModule* rayGenShader = nullptr;
+	};
+	export struct RayMissShaderBindingTableDescriptor {
+		ShaderModule* rayMissShader = nullptr;
+	};
+	export struct RayHitGroupShaderBindingTableDescriptor {
+		struct HitGroupDescriptor {
+			ShaderModule* closetHitShader	 = nullptr;
+			ShaderModule* anyHitShader		 = nullptr;
+			ShaderModule* intersectionShader = nullptr;
+		};
+	};
+	export struct CallableShaderBindingTableDescriptor {
+		ShaderModule* callableShader = nullptr;
+	};
+
+	/**
+	* Describe a set of SBTs that are stored consecutively.
+	* When looking up a shader, different factors will tell the traversal engine the index of the shader to call.
+	* These factors are:
+	* - 1. missIndex from the GLSL traceRayEXT call;
+	* - 2. The instance's instanceShaderBindingTableRecordOffset from TLAS creation;
+	* - 3. sbtRecordOffset from the GLSL traceRayEXT call;
+	* - 4. sbtRecordStride from the GLSL traceRayEXT call;
+	* - 5. The geometry index geometryIndex of each geometry inside a BLAS.
+	*/
+	export struct SBTsDescriptor {
+		/** @indexing: By default, traceRayEXT always uses the ray generation shader at index 0. 
+		* Therefore we currently support single record slot for a ray generation SBT. */
+		struct RayGenerationSBT {
+			/** A ray generation record only has a ray generation shader. */
+			struct RayGenerationRecord { ShaderModule* rayGenShader = nullptr; };
+			/** As defaultly 0 is chosen, we only provide one record slot*/
+			RayGenerationRecord rgenRecord = {};
+		} rgenSBT;
+		/** @indexing: When a ray didn't intersect anything, traversal calls
+		* the index missIndex miss shader, specified in traceRayEXT call. */
+		struct MissSBT {
+			/** A ray miss record only has a miss shader. */
+			struct MissRecord { ShaderModule* missShader = nullptr; };
+			/** There could be multiple miss shader to be selected from */
+			std::vector<MissRecord> rmissRecords = {};
+		} missSBT;
+		/** @indexing: Traversal calls the corresponding shader from the hit record with index. 
+		* instanceShaderBindingTableRecordOffset (from TLAS) + sbtRecordOffset (from traceRayEXT call) 
+		* + sbtRecordStride (from traceRayEXT call)* geometryIndex (from BLAS) */
+		struct HitGroupSBT {
+			/** A hit group record includes a closest hit shader, an optional any hit shader, 
+			* and an optional intersection shader (only for procedural hit groups). */
+			struct HitGroupRecord {
+				ShaderModule* closetHitShader	 = nullptr;
+				ShaderModule* anyHitShader		 = nullptr;
+				ShaderModule* intersectionShader = nullptr; };
+			/** There could be hit group shader to be selected from */
+			std::vector<HitGroupRecord> hitGroupRecords = {};
+		} hitGroupSBT;
+		struct CallableSBT {
+			/** A callable record includes only a callable shader. */
+			struct CallableRecord { ShaderModule* callableShader = nullptr; };
+			/** There could be hit group shader to be selected from */
+			std::vector<CallableRecord> callableRecords = {};
+		} callableSBT;
+	};
+
 	export struct RayTracingPipelineDescriptor :public PipelineDescriptorBase {
 		uint32_t maxPipelineRayRecursionDepth = 1;
-		ShaderModule* rayGenShader			= nullptr;
-		std::vector<ShaderModule*> rayMissShaders	= {};
-		std::vector<ShaderModule*> closetHitShaders = {};
-		ShaderModule* anyHitShader			= nullptr;
-		ShaderModule* intersectionShader	= nullptr;
+		SBTsDescriptor sbtsDescriptor = {};
 	};
 
 #pragma region RHI_DEVICE_UTILITY_IMPL

@@ -4368,175 +4368,194 @@ namespace SIByL::RHI
 
 	RayTracingPipeline_VK::RayTracingPipeline_VK(Device_VK* device, RayTracingPipelineDescriptor const& desc)
 		:device(device), pipelineLayout(static_cast<PipelineLayout_VK*>(desc.layout)) {
-		// First, we create objects that point to each of our shaders.
-		// These are called "shader stages" in this context.
-		// These are shader module + entry point + stage combinations, because each
-		// shader module can contain multiple entry points (e.g. main1, main2...)
-		// Creating a table of VkPipelineShaderStageCreateInfo objects, containing all shader stages.
-		int rayMissBegin = 0;
-		int rayMissCount = 0;
-		int closetHitBegin = 0;
-		int closetHitCount = 0;
-		std::vector<VkPipelineShaderStageCreateInfo> pssci = {};
-		if (desc.rayGenShader)		pssci.push_back(static_cast<ShaderModule_VK*>(desc.rayGenShader)->shaderStageInfo);
-		if (desc.rayMissShaders.size()) {
-			rayMissBegin = pssci.size();
-			rayMissCount = desc.rayMissShaders.size();
-			for (auto& rmissShader : desc.rayMissShaders) {
-				pssci.push_back(static_cast<ShaderModule_VK*>(rmissShader)->shaderStageInfo);
-			}
-		}
-		if (desc.closetHitShaders.size()) {
-			closetHitBegin = pssci.size();
-			closetHitCount = desc.closetHitShaders.size();
-			for (auto& chitShader : desc.closetHitShaders) {
-				pssci.push_back(static_cast<ShaderModule_VK*>(chitShader)->shaderStageInfo);
-			}
-		}
-		if (desc.anyHitShader)		pssci.push_back(static_cast<ShaderModule_VK*>(desc.anyHitShader)->shaderStageInfo);
-		if (desc.intersectionShader)pssci.push_back(static_cast<ShaderModule_VK*>(desc.intersectionShader)->shaderStageInfo);
-		// Then we make groups point to the shader stages. Each group can point to
-		// one or two shader stages depending on the type, by specifying the index
-		// in the stages array. These groups of handles then become the most
-		// important part of the entries in the shader binding table.
-		// Stores the indices of stages in each group.
-		// Enumerating the elements of an array of shader groups, which contains one ray generation group, one miss group, and one hit group.
+		int rayMissBegin = 0;		int rayMissCount = 0;
+		int closetHitBegin = 0;		int closetHitCount = 0;		int hitGroupCount = 0;
+		int anyHitBegin = 0;		int anyHitCount = 0;
+		int intersectionBegin = 0;	int intersectionCount = 0;
+		int callableBegin = 0;		int callableCount = 0;
 		std::vector<VkRayTracingShaderGroupCreateInfoKHR> rtsgci{};
-		VkRayTracingShaderGroupCreateInfoKHR rtsgTemplate = {};
-		{	// inita a template rtsgci
+		// First create RT Pipeline
+		{
+			// Creating a table of VkPipelineShaderStageCreateInfo objects, containing all shader stages.
+			std::vector<VkPipelineShaderStageCreateInfo> pssci = {};
+			// push ray generation SBT shader stages
+			if (desc.sbtsDescriptor.rgenSBT.rgenRecord.rayGenShader) {
+				pssci.push_back(static_cast<ShaderModule_VK*>(desc.sbtsDescriptor.rgenSBT.rgenRecord.rayGenShader)->shaderStageInfo);
+			}
+			// push ray miss SBT shader stages
+			if (desc.sbtsDescriptor.missSBT.rmissRecords.size() > 0) {
+				rayMissBegin = pssci.size();
+				rayMissCount = desc.sbtsDescriptor.missSBT.rmissRecords.size();
+				for (auto& rmissRecord : desc.sbtsDescriptor.missSBT.rmissRecords) {
+					pssci.push_back(static_cast<ShaderModule_VK*>(rmissRecord.missShader)->shaderStageInfo);
+				}
+			}
+			// push hit groups SBT shader stages
+			if (desc.sbtsDescriptor.hitGroupSBT.hitGroupRecords.size() > 0) {
+				// closet hit shaders
+				closetHitBegin = pssci.size();
+				for (auto& hitGroupRecord : desc.sbtsDescriptor.hitGroupSBT.hitGroupRecords) {
+					++hitGroupCount;
+					if (hitGroupRecord.closetHitShader) {
+						pssci.push_back(static_cast<ShaderModule_VK*>(hitGroupRecord.closetHitShader)->shaderStageInfo);
+						++closetHitCount; }}
+				// any hit shaders
+				anyHitBegin = pssci.size();
+				for (auto& hitGroupRecord : desc.sbtsDescriptor.hitGroupSBT.hitGroupRecords) {
+					if (hitGroupRecord.anyHitShader) {
+						pssci.push_back(static_cast<ShaderModule_VK*>(hitGroupRecord.anyHitShader)->shaderStageInfo);
+						++anyHitCount; }}
+				// intersection shader
+				intersectionBegin = pssci.size();
+				for (auto& hitGroupRecord : desc.sbtsDescriptor.hitGroupSBT.hitGroupRecords) {
+					if (hitGroupRecord.intersectionShader) {
+						pssci.push_back(static_cast<ShaderModule_VK*>(hitGroupRecord.intersectionShader)->shaderStageInfo);
+						++intersectionCount; }}
+			}
+			// push callable SBT shader stages
+			if (desc.sbtsDescriptor.callableSBT.callableRecords.size() > 0) {
+				callableBegin = pssci.size();
+				callableCount = desc.sbtsDescriptor.callableSBT.callableRecords.size();
+				for (auto& callableRecord : desc.sbtsDescriptor.callableSBT.callableRecords) {
+					pssci.push_back(static_cast<ShaderModule_VK*>(callableRecord.callableShader)->shaderStageInfo);
+				}
+			}
+			// 1.2. Then we make groups point to the shader stages. Each group can point to one or two shader stages 
+			// depending on the type, by specifying the index in the stages array. These groups of handles then become the most
+			// important part of the entries in the shader binding table. Stores the indices of stages in each group.
+			// Enumerating the elements of an array of shader groups, which contains one ray generation group, one miss group, and one hit group.
+			VkRayTracingShaderGroupCreateInfoKHR rtsgTemplate = {};
+			// inita a template rtsgci
 			rtsgTemplate.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
 			rtsgTemplate.generalShader = VK_SHADER_UNUSED_KHR;
 			rtsgTemplate.anyHitShader = VK_SHADER_UNUSED_KHR;
 			rtsgTemplate.closestHitShader = VK_SHADER_UNUSED_KHR;
-			rtsgTemplate.intersectionShader = VK_SHADER_UNUSED_KHR;	}
-		if (desc.rayGenShader) {
-			VkRayTracingShaderGroupCreateInfoKHR rtsg = rtsgTemplate;
-			rtsg.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-			rtsg.generalShader = 0;
-			rtsgci.push_back(rtsg); }
-		if (desc.rayMissShaders.size()) {
-			for (int i = 0; i < desc.rayMissShaders.size(); ++i) {
+			rtsgTemplate.intersectionShader = VK_SHADER_UNUSED_KHR;
+			if (desc.sbtsDescriptor.rgenSBT.rgenRecord.rayGenShader) {
 				VkRayTracingShaderGroupCreateInfoKHR rtsg = rtsgTemplate;
 				rtsg.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-				rtsg.generalShader = rayMissBegin + i;
-				rtsgci.push_back(rtsg); } }
-		if (desc.closetHitShaders.size()) {
-			for (int i = 0; i < desc.closetHitShaders.size(); ++i) {
-				VkRayTracingShaderGroupCreateInfoKHR rtsg = rtsgTemplate;
-				rtsg.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
-				rtsg.closestHitShader = closetHitBegin + i;
-				rtsgci.push_back(rtsg);
-			}
+				rtsg.generalShader = 0;
+				rtsgci.push_back(rtsg); }
+			if (desc.sbtsDescriptor.missSBT.rmissRecords.size() > 0) {
+				for (int i = 0; i < desc.sbtsDescriptor.missSBT.rmissRecords.size(); ++i) {
+					VkRayTracingShaderGroupCreateInfoKHR rtsg = rtsgTemplate;
+					rtsg.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+					rtsg.generalShader = rayMissBegin + i;
+					rtsgci.push_back(rtsg); } }
+			if (desc.sbtsDescriptor.hitGroupSBT.hitGroupRecords.size() > 0) {
+				int closetHitIdx = 0, anyHitIdx = 0, intersectionIdx = 0;
+				for (int i = 0; i < desc.sbtsDescriptor.hitGroupSBT.hitGroupRecords.size(); ++i) {
+					VkRayTracingShaderGroupCreateInfoKHR rtsg = rtsgTemplate;
+					rtsg.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
+					auto& hitGroupRecord = desc.sbtsDescriptor.hitGroupSBT.hitGroupRecords[i];
+					if (hitGroupRecord.closetHitShader)		rtsg.closestHitShader = closetHitBegin + closetHitIdx++;
+					if (hitGroupRecord.anyHitShader)		rtsg.anyHitShader = anyHitBegin + anyHitIdx++;
+					if (hitGroupRecord.intersectionShader)	rtsg.intersectionShader = intersectionBegin + intersectionIdx++;
+					rtsgci.push_back(rtsg); }}
+			if (desc.sbtsDescriptor.callableSBT.callableRecords.size() > 0) {
+				for (int i = 0; i < desc.sbtsDescriptor.missSBT.rmissRecords.size(); ++i) {
+					VkRayTracingShaderGroupCreateInfoKHR rtsg = rtsgTemplate;
+					rtsg.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+					rtsg.generalShader = callableBegin + i;
+					rtsgci.push_back(rtsg); }}
+			// Now, describe the ray tracing pipeline.
+			VkRayTracingPipelineCreateInfoKHR rtpci = {};
+			rtpci.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
+			rtpci.stageCount = uint32_t(pssci.size());
+			rtpci.pStages = pssci.data();
+			rtpci.groupCount = uint32_t(rtsgci.size());
+			rtpci.pGroups = rtsgci.data();
+			rtpci.maxPipelineRayRecursionDepth = desc.maxPipelineRayRecursionDepth; // Depth of call tree
+			rtpci.pLibraryInfo = nullptr;
+			rtpci.layout = static_cast<PipelineLayout_VK*>(desc.layout)->pipelineLayout;
+			// create the ray tracing pipeline
+			device->getAdapterVk()->getContext()->vkCreateRayTracingPipelinesKHR(
+				device->getVkDevice(), // The VkDevice
+				VK_NULL_HANDLE, // Don't request deferral
+				VK_NULL_HANDLE, // No Pipeline Cahce (?)
+				1, &rtpci, // Array of structures
+				nullptr, // Default host allocator
+				&pipeline); // Output VkPipelines
 		}
-		// Now, describe the ray tracing pipeline.
-		VkRayTracingPipelineCreateInfoKHR rtpci = {};
-		rtpci.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
-		rtpci.stageCount = uint32_t(pssci.size());
-		rtpci.pStages = pssci.data();
-		rtpci.groupCount = uint32_t(rtsgci.size());
-		rtpci.pGroups = rtsgci.data();
-		rtpci.maxPipelineRayRecursionDepth = desc.maxPipelineRayRecursionDepth; // Depth of call tree
-		rtpci.pLibraryInfo = nullptr;
-		rtpci.layout = static_cast<PipelineLayout_VK*>(desc.layout)->pipelineLayout;
-		// create the ray tracing pipeline
-		device->getAdapterVk()->getContext()->vkCreateRayTracingPipelinesKHR(
-			device->getVkDevice(), // The VkDevice
-			VK_NULL_HANDLE, // Don't request deferral
-			VK_NULL_HANDLE, // No Pipeline Cahce (?)
-			1, &rtpci, // Array of structures
-			nullptr, // Default host allocator
-			&pipeline); // Output VkPipelines
-
-		// --------------------------------------
-		// Now create and write the shader binding table, by getting the shader
-		// group handles from the ray tracing pipeline and writing them into a
-		// Vulkan buffer object.
-		// 
-		// create ray tracing shader binding table
-		// 1. Get the properties of ray tracing pipelines on this device
-		VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtPipelineProperties =
-			static_cast<RayTracingExtension_VK*>(device->getRayTracingExtension())->vkRayTracingProperties;
-		// Computing a valid size and stride for the SBT
-		// The number of groups
-		auto groupCount = uint32_t(rtsgci.size());
-		// The size of a program identifier
-		uint32_t groupHandleSize	= rtPipelineProperties.shaderGroupHandleSize;
-		uint32_t baseAlignment		= rtPipelineProperties.shaderGroupBaseAlignment;
-		uint32_t handleAlignment	= rtPipelineProperties.shaderGroupHandleAlignment;
-		// Compute the stride between shader binding table (SBT) records / actual size needed per SBT entry.
-		// This must be:
-		// - Greater than rtPipelineProperties.shaderGroupHandleSize (since a record contains a shader group handle)
-		// - A multiple of rtPipelineProperties.shaderGroupHandleAlignment
-		// - Less than or equal to rtPipelineProperties.maxShaderGroupStride
-		// In addition, each SBT must start at a multiple of
-		// rtPipelineProperties.shaderGroupBaseAlignment.
-		// Since we store all records contiguously in a single SBT, we assert that
-		// sbtBaseAlignment is a multiple of sbtHandleAlignment, round sbtHeaderSize
-		// up to a multiple of sbtBaseAlignment, and then assert that the result is
-		// less than or equal to maxShaderGroupStride.
-		uint32_t groupSizeAligned = Math::alignUp(groupHandleSize, baseAlignment);
-		// ray gen region
-		//rayGenRegion.deviceAddress = SBTBufferAddress;
-		rayGenRegion.stride = Math::alignUp(groupHandleSize, rtPipelineProperties.shaderGroupBaseAlignment);
-		rayGenRegion.size = rayGenRegion.stride; // The size member of pRayGenShaderBindingTable must be equal to its stride member
-		// miss region
-		//missRegion.deviceAddress = SBTBufferAddress;
-		missRegion.stride = groupSizeAligned;
-		missRegion.size = Math::alignUp(rayMissCount * groupSizeAligned, rtPipelineProperties.shaderGroupBaseAlignment);
-		// hit region
-		//hitRegion.deviceAddress = SBTBufferAddress;
-		hitRegion.stride = groupSizeAligned;
-		hitRegion.size = Math::alignUp(closetHitCount * groupSizeAligned, rtPipelineProperties.shaderGroupBaseAlignment);
-		// callable region
-		callableRegion.stride = 0;
-		callableRegion.size = 0;
-
-		// Allocating and writing shader handles from the ray tracing pipeline into the SBT
-		// Fetch all the shader handles used in the pipeline.
-		// This is opaque data, so we store it in a vector of bytes. Bytes needed for the SBT.
-		uint32_t dataSize = groupCount * groupHandleSize;
-		std::vector<uint8_t> shaderHandleStorage(dataSize);
-		device->getAdapterVk()->getContext()->vkGetRayTracingShaderGroupHandlesKHR(
-			device->getVkDevice(),			// The device
-			pipeline,						// The ray tracing pipeline
-			0,								// Index of the group to start from
-			groupCount,						// The number of groups
-			dataSize,						// Size of the output buffer in bytes
-			shaderHandleStorage.data());	// The output buffer
-		// Allocate a buffer for storing the SBT.
-		VkDeviceSize sbtSize = rayGenRegion.size + missRegion.size + hitRegion.size + callableRegion.size;
-		SBTBuffer = device->createBuffer({
-				sbtSize,
-				(uint32_t)BufferUsage::COPY_SRC | (uint32_t)BufferUsage::SHADER_DEVICE_ADDRESS | (uint32_t)BufferUsage::SHADER_BINDING_TABLE,
-				BufferShareMode::EXCLUSIVE,
-				(uint32_t)MemoryProperty::HOST_VISIBLE_BIT | (uint32_t)MemoryProperty::HOST_COHERENT_BIT
-			});
-
-		// Helper to retrieve the handle data
-		auto getHandle = [&](int i) { return shaderHandleStorage.data() + i * groupHandleSize; };
-		// Copy the shader group handles to the SBT.
-		std::future<bool> sync = SBTBuffer->mapAsync((uint32_t)MapMode::WRITE, 0, sbtSize);
-		if (sync.get()) {
-			void* mapped = SBTBuffer->getMappedRange(0, sbtSize);
-			auto* pData = reinterpret_cast <uint8_t*>(mapped);
-			for (uint32_t g = 0; g < groupCount; g++) {
-				memcpy(pData, shaderHandleStorage.data() + g * groupHandleSize, groupHandleSize);
-				pData += groupSizeAligned;
+		// Second create SBTs
+		{
+			// 1. Get the properties of ray tracing pipelines on this device
+			VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtPipelineProperties =
+				static_cast<RayTracingExtension_VK*>(device->getRayTracingExtension())->vkRayTracingProperties;
+			// Computing a valid size and stride for the SBT, first, get the number of groups
+			auto groupCount = uint32_t(rtsgci.size());
+			// The size of a program identifier
+			uint32_t groupHandleSize	= rtPipelineProperties.shaderGroupHandleSize;
+			uint32_t baseAlignment		= rtPipelineProperties.shaderGroupBaseAlignment;
+			uint32_t handleAlignment	= rtPipelineProperties.shaderGroupHandleAlignment;
+			// Compute the stride between shader binding table (SBT) records / actual size needed per SBT entry.
+			// This must be:
+			// - Greater than rtPipelineProperties.shaderGroupHandleSize (since a record contains a shader group handle)
+			// - A multiple of rtPipelineProperties.shaderGroupHandleAlignment
+			// - Less than or equal to rtPipelineProperties.maxShaderGroupStride
+			// In addition, each SBT must start at a multiple of
+			// rtPipelineProperties.shaderGroupBaseAlignment.
+			// Since we store all records contiguously in a single SBT, we assert that
+			// sbtBaseAlignment is a multiple of sbtHandleAlignment, round sbtHeaderSize
+			// up to a multiple of sbtBaseAlignment, and then assert that the result is
+			// less than or equal to maxShaderGroupStride.
+			uint32_t groupSizeAligned = Math::alignUp(groupHandleSize, baseAlignment);
+			// ray gen region
+			rayGenRegion.stride = Math::alignUp(groupHandleSize, rtPipelineProperties.shaderGroupBaseAlignment);
+			rayGenRegion.size = rayGenRegion.stride; // The size member of pRayGenShaderBindingTable must be equal to its stride member
+			// miss region
+			missRegion.stride = groupSizeAligned;
+			missRegion.size = Math::alignUp(rayMissCount * groupSizeAligned, rtPipelineProperties.shaderGroupBaseAlignment);
+			// hit region
+			hitRegion.stride = groupSizeAligned;
+			hitRegion.size = Math::alignUp(hitGroupCount * groupSizeAligned, rtPipelineProperties.shaderGroupBaseAlignment);
+			// callable region
+			callableRegion.stride = groupSizeAligned;
+			callableRegion.size = Math::alignUp(callableCount * groupSizeAligned, rtPipelineProperties.shaderGroupBaseAlignment);
+			// Allocating and writing shader handles from the ray tracing pipeline into the SBT
+			// Fetch all the shader handles used in the pipeline.
+			// This is opaque data, so we store it in a vector of bytes. Bytes needed for the SBT.
+			uint32_t dataSize = groupCount * groupHandleSize;
+			std::vector<uint8_t> shaderHandleStorage(dataSize);
+			device->getAdapterVk()->getContext()->vkGetRayTracingShaderGroupHandlesKHR(
+				device->getVkDevice(),			// The device
+				pipeline,						// The ray tracing pipeline
+				0,								// Index of the group to start from
+				groupCount,						// The number of groups
+				dataSize,						// Size of the output buffer in bytes
+				shaderHandleStorage.data());	// The output buffer
+			// Allocate a buffer for storing the SBT.
+			VkDeviceSize sbtSize = rayGenRegion.size + missRegion.size + hitRegion.size + callableRegion.size;
+			SBTBuffer = device->createBuffer({
+					sbtSize,
+					(uint32_t)BufferUsage::COPY_SRC | (uint32_t)BufferUsage::SHADER_DEVICE_ADDRESS | (uint32_t)BufferUsage::SHADER_BINDING_TABLE,
+					BufferShareMode::EXCLUSIVE,
+					(uint32_t)MemoryProperty::HOST_VISIBLE_BIT | (uint32_t)MemoryProperty::HOST_COHERENT_BIT
+				});
+			// Copy the shader group handles to the SBT.
+			std::future<bool> sync = SBTBuffer->mapAsync((uint32_t)MapMode::WRITE, 0, sbtSize);
+			if (sync.get()) {
+				void* mapped = SBTBuffer->getMappedRange(0, sbtSize);
+				auto* pData = reinterpret_cast <uint8_t*>(mapped);
+				for (uint32_t g = 0; g < groupCount; g++) {
+					memcpy(pData, shaderHandleStorage.data() + g * groupHandleSize, groupHandleSize);
+					pData += groupSizeAligned;
+				}
 			}
+			SBTBuffer->unmap();
+			// VkCmdTraceRaysKHR uses VkStridedDeviceAddressregionKHR objects to say where 
+			// each block of shaders is held in memory. These could change per draw call, 
+			// but let's create them up front since they're the same every time here.
+			// └ first fetch the device address of the SBT buffer
+			VkBufferDeviceAddressInfo deviceAddressInfo = {};
+			deviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+			deviceAddressInfo.buffer = static_cast<Buffer_VK*>(SBTBuffer.get())->getVkBuffer();
+			VkDeviceAddress SBTBufferAddress = vkGetBufferDeviceAddress(device->getVkDevice(), &deviceAddressInfo);
+			// └ then fill the address infos into all kinds of regions
+			rayGenRegion.deviceAddress = SBTBufferAddress;
+			missRegion.deviceAddress = SBTBufferAddress + rayGenRegion.size;
+			hitRegion.deviceAddress = SBTBufferAddress + rayGenRegion.size + missRegion.size;
 		}
-		SBTBuffer->unmap();
-		// VkCmdTraceRaysKHR uses VkStridedDeviceAddressregionKHR objects to say where 
-		// each block of shaders is held in memory. These could change per draw call, 
-		// but let's create them up front since they're the same every time here.
-		// └ first fetch the device address of the SBT buffer
-		VkBufferDeviceAddressInfo deviceAddressInfo = {};
-		deviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-		deviceAddressInfo.buffer = static_cast<Buffer_VK*>(SBTBuffer.get())->getVkBuffer();
-		VkDeviceAddress SBTBufferAddress = vkGetBufferDeviceAddress(device->getVkDevice(), &deviceAddressInfo);
-		// └ then fill the address infos into all kinds of regions
-		rayGenRegion.deviceAddress = SBTBufferAddress;
-		missRegion.deviceAddress = SBTBufferAddress + rayGenRegion.size;
-		hitRegion.deviceAddress = SBTBufferAddress + rayGenRegion.size + missRegion.size;
 	}
 
 	RayTracingPipeline_VK::~RayTracingPipeline_VK() {

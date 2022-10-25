@@ -190,18 +190,20 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		vert_module = device->createShaderModule({ &vert, RHI::ShaderStages::VERTEX });
 		frag_module = device->createShaderModule({ &frag, RHI::ShaderStages::FRAGMENT });
 
-		Core::GUID rgen, rmiss_0, rmiss_1, mat0_rchit, mat1_rchit, comp;
+		Core::GUID rgen, rmiss_0, rmiss_1, mat0_rchit, mat1_rchit, comp, rahit;
 		rgen = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		rmiss_0 = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		rmiss_1 = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		mat0_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		mat1_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		comp = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+		rahit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		GFX::GFXManager::get()->registerShaderModuleResource(rgen, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/raytrace_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
 		GFX::GFXManager::get()->registerShaderModuleResource(rmiss_0, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/simple_sky_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
 		GFX::GFXManager::get()->registerShaderModuleResource(rmiss_1, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/simple_shadow_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
 		GFX::GFXManager::get()->registerShaderModuleResource(mat0_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/diffuseMat_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
 		GFX::GFXManager::get()->registerShaderModuleResource(mat1_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/specularMat_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
+		GFX::GFXManager::get()->registerShaderModuleResource(rahit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/AAF_softshadow/distanceAwareShadow_rahit.spv", { nullptr, RHI::ShaderStages::ANY_HIT});
 		GFX::GFXManager::get()->registerShaderModuleResource(comp, "../Engine/Binaries/Runtime/spirv/Common/test_compute_comp.spv", { nullptr, RHI::ShaderStages::COMPUTE});
 		
 		// create uniformBuffer
@@ -278,16 +280,17 @@ struct SandBoxApplication :public Application::ApplicationBase {
 					});
 
 			raytracingPipeline[i] = device->createRayTracingPipeline(RHI::RayTracingPipelineDescriptor{
-				pipelineLayout_RT[i].get(), 2,
-				Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rgen)->shaderModule.get(),
-				{	Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rmiss_0)->shaderModule.get(),
-					Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rmiss_1)->shaderModule.get(),
-				}, 
-				{	Core::ResourceManager::get()->getResource<GFX::ShaderModule>(mat0_rchit)->shaderModule.get(),
-					Core::ResourceManager::get()->getResource<GFX::ShaderModule>(mat1_rchit)->shaderModule.get() },
-				nullptr,
-				nullptr
-				});
+				pipelineLayout_RT[i].get(), 2, RHI::SBTsDescriptor{
+					RHI::SBTsDescriptor::RayGenerationSBT{{ Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rgen)->shaderModule.get() }},
+					RHI::SBTsDescriptor::MissSBT{{
+						{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rmiss_0)->shaderModule.get()},
+						{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rmiss_1)->shaderModule.get()} }},
+					RHI::SBTsDescriptor::HitGroupSBT{{
+							{{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(mat0_rchit)->shaderModule.get()}, nullptr, nullptr},
+							{{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(mat1_rchit)->shaderModule.get()}, nullptr, nullptr},
+							//{{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rahit)->shaderModule.get()}, nullptr, nullptr},
+						}}
+				} });
 
 			computePipeline[i] = device->createComputePipeline(RHI::ComputePipelineDescriptor{
 				pipelineLayout_RT[i].get(),
