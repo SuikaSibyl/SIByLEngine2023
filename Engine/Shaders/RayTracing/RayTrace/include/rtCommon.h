@@ -17,6 +17,7 @@ struct PassableInfo {
   vec3 color;         // The reflectivity of the surface.
   vec3 rayOrigin;     // The new ray origin in world-space.
   vec3 rayDirection;  // The new ray direction in world-space.
+  vec3 lightCarry;
   uint rngState;      // State of the random number generator.
   bool rayHitSky;     // True if the ray hit the sky.
 };

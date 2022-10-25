@@ -91,15 +91,16 @@ void main()
             // Sum this with the pixel's other samples.
             // (Note that we treat a ray that didn't find a light source as if it had
             // an accumulated color of (0, 0, 0)).
-            summedPixelColor += accumulatedRayColor;
+            // summedPixelColor += accumulatedRayColor;
 
             break;
         }
-        else
-        {
+        else {
             // Start a new segment
             rayOrigin    = pld.rayOrigin;
             rayDirection = pld.rayDirection;
+
+            summedPixelColor += pld.lightCarry * accumulatedRayColor;       
         }
         }
     }

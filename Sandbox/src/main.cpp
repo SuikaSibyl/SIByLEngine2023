@@ -152,16 +152,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			indexCount / 3,
 			RHI::IndexFormat::UINT16_t });
 		tlas = device->createTLAS(RHI::TLASDescriptor{ {
-			{blas.get(), Math::mul(Math::translate(Math::vec3{0,0.00,0}).m, Math::scale(0.2,0.2, 0.2).m),0,0},
-			{blas.get(), Math::mul(Math::translate(Math::vec3{0,0.45,0}).m, Math::scale(0.2,0.2, 0.2).m),0,0},
-			{blas.get(), Math::mul(Math::translate(Math::vec3{0,0.90,0}).m, Math::scale(0.2,0.2, 0.2).m),0,0},
-			{blas.get(), Math::mul(Math::translate(Math::vec3{0,1.35,0}).m, Math::scale(0.2,0.2, 0.2).m),0,0},
-			{blas.get(), Math::mul(Math::translate(Math::vec3{0,1.80,0}).m, Math::scale(0.2,0.2, 0.2).m),0,0},
-			{blas.get(), Math::mul(Math::translate(Math::vec3{0.45,0.00,0}).m, Math::scale(0.2,0.2, 0.2).m),0,1},
-			{blas.get(), Math::mul(Math::translate(Math::vec3{0.45,0.45,0}).m, Math::scale(0.2,0.2, 0.2).m),0,0},
-			{blas.get(), Math::mul(Math::translate(Math::vec3{0.45,0.90,0}).m, Math::scale(0.2,0.2, 0.2).m),0,1},
-			{blas.get(), Math::mul(Math::translate(Math::vec3{0.45,1.35,0}).m, Math::scale(0.2,0.2, 0.2).m),0,0},
-			{blas.get(), Math::mul(Math::translate(Math::vec3{0.45,1.80,0}).m, Math::scale(0.2,0.2, 0.2).m),0,0},
+			{blas.get(), Math::mul(Math::translate(Math::vec3{0,0.00,0}).m, Math::scale(1,1, 1).m),0,0},
 			}});
 
 		{
@@ -199,14 +190,16 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		vert_module = device->createShaderModule({ &vert, RHI::ShaderStages::VERTEX });
 		frag_module = device->createShaderModule({ &frag, RHI::ShaderStages::FRAGMENT });
 
-		Core::GUID rgen, rmiss, mat0_rchit, mat1_rchit, comp;
+		Core::GUID rgen, rmiss_0, rmiss_1, mat0_rchit, mat1_rchit, comp;
 		rgen = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-		rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+		rmiss_0 = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+		rmiss_1 = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		mat0_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		mat1_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		comp = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		GFX::GFXManager::get()->registerShaderModuleResource(rgen, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/raytrace_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
-		GFX::GFXManager::get()->registerShaderModuleResource(rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/simple_sky_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
+		GFX::GFXManager::get()->registerShaderModuleResource(rmiss_0, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/simple_sky_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
+		GFX::GFXManager::get()->registerShaderModuleResource(rmiss_1, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/simple_shadow_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
 		GFX::GFXManager::get()->registerShaderModuleResource(mat0_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/diffuseMat_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
 		GFX::GFXManager::get()->registerShaderModuleResource(mat1_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/specularMat_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
 		GFX::GFXManager::get()->registerShaderModuleResource(comp, "../Engine/Binaries/Runtime/spirv/Common/test_compute_comp.spv", { nullptr, RHI::ShaderStages::COMPUTE});
@@ -285,9 +278,11 @@ struct SandBoxApplication :public Application::ApplicationBase {
 					});
 
 			raytracingPipeline[i] = device->createRayTracingPipeline(RHI::RayTracingPipelineDescriptor{
-				pipelineLayout_RT[i].get(),
+				pipelineLayout_RT[i].get(), 2,
 				Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rgen)->shaderModule.get(),
-				Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rmiss)->shaderModule.get(),
+				{	Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rmiss_0)->shaderModule.get(),
+					Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rmiss_1)->shaderModule.get(),
+				}, 
 				{	Core::ResourceManager::get()->getResource<GFX::ShaderModule>(mat0_rchit)->shaderModule.get(),
 					Core::ResourceManager::get()->getResource<GFX::ShaderModule>(mat1_rchit)->shaderModule.get() },
 				nullptr,

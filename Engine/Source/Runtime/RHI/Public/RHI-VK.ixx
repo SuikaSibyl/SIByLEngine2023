@@ -4373,11 +4373,19 @@ namespace SIByL::RHI
 		// These are shader module + entry point + stage combinations, because each
 		// shader module can contain multiple entry points (e.g. main1, main2...)
 		// Creating a table of VkPipelineShaderStageCreateInfo objects, containing all shader stages.
+		int rayMissBegin = 0;
+		int rayMissCount = 0;
 		int closetHitBegin = 0;
 		int closetHitCount = 0;
 		std::vector<VkPipelineShaderStageCreateInfo> pssci = {};
 		if (desc.rayGenShader)		pssci.push_back(static_cast<ShaderModule_VK*>(desc.rayGenShader)->shaderStageInfo);
-		if (desc.rayMissShader)		pssci.push_back(static_cast<ShaderModule_VK*>(desc.rayMissShader)->shaderStageInfo);
+		if (desc.rayMissShaders.size()) {
+			rayMissBegin = pssci.size();
+			rayMissCount = desc.rayMissShaders.size();
+			for (auto& rmissShader : desc.rayMissShaders) {
+				pssci.push_back(static_cast<ShaderModule_VK*>(rmissShader)->shaderStageInfo);
+			}
+		}
 		if (desc.closetHitShaders.size()) {
 			closetHitBegin = pssci.size();
 			closetHitCount = desc.closetHitShaders.size();
@@ -4406,11 +4414,12 @@ namespace SIByL::RHI
 			rtsg.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
 			rtsg.generalShader = 0;
 			rtsgci.push_back(rtsg); }
-		if (desc.rayMissShader) {
-			VkRayTracingShaderGroupCreateInfoKHR rtsg = rtsgTemplate;
-			rtsg.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-			rtsg.generalShader = 1;
-			rtsgci.push_back(rtsg); }
+		if (desc.rayMissShaders.size()) {
+			for (int i = 0; i < desc.rayMissShaders.size(); ++i) {
+				VkRayTracingShaderGroupCreateInfoKHR rtsg = rtsgTemplate;
+				rtsg.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+				rtsg.generalShader = rayMissBegin + i;
+				rtsgci.push_back(rtsg); } }
 		if (desc.closetHitShaders.size()) {
 			for (int i = 0; i < desc.closetHitShaders.size(); ++i) {
 				VkRayTracingShaderGroupCreateInfoKHR rtsg = rtsgTemplate;
@@ -4426,7 +4435,7 @@ namespace SIByL::RHI
 		rtpci.pStages = pssci.data();
 		rtpci.groupCount = uint32_t(rtsgci.size());
 		rtpci.pGroups = rtsgci.data();
-		rtpci.maxPipelineRayRecursionDepth = 1; // Depth of call tree
+		rtpci.maxPipelineRayRecursionDepth = desc.maxPipelineRayRecursionDepth; // Depth of call tree
 		rtpci.pLibraryInfo = nullptr;
 		rtpci.layout = static_cast<PipelineLayout_VK*>(desc.layout)->pipelineLayout;
 		// create the ray tracing pipeline
@@ -4473,8 +4482,7 @@ namespace SIByL::RHI
 		// miss region
 		//missRegion.deviceAddress = SBTBufferAddress;
 		missRegion.stride = groupSizeAligned;
-		uint32_t missCount = 1;
-		missRegion.size = Math::alignUp(missCount * groupSizeAligned, rtPipelineProperties.shaderGroupBaseAlignment);
+		missRegion.size = Math::alignUp(rayMissCount * groupSizeAligned, rtPipelineProperties.shaderGroupBaseAlignment);
 		// hit region
 		//hitRegion.deviceAddress = SBTBufferAddress;
 		hitRegion.stride = groupSizeAligned;

@@ -1927,8 +1927,9 @@ namespace SIByL::RHI
 	};
 
 	export struct RayTracingPipelineDescriptor :public PipelineDescriptorBase {
+		uint32_t maxPipelineRayRecursionDepth = 1;
 		ShaderModule* rayGenShader			= nullptr;
-		ShaderModule* rayMissShader			= nullptr;
+		std::vector<ShaderModule*> rayMissShaders	= {};
 		std::vector<ShaderModule*> closetHitShaders = {};
 		ShaderModule* anyHitShader			= nullptr;
 		ShaderModule* intersectionShader	= nullptr;
