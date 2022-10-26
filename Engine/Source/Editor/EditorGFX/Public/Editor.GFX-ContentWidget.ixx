@@ -60,12 +60,12 @@ namespace SIByL::Editor
             // Text and Tree nodes are less high than framed widgets, using AlignTextToFramePadding() we add vertical spacing to make the tree lines equal high.
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            ImGui::AlignTextToFramePadding();
-            ImGui::Text("my sailor is rich");
-            ImGui::Text("my sailor is rich");
-            ImGui::Text("my sailor is rich");
-            ImGui::Text("my sailor is rich");
-            ImGui::Text("my sailor is rich");
+			// Select content browser source
+			{
+				ImGui::AlignTextToFramePadding();
+				ImGui::Text("File Exploror");
+				ImGui::Text("Runtime Resources");
+			}
             //bool node_open = ImGui::TreeNode("Object", "%s_%u", 1, 1);
             ImGui::TableSetColumnIndex(1);
 			if (source == Source::FileSystem) {
@@ -85,7 +85,7 @@ namespace SIByL::Editor
 				int subdirCount = std::distance(
 					std::filesystem::directory_iterator(currentDirectory), 
 					std::filesystem::directory_iterator{});
-				ImGui::Text(currentDirectory.string().substr(2, currentDirectory.string().size()).c_str());
+				ImGui::Text(("File Explorer Path: " + currentDirectory.string()).c_str());
 				if (ImGui::BeginTable("FileSystemBrowser", columnCount, ImGuiTableFlags_Resizable | ImGuiTableFlags_NoBordersInBody)) {
 					ImGui::TableNextRow();
 					{
