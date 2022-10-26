@@ -22,6 +22,7 @@ namespace SIByL::Editor
 			layer->getWidget<Editor::SceneWidget>()->inspectorWidget = layer->getWidget<Editor::InspectorWidget>();
 			layer->getWidget<Editor::SceneWidget>()->gameobjectInspector.registerFragment<Editor::TagComponentFragment>();
 			layer->getWidget<Editor::SceneWidget>()->gameobjectInspector.registerFragment<Editor::TransformComponentFragment>();
+			layer->getWidget<Editor::SceneWidget>()->gameobjectInspector.registerFragment<Editor::MeshReferenceComponentFragment>();
 
 			layer->getWidget<Editor::ContentWidget>()->reigsterIconResources();
 		}

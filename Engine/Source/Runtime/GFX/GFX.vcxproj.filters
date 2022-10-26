@@ -51,5 +51,8 @@
     <ClCompile Include="Public\Resource\GFX.MeshLoader.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Resource\GFX.SceneNodeLoader.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

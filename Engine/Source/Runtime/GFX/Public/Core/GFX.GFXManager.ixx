@@ -13,6 +13,7 @@ import RHI.RHILayer;
 import Image.Color;
 import Image.Image;
 import GFX.Resource;
+import GFX.Components;
 
 namespace SIByL::GFX
 {
@@ -26,6 +27,8 @@ namespace SIByL::GFX
 			// register component types
 			Core::ComponentManager::get()->registerComponent<GFX::TagComponent>();
 			Core::ComponentManager::get()->registerComponent<GFX::TransformComponent>();
+			Core::ComponentManager::get()->registerComponent<GFX::MeshReference>();
+			Core::ComponentManager::get()->registerComponent<GFX::MeshRenderer>();
 			// register resource types
 			Core::ResourceManager::get()->registerResource<GFX::Mesh>();
 			Core::ResourceManager::get()->registerResource<GFX::Texture>();

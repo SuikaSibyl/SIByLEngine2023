@@ -5,7 +5,7 @@ import GFX.Resource;
 
 namespace SIByL::GFX
 {
-	struct MeshRenderer {
+	export struct MeshRenderer {
 		/** materials in renderer */
 		std::vector<Material*> materials = {};
 	};

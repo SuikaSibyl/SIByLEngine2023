@@ -3,7 +3,7 @@ import GFX.Resource;
 
 namespace SIByL::GFX
 {
-	struct MeshReference {
+	export struct MeshReference {
 		Mesh* mesh = nullptr;
 	};
 }

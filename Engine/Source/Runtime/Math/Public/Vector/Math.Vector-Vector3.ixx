@@ -48,6 +48,7 @@ namespace SIByL::Math
 	};
 
 	export using vec3 = Vector3<float>;
+	export using dvec3 = Vector3<double>;
 	export using ivec3 = Vector3<int32_t>;
 	export using uvec3 = Vector3<uint32_t>;
 

@@ -8,7 +8,10 @@ module;
 #include <imgui_internal.h>
 export module Editor.GFX:InspectorFragments;
 import :SceneWidget;
+import Math.Vector;
+import RHI;
 import GFX.Resource;
+import GFX.Components;
 import Editor.Framework;
 import Editor.Utils;
 
@@ -102,6 +105,33 @@ namespace SIByL::Editor
 					bool scale_modified = (component->scale != scaling);
 					if (scale_modified) component->scale = scaling;
 				});
+			}
+		}
+	};
+
+	export inline auto to_string(RHI::PrimitiveTopology topology) noexcept -> std::string {
+		switch (topology) {
+		case SIByL::RHI::PrimitiveTopology::TRIANGLE_STRIP:	return "TRIANGLE_STRIP";
+		case SIByL::RHI::PrimitiveTopology::TRIANGLE_LIST:return "TRIANGLE_LIST";
+		case SIByL::RHI::PrimitiveTopology::LINE_STRIP:return "LINE_STRIP";
+		case SIByL::RHI::PrimitiveTopology::LINE_LIST:return "LINE_LIST";
+		case SIByL::RHI::PrimitiveTopology::POINT_LIST:return "POINT_LIST";
+		default: return "UNKNOWN"; }
+	}
+
+	export struct MeshReferenceComponentFragment :public ComponentElucidator {
+		virtual auto elucidateComponent(GameObjectInspector::GameObjectData* data) noexcept -> void {
+			GFX::GameObject* go = data->scene->getGameObject(data->handle);
+			GFX::MeshReference* meshReference = go->getEntity().getComponent<GFX::MeshReference>();
+			if (meshReference) {
+				drawComponent<GFX::MeshReference>(go, "MeshReference", [](GFX::MeshReference* component) {
+					ImGui::Text("Primitive:");
+					ImGui::Text((std::string("- topology: ") + to_string(component->mesh->primitiveState.topology)).c_str());
+					ImGui::Text("Vertex Buffer:");
+					ImGui::Text((std::string("- size: ") + std::to_string(component->mesh->vertexBuffer->size())).c_str());
+					ImGui::Text("Index Buffer:");
+					ImGui::Text((std::string("- size: ") + std::to_string(component->mesh->indexBuffer->size())).c_str());
+					});
 			}
 		}
 	};

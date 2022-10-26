@@ -51,6 +51,7 @@ import RHI.RHILayer;
 import GFX.Resource;
 import GFX.GFXManager;
 import GFX.MeshLoader;
+import GFX.SceneNodeLoader;
 import Application.Root;
 import Application.Base;
 
@@ -104,6 +105,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		RHI::Device* device = rhiLayer->getDevice();
 		RHI::SwapChain* swapchain = rhiLayer->getSwapChain();
 
+		//GFX::SceneNodeLoader_glTF::loadSceneNode("./content/scenes/cornellBox.gltf", scene);
 
 		Core::Buffer vertex_CornellBox;
 		Core::Buffer vertex_CornellBox_POnly;

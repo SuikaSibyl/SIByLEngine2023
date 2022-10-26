@@ -400,3 +400,5 @@ FodyWeavers.xsd
 # Intel VTune cache
 GPUCache/
 Sandbox/VTune Profiler Results/
+Sandbox/content/scenes/
+Sandbox/content/textures/
