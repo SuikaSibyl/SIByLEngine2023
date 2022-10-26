@@ -1,10 +1,16 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_scalar_block_layout : require
+#extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 
-#include "../../../../Utility/random.h"
+#include "aaf_payloads.h"
 #include "../../include/closestHitCommon.h"
+#include "../../../../Utility/random.h"
 
-layout(location = 1) rayPayloadEXT bool isShadowed;
+layout(location = 0) rayPayloadInEXT InitalSamplePayload primaryPayLoad;
+layout(location = 1) rayPayloadEXT ShadowRayPayload shadowPayLoad;
 layout(binding = 0, set = 0) uniform accelerationStructureEXT tlas;
 
 const vec3 lightMin = vec3(-0.24, 1.979, -0.22);
@@ -18,21 +24,23 @@ vec3 sampleAreaLight(inout uint rngState) {
 }
 
 vec3 sampleAreaLight(in vec2 lsample) {
-    vec2 xz = vec2(-0.24, -0.22) + sample * vec2(0.47, 0.38);
+    vec2 xz = vec2(-0.24, -0.22) + lsample * vec2(0.47, 0.38);
     return vec3(xz.x, 1.979, xz.y);
 }
 
 void main() {
+    // get primary hit info
     HitInfo hitInfo = getObjectHitInfo();
+    const vec3 secondaryRayOrigin = offsetPositionAlongNormal(hitInfo.worldPosition, hitInfo.worldNormal);
 
-    pld.color        = vec3(0.7);
-    pld.rayOrigin    = offsetPositionAlongNormal(hitInfo.worldPosition, hitInfo.worldNormal);
-    pld.rayDirection = diffuseReflection(hitInfo.worldNormal, pld.rngState);
-    pld.rayHitSky    = false;
-
-    vec3 toLight = lightCenter - pld.rayOrigin;
-    float distanceToLight = length(toLight);
+    const vec3 toLight = lightCenter - secondaryRayOrigin;
+    const float distanceToLight = length(toLight);
     // compute BRDF in first pass ?
+
+    shadowPayLoad.hit = false;
+    shadowPayLoad.attenuation = vec3(1,0,0);
+    shadowPayLoad.distanceMin = 9999;
+    shadowPayLoad.distanceMax = 0;
 
     const float lightSigma = 1.f;
     const int sqrtShadowRaySamples = 3;
@@ -40,51 +48,34 @@ void main() {
     vec2 lightSampleSeed;
     for(int i=0; i<sqrtShadowRaySamples; ++i) {
         for(int j=0; j<sqrtShadowRaySamples; ++j) {
-            lightSampleSeed.x = invNSamples* (i + stepAndOutputRNGFloat(rngState));
-            lightSampleSeed.y = invNSamples* (j + stepAndOutputRNGFloat(rngState));
+            lightSampleSeed.x = invNSamples* (i + stepAndOutputRNGFloat(primaryPayLoad.rngState));
+            lightSampleSeed.y = invNSamples* (j + stepAndOutputRNGFloat(primaryPayLoad.rngState));
             vec3 lightSample = sampleAreaLight(lightSampleSeed);
             vec3 center2Sample = lightCenter - lightSample;
-            float strength = exp(-0.5 * dot(center2Sample,center2Sample) / (lightSigma * lightSigma))
-            vec3 lightDir = normalize(lightSample - pld.rayOrigin);
+            float strength = exp(-0.5 * dot(center2Sample,center2Sample) / (lightSigma * lightSigma));
+            vec3 lightDir = lightCenter - secondaryRayOrigin;
 
             if(dot(hitInfo.worldNormal, lightDir) > 0.f) {
-
+                // shadowPayLoad.attenuation = vec3(0,0,1);
+                uint  flags = gl_RayFlagsNoneEXT;
+                traceRayEXT(tlas,   // acceleration structure
+                        flags,       // rayFlags
+                        0xFF,        // cullMask
+                        1,           // sbtRecordOffset
+                        0,           // sbtRecordStride
+                        1,           // missIndex
+                        secondaryRayOrigin,  // ray origin
+                        0.0,         // ray min range
+                        normalize(lightDir),      // ray direction
+                        length(lightDir),        // ray max range
+                        1            // payload (location = 1)
+                );
             }
         }
-    }   
-
-    // Tracing shadow ray only if the light is visible from the surface
-    vec3 lightSample = sampleAreaLight(pld.rngState);
-    if(dot(hitInfo.worldNormal, lightSample - pld.rayOrigin) > 0) {
-        float tMin   = 0.001;
-        float tMax   = length(lightSample - pld.rayOrigin);
-        vec3  origin = pld.rayOrigin;
-        vec3  rayDir = lightSample - pld.rayOrigin;
-        rayDir = normalize(rayDir);
-        uint  flags =
-            gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
-        isShadowed = true;
-        traceRayEXT(tlas,  // acceleration structure
-                flags,       // rayFlags
-                0xFF,        // cullMask
-                0,           // sbtRecordOffset
-                0,           // sbtRecordStride
-                1,           // missIndex
-                origin,      // ray origin
-                tMin,        // ray min range
-                rayDir,      // ray direction
-                tMax,        // ray max range
-                1            // payload (location = 1)
-        );
-
-        if(isShadowed) {
-            pld.lightCarry = vec3(0.0,0,0);
-        } else {
-            // Specular
-            pld.lightCarry = vec3(0.5) * dot(hitInfo.worldNormal, normalize(lightSample - pld.rayOrigin));
-        }
     }
-    else {
-        pld.lightCarry = vec3(0.0);
-    }
+    // write to primary ray payload
+    primaryPayLoad.rayHitSky = false;
+    primaryPayLoad.rayShadow = shadowPayLoad.hit;
+    primaryPayLoad.distanceMin = shadowPayLoad.distanceMin;
+    primaryPayLoad.distanceMax = shadowPayLoad.distanceMax;
 }

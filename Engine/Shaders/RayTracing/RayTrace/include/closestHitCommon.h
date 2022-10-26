@@ -20,8 +20,8 @@ layout(binding = 2, set = 0, scalar) buffer Vertices {
 };
 layout(binding = 3, set = 0, scalar) buffer Indices { uint16_t indices[]; };
 
-// The payload:
-layout(location = 0) rayPayloadInEXT PassableInfo pld;
+// // The payload:
+// layout(location = 0) rayPayloadInEXT PassableInfo pld;
 
 // Gets hit info about the object at the intersection. This uses GLSL variables
 // defined in closest hit stages instead of ray queries.

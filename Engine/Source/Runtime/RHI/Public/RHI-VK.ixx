@@ -3952,6 +3952,13 @@ namespace SIByL::RHI
 
 #pragma region VK_BLAS_IMPL
 
+	inline auto getVkGeometryFlagsKHR(BLASGeometryFlags input) noexcept -> VkGeometryFlagsKHR {
+		VkGeometryFlagsKHR flag = 0;
+		if (input & (uint32_t)BLASGeometryFlagBits::OPAQUE_GEOMETRY) flag |= VK_GEOMETRY_OPAQUE_BIT_KHR;
+		if (input & (uint32_t)BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION) flag |= VK_GEOMETRY_NO_DUPLICATE_ANY_HIT_INVOCATION_BIT_KHR;
+		return flag;
+	}
+
 	BLAS_VK::BLAS_VK(Device_VK* device, BLASDescriptor const& descriptor) : device(device), descriptor(descriptor) {
 		// 1. Get the host or device addresses of the geometry’s buffers
 		VkBufferDeviceAddressInfo deviceAddressInfo = {};
@@ -3974,7 +3981,7 @@ namespace SIByL::RHI
 		geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
 		geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
 		geometry.geometry.triangles = triangles;
-		geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+		geometry.flags = getVkGeometryFlagsKHR(descriptor.geometryFlags);
 		// 3. Determine the worst-case memory requirements for the AS and 
 		//    for scratch storage required when building.
 		VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
@@ -4063,7 +4070,7 @@ namespace SIByL::RHI
 		geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
 		geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
 		geometry.geometry.triangles = triangles;
-		geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+		geometry.flags = getVkGeometryFlagsKHR(descriptor.geometryFlags);
 		// 3. Determine the worst-case memory requirements for the AS and 
 		//    for scratch storage required when building.
 		VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
@@ -4153,7 +4160,7 @@ namespace SIByL::RHI
 		geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
 		geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
 		geometry.geometry.triangles = triangles;
-		geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+		geometry.flags = getVkGeometryFlagsKHR(blas->descriptor.geometryFlags);
 		// 3. Determine the worst-case memory requirements for the AS and 
 		//    for scratch storage required when building.
 		VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};

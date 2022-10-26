@@ -1892,12 +1892,20 @@ namespace SIByL::RHI
 		virtual ~BLAS() = default;
 	};
 
+	export enum struct BLASGeometryFlagBits :uint32_t {
+		NONE									= 0 << 0,
+		OPAQUE_GEOMETRY							= 1 << 0,
+		NO_DUPLICATE_ANY_HIT_INVOCATION			= 1 << 1,
+	};
+	export using BLASGeometryFlags = uint32_t;
+
 	export struct BLASDescriptor {
 		Buffer*		vertexBuffer   = nullptr;
 		Buffer*		indexBuffer    = nullptr;
 		uint32_t	maxVertex	   = 0;
 		uint32_t	primitiveCount = 0;
 		IndexFormat	indexFormat    = IndexFormat::UINT16_t;
+		BLASGeometryFlags geometryFlags = 0;
 		bool		allowRefitting	= false;
 		bool		allowCompaction = false;
 	};

@@ -150,7 +150,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			mesh_resource->indexBuffer.get(),
 			(uint32_t)vertex_CornellBox_POnly.size / (sizeof(float) * 3),
 			indexCount / 3,
-			RHI::IndexFormat::UINT16_t });
+			RHI::IndexFormat::UINT16_t,
+			(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION });
 		tlas = device->createTLAS(RHI::TLASDescriptor{ {
 			{blas.get(), Math::mul(Math::translate(Math::vec3{0,0.00,0}).m, Math::scale(1,1, 1).m),0,0},
 			}});
@@ -190,20 +191,26 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		vert_module = device->createShaderModule({ &vert, RHI::ShaderStages::VERTEX });
 		frag_module = device->createShaderModule({ &frag, RHI::ShaderStages::FRAGMENT });
 
-		Core::GUID rgen, rmiss_0, rmiss_1, mat0_rchit, mat1_rchit, comp, rahit;
+		Core::GUID rgen, aaf_initial_sample_rmiss, rmiss_1, mat0_rchit, mat1_rchit, comp, distance_shadow_rahit, distance_shadow_rchit, distance_shadow_rmiss, shadow_sample_rhit;
 		rgen = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-		rmiss_0 = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+		aaf_initial_sample_rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		rmiss_1 = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		mat0_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		mat1_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		comp = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-		rahit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-		GFX::GFXManager::get()->registerShaderModuleResource(rgen, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/raytrace_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
-		GFX::GFXManager::get()->registerShaderModuleResource(rmiss_0, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/simple_sky_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
+		distance_shadow_rahit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+		distance_shadow_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+		distance_shadow_rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+		shadow_sample_rhit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+		GFX::GFXManager::get()->registerShaderModuleResource(rgen, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/AAF_softshadow/aaf_initial_sample_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
+		GFX::GFXManager::get()->registerShaderModuleResource(aaf_initial_sample_rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/AAF_softshadow/aaf_initial_sample_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
 		GFX::GFXManager::get()->registerShaderModuleResource(rmiss_1, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/simple_shadow_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
 		GFX::GFXManager::get()->registerShaderModuleResource(mat0_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/diffuseMat_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
 		GFX::GFXManager::get()->registerShaderModuleResource(mat1_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/specularMat_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
-		GFX::GFXManager::get()->registerShaderModuleResource(rahit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/AAF_softshadow/distanceAwareShadow_rahit.spv", { nullptr, RHI::ShaderStages::ANY_HIT});
+		GFX::GFXManager::get()->registerShaderModuleResource(distance_shadow_rahit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/AAF_softshadow/distanceAwareShadow_rahit.spv", { nullptr, RHI::ShaderStages::ANY_HIT});
+		GFX::GFXManager::get()->registerShaderModuleResource(distance_shadow_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/AAF_softshadow/distanceAwareShadow_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT});
+		GFX::GFXManager::get()->registerShaderModuleResource(distance_shadow_rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/AAF_softshadow/distanceAwareShadow_rmiss.spv", { nullptr, RHI::ShaderStages::MISS});
+		GFX::GFXManager::get()->registerShaderModuleResource(shadow_sample_rhit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/AAF_softshadow/diffuse_9shadow_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
 		GFX::GFXManager::get()->registerShaderModuleResource(comp, "../Engine/Binaries/Runtime/spirv/Common/test_compute_comp.spv", { nullptr, RHI::ShaderStages::COMPUTE});
 		
 		// create uniformBuffer
@@ -221,16 +228,16 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		{
 			bindGroupLayout = device->createBindGroupLayout(
 				RHI::BindGroupLayoutDescriptor{ {
-					RHI::BindGroupLayoutEntry{0, (uint32_t)RHI::ShaderStages::VERTEX | (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT, RHI::BufferBindingLayout{RHI::BufferBindingType::UNIFORM}}
+					RHI::BindGroupLayoutEntry{0, (uint32_t)RHI::ShaderStages::VERTEX | (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT | (uint32_t)RHI::ShaderStages::ANY_HIT, RHI::BufferBindingLayout{RHI::BufferBindingType::UNIFORM}}
 					} }
 			);
 
 			bindGroupLayout_RT = device->createBindGroupLayout(
 				RHI::BindGroupLayoutDescriptor{ {
-					RHI::BindGroupLayoutEntry{0, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT, RHI::AccelerationStructureBindingLayout{}},
-					RHI::BindGroupLayoutEntry{1, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT, RHI::StorageTextureBindingLayout{}},
-					RHI::BindGroupLayoutEntry{2, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
-					RHI::BindGroupLayoutEntry{3, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
+					RHI::BindGroupLayoutEntry{0, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT | (uint32_t)RHI::ShaderStages::ANY_HIT, RHI::AccelerationStructureBindingLayout{}},
+					RHI::BindGroupLayoutEntry{1, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT | (uint32_t)RHI::ShaderStages::ANY_HIT, RHI::StorageTextureBindingLayout{}},
+					RHI::BindGroupLayoutEntry{2, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT | (uint32_t)RHI::ShaderStages::ANY_HIT, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
+					RHI::BindGroupLayoutEntry{3, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT | (uint32_t)RHI::ShaderStages::ANY_HIT, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
 					} }
 			);
 
@@ -283,12 +290,14 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				pipelineLayout_RT[i].get(), 2, RHI::SBTsDescriptor{
 					RHI::SBTsDescriptor::RayGenerationSBT{{ Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rgen)->shaderModule.get() }},
 					RHI::SBTsDescriptor::MissSBT{{
-						{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rmiss_0)->shaderModule.get()},
+						{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(aaf_initial_sample_rmiss)->shaderModule.get()},
+						{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(distance_shadow_rmiss)->shaderModule.get()},
 						{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rmiss_1)->shaderModule.get()} }},
 					RHI::SBTsDescriptor::HitGroupSBT{{
+							{{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(shadow_sample_rhit)->shaderModule.get()}, nullptr, nullptr},
+							{nullptr, {Core::ResourceManager::get()->getResource<GFX::ShaderModule>(distance_shadow_rahit)->shaderModule.get()}, nullptr},
 							{{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(mat0_rchit)->shaderModule.get()}, nullptr, nullptr},
 							{{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(mat1_rchit)->shaderModule.get()}, nullptr, nullptr},
-							//{{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rahit)->shaderModule.get()}, nullptr, nullptr},
 						}}
 				} });
 
@@ -515,7 +524,6 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		ImGui::End();
 		editorLayer->onDrawGui();
 		imguiLayer->render();
-
 
 		multiFrameFlights->frameEnd();
 	};
