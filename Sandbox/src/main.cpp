@@ -60,6 +60,8 @@ import Editor.Framework;
 import Editor.GFX;
 import Editor.Config;
 
+import Sandbox.Tracer;
+
 using namespace SIByL;
 using namespace SIByL::Core;
 using namespace SIByL::Math;
@@ -105,7 +107,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		RHI::Device* device = rhiLayer->getDevice();
 		RHI::SwapChain* swapchain = rhiLayer->getSwapChain();
 
-		//GFX::SceneNodeLoader_glTF::loadSceneNode("./content/scenes/cornellBox.gltf", scene);
+		GFX::SceneNodeLoader_glTF::loadSceneNode("./content/scenes/cornellBox.gltf", scene);
 
 		Core::Buffer vertex_CornellBox;
 		Core::Buffer vertex_CornellBox_POnly;
@@ -193,24 +195,18 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		vert_module = device->createShaderModule({ &vert, RHI::ShaderStages::VERTEX });
 		frag_module = device->createShaderModule({ &frag, RHI::ShaderStages::FRAGMENT });
 
-		Core::GUID rgen, aaf_initial_sample_rmiss, rmiss_1, mat0_rchit, mat1_rchit, comp, distance_shadow_rahit, distance_shadow_rmiss, shadow_sample_rhit;
+		Core::GUID rgen, aaf_initial_sample_rmiss, comp, distance_shadow_rahit, distance_shadow_rmiss, shadow_sample_rhit;
 		rgen = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		aaf_initial_sample_rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-		rmiss_1 = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-		mat0_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-		mat1_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		comp = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		distance_shadow_rahit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		distance_shadow_rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		shadow_sample_rhit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-		GFX::GFXManager::get()->registerShaderModuleResource(rgen, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/AAF_softshadow/aaf_initial_sample_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
-		GFX::GFXManager::get()->registerShaderModuleResource(aaf_initial_sample_rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/AAF_softshadow/aaf_initial_sample_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
-		GFX::GFXManager::get()->registerShaderModuleResource(rmiss_1, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/simple_shadow_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
-		GFX::GFXManager::get()->registerShaderModuleResource(mat0_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/diffuseMat_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
-		GFX::GFXManager::get()->registerShaderModuleResource(mat1_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/specularMat_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
-		GFX::GFXManager::get()->registerShaderModuleResource(distance_shadow_rahit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/AAF_softshadow/aaf_distance_shadowray_rahit.spv", { nullptr, RHI::ShaderStages::ANY_HIT});
-		GFX::GFXManager::get()->registerShaderModuleResource(distance_shadow_rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/AAF_softshadow/aaf_distance_shadowray_rmiss.spv", { nullptr, RHI::ShaderStages::MISS});
-		GFX::GFXManager::get()->registerShaderModuleResource(shadow_sample_rhit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/AAF_softshadow/aaf_shadow_sampling_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
+		GFX::GFXManager::get()->registerShaderModuleResource(rgen, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_softshadow/aaf_initial_sample_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
+		GFX::GFXManager::get()->registerShaderModuleResource(aaf_initial_sample_rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_softshadow/aaf_initial_sample_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
+		GFX::GFXManager::get()->registerShaderModuleResource(distance_shadow_rahit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_softshadow/aaf_distance_shadowray_rahit.spv", { nullptr, RHI::ShaderStages::ANY_HIT});
+		GFX::GFXManager::get()->registerShaderModuleResource(distance_shadow_rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_softshadow/aaf_distance_shadowray_rmiss.spv", { nullptr, RHI::ShaderStages::MISS});
+		GFX::GFXManager::get()->registerShaderModuleResource(shadow_sample_rhit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_softshadow/aaf_shadow_sampling_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
 		GFX::GFXManager::get()->registerShaderModuleResource(comp, "../Engine/Binaries/Runtime/spirv/Common/test_compute_comp.spv", { nullptr, RHI::ShaderStages::COMPUTE});
 		
 		// create uniformBuffer
@@ -291,14 +287,10 @@ struct SandBoxApplication :public Application::ApplicationBase {
 					RHI::SBTsDescriptor::RayGenerationSBT{{ Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rgen)->shaderModule.get() }},
 					RHI::SBTsDescriptor::MissSBT{{
 						{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(aaf_initial_sample_rmiss)->shaderModule.get()},
-						{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(distance_shadow_rmiss)->shaderModule.get()},
-						{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rmiss_1)->shaderModule.get()} }},
+						{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(distance_shadow_rmiss)->shaderModule.get()} }},
 					RHI::SBTsDescriptor::HitGroupSBT{{
 							{{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(shadow_sample_rhit)->shaderModule.get()}, nullptr, nullptr},
-							{nullptr, {Core::ResourceManager::get()->getResource<GFX::ShaderModule>(distance_shadow_rahit)->shaderModule.get()}, nullptr},
-							{{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(mat0_rchit)->shaderModule.get()}, nullptr, nullptr},
-							{{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(mat1_rchit)->shaderModule.get()}, nullptr, nullptr},
-						}}
+							{nullptr, {Core::ResourceManager::get()->getResource<GFX::ShaderModule>(distance_shadow_rahit)->shaderModule.get()}, nullptr} }}
 				} });
 
 			computePipeline[i] = device->createComputePipeline(RHI::ComputePipelineDescriptor{
@@ -308,6 +300,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 			computePipeline[i]->setName("ComputeShader_RayTracer");
 		}
+
+		directTracer = std::make_unique<Sandbox::DirectTracer>(rhiLayer.get(), std::array<RHI::PipelineLayout*, 2>{ pipelineLayout_RT[0].get() ,pipelineLayout_RT[1].get() });
 	};
 
 	/** Update the application every loop */
@@ -417,8 +411,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 			static uint32_t batchIdx = 0;
 			rtEncoder[index] = commandEncoder->beginRayTracingPass(rayTracingDescriptor);
-			rtEncoder[index]->setPipeline(raytracingPipeline[index].get());
-			//rtEncoder[index]->pushConstants(&batchIdx, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::CLOSEST_HIT);
+			//rtEncoder[index]->setPipeline(raytracingPipeline[index].get());
+			rtEncoder[index]->setPipeline(directTracer->raytracingPipeline[index].get());
 			rtEncoder[index]->setBindGroup(0, bindGroup_RT[index].get(), 0, 0);
 			rtEncoder[index]->setBindGroup(1, bindGroup[index].get(), 0, 0);
 			rtEncoder[index]->pushConstants(&batchIdx,
@@ -535,6 +529,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 	virtual auto Exit() noexcept -> void override {
 		rhiLayer->getDevice()->waitIdle();
+
+		directTracer = nullptr;
 		renderPipeline[0] = nullptr;
 		renderPipeline[1] = nullptr;
 		computePipeline[0] = nullptr;
@@ -609,6 +605,8 @@ private:
 	std::unique_ptr<RHI::ComputePassEncoder> compEncoder[2] = {};
 	std::unique_ptr<RHI::BLAS> blas = nullptr;
 	std::unique_ptr<RHI::TLAS> tlas = nullptr;
+
+	std::unique_ptr<Sandbox::DirectTracer> directTracer = nullptr;
 
 	std::unique_ptr<RHI::ComputePipeline> computePipeline[2];
 	std::unique_ptr<RHI::RenderPipeline> renderPipeline[2];

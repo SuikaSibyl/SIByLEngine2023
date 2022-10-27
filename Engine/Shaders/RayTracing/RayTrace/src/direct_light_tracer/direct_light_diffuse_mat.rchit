@@ -1,9 +1,11 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 
-#include "../../../Utility/random.h"
-#include "../include/closestHitCommon.h"
+#include "../../../../Utility/random.h"
+#include "../../include/closestHitCommon.h"
 
+// The payload:
+layout(location = 0) rayPayloadInEXT PassableInfo pld;
 layout(location = 1) rayPayloadEXT bool isShadowed;
 layout(binding = 0, set = 0) uniform accelerationStructureEXT tlas;
 

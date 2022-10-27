@@ -54,5 +54,8 @@
     <ClCompile Include="Public\Resource\GFX.SceneNodeLoader.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\RDG\GFX.RDG.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
