@@ -193,7 +193,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		vert_module = device->createShaderModule({ &vert, RHI::ShaderStages::VERTEX });
 		frag_module = device->createShaderModule({ &frag, RHI::ShaderStages::FRAGMENT });
 
-		Core::GUID rgen, aaf_initial_sample_rmiss, rmiss_1, mat0_rchit, mat1_rchit, comp, distance_shadow_rahit, distance_shadow_rchit, distance_shadow_rmiss, shadow_sample_rhit;
+		Core::GUID rgen, aaf_initial_sample_rmiss, rmiss_1, mat0_rchit, mat1_rchit, comp, distance_shadow_rahit, distance_shadow_rmiss, shadow_sample_rhit;
 		rgen = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		aaf_initial_sample_rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		rmiss_1 = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
@@ -201,7 +201,6 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		mat1_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		comp = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		distance_shadow_rahit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-		distance_shadow_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		distance_shadow_rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		shadow_sample_rhit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 		GFX::GFXManager::get()->registerShaderModuleResource(rgen, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/AAF_softshadow/aaf_initial_sample_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
@@ -209,10 +208,9 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		GFX::GFXManager::get()->registerShaderModuleResource(rmiss_1, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/simple_shadow_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
 		GFX::GFXManager::get()->registerShaderModuleResource(mat0_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/diffuseMat_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
 		GFX::GFXManager::get()->registerShaderModuleResource(mat1_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/specularMat_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
-		GFX::GFXManager::get()->registerShaderModuleResource(distance_shadow_rahit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/AAF_softshadow/distanceAwareShadow_rahit.spv", { nullptr, RHI::ShaderStages::ANY_HIT});
-		GFX::GFXManager::get()->registerShaderModuleResource(distance_shadow_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/AAF_softshadow/distanceAwareShadow_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT});
-		GFX::GFXManager::get()->registerShaderModuleResource(distance_shadow_rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/AAF_softshadow/distanceAwareShadow_rmiss.spv", { nullptr, RHI::ShaderStages::MISS});
-		GFX::GFXManager::get()->registerShaderModuleResource(shadow_sample_rhit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/AAF_softshadow/diffuse_9shadow_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
+		GFX::GFXManager::get()->registerShaderModuleResource(distance_shadow_rahit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/AAF_softshadow/aaf_distance_shadowray_rahit.spv", { nullptr, RHI::ShaderStages::ANY_HIT});
+		GFX::GFXManager::get()->registerShaderModuleResource(distance_shadow_rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/AAF_softshadow/aaf_distance_shadowray_rmiss.spv", { nullptr, RHI::ShaderStages::MISS});
+		GFX::GFXManager::get()->registerShaderModuleResource(shadow_sample_rhit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/AAF_softshadow/aaf_shadow_sampling_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
 		GFX::GFXManager::get()->registerShaderModuleResource(comp, "../Engine/Binaries/Runtime/spirv/Common/test_compute_comp.spv", { nullptr, RHI::ShaderStages::COMPUTE});
 		
 		// create uniformBuffer

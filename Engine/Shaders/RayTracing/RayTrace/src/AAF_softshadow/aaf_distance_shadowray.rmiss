@@ -6,7 +6,4 @@
 
 layout(location = 1) rayPayloadInEXT ShadowRayPayload shadowPayLoad;
 
-void main() {
-    // shadowPayLoad.hit = false;
-    // shadowPayLoad.attenuation = vec3(0,0,0);
-}
+void main() {}

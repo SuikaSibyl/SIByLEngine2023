@@ -86,7 +86,7 @@ void main()
 //         (pushConstants.sample_batch * previousAverageColor + averagePixelColor) / (pushConstants.sample_batch + 1);
 //   }
     const vec3 background_color = vec3(0.34f, 0.55f, 0.85f);
-    pixelColor = pld.rayHitSky ? background_color : (pld.rayShadow ? colorMap_naive(pld.distanceMax): vec3(0.f));
+    pixelColor = pld.rayHitSky ? background_color : (pld.rayShadow ? colorMap_naive(pld.distanceMin): vec3(0.f));
     // Set the color of the pixel `pixel` in the storage image to `averagePixelColor`:
     imageStore(storageImage, pixel, vec4(pixelColor, 1.0));
 }
