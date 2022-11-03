@@ -1,5 +1,6 @@
 export module GFX.Resource;
 
+export import :Buffer;
 export import :ShaderModule;
 export import :Mesh;
 export import :Texture;

@@ -61,6 +61,7 @@ import Editor.GFX;
 import Editor.Config;
 
 import Sandbox.Tracer;
+import Sandbox.AAF_GI;
 
 using namespace SIByL;
 using namespace SIByL::Core;
@@ -195,18 +196,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		vert_module = device->createShaderModule({ &vert, RHI::ShaderStages::VERTEX });
 		frag_module = device->createShaderModule({ &frag, RHI::ShaderStages::FRAGMENT });
 
-		Core::GUID rgen, aaf_initial_sample_rmiss, comp, distance_shadow_rahit, distance_shadow_rmiss, shadow_sample_rhit;
-		rgen = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-		aaf_initial_sample_rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+		Core::GUID comp;
 		comp = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-		distance_shadow_rahit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-		distance_shadow_rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-		shadow_sample_rhit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-		GFX::GFXManager::get()->registerShaderModuleResource(rgen, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_softshadow/aaf_initial_sample_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
-		GFX::GFXManager::get()->registerShaderModuleResource(aaf_initial_sample_rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_softshadow/aaf_initial_sample_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
-		GFX::GFXManager::get()->registerShaderModuleResource(distance_shadow_rahit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_softshadow/aaf_distance_shadowray_rahit.spv", { nullptr, RHI::ShaderStages::ANY_HIT});
-		GFX::GFXManager::get()->registerShaderModuleResource(distance_shadow_rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_softshadow/aaf_distance_shadowray_rmiss.spv", { nullptr, RHI::ShaderStages::MISS});
-		GFX::GFXManager::get()->registerShaderModuleResource(shadow_sample_rhit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_softshadow/aaf_shadow_sampling_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
 		GFX::GFXManager::get()->registerShaderModuleResource(comp, "../Engine/Binaries/Runtime/spirv/Common/test_compute_comp.spv", { nullptr, RHI::ShaderStages::COMPUTE});
 		
 		// create uniformBuffer
@@ -222,7 +213,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			}
 		}
 		{
-			bindGroupLayout = device->createBindGroupLayout(
+			rtBindGroupLayout = device->createBindGroupLayout(
 				RHI::BindGroupLayoutDescriptor{ {
 					RHI::BindGroupLayoutEntry{0, (uint32_t)RHI::ShaderStages::VERTEX | (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT | (uint32_t)RHI::ShaderStages::ANY_HIT, RHI::BufferBindingLayout{RHI::BufferBindingType::UNIFORM}}
 					} }
@@ -238,8 +229,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			);
 
 			for (int i = 0; i < 2; ++i) {
-				bindGroup[i] = device->createBindGroup(RHI::BindGroupDescriptor{
-					bindGroupLayout.get(),
+				rtBindGroup[i] = device->createBindGroup(RHI::BindGroupDescriptor{
+					rtBindGroupLayout.get(),
 					std::vector<RHI::BindGroupEntry>{
 						{0,RHI::BindingResource{RHI::BufferBinding{uniformBuffer[i].get(), 0, uniformBuffer[i]->size()}}}
 				} });
@@ -256,12 +247,12 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		for (int i = 0; i < 2; ++i) {
 			pipelineLayout[i] = device->createPipelineLayout(RHI::PipelineLayoutDescriptor{ {},
-				{ bindGroupLayout.get() }
+				{ rtBindGroupLayout.get() }
 				});
 
 			pipelineLayout_RT[i] = device->createPipelineLayout(RHI::PipelineLayoutDescriptor{
 				{ {(uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::CLOSEST_HIT | (uint32_t)RHI::ShaderStages::MISS | (uint32_t)RHI::ShaderStages::COMPUTE, 0, sizeof(PushConstantRay)}},
-				{ bindGroupLayout_RT.get(), bindGroupLayout.get() }
+				{ bindGroupLayout_RT.get(), rtBindGroupLayout.get() }
 				});
 
 			renderPipeline[i] = device->createRenderPipeline(RHI::RenderPipelineDescriptor{
@@ -282,16 +273,6 @@ struct SandBoxApplication :public Application::ApplicationBase {
 						{{RHI::TextureFormat::RGBA8_UNORM}}}
 					});
 
-			raytracingPipeline[i] = device->createRayTracingPipeline(RHI::RayTracingPipelineDescriptor{
-				pipelineLayout_RT[i].get(), 2, RHI::SBTsDescriptor{
-					RHI::SBTsDescriptor::RayGenerationSBT{{ Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rgen)->shaderModule.get() }},
-					RHI::SBTsDescriptor::MissSBT{{
-						{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(aaf_initial_sample_rmiss)->shaderModule.get()},
-						{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(distance_shadow_rmiss)->shaderModule.get()} }},
-					RHI::SBTsDescriptor::HitGroupSBT{{
-							{{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(shadow_sample_rhit)->shaderModule.get()}, nullptr, nullptr},
-							{nullptr, {Core::ResourceManager::get()->getResource<GFX::ShaderModule>(distance_shadow_rahit)->shaderModule.get()}, nullptr} }}
-				} });
 
 			computePipeline[i] = device->createComputePipeline(RHI::ComputePipelineDescriptor{
 				pipelineLayout_RT[i].get(),
@@ -302,6 +283,11 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		}
 
 		directTracer = std::make_unique<Sandbox::DirectTracer>(rhiLayer.get(), std::array<RHI::PipelineLayout*, 2>{ pipelineLayout_RT[0].get() ,pipelineLayout_RT[1].get() });
+
+		aafPipeline = std::make_unique<Sandbox::AAFPipeline>(rhiLayer.get(), tlas.get(), rtTarget, vertexBufferRT.get(),
+			mesh_resource->indexBuffer.get(), rtBindGroupLayout.get(), std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()});
+		aafGIPipeline = std::make_unique<Sandbox::AAF_GI_Pipeline>(rhiLayer.get(), tlas.get(), rtTarget, vertexBufferRT.get(),
+			mesh_resource->indexBuffer.get(), rtBindGroupLayout.get(), std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()});
 	};
 
 	/** Update the application every loop */
@@ -388,56 +374,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			}}
 			});
 
-		{
-			commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
-				(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
-				(uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR,
-				(uint32_t)RHI::DependencyType::NONE,
-				{}, {},
-				{ RHI::TextureMemoryBarrierDescriptor{
-					Core::ResourceManager::get()->getResource<GFX::Texture>(rtTarget)->texture.get(),
-					RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
-					(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
-					(uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
-					RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
-					RHI::TextureLayout::GENERAL
-				}}
-				});
-
-			pcRay.clearColor = Math::vec4{ 0.2f, 0.3f, 0.3f, 1.0f };
-			pcRay.lightPosition = Math::vec3{ 10.f,0.f,0.f };
-			pcRay.lightIntensity = 100;
-			pcRay.lightType = 0;
-
-			static uint32_t batchIdx = 0;
-			rtEncoder[index] = commandEncoder->beginRayTracingPass(rayTracingDescriptor);
-			//rtEncoder[index]->setPipeline(raytracingPipeline[index].get());
-			rtEncoder[index]->setPipeline(directTracer->raytracingPipeline[index].get());
-			rtEncoder[index]->setBindGroup(0, bindGroup_RT[index].get(), 0, 0);
-			rtEncoder[index]->setBindGroup(1, bindGroup[index].get(), 0, 0);
-			rtEncoder[index]->pushConstants(&batchIdx,
-				(uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::CLOSEST_HIT
-				| (uint32_t)RHI::ShaderStages::MISS | (uint32_t)RHI::ShaderStages::COMPUTE,
-				0, sizeof(uint32_t));
-			rtEncoder[index]->traceRays(800, 600, 1);
-			rtEncoder[index]->end();
-			++batchIdx;
-
-			commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
-				(uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR,
-				(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
-				(uint32_t)RHI::DependencyType::NONE,
-				{}, {},
-				{ RHI::TextureMemoryBarrierDescriptor{
-					Core::ResourceManager::get()->getResource<GFX::Texture>(rtTarget)->texture.get(),
-					RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
-					(uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
-					(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
-					RHI::TextureLayout::GENERAL,
-					RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL
-				}}
-				});
-		}
+		//aafPipeline->composeCommands(commandEncoder.get(), index);
+		aafGIPipeline->composeCommands(commandEncoder.get(), index);
 
 		//{
 		//	commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
@@ -459,7 +397,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		//	compEncoder[index] = commandEncoder->beginComputePass({});
 		//	compEncoder[index]->setPipeline(computePipeline[index].get());
 		//	compEncoder[index]->setBindGroup(0, bindGroup_RT[index].get(), 0, 0);
-		//	compEncoder[index]->setBindGroup(1, bindGroup[index].get(), 0, 0);
+		//	compEncoder[index]->setBindGroup(1, rtBindGroup[index].get(), 0, 0);
 		//	compEncoder[index]->pushConstants(&batchIdx, (uint32_t)RHI::ShaderStages::COMPUTE
 		//		| (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::CLOSEST_HIT
 		//		| (uint32_t)RHI::ShaderStages::MISS, 0, sizeof(uint32_t));
@@ -491,7 +429,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			0, ResourceManager::get()->getResource<GFX::Mesh>(0)->vertexBuffer->size());
 		passEncoder[index]->setIndexBuffer(ResourceManager::get()->getResource<GFX::Mesh>(0)->indexBuffer.get(), 
 			RHI::IndexFormat::UINT16_t, 0, ResourceManager::get()->getResource<GFX::Mesh>(0)->indexBuffer->size());
-		passEncoder[index]->setBindGroup(0, bindGroup[index].get(), 0, 0);
+		passEncoder[index]->setBindGroup(0, rtBindGroup[index].get(), 0, 0);
 		passEncoder[index]->drawIndexed(indexCount, 1, 0, 0, 0);
 		passEncoder[index]->end();
 
@@ -530,13 +468,13 @@ struct SandBoxApplication :public Application::ApplicationBase {
 	virtual auto Exit() noexcept -> void override {
 		rhiLayer->getDevice()->waitIdle();
 
+		aafPipeline = nullptr;
+		aafGIPipeline = nullptr;
 		directTracer = nullptr;
 		renderPipeline[0] = nullptr;
 		renderPipeline[1] = nullptr;
 		computePipeline[0] = nullptr;
 		computePipeline[1] = nullptr;
-		raytracingPipeline[0] = nullptr;
-		raytracingPipeline[1] = nullptr;
 		passEncoder[0] = nullptr;
 		passEncoder[1] = nullptr;
 		compEncoder[1] = nullptr;
@@ -559,11 +497,11 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		tlas = nullptr;
 		blas = nullptr;
 
-		bindGroupLayout = nullptr;
+		rtBindGroupLayout = nullptr;
 		uniformBuffer[0] = nullptr;
 		uniformBuffer[1] = nullptr;
-		bindGroup[0] = nullptr;
-		bindGroup[1] = nullptr;
+		rtBindGroup[0] = nullptr;
+		rtBindGroup[1] = nullptr;
 
 		editorLayer = nullptr;
 		imguiLayer = nullptr;
@@ -585,8 +523,8 @@ private:
 	std::unique_ptr<Editor::ImGuiLayer> imguiLayer = nullptr;
 	std::unique_ptr<Editor::EditorLayer> editorLayer = nullptr;
 
-	std::unique_ptr<RHI::BindGroupLayout> bindGroupLayout = nullptr;
-	std::unique_ptr<RHI::BindGroup> bindGroup[2];
+	std::unique_ptr<RHI::BindGroupLayout> rtBindGroupLayout = nullptr;
+	std::unique_ptr<RHI::BindGroup> rtBindGroup[2];
 
 	std::unique_ptr<RHI::BindGroupLayout> bindGroupLayout_RT = nullptr;
 	std::unique_ptr<RHI::BindGroup> bindGroup_RT[2];
@@ -607,10 +545,11 @@ private:
 	std::unique_ptr<RHI::TLAS> tlas = nullptr;
 
 	std::unique_ptr<Sandbox::DirectTracer> directTracer = nullptr;
+	std::unique_ptr<Sandbox::AAFPipeline> aafPipeline = nullptr;
+	std::unique_ptr<Sandbox::AAF_GI_Pipeline> aafGIPipeline = nullptr;
 
 	std::unique_ptr<RHI::ComputePipeline> computePipeline[2];
 	std::unique_ptr<RHI::RenderPipeline> renderPipeline[2];
-	std::unique_ptr<RHI::RayTracingPipeline> raytracingPipeline[2];
 	// the embedded scene, which should be removed in the future
 	GFX::Scene scene;
 };

@@ -57,5 +57,8 @@
     <ClCompile Include="Public\RDG\GFX.RDG.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Resource\GFX.Resources-Buffer.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

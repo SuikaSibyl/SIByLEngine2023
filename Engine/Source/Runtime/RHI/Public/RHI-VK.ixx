@@ -3361,6 +3361,39 @@ namespace SIByL::RHI
 		return (VkPipelineStageFlags)flags;
 	}
 
+	inline auto getVkAccessFlags(AccessFlags accessFlags) noexcept -> VkAccessFlags {
+		VkAccessFlags flags = 0;
+		if (accessFlags & (uint32_t)AccessFlagBits::INDIRECT_COMMAND_READ_BIT) flags |= VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+		if (accessFlags & (uint32_t)AccessFlagBits::INDEX_READ_BIT) flags |= VK_ACCESS_INDEX_READ_BIT;
+		if (accessFlags & (uint32_t)AccessFlagBits::VERTEX_ATTRIBUTE_READ_BIT) flags |= VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+		if (accessFlags & (uint32_t)AccessFlagBits::UNIFORM_READ_BIT) flags |= VK_ACCESS_UNIFORM_READ_BIT;
+		if (accessFlags & (uint32_t)AccessFlagBits::INPUT_ATTACHMENT_READ_BIT) flags |= VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
+		if (accessFlags & (uint32_t)AccessFlagBits::SHADER_READ_BIT) flags |= VK_ACCESS_SHADER_READ_BIT;
+		if (accessFlags & (uint32_t)AccessFlagBits::SHADER_WRITE_BIT) flags |= VK_ACCESS_SHADER_WRITE_BIT;
+		if (accessFlags & (uint32_t)AccessFlagBits::COLOR_ATTACHMENT_READ_BIT) flags |= VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+		if (accessFlags & (uint32_t)AccessFlagBits::COLOR_ATTACHMENT_WRITE_BIT) flags |= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		if (accessFlags & (uint32_t)AccessFlagBits::DEPTH_STENCIL_ATTACHMENT_READ_BIT) flags |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+		if (accessFlags & (uint32_t)AccessFlagBits::DEPTH_STENCIL_ATTACHMENT_WRITE_BIT) flags |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+		if (accessFlags & (uint32_t)AccessFlagBits::TRANSFER_READ_BIT) flags |= VK_ACCESS_TRANSFER_READ_BIT;
+		if (accessFlags & (uint32_t)AccessFlagBits::TRANSFER_WRITE_BIT) flags |= VK_ACCESS_TRANSFER_WRITE_BIT;
+		if (accessFlags & (uint32_t)AccessFlagBits::HOST_READ_BIT) flags |= VK_ACCESS_HOST_READ_BIT;
+		if (accessFlags & (uint32_t)AccessFlagBits::HOST_WRITE_BIT) flags |= VK_ACCESS_HOST_WRITE_BIT;
+		if (accessFlags & (uint32_t)AccessFlagBits::MEMORY_READ_BIT) flags |= VK_ACCESS_MEMORY_READ_BIT;
+		if (accessFlags & (uint32_t)AccessFlagBits::MEMORY_WRITE_BIT) flags |= VK_ACCESS_MEMORY_WRITE_BIT;
+		if (accessFlags & (uint32_t)AccessFlagBits::TRANSFORM_FEEDBACK_WRITE_BIT) flags |= VK_ACCESS_TRANSFORM_FEEDBACK_WRITE_BIT_EXT;
+		if (accessFlags & (uint32_t)AccessFlagBits::TRANSFORM_FEEDBACK_COUNTER_READ_BIT) flags |= VK_ACCESS_TRANSFORM_FEEDBACK_COUNTER_READ_BIT_EXT;
+		if (accessFlags & (uint32_t)AccessFlagBits::TRANSFORM_FEEDBACK_COUNTER_WRITE_BIT) flags |= VK_ACCESS_TRANSFORM_FEEDBACK_COUNTER_WRITE_BIT_EXT;
+		if (accessFlags & (uint32_t)AccessFlagBits::CONDITIONAL_RENDERING_READ_BIT) flags |= VK_ACCESS_CONDITIONAL_RENDERING_READ_BIT_EXT;
+		if (accessFlags & (uint32_t)AccessFlagBits::COLOR_ATTACHMENT_READ_NONCOHERENT_BIT) flags |= VK_ACCESS_COLOR_ATTACHMENT_READ_NONCOHERENT_BIT_EXT;
+		if (accessFlags & (uint32_t)AccessFlagBits::ACCELERATION_STRUCTURE_READ_BIT) flags |= VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+		if (accessFlags & (uint32_t)AccessFlagBits::ACCELERATION_STRUCTURE_WRITE_BIT) flags |= VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+		if (accessFlags & (uint32_t)AccessFlagBits::FRAGMENT_DENSITY_MAP_READ_BIT) flags |= VK_ACCESS_FRAGMENT_DENSITY_MAP_READ_BIT_EXT;
+		if (accessFlags & (uint32_t)AccessFlagBits::FRAGMENT_SHADING_RATE_ATTACHMENT_READ_BIT) flags |= VK_ACCESS_FRAGMENT_SHADING_RATE_ATTACHMENT_READ_BIT_KHR;
+		if (accessFlags & (uint32_t)AccessFlagBits::COMMAND_PREPROCESS_READ_BIT) flags |= VK_ACCESS_COMMAND_PREPROCESS_READ_BIT_NV;
+		if (accessFlags & (uint32_t)AccessFlagBits::COMMAND_PREPROCESS_WRITE_BIT) flags |= VK_ACCESS_COMMAND_PREPROCESS_WRITE_BIT_NV;
+		return flags;
+	}
+
 	inline auto getVkDependencyTypeFlags(DependencyTypeFlags type) noexcept -> VkDependencyFlags {
 		uint32_t flags = 0;
 		if (type & (uint32_t)DependencyType::BY_REGION_BIT) flags|= VK_DEPENDENCY_BY_REGION_BIT;
@@ -3374,7 +3407,19 @@ namespace SIByL::RHI
 		std::vector<VkMemoryBarrier> memoryBarriers(desc.memoryBarriers.size());
 		// buffer memory barriers
 		std::vector<VkBufferMemoryBarrier> bufferBemoryBarriers(desc.bufferMemoryBarriers.size());
-		// image memory barriers
+		for (int i = 0; i < bufferBemoryBarriers.size(); ++i) {
+			VkBufferMemoryBarrier& bmb = bufferBemoryBarriers[i];
+			BufferMemoryBarrierDescriptor const& descriptor = desc.bufferMemoryBarriers[i];
+			bmb.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+			bmb.buffer = static_cast<Buffer_VK*>(descriptor.buffer)->getVkBuffer();
+			bmb.offset = 0;
+			bmb.size = static_cast<Buffer_VK*>(descriptor.buffer)->size();
+			bmb.srcAccessMask = getVkAccessFlags(descriptor.srcAccessMask);
+			bmb.dstAccessMask = getVkAccessFlags(descriptor.dstAccessMask);
+			bmb.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			bmb.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		}
+		// image memory 
 		std::vector<VkImageMemoryBarrier> imageMemoryBarriers(desc.textureMemoryBarriers.size());
 		for (int i = 0; i < imageMemoryBarriers.size(); ++i) {
 			VkImageMemoryBarrier& imb = imageMemoryBarriers[i];

@@ -1,0 +1,51 @@
+#version 460
+#extension GL_EXT_scalar_block_layout : require
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+#include "aaf_common.h"
+
+layout(binding = 0, set = 0) readonly buffer slopeBuffer        { vec2 slope[]; };
+layout(binding = 6, set = 0) readonly buffer useFilterBuffer    { uint use_filter[]; };
+
+layout(binding = 8, set = 0) writeonly buffer useFilterBlurTmpBuffer        { uint use_filter_tmp[]; };
+layout(binding = 10, set = 0, scalar) writeonly buffer slopeBlurTmpBuffer   { vec2 slope_tmp[]; };
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+void main()
+{
+    // Get current pixel position and global index.
+    const uvec2 pixel = gl_GlobalInvocationID.xy;
+    const uint gid = pixel.x + pixel.y * resolution.x;
+    // If the pixel is outside of the image, don't do anything:
+    if((pixel.x >= resolution.x) || (pixel.y >= resolution.y)) {
+        return;
+    }
+    
+    vec2 center_slope = slope[gid];
+    uint center_use_filter = use_filter[gid];
+    vec2 filterd_slope = center_slope;
+    int obj_id = 0; // TODO: add object idx
+    
+    for (int i=int(pixel.x)-pixel_radius.x; i<=int(pixel.x)+pixel_radius.x; i++) {
+        if (i < 0 || i >= resolution.x) continue;
+        uint neighbor_id = i + pixel.y*resolution.x;
+        vec2 neighbor_slope = slope[neighbor_id];
+        uint neighbor_use_filter = use_filter[neighbor_id];
+        // int neigbor_obj_id = 0; // TODO
+        // if (neigbor_obj_id != center_slope) {
+        //     center_slope = filterd_slope;
+        //     break;
+        // }
+        if (neighbor_use_filter != 0) {
+            filterd_slope.x = max(neighbor_slope.x, filterd_slope.x);
+            filterd_slope.y = min(neighbor_slope.y, filterd_slope.y);
+        }
+        center_use_filter |= neighbor_use_filter;
+    }
+    use_filter_tmp[gid] |= center_use_filter;
+    slope_tmp[gid] = filterd_slope;
+    return;
+}

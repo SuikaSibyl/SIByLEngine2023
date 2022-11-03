@@ -6,4 +6,6 @@
 
 layout(location = 1) rayPayloadInEXT ShadowRayPayload shadowPayLoad;
 
-void main() {}
+void main() {
+    // shadowPayLoad.hit = false;
+}

@@ -30,6 +30,7 @@ namespace SIByL::GFX
 			Core::ComponentManager::get()->registerComponent<GFX::MeshReference>();
 			Core::ComponentManager::get()->registerComponent<GFX::MeshRenderer>();
 			// register resource types
+			Core::ResourceManager::get()->registerResource<GFX::Buffer>();
 			Core::ResourceManager::get()->registerResource<GFX::Mesh>();
 			Core::ResourceManager::get()->registerResource<GFX::Texture>();
 			Core::ResourceManager::get()->registerResource<GFX::Sampler>();
@@ -40,6 +41,7 @@ namespace SIByL::GFX
 		/** shut down the GFX manager */
 		virtual auto shutDown() noexcept -> void override {}
 		/** register GFX resources */
+		auto registerBufferResource(Core::GUID guid, RHI::BufferDescriptor const& desc) noexcept -> void;
 		auto registerTextureResource(Core::GUID guid, Image::Image<Image::COLOR_R8G8B8A8_UINT>* image) noexcept -> void;
 		auto registerTextureResource(Core::GUID guid, RHI::TextureDescriptor const& desc) noexcept -> void;
 		auto registerSamplerResource(Core::GUID guid, RHI::SamplerDescriptor const& desc) noexcept -> void;
@@ -59,6 +61,12 @@ namespace SIByL::GFX
 #pragma region GFX_MANAGER_IMPL
 
 	GFXManager* GFXManager::singleton = nullptr;
+	
+	auto GFXManager::registerBufferResource(Core::GUID guid, RHI::BufferDescriptor const& desc) noexcept -> void {
+		GFX::Buffer bufferResource = {};
+		bufferResource.buffer = rhiLayer->getDevice()->createBuffer(desc);
+		Core::ResourceManager::get()->addResource(guid, std::move(bufferResource));
+	}
 
 	auto GFXManager::registerTextureResource(Core::GUID guid, Image::Image<Image::COLOR_R8G8B8A8_UINT>* image) noexcept -> void {
 		GFX::Texture textureResource = {};

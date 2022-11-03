@@ -1,0 +1,82 @@
+#version 460
+#extension GL_EXT_scalar_block_layout : require
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+#include "aaf_common.h"
+
+layout(binding = 0, set = 0) readonly buffer slopeBuffer        { vec2 slope[]; };
+layout(binding = 1, set = 0, scalar) readonly buffer visBlurredBuffer   { vec3 vis_blurred[]; };
+layout(binding = 2, set = 0) readonly buffer projDistBuffer     { float proj_dist[]; };
+layout(binding = 3, set = 0) readonly buffer worldPosBuffer     { vec3 world_position[]; };
+layout(binding = 4, set = 0) readonly buffer worldNormalBuffer  { vec3 world_normal[]; };
+layout(binding = 5, set = 0, scalar) readonly buffer brdfBuffer { vec3 brdf[]; };
+layout(binding = 6, set = 0) readonly buffer useFilterBuffer    { uint use_filter[]; };
+layout(binding = 9, set = 0, scalar) writeonly buffer visBlurTmpBuffer   { float vis_tmp[]; };
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(binding = 7, set = 0, rgba32f) uniform image2D storageImage;
+
+void main()
+{
+    // Get current pixel position and global index.
+    const uvec2 pixel = gl_GlobalInvocationID.xy;
+    const uint gid = pixel.x + pixel.y * resolution.x;
+    // If the pixel is outside of the image, don't do anything:
+    if((pixel.x >= resolution.x) || (pixel.y >= resolution.y)) {
+        return;
+    }
+    
+    // Get center pixel properties.
+    const vec3  center_vis = vis_blurred[gid];
+    const float center_omega_x_f = compute_omega_x_f(slope[gid].y, proj_dist[gid]);
+    const vec3  center_world_pos = world_position[gid];
+    const vec3  center_world_norm = world_normal[gid];
+
+    if(use_filter[gid] == 0) { // TODO: use filter n?
+        vis_tmp[gid] = center_vis.x;
+        return;
+    }
+
+    float accum_blurred_vis = 0.f;
+    float accum_vis_weights = 0.f;
+
+    for (int i = int(pixel.x)-pixel_radius.x; i <= int(pixel.x)+pixel_radius.x; ++i) {
+        // ignore if the sample exceed the resolution valid region
+        if(i<0 || i>=resolution.x) continue;
+        const uint  neighbor_gid = i + pixel.y * resolution.x;
+        const float neighbor_vis = vis_blurred[neighbor_gid].x;
+        const float neighbor_omega_x_f = compute_omega_x_f(slope[neighbor_gid].y, proj_dist[neighbor_gid]);
+
+        // if (neighbor_omega_x_f > 0                                                  // have a positive x bandlimiting
+        //     && abs(center_omega_x_f - neighbor_omega_x_f) < dist_scale_threshold   // x bandlimiting distance not too large
+        //     && use_filter[neighbor_gid] != 0)  // what?
+        {
+            const vec3 neighbor_world_pos = world_position[neighbor_gid];
+            const vec3 diff = center_world_pos - neighbor_world_pos;
+            const float euclidean_distancesq = dot(diff, diff);
+            const float normcomp = dot(diff, light_normal);
+            const float distancesq = euclidean_distancesq - normcomp*normcomp;
+            // if (distancesq < dist_threshold) 
+            {
+                const vec3 neighbor_world_norm = world_normal[neighbor_gid];
+                if(acos(dot(center_world_norm, neighbor_world_norm)) < angle_threshold) {
+                    // const float weight = gaussian_filter(distancesq, center_omega_x_f);
+                    const float weight = 1;
+                    accum_blurred_vis += weight * neighbor_vis;
+                    accum_vis_weights += weight;
+                }
+           }
+        }
+    }
+
+    float blurred_vis = 0.f;
+    if (accum_vis_weights > 0.0001f) // if the filter is ? enough
+        blurred_vis = accum_blurred_vis / accum_vis_weights;
+    else // else use current local visibility
+        blurred_vis = center_vis.x;
+
+    vis_tmp[gid] = blurred_vis;
+}

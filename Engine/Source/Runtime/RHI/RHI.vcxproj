@@ -145,6 +145,7 @@
     <ClCompile Include="Public\RHI-Interface.ixx" />
     <ClCompile Include="Public\RHI.ixx" />
     <ClCompile Include="Public\RHI.RHILayer.ixx" />
+    <ClCompile Include="Public\RHI.Utility.ixx" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Core\Core.vcxproj">

@@ -6,8 +6,7 @@
 #extension GL_EXT_shader_16bit_storage : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 
-#include "aaf_common.h"
-#include "aaf_payloads.h"
+#include "aaf_gi_common.h"
 #include "../../../../Utility/random.h"
 #include "../../../../Utility/Visualization.h"
 #include "../../include/rtCommon.h"
@@ -22,15 +21,17 @@ layout(push_constant) uniform PushConsts {
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT tlas;
 
+layout(binding = 7, set = 2, rgba32f) uniform image2D storageImage;
+
 // buffers
-layout(binding = 0, set = 2) writeonly  buffer slopeBuffer        { vec2 slope[]; };
-layout(binding = 1, set = 2, scalar) writeonly  buffer visInBuffer        { vec3 vis[]; };
-layout(binding = 2, set = 2) writeonly  buffer projDistBuffer     { float proj_dist[]; };
-layout(binding = 3, set = 2) writeonly  buffer worldPosBuffer     { vec3 world_position[]; };
-layout(binding = 4, set = 2) writeonly  buffer worldNormalBuffer  { vec3 world_normal[]; };
-layout(binding = 5, set = 2, scalar) writeonly buffer brdfBuffer  { vec3 brdf[]; };
-layout(binding = 6, set = 2) writeonly buffer useFilterBuffer     { uint use_filter[]; };
-layout(binding = 8, set = 2) writeonly buffer useFilterBlurTmpBuffer { uint use_filter_tmp[]; };
+// layout(binding = 0, set = 2) writeonly  buffer slopeBuffer        { vec2 slope[]; };
+// layout(binding = 1, set = 2, scalar) writeonly  buffer giBuffer   { vec3 gi[]; };
+// layout(binding = 2, set = 2) writeonly  buffer projDistBuffer     { float proj_dist[]; };
+// layout(binding = 3, set = 2) writeonly  buffer worldPosBuffer     { vec3 world_position[]; };
+// layout(binding = 4, set = 2) writeonly  buffer worldNormalBuffer  { vec3 world_normal[]; };
+// layout(binding = 5, set = 2, scalar) writeonly buffer brdfBuffer  { vec3 brdf[]; };
+// layout(binding = 6, set = 2) writeonly buffer useFilterBuffer     { uint use_filter[]; };
+// layout(binding = 8, set = 2) writeonly buffer useFilterBlurTmpBuffer { uint use_filter_tmp[]; };
 
 // layout(binding = 6, set = 2, rgba32f) uniform image2D storageImage;
 // Global uniforms carrying camera information.
@@ -44,7 +45,7 @@ struct GlobalUniforms {
 layout(binding = 0, set = 1) uniform _GlobalUniforms { GlobalUniforms uni; };
 
 // Primary ray payload.
-layout(location = 0) rayPayloadEXT InitalSamplePayload pld;
+layout(location = 0) rayPayloadEXT PrimarySamplePayload pld;
 
 void main()
 {   
@@ -68,11 +69,12 @@ void main()
     // Initialize payload.
     // Set the state of the random number generator with an initial seed.
     pld.rngState = uint((pushConstants.sample_batch * resolution.y + pixel.y) * resolution.x + pixel.x);
-    pld.rayShadow = false;
-    pld.accumVis = 0.f;
+    pld.rayHitReflector = false;
+    pld.rayHitShadow = false;
+    pld.accumGI = vec3(0.f);
     pld.accumWeights = 0.f;
-    pld.s1 = 0.0;
-    pld.s2 = 10000.0;
+    pld.slope1 = 0.0;
+    pld.slope2 = 10000.0;
     pld.brdf = vec3(0.);
     // When do initial sampling for AAF, only trace single primary ray
     traceRayEXT(tlas,                  // Top-level acceleration structure
@@ -87,35 +89,18 @@ void main()
                 10000.0,               // Maximum t-value
                 0);                    // Location of payload
 
-//   // Blend with the averaged image in the buffer:
-    // vec3 averagePixelColor = summedPixelColor / float(NUM_SAMPLES);
-//   if(pushConstants.sample_batch != 0)
-//   {
-//     // Read the storage image:
-//     const vec3 previousAverageColor = imageLoad(storageImage, pixel).rgb;
-//     // Compute the new average:
-//     averagePixelColor =
-//         (pushConstants.sample_batch * previousAverageColor + averagePixelColor) / (pushConstants.sample_batch + 1);
-//   }
-    // Initialize the pixel color.
-
-  const float tHit = distance(pld.hitPoint, rayOrigin);
-  const float proj_distance  = 2.f / resolution.y * (tHit * tan(half_fov* k_pi / 180.0));
-
-  const float avgVis = (pld.rayShadow && pld.accumWeights > 0.01) ? pld.accumVis/pld.accumWeights : 1.0;
-  // fill in output buffers
-  uint gid = pixel.x + pixel.y * resolution.x;
-  slope[gid] = vec2(pld.s1, pld.s2);
-  vis[gid] = vec3(avgVis, pld.accumWeights, pld.accumVis);
-  world_position[gid] = pld.hitPoint;
-  world_normal[gid] = normalize(pld.hitNormal);
-  brdf[gid] = pld.brdf;
-  use_filter[gid] = pld.rayShadow ? 1:0;
-  use_filter_tmp[gid] = 0;
-
-  // // output image visualization
-  // const vec3 background_color = vec3(0.34f, 0.55f, 0.85f);
-  // vec3 pixelColor = pld.rayHitSky ? background_color : (pld.rayShadow ? colorMap_naive(pld.distanceMax): vec3(0.f));
-  // // Set the color of the pixel `pixel` in the storage image to `averagePixelColor`:
-  // imageStore(storageImage, pixel, vec4(pixelColor, 1.0));
+  // const float tHit = distance(pld.hitPoint, rayOrigin);
+  // const float proj_distance  = 2.f / resolution.y * (tHit * tan(half_fov* k_pi / 180.0));
+  vec3 pixelColor = pld.accumGI + (pld.rayHitShadow ? pld.brdf : vec3(0));
+  imageStore(storageImage, ivec2(pixel), vec4(pixelColor, 1.0));
+  // const float avgVis = (pld.rayShadow && pld.accumWeights > 0.01) ? pld.accumVis/pld.accumWeights : 1.0;
+  // // fill in output buffers
+  // uint gid = pixel.x + pixel.y * resolution.x;
+  // slope[gid] = vec2(pld.s1, pld.s2);
+  // vis[gid] = vec3(avgVis, pld.accumWeights, pld.accumVis);
+  // world_position[gid] = pld.hitPoint;
+  // world_normal[gid] = normalize(pld.hitNormal);
+  // brdf[gid] = pld.brdf;
+  // use_filter[gid] = pld.rayShadow ? 1:0;
+  // use_filter_tmp[gid] = 0;
 }

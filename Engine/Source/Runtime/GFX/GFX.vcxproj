@@ -162,6 +162,7 @@
     <ClCompile Include="Public\RDG\GFX.RDG.ixx" />
     <ClCompile Include="Public\Resource\GFX.MeshLoader.ixx" />
     <ClCompile Include="Public\Core\GFX.GFXManager.ixx" />
+    <ClCompile Include="Public\Resource\GFX.Resources-Buffer.ixx" />
     <ClCompile Include="Public\Resource\GFX.Resources-Sampler.ixx" />
     <ClCompile Include="Public\Resource\GFX.Resources-Scene.ixx" />
     <ClCompile Include="Public\Resource\GFX.Resources-Material.ixx" />

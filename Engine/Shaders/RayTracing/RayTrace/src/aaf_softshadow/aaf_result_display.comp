@@ -1,0 +1,55 @@
+#version 460
+#extension GL_EXT_scalar_block_layout : require
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+#include "aaf_common.h"
+#include "../../../../Utility/Visualization.h"
+
+layout(binding = 0, set = 0) readonly buffer slopeBuffer        { vec2 slope[]; };
+layout(binding = 1, set = 0, scalar) readonly buffer visBlurredBuffer   { vec3 vis_blurred[]; };
+layout(binding = 2, set = 0) readonly buffer projDistBuffer     { float proj_dist[]; };
+layout(binding = 3, set = 0) readonly buffer worldPosBuffer     { vec3 world_position[]; };
+layout(binding = 4, set = 0) readonly buffer worldNormalBuffer  { vec3 world_normal[]; };
+layout(binding = 5, set = 0, scalar) readonly buffer brdfBuffer { vec3 brdf[]; };
+layout(binding = 6, set = 0) readonly buffer useFilterBuffer    { uint use_filter[]; };
+
+layout(binding = 7, set = 0, rgba32f) uniform image2D storageImage;
+
+layout(binding = 8, set = 0) readonly buffer useFilterBlurTmpBuffer     { uint use_filter_tmp[]; };
+layout(binding = 9, set = 0, scalar) readonly buffer visBlurTmpBuffer   { float vis_tmp[]; };
+layout(binding = 10, set = 0, scalar) readonly buffer slopeBlurTmpBuffer   { vec2 slope_tmp[]; };
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+void main()
+{
+    // Get current pixel position and global index.
+    const uvec2 pixel = gl_GlobalInvocationID.xy;
+    const uint gid = pixel.x + pixel.y * resolution.x;
+    // If the pixel is outside of the image, don't do anything:
+    if((pixel.x >= resolution.x) || (pixel.y >= resolution.y)) {
+        return;
+    }
+    
+    // the output color
+    vec3 pixelColor = vec3(0.f);
+    // display vis
+    // pixelColor = vec3(vis_blurred[gid].x);
+    // display world position
+    // pixelColor = vec3(0.25 * (world_position[gid] + vec3(2)));
+    // display world normal
+    // pixelColor = vec3(0.5 * (world_normal[gid] + vec3(1)));
+    // display brdf
+    // pixelColor = vec3(brdf[gid]);
+    // ccombined
+    pixelColor = vec3(brdf[gid]) * vec3(vis_blurred[gid].x);
+    // pixelColor = colorMap_naive(slope[gid].x);
+    // display slope min
+    // pixelColor = vec3(colorMap_naive(slope[gid].y));
+
+    // pixelColor = vec3(float(use_filter_tmp[gid]));
+
+    imageStore(storageImage, ivec2(pixel), vec4(pixelColor, 1.0));
+}
