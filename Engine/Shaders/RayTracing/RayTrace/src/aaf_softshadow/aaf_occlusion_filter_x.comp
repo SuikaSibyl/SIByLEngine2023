@@ -50,21 +50,21 @@ void main()
         const float neighbor_vis = vis_blurred[neighbor_gid].x;
         const float neighbor_omega_x_f = compute_omega_x_f(slope[neighbor_gid].y, proj_dist[neighbor_gid]);
 
-        // if (neighbor_omega_x_f > 0                                                  // have a positive x bandlimiting
-        //     && abs(center_omega_x_f - neighbor_omega_x_f) < dist_scale_threshold   // x bandlimiting distance not too large
-        //     && use_filter[neighbor_gid] != 0)  // what?
+        if (neighbor_omega_x_f > 0                                                  // have a positive x bandlimiting
+            && abs(center_omega_x_f - neighbor_omega_x_f) < dist_scale_threshold   // x bandlimiting distance not too large
+            && use_filter[neighbor_gid] != 0)  // what?
         {
             const vec3 neighbor_world_pos = world_position[neighbor_gid];
             const vec3 diff = center_world_pos - neighbor_world_pos;
             const float euclidean_distancesq = dot(diff, diff);
             const float normcomp = dot(diff, light_normal);
             const float distancesq = euclidean_distancesq - normcomp*normcomp;
-            // if (distancesq < dist_threshold) 
+            if (distancesq < dist_threshold) 
             {
                 const vec3 neighbor_world_norm = world_normal[neighbor_gid];
                 if(acos(dot(center_world_norm, neighbor_world_norm)) < angle_threshold) {
-                    // const float weight = gaussian_filter(distancesq, center_omega_x_f);
-                    const float weight = 1;
+                    const float weight = gaussian_filter(distancesq, center_omega_x_f);
+                    // const float weight = 1;
                     accum_blurred_vis += weight * neighbor_vis;
                     accum_vis_weights += weight;
                 }

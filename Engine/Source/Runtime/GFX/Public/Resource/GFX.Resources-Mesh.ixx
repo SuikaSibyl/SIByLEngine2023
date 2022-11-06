@@ -21,6 +21,8 @@ namespace SIByL::GFX
 		std::unique_ptr<RHI::Buffer> vertexBuffer = nullptr;
 		/** the gpu index buffer */
 		std::unique_ptr<RHI::Buffer> indexBuffer = nullptr;
+		/** the gpu vertex buffer with only position for ray tracing */
+		std::unique_ptr<RHI::Buffer> vertexBufferPosOnly = nullptr;
 	};
 
 

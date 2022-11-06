@@ -25,6 +25,7 @@
     <ClCompile Include="Private\FileFormat\Image.FileFormat-PPM.cpp" />
     <ClCompile Include="Private\Image\Image.Image.cpp" />
     <ClCompile Include="Public\Color\Image.Color.ixx" />
+    <ClCompile Include="Public\FileFormat\Image.FileFormat-HDR.ixx" />
     <ClCompile Include="Public\FileFormat\Image.FileFormat-JPEG.ixx" />
     <ClCompile Include="Public\FileFormat\Image.FileFormat-PFM.ixx" />
     <ClCompile Include="Public\FileFormat\Image.FileFormat-PNG.ixx" />

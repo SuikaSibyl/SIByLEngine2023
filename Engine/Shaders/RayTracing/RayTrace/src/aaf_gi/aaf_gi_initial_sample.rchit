@@ -74,17 +74,8 @@ void main() {
             secondarySampleSeed.x = invNSamples* (i + stepAndOutputRNGFloat(primaryPayLoad.rngState));
             secondarySampleSeed.y = invNSamples* (j + stepAndOutputRNGFloat(primaryPayLoad.rngState));
             vec3 sampleDir = uniformSampleHemisphere(secondarySampleSeed);
-            // sampleDir.z = abs(sampleDir.z);
+            float const NdL = abs(sampleDir.z);
             sampleDir = TBN * sampleDir;
-            // sampleDir =  vec3(sampleDir.x, sampleDir.z, sampleDir.y);
-            // vec3 sampleDir = uniformSampleHemisphere(secondarySampleSeed);
-            // sampleDir = TBN * sampleDir;
-            // if(primaryPayLoad.rngState > 0.5) sampleDir.z = -sampleDir.z;
-            // sampleDir = hitInfo.worldNormal;
-            // const vec3 sampleDir = hitInfo.worldNormal + randomPointInSphere(primaryPayLoad.rngState);
-    //         const vec3 center2Sample = lightCenter - lightSample;
-    //         const float strength = exp(-0.5 * dot(center2Sample,center2Sample) / (lightSigma * lightSigma));
-    //         const vec3 lightDir = lightSample - secondaryRayOrigin;
             const float strength = 1;
 
             // accumulate weights for vis
@@ -121,12 +112,10 @@ void main() {
             }
             // if shadow ray hit no objects
             else {
-                const vec3 L = normalize(sampleDir);
-                const float NdL = max(dot(hitInfo.worldNormal, L),0.0f);
                 vec3 color = vec3(0);
                 // white light
                 const vec3 Kd = vec3(1.);
-                color += getAlbedo(hitInfo.worldNormal) * NdL;
+                color += getAlbedo(hitInfo.worldNormal) * NdL * 2;
 
                 primaryPayLoad.accumGI += secondaryPayload.L * color;
             }

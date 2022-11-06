@@ -44,7 +44,7 @@ void main()
     // display brdf
     // pixelColor = vec3(brdf[gid]);
     // ccombined
-    pixelColor = vec3(brdf[gid]) * vec3(vis_blurred[gid].x);
+    pixelColor = vec3(vis_tmp[gid]);
     // pixelColor = colorMap_naive(slope[gid].x);
     // display slope min
     // pixelColor = vec3(colorMap_naive(slope[gid].y));

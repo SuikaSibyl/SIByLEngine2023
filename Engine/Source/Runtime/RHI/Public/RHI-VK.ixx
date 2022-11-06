@@ -1360,7 +1360,7 @@ namespace SIByL::RHI
 		for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
 			if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
 				return i;
-		Core::LogManager::Log("VULKAN :: failed to find suitable memory type!");
+		Core::LogManager::Error("VULKAN :: failed to find suitable memory type!");
 		return 0;
 	}
 
@@ -1444,9 +1444,21 @@ namespace SIByL::RHI
 		virtual auto dimension() const noexcept -> TextureDimension override;
 		/** readonly format of the texture */
 		virtual auto format() const noexcept -> TextureFormat override;
+		// Map methods
+		// ---------------------------
+		/** Maps the given range of the GPUBuffer */
+		virtual auto mapAsync(MapModeFlags mode, size_t offset = 0, size_t size = 0) noexcept -> std::future<bool> override;
+		/** Returns an ArrayBuffer with the contents of the GPUBuffer in the given mapped range */
+		virtual auto getMappedRange(size_t offset = 0, size_t size = 0) noexcept -> ArrayBuffer override;
+		/** Unmaps the mapped range of the GPUBuffer and makes it’s contents available for use by the GPU again. */
+		virtual auto unmap() noexcept -> void override;
 	public:
 		/** get the VkImage */
 		auto getVkImage() noexcept -> VkImage& { return image; }
+		/** get the VkDeviceMemory */
+		auto getVkDeviceMemory() noexcept -> VkDeviceMemory& { return deviceMemory; }
+		/** set buffer state */
+		auto setBufferMapState(BufferMapState const& state) noexcept -> void { mapState = state; }
 	private:
 		/** vulkan image */
 		VkImage image;
@@ -1454,6 +1466,10 @@ namespace SIByL::RHI
 		VkDeviceMemory deviceMemory = nullptr;
 		/** Texture Descriptor */
 		TextureDescriptor descriptor;
+		/** buffer map state */
+		BufferMapState mapState = BufferMapState::UNMAPPED;
+		/** mapped address of the buffer */
+		void* mappedData = nullptr;
 		/** the device this texture is created on */
 		Device_VK* device = nullptr;
 	};
@@ -1568,7 +1584,7 @@ namespace SIByL::RHI
 		imageInfo.mipLevels = desc.mipLevelCount;
 		imageInfo.arrayLayers = desc.size.depthOrArrayLayers;
 		imageInfo.format = getVkFormat(desc.format);
-		imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+		imageInfo.tiling = desc.hostVisible ? VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL;
 		imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		imageInfo.usage = getVkImageUsageFlagBits(desc.usage);
 		imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -1583,7 +1599,10 @@ namespace SIByL::RHI
 		VkMemoryAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		allocInfo.allocationSize = memRequirements.size;
-		allocInfo.memoryTypeIndex = findMemoryType(device, memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		VkMemoryPropertyFlags memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+		if (desc.hostVisible) 
+			memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+		allocInfo.memoryTypeIndex = findMemoryType(device, memRequirements.memoryTypeBits, memoryProperties);
 		if (vkAllocateMemory(device->getVkDevice(), &allocInfo, nullptr, &deviceMemory) != VK_SUCCESS) {
 			throw std::runtime_error("failed to allocate image memory!");
 		}
@@ -1633,6 +1652,27 @@ namespace SIByL::RHI
 
 	auto Texture_VK::format() const noexcept -> TextureFormat {
 		return descriptor.format;
+	}
+
+	inline auto mapMemoryTexture(Device_VK* device, Texture_VK* texture, size_t offset, size_t size, void*& mappedData) noexcept-> bool {
+		VkResult result = vkMapMemory(device->getVkDevice(), texture->getVkDeviceMemory(), offset, size, 0, &mappedData);
+		if (result) texture->setBufferMapState(BufferMapState::MAPPED);
+		return result == VkResult::VK_SUCCESS ? true : false;
+	}
+
+	auto Texture_VK::mapAsync(MapModeFlags mode, size_t offset, size_t size) noexcept -> std::future<bool> {
+		mapState = BufferMapState::PENDING;
+		return std::async(mapMemoryTexture, device, this, offset, size, std::ref(mappedData));
+	}
+
+	auto Texture_VK::getMappedRange(size_t offset, size_t size) noexcept -> ArrayBuffer {
+		return (void*)&(((char*)mappedData)[offset]);
+	}
+
+	auto Texture_VK::unmap() noexcept -> void {
+		vkUnmapMemory(device->getVkDevice(), getVkDeviceMemory());
+		mappedData = nullptr;
+		BufferMapState mapState = BufferMapState::UNMAPPED;
 	}
 
 	auto Texture_VK::setName(std::string const& name) -> void {
@@ -3520,7 +3560,25 @@ namespace SIByL::RHI
 		ImageCopyTexture const& destination,
 		Extend3D		 const& copySize) noexcept -> void
 	{
-
+		VkImageCopy region;
+		// We copy the image aspect, layer 0, mip 0:
+		region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		region.srcSubresource.baseArrayLayer = 0;
+		region.srcSubresource.layerCount = 1;
+		region.srcSubresource.mipLevel = source.mipLevel;
+		// (0, 0, 0) in the first image corresponds to (0, 0, 0) in the second image:
+		region.srcOffset = { int(source.origin.x), int(source.origin.y), int(source.origin.z)};
+		region.dstSubresource = region.srcSubresource;
+		region.dstSubresource.mipLevel = destination.mipLevel;
+		region.dstOffset = { int(destination.origin.x), int(destination.origin.y), int(destination.origin.z) };
+		// Copy the entire image:
+		region.extent = { copySize.width, copySize.height, copySize.depthOrArrayLayers };
+		vkCmdCopyImage(commandBuffer->commandBuffer,	// Command buffer
+			static_cast<Texture_VK*>(source.texutre)->getVkImage(), // Source image
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,  // Source image layout
+			static_cast<Texture_VK*>(destination.texutre)->getVkImage(), // Destination image
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,  // Destination image layout
+			1, &region);                           // Regions
 	}
 	
 	auto CommandEncoder_VK::writeTimestamp(

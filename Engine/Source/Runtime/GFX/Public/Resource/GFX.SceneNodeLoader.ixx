@@ -6,7 +6,7 @@ module;
 #include <unordered_map>
 #pragma warning(disable:4996)
 #define TINYGLTF_IMPLEMENTATION
-#define STB_IMAGE_WRITE_IMPLEMENTATION
+//#define STB_IMAGE_WRITE_IMPLEMENTATION
 #define TINYGLTF_NOEXCEPTION
 #define JSON_NOEXCEPTION
 #include <tinygltf/tiny_gltf.h>

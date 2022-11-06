@@ -230,6 +230,8 @@ namespace SIByL::RHI
 		// ---------------------------
 		/** create a device local buffer with initialzie value */
 		auto createDeviceLocalBuffer(void* data, uint32_t size, BufferUsagesFlags usage) noexcept -> std::unique_ptr<Buffer>;
+		/** read back device local buffer */
+		auto readbackDeviceLocalBuffer(Buffer* buffer, void* data, uint32_t size) noexcept -> void;
 	};
 
 	struct DeviceDescriptor {};
@@ -497,6 +499,14 @@ namespace SIByL::RHI
 		virtual auto format() const noexcept -> TextureFormat = 0;
 		/** set debug name */
 		virtual auto setName(std::string const& name) -> void = 0;
+		// Map methods
+		// ---------------------------
+		/** Maps the given range of the GPUBuffer */
+		virtual auto mapAsync(MapModeFlags mode, size_t offset = 0, size_t size = 0) noexcept -> std::future<bool> = 0;
+		/** Returns an ArrayBuffer with the contents of the GPUBuffer in the given mapped range */
+		virtual auto getMappedRange(size_t offset = 0, size_t size = 0) noexcept -> ArrayBuffer = 0;
+		/** Unmaps the mapped range of the GPUBuffer and makes it’s contents available for use by the GPU again. */
+		virtual auto unmap() noexcept -> void = 0;
 	};
 
 	export struct TextureDescriptor {
@@ -512,6 +522,7 @@ namespace SIByL::RHI
 		* on this texture (in addition to the texture’s actual format).
 		*/
 		std::vector<TextureFormat> viewFormats;
+		bool hostVisible = false;
 	};
 
 	export enum struct TextureViewDimension {
@@ -1233,7 +1244,7 @@ namespace SIByL::RHI
 		Texture* texutre;
 		uint32_t mipLevel = 0;
 		Origin3D origin = {};
-		TextureAspectFlags aspect;
+		TextureAspectFlags aspect = (TextureAspectFlags)TextureAspect::COLOR_BIT;
 	};
 
 	export struct ImageCopyTextureTagged :public ImageCopyTexture {
@@ -2011,7 +2022,7 @@ namespace SIByL::RHI
 		// create vertex buffer
 		RHI::BufferDescriptor descriptor;
 		descriptor.size = size;
-		descriptor.usage = usage | (uint32_t)RHI::BufferUsage::COPY_DST;
+		descriptor.usage = usage | (uint32_t)RHI::BufferUsage::COPY_DST | (uint32_t)RHI::BufferUsage::COPY_SRC;
 		descriptor.memoryProperties = (uint32_t)RHI::MemoryProperty::DEVICE_LOCAL_BIT;
 		descriptor.mappedAtCreation = true;
 		buffer = createBuffer(descriptor);
@@ -2034,6 +2045,30 @@ namespace SIByL::RHI
 		getGraphicsQueue()->submit({ commandEncoder->finish({}) });
 		getGraphicsQueue()->waitIdle();
 		return buffer;
+	}
+
+	auto Device::readbackDeviceLocalBuffer(Buffer* buffer, void* data, uint32_t size) noexcept -> void {
+		// create staging buffer
+		RHI::BufferDescriptor stagingBufferDescriptor;
+		stagingBufferDescriptor.size = size;
+		stagingBufferDescriptor.usage = (uint32_t)RHI::BufferUsage::COPY_DST;
+		stagingBufferDescriptor.memoryProperties = 
+			(uint32_t)RHI::MemoryProperty::HOST_VISIBLE_BIT
+			| (uint32_t)RHI::MemoryProperty::HOST_COHERENT_BIT;
+		stagingBufferDescriptor.mappedAtCreation = true;
+		std::unique_ptr<RHI::Buffer> stagingBuffer = createBuffer(stagingBufferDescriptor);
+		// copy buffer
+		std::unique_ptr<RHI::CommandEncoder> commandEncoder = createCommandEncoder({ nullptr });
+		commandEncoder->copyBufferToBuffer(buffer, 0, stagingBuffer.get(), 0, buffer->size());
+		getGraphicsQueue()->submit({ commandEncoder->finish({}) });
+		getGraphicsQueue()->waitIdle();
+		// buffer readback
+		std::future<bool> mapped = stagingBuffer->mapAsync(0, 0, buffer->size());
+		if (mapped.get()) {
+			void* mapdata = stagingBuffer->getMappedRange(0, buffer->size());
+			memcpy(data, mapdata, (size_t)buffer->size());
+			stagingBuffer->unmap();
+		}
 	}
 	
 #pragma endregion

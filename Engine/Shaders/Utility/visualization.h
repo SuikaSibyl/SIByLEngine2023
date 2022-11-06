@@ -5,6 +5,10 @@
 * Visualization Module. 
 */
 
+vec3 normalToColor(in vec3 n) {
+  return 0.5*(vec3(1)+n);
+}
+
 /** Map a float value between [0,1] to a RGB color. */
 vec3 colorMap_naive(in float val) {
   const float fraction = 2 * clamp(val, 0, 1) - 1;

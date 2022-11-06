@@ -62,6 +62,9 @@ import Editor.Config;
 
 import Sandbox.Tracer;
 import Sandbox.AAF_GI;
+import Sandbox.Benchmark;
+
+import Image.FileFormat;
 
 using namespace SIByL;
 using namespace SIByL::Core;
@@ -110,55 +113,63 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		GFX::SceneNodeLoader_glTF::loadSceneNode("./content/scenes/cornellBox.gltf", scene);
 
-		Core::Buffer vertex_CornellBox;
-		Core::Buffer vertex_CornellBox_POnly;
-		Core::Buffer index_CornellBox;
-		GFX::MeshLoader_OBJ::loadOBJ(
+		cornellBox = GFX::MeshLoader_OBJ::loadMeshResource(
 			"./content/CornellBox-Original-Merged.obj",
 			GFX::MeshDataLayout{ 
 				{{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::POSITION},
 				{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::COLOR}},
 				RHI::IndexFormat::UINT16_t },
-			&vertex_CornellBox,
-			&index_CornellBox
-		);
-		GFX::MeshLoader_OBJ::loadOBJ(
-			"./content/CornellBox-Original-Merged.obj",
+				true);
+		grid1 = GFX::MeshLoader_OBJ::loadMeshResource(
+			"./content/grids2/grid1.obj",
 			GFX::MeshDataLayout{ 
-				{{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::POSITION}},
+				{{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::POSITION},
+				{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::COLOR}},
 				RHI::IndexFormat::UINT16_t },
-			&vertex_CornellBox_POnly,
-			nullptr
-		);
-		indexCount = index_CornellBox.size / sizeof(uint16_t);
+				true);
+		GFX::Mesh* conrnell_resource = ResourceManager::get()->getResource<GFX::Mesh>(cornellBox);
+		GFX::Mesh* grid1_mesh = ResourceManager::get()->getResource<GFX::Mesh>(grid1);
+		indexCount = conrnell_resource->indexBuffer->size() / sizeof(uint16_t);
 
 		struct Vertex {
 			Math::vec3 pos;
 			Math::vec3 color;
 		};
 
-		GFX::Mesh mesh;
-		mesh.vertexBuffer = device->createDeviceLocalBuffer((void*)vertex_CornellBox.data, vertex_CornellBox.size,
-			(uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::STORAGE);
-		mesh.indexBuffer = device->createDeviceLocalBuffer((void*)index_CornellBox.data, index_CornellBox.size,
-			(uint32_t)RHI::BufferUsage::INDEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
-			(uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
-		ResourceManager::get()->addResource<GFX::Mesh>(0, std::move(mesh));
-		GFX::Mesh* mesh_resource = ResourceManager::get()->getResource<GFX::Mesh>(0);
-
-		vertexBufferRT = device->createDeviceLocalBuffer((void*)vertex_CornellBox_POnly.data, vertex_CornellBox_POnly.size,
-			(uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
-			(uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
-
 		blas = device->createBLAS(RHI::BLASDescriptor{
-			vertexBufferRT.get(),
-			mesh_resource->indexBuffer.get(),
-			(uint32_t)vertex_CornellBox_POnly.size / (sizeof(float) * 3),
+			conrnell_resource->vertexBufferPosOnly.get(),
+			conrnell_resource->indexBuffer.get(),
+			(uint32_t)conrnell_resource->vertexBufferPosOnly->size() / (sizeof(float) * 3),
 			indexCount / 3,
 			RHI::IndexFormat::UINT16_t,
 			(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION });
+		
+		blas2 = device->createBLAS(RHI::BLASDescriptor{
+			grid1_mesh->vertexBufferPosOnly.get(),
+			grid1_mesh->indexBuffer.get(),
+			(uint32_t)grid1_mesh->vertexBufferPosOnly->size() / (sizeof(float) * 3),
+			(uint32_t)grid1_mesh->indexBuffer->size() / (3 * sizeof(uint16_t)),
+			RHI::IndexFormat::UINT16_t,
+			(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION });
+
+		Math::mat4 grid1_transform = {
+			0.75840f, -0.465828, 0.455878, 2.18526,
+			0.6232783f, 0.693876, -0.343688, 1.0795,
+			-0.156223f, 0.549127, 0.821008, 1.23179,
+			0.0, 0.0, 0.0, 1.0};
+
+		ASGroup = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ASGroup>();
+		GFX::GFXManager::get()->registerAsGroupResource(ASGroup,
+			RHI::TLASDescriptor{ {
+				{blas.get(), Math::mul(Math::translate(Math::vec3{0,0.00,0}).m, Math::scale(1,1, 1).m),0,0},
+				//{blas2.get(), grid1_transform,0,0},
+			} },
+			std::vector<Core::GUID>{ cornellBox }
+			//std::vector<Core::GUID>{ cornellBox, grid1 }
+			);
 		tlas = device->createTLAS(RHI::TLASDescriptor{ {
 			{blas.get(), Math::mul(Math::translate(Math::vec3{0,0.00,0}).m, Math::scale(1,1, 1).m),0,0},
+			{blas2.get(), grid1_transform,0,0},
 			}});
 
 		{
@@ -183,7 +194,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			};
 			GFX::GFXManager::get()->registerTextureResource(framebufferColorAttach, desc);
 			desc.format = RHI::TextureFormat::RGBA32_FLOAT;
-			desc.usage |= (uint32_t)RHI::TextureUsage::STORAGE_BINDING;
+			desc.usage |= (uint32_t)RHI::TextureUsage::STORAGE_BINDING | (uint32_t)RHI::TextureUsage::COPY_SRC;
 			GFX::GFXManager::get()->registerTextureResource(rtTarget, desc);
 			desc.format = RHI::TextureFormat::DEPTH32_FLOAT;
 			desc.usage = (uint32_t)RHI::TextureUsage::DEPTH_ATTACHMENT | (uint32_t)RHI::TextureUsage::TEXTURE_BINDING;
@@ -239,8 +250,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 					std::vector<RHI::BindGroupEntry>{
 						{0,RHI::BindingResource{tlas.get()}},
 						{1,RHI::BindingResource{Core::ResourceManager::get()->getResource<GFX::Texture>(rtTarget)->originalView.get()}},
-						{2,RHI::BindingResource{{vertexBufferRT.get(), 0, vertexBufferRT.get()->size()}}},
-						{3,RHI::BindingResource{{mesh_resource->indexBuffer.get(), 0, mesh_resource->indexBuffer->size()}}}
+						{2,RHI::BindingResource{{conrnell_resource->vertexBufferPosOnly.get(), 0, conrnell_resource->vertexBufferPosOnly.get()->size()}}},
+						{3,RHI::BindingResource{{conrnell_resource->indexBuffer.get(), 0, conrnell_resource->indexBuffer->size()}}}
 				} });
 			}
 		}
@@ -284,10 +295,13 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		directTracer = std::make_unique<Sandbox::DirectTracer>(rhiLayer.get(), std::array<RHI::PipelineLayout*, 2>{ pipelineLayout_RT[0].get() ,pipelineLayout_RT[1].get() });
 
-		aafPipeline = std::make_unique<Sandbox::AAFPipeline>(rhiLayer.get(), tlas.get(), rtTarget, vertexBufferRT.get(),
-			mesh_resource->indexBuffer.get(), rtBindGroupLayout.get(), std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()});
-		aafGIPipeline = std::make_unique<Sandbox::AAF_GI_Pipeline>(rhiLayer.get(), tlas.get(), rtTarget, vertexBufferRT.get(),
-			mesh_resource->indexBuffer.get(), rtBindGroupLayout.get(), std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()});
+		aafPipeline = std::make_unique<Sandbox::AAFPipeline>(rhiLayer.get(), tlas.get(), rtTarget, conrnell_resource->vertexBufferPosOnly.get(),
+			conrnell_resource->indexBuffer.get(), rtBindGroupLayout.get(), std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()});
+		aafGIPipeline = std::make_unique<Sandbox::AAF_GI_Pipeline>(rhiLayer.get(), tlas.get(), rtTarget, conrnell_resource->vertexBufferPosOnly.get(),
+			conrnell_resource->indexBuffer.get(), rtBindGroupLayout.get(), std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()});
+		benchmarkPipeline = std::make_unique<Sandbox::Benchmark_Pipeline>(rhiLayer.get(), 
+			Core::ResourceManager::get()->getResource<GFX::ASGroup>(ASGroup), rtTarget, 
+			rtBindGroupLayout.get(), std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()});
 	};
 
 	/** Update the application every loop */
@@ -328,6 +342,10 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		//ubo.model = Math::transpose(Math::rotate(timer.totalTime() * 80, Math::vec3(0, 1, 0)).m);
 		ubo.view = Math::transpose(Math::lookAt(Math::vec3(campos.x, campos.y, campos.z) , Math::vec3(0, 1, 0), Math::vec3(0, 1, 0)).m);
 		ubo.proj = Math::transpose(Math::perspective(22.f, 1.f * 800 / 600, 0.1f, 10.f).m);
+		//Math::vec4 campos = Math::mul(Math::rotateY(0 * 20).m, Math::vec4(-0.001, 1.0, 6.0, 1));
+		////ubo.model = Math::transpose(Math::rotate(timer.totalTime() * 80, Math::vec3(0, 1, 0)).m);
+		//ubo.view = Math::transpose(Math::lookAt(Math::vec3(campos.x, campos.y, campos.z), Math::vec3(0, 0.5f, 0), Math::vec3(0, 1, 0)).m);
+		//ubo.proj = Math::transpose(Math::perspective(60.f, 1.f * 800 / 600, 0.1f, 10.f).m);
 		ubo.viewInverse = Math::inverse(ubo.view);
 		//ubo.proj.data[1][1] *= -1;
 		ubo.projInverse = Math::inverse(ubo.proj);
@@ -375,7 +393,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			});
 
 		//aafPipeline->composeCommands(commandEncoder.get(), index);
-		aafGIPipeline->composeCommands(commandEncoder.get(), index);
+		//aafGIPipeline->composeCommands(commandEncoder.get(), index);
+		benchmarkPipeline->composeCommands(commandEncoder.get(), index);
 
 		//{
 		//	commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
@@ -425,12 +444,12 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		passEncoder[index]->setPipeline(renderPipeline[index].get());
 		passEncoder[index]->setViewport(0, 0, width, height, 0, 1);
 		passEncoder[index]->setScissorRect(0, 0, width, height);
-		passEncoder[index]->setVertexBuffer(0, ResourceManager::get()->getResource<GFX::Mesh>(0)->vertexBuffer.get(), 
-			0, ResourceManager::get()->getResource<GFX::Mesh>(0)->vertexBuffer->size());
-		passEncoder[index]->setIndexBuffer(ResourceManager::get()->getResource<GFX::Mesh>(0)->indexBuffer.get(), 
-			RHI::IndexFormat::UINT16_t, 0, ResourceManager::get()->getResource<GFX::Mesh>(0)->indexBuffer->size());
+		passEncoder[index]->setVertexBuffer(0, ResourceManager::get()->getResource<GFX::Mesh>(cornellBox)->vertexBuffer.get(),
+			0, ResourceManager::get()->getResource<GFX::Mesh>(cornellBox)->vertexBuffer->size());
+		passEncoder[index]->setIndexBuffer(ResourceManager::get()->getResource<GFX::Mesh>(cornellBox)->indexBuffer.get(),
+			RHI::IndexFormat::UINT16_t, 0, ResourceManager::get()->getResource<GFX::Mesh>(cornellBox)->indexBuffer->size());
 		passEncoder[index]->setBindGroup(0, rtBindGroup[index].get(), 0, 0);
-		passEncoder[index]->drawIndexed(indexCount, 1, 0, 0, 0);
+		passEncoder[index]->drawIndexed(ResourceManager::get()->getResource<GFX::Mesh>(cornellBox)->indexBuffer->size()/sizeof(uint16_t), 1, 0, 0, 0);
 		passEncoder[index]->end();
 
 		device->getGraphicsQueue()->submit({ commandEncoder->finish({}) }, 
@@ -447,18 +466,103 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			Editor::TextureUtils::getImGuiTexture(rtTarget)->getTextureID(),
 			{ (float)width,(float)height },
 			{ 0,0 }, { 1, 1 });
+		if (ImGui::Button("Capture", { 200,100 })) {
+			captureImage(rtTarget);
+		}
+
 		ImGui::End();
 		ImGui::Begin("Rasterizer");
 		ImGui::Image(
 			Editor::TextureUtils::getImGuiTexture(framebufferColorAttach)->getTextureID(),
 			{ (float)width,(float)height },
 			{ 0,0 }, { 1, 1 });
+		if (ImGui::Button("Capture Rasterizer", { 200,100 })) {
+			captureImage(framebufferColorAttach);
+		}
 		ImGui::End();
 		editorLayer->onDrawGui();
 		imguiLayer->render();
 
 		multiFrameFlights->frameEnd();
 	};
+
+	auto captureImage(Core::GUID src) noexcept -> void {
+		static Core::GUID copyDst = 0;
+		if (copyDst == 0) {
+			copyDst = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
+			RHI::TextureDescriptor desc{
+				{800,600,1},
+				1, 1, RHI::TextureDimension::TEX2D,
+				RHI::TextureFormat::RGBA32_FLOAT,
+				(uint32_t)RHI::TextureUsage::COPY_DST,
+				{ RHI::TextureFormat::RGBA32_FLOAT },
+				true
+			};
+			GFX::GFXManager::get()->registerTextureResource(copyDst, desc);
+		}
+		rhiLayer->getDevice()->waitIdle();
+		std::unique_ptr<RHI::CommandEncoder> commandEncoder = rhiLayer->getDevice()->createCommandEncoder({});
+		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+			(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
+			(uint32_t)RHI::PipelineStages::TRANSFER_BIT,
+			(uint32_t)RHI::DependencyType::NONE,
+			{}, {},
+			{ RHI::TextureMemoryBarrierDescriptor{
+				Core::ResourceManager::get()->getResource<GFX::Texture>(src)->texture.get(),
+				RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
+				(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT | (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
+				(uint32_t)RHI::AccessFlagBits::TRANSFER_READ_BIT,
+				RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
+				RHI::TextureLayout::TRANSFER_SRC_OPTIMAL
+			}}
+		});
+		commandEncoder->copyTextureToTexture(
+			RHI::ImageCopyTexture{
+				Core::ResourceManager::get()->getResource<GFX::Texture>(src)->texture.get()
+			},
+			RHI::ImageCopyTexture{
+				Core::ResourceManager::get()->getResource<GFX::Texture>(copyDst)->texture.get()
+			},
+			RHI::Extend3D{ 800, 600, 1 }
+		);
+		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+			(uint32_t)RHI::PipelineStages::TRANSFER_BIT,
+			(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
+			(uint32_t)RHI::DependencyType::NONE,
+			{}, {},
+			{ RHI::TextureMemoryBarrierDescriptor{
+				Core::ResourceManager::get()->getResource<GFX::Texture>(src)->texture.get(),
+				RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
+				(uint32_t)RHI::AccessFlagBits::TRANSFER_READ_BIT,
+				(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT | (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
+				RHI::TextureLayout::TRANSFER_SRC_OPTIMAL,
+				RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL
+			}}
+		});
+		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+			(uint32_t)RHI::PipelineStages::TRANSFER_BIT,
+			(uint32_t)RHI::PipelineStages::HOST_BIT,
+			(uint32_t)RHI::DependencyType::NONE,
+			{}, {},
+			{ RHI::TextureMemoryBarrierDescriptor{
+				Core::ResourceManager::get()->getResource<GFX::Texture>(copyDst)->texture.get(),
+				RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
+				(uint32_t)RHI::AccessFlagBits::TRANSFER_WRITE_BIT,
+				(uint32_t)RHI::AccessFlagBits::HOST_READ_BIT,
+				RHI::TextureLayout::TRANSFER_DST_OPTIMAL,
+				RHI::TextureLayout::TRANSFER_DST_OPTIMAL
+			}}
+			});
+		rhiLayer->getDevice()->getGraphicsQueue()->submit({ commandEncoder->finish({}) });
+		rhiLayer->getDevice()->waitIdle();
+		std::future<bool> mapped = Core::ResourceManager::get()->getResource<GFX::Texture>(copyDst)->texture->mapAsync(
+			(uint32_t)RHI::MapMode::READ, 0, 800 * 600 * sizeof(vec4));
+		if (mapped.get()) {
+			void* data = Core::ResourceManager::get()->getResource<GFX::Texture>(copyDst)->texture->getMappedRange(0, 800 * 600 * sizeof(vec4));
+			Image::HDR::writeHDR("./out.hdr", 800, 600, 4, reinterpret_cast<float*>(data));
+			Core::ResourceManager::get()->getResource<GFX::Texture>(copyDst)->texture->unmap();
+		}
+	}
 	
 	/** Update the application every fixed update timestep */
 	virtual auto FixedUpdate() noexcept -> void override {
@@ -470,6 +574,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		aafPipeline = nullptr;
 		aafGIPipeline = nullptr;
+		benchmarkPipeline = nullptr;
 		directTracer = nullptr;
 		renderPipeline[0] = nullptr;
 		renderPipeline[1] = nullptr;
@@ -490,12 +595,11 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		bindGroup_RT[0] = nullptr;
 		bindGroup_RT[1] = nullptr;
 
-		vertexBufferRT = nullptr;
-		indexBufferRT = nullptr;
 		vert_module = nullptr;
 		frag_module = nullptr;
 		tlas = nullptr;
 		blas = nullptr;
+		blas2 = nullptr;
 
 		rtBindGroupLayout = nullptr;
 		uniformBuffer[0] = nullptr;
@@ -528,25 +632,28 @@ private:
 
 	std::unique_ptr<RHI::BindGroupLayout> bindGroupLayout_RT = nullptr;
 	std::unique_ptr<RHI::BindGroup> bindGroup_RT[2];
+	
+	Core::GUID cornellBox;
+	Core::GUID grid1;
+	Core::GUID ASGroup;
 
 	std::unique_ptr<RHI::Buffer> uniformBuffer[2];
 	std::unique_ptr<RHI::PipelineLayout> pipelineLayout[2];
 	std::unique_ptr<RHI::PipelineLayout> pipelineLayout_RT[2];
 	std::unique_ptr<RHI::PipelineLayout> pipelineLayout_COMP[2];
 
-	std::unique_ptr<RHI::Buffer> vertexBufferRT = nullptr;
-	std::unique_ptr<RHI::Buffer> indexBufferRT = nullptr;
 	std::unique_ptr<RHI::ShaderModule> vert_module = nullptr;
 	std::unique_ptr<RHI::ShaderModule> frag_module = nullptr;
 	std::unique_ptr<RHI::RenderPassEncoder> passEncoder[2] = {};
-	std::unique_ptr<RHI::RayTracingPassEncoder> rtEncoder[2] = {};
 	std::unique_ptr<RHI::ComputePassEncoder> compEncoder[2] = {};
 	std::unique_ptr<RHI::BLAS> blas = nullptr;
+	std::unique_ptr<RHI::BLAS> blas2 = nullptr;
 	std::unique_ptr<RHI::TLAS> tlas = nullptr;
 
 	std::unique_ptr<Sandbox::DirectTracer> directTracer = nullptr;
 	std::unique_ptr<Sandbox::AAFPipeline> aafPipeline = nullptr;
 	std::unique_ptr<Sandbox::AAF_GI_Pipeline> aafGIPipeline = nullptr;
+	std::unique_ptr<Sandbox::Benchmark_Pipeline> benchmarkPipeline = nullptr;
 
 	std::unique_ptr<RHI::ComputePipeline> computePipeline[2];
 	std::unique_ptr<RHI::RenderPipeline> renderPipeline[2];

@@ -19,6 +19,7 @@ layout(binding = 2, set = 0, scalar) buffer Vertices {
   vec3 vertices[];
 };
 layout(binding = 3, set = 0, scalar) buffer Indices { uint16_t indices[]; };
+layout(binding = 4, set = 0, scalar) buffer Geometry { uvec2 geometryInfo[]; };
 
 // // The payload:
 // layout(location = 0) rayPayloadInEXT PassableInfo pld;
@@ -29,16 +30,18 @@ HitInfo getObjectHitInfo() {
   HitInfo result;
   // Get the ID of the triangle
   const int primitiveID = gl_PrimitiveID;
+  const int instanceID = gl_InstanceID;
+  const uvec2 geometryInfoID = geometryInfo[instanceID];
 
   // Get the indices of the vertices of the triangle
-  const uint i0 = indices[3 * primitiveID + 0];
-  const uint i1 = indices[3 * primitiveID + 1];
-  const uint i2 = indices[3 * primitiveID + 2];
+  const uint i0 = indices[3 * primitiveID + 0 + geometryInfoID.y];
+  const uint i1 = indices[3 * primitiveID + 1 + geometryInfoID.y];
+  const uint i2 = indices[3 * primitiveID + 2 + geometryInfoID.y];
 
   // Get the vertices of the triangle
-  const vec3 v0 = vertices[i0];
-  const vec3 v1 = vertices[i1];
-  const vec3 v2 = vertices[i2];
+  const vec3 v0 = vertices[i0 + geometryInfoID.x/3];
+  const vec3 v1 = vertices[i1 + geometryInfoID.x/3];
+  const vec3 v2 = vertices[i2 + geometryInfoID.x/3];
 
   // Get the barycentric coordinates of the intersection
   vec3 barycentrics = vec3(0.0, attributes.x, attributes.y);
@@ -48,7 +51,6 @@ HitInfo getObjectHitInfo() {
   result.objectPosition = v0 * barycentrics.x + v1 * barycentrics.y + v2 * barycentrics.z;
   // Transform from object space to world space:
   result.worldPosition = gl_ObjectToWorldEXT * vec4(result.objectPosition, 1.0f);
-
 
   // Compute the normal of the triangle in object space, using the right-hand rule:
   //    v2      .

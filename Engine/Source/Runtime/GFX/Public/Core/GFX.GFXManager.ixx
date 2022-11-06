@@ -1,6 +1,9 @@
 module;
 #include <typeinfo>
 #include <memory>
+#include <vector>
+#include <set>
+#include <unordered_map>
 #include <filesystem>
 export module GFX.GFXManager;
 import Core.System;
@@ -37,6 +40,7 @@ namespace SIByL::GFX
 			Core::ResourceManager::get()->registerResource<GFX::ShaderModule>();
 			Core::ResourceManager::get()->registerResource<GFX::Material>();
 			Core::ResourceManager::get()->registerResource<GFX::Scene>();
+			Core::ResourceManager::get()->registerResource<GFX::ASGroup>();
 		}
 		/** shut down the GFX manager */
 		virtual auto shutDown() noexcept -> void override {}
@@ -47,6 +51,7 @@ namespace SIByL::GFX
 		auto registerSamplerResource(Core::GUID guid, RHI::SamplerDescriptor const& desc) noexcept -> void;
 		auto registerShaderModuleResource(Core::GUID guid, RHI::ShaderModuleDescriptor const& desc) noexcept -> void;
 		auto registerShaderModuleResource(Core::GUID guid, std::filesystem::path const& path, RHI::ShaderModuleDescriptor const& desc) noexcept -> void;
+		auto registerAsGroupResource(Core::GUID guid, RHI::TLASDescriptor const& desc, std::vector<Core::GUID> const& meshes) noexcept -> void;
 		/** RHI layer */
 		RHI::RHILayer* rhiLayer = nullptr;
 		/** common samplers */
@@ -147,11 +152,21 @@ namespace SIByL::GFX
 			targetAccessFlags = (uint32_t)RHI::AccessFlagBits::COLOR_ATTACHMENT_READ_BIT
 				| (uint32_t)RHI::AccessFlagBits::COLOR_ATTACHMENT_WRITE_BIT;
 		}
-		if (desc.usage & (uint32_t)RHI::TextureUsage::DEPTH_ATTACHMENT) {
+		else if (desc.usage & (uint32_t)RHI::TextureUsage::DEPTH_ATTACHMENT) {
 			aspectMask |= (uint32_t)RHI::TextureAspect::DEPTH_BIT;
 			targetLayout = RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL;
 			targetAccessFlags = (uint32_t)RHI::AccessFlagBits::DEPTH_STENCIL_ATTACHMENT_READ_BIT
 				| (uint32_t)RHI::AccessFlagBits::DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+		}
+		else if (desc.usage & (uint32_t)RHI::TextureUsage::TEXTURE_BINDING) {
+			aspectMask |= (uint32_t)RHI::TextureAspect::COLOR_BIT;
+			targetLayout = RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL;
+			targetAccessFlags = (uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT;
+		}
+		else if (desc.usage & (uint32_t)RHI::TextureUsage::COPY_DST) {
+			aspectMask |= (uint32_t)RHI::TextureAspect::COLOR_BIT;
+			targetLayout = RHI::TextureLayout::TRANSFER_DST_OPTIMAL;
+			targetAccessFlags = (uint32_t)RHI::AccessFlagBits::TRANSFER_WRITE_BIT;
 		}
 		// do transition commands
 		std::unique_ptr<RHI::CommandEncoder> commandEncoder = rhiLayer->getDevice()->createCommandEncoder({ nullptr });
@@ -172,7 +187,8 @@ namespace SIByL::GFX
 		rhiLayer->getDevice()->getGraphicsQueue()->waitIdle();
 		RHI::TextureViewDescriptor viewDesc = { desc.format };
 		viewDesc.aspect = RHI::getTextureAspect(desc.format);
-		textureResource.originalView = textureResource.texture->createView(viewDesc);
+		if (!desc.hostVisible) // if host visible we do not create view
+			textureResource.originalView = textureResource.texture->createView(viewDesc);
 		Core::ResourceManager::get()->addResource(guid, std::move(textureResource));
 	}
 
@@ -196,6 +212,53 @@ namespace SIByL::GFX
 		GFX::ShaderModule shaderModuleResource = {};
 		shaderModuleResource.shaderModule = rhiLayer->getDevice()->createShaderModule(smDesc);
 		Core::ResourceManager::get()->addResource(guid, std::move(shaderModuleResource));
+	}
+
+	auto GFXManager::registerAsGroupResource(Core::GUID guid, RHI::TLASDescriptor const& desc, std::vector<Core::GUID> const& meshes) noexcept -> void {
+		GFX::ASGroup asGroup = {};
+		asGroup.tlas = rhiLayer->getDevice()->createTLAS(desc);
+		std::unordered_map<Core::GUID, uint32_t> map;
+		uint32_t vertexOffset = 0;
+		uint32_t indexOffset = 0;
+		std::vector<Core::GUID> meshesToBind = {};
+		uint32_t vertexCount = 0;
+		uint32_t indexCount = 0;
+		for (auto& meshid : meshes) {
+			if (map.find(meshid) != map.end()) {
+				asGroup.geometryInfo.emplace_back(asGroup.geometryInfo[map[meshid]]);
+			}
+			GFX::Mesh* mesh = Core::ResourceManager::get()->getResource<GFX::Mesh>(meshid);
+			meshesToBind.emplace_back(meshid);
+			asGroup.geometryInfo.emplace_back(ASGroup::GeometryInfo{
+				uint32_t(vertexOffset / sizeof(float)),
+				uint32_t(indexOffset / sizeof(uint16_t)) });
+			map[meshid] = asGroup.geometryInfo.size() - 1;
+			vertexOffset += mesh->vertexBufferPosOnly->size();
+			indexOffset += mesh->indexBuffer->size();
+		}
+		std::vector<float> vertexBuffer(vertexOffset / sizeof(float));
+		std::vector<uint16_t> indexBuffer(indexOffset / sizeof(uint16_t));
+		vertexOffset = 0;
+		indexOffset = 0;
+		for (auto& meshid : meshesToBind) {
+			GFX::Mesh* mesh = Core::ResourceManager::get()->getResource<GFX::Mesh>(meshid);
+			rhiLayer->getDevice()->readbackDeviceLocalBuffer(mesh->vertexBufferPosOnly.get(), (void*)&(vertexBuffer[vertexOffset / sizeof(float)]), mesh->vertexBufferPosOnly->size());
+			rhiLayer->getDevice()->readbackDeviceLocalBuffer(mesh->indexBuffer.get(), (void*)&(indexBuffer[indexOffset / sizeof(uint16_t)]), mesh->indexBuffer->size());
+			vertexOffset += mesh->vertexBufferPosOnly->size();
+			indexOffset += mesh->indexBuffer->size();
+		}
+		asGroup.vertexBufferArray = GFX::GFXManager::get()->rhiLayer->getDevice()->createDeviceLocalBuffer(
+			(void*)vertexBuffer.data(), vertexBuffer.size() * sizeof(float),
+			(uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
+			(uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
+		asGroup.indexBufferArray = GFX::GFXManager::get()->rhiLayer->getDevice()->createDeviceLocalBuffer(
+			(void*)indexBuffer.data(), indexBuffer.size() * sizeof(uint16_t), 
+			(uint32_t)RHI::BufferUsage::INDEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
+			(uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
+		asGroup.GeometryInfoBuffer = GFX::GFXManager::get()->rhiLayer->getDevice()->createDeviceLocalBuffer(
+			(void*)asGroup.geometryInfo.data(), asGroup.geometryInfo.size() * sizeof(GFX::ASGroup::GeometryInfo),
+			(uint32_t)RHI::BufferUsage::STORAGE);
+		Core::ResourceManager::get()->addResource(guid, std::move(asGroup));
 	}
 
 #pragma endregion

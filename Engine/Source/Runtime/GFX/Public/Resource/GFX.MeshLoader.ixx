@@ -7,7 +7,11 @@ module;
 export module GFX.MeshLoader;
 import Core.Log;
 import Core.Memory;
+import Core.Resource.RuntimeManage;
 import RHI;
+import RHI.RHILayer;
+import GFX.GFXManager;
+import GFX.Resource;
 
 namespace SIByL::GFX
 {
@@ -36,9 +40,11 @@ namespace SIByL::GFX
         static auto loadOBJ(std::filesystem::path const& path, 
             MeshDataLayout const& layout,
             Core::Buffer* vertexBuffer,
-            Core::Buffer* indexBuffer) noexcept -> void {
+            Core::Buffer* indexBuffer,
+            Core::Buffer* vertexPosOnlyBuffer = nullptr) noexcept -> void {
             /** buffers */
             std::vector<float>      vertexBufferV = {};
+            std::vector<float>      vertexBufferPosOnlyV = {};
             std::vector<uint16_t>   indexBufferV = {};
             std::vector<uint32_t>   indexBufferWV = {};
 
@@ -89,6 +95,11 @@ namespace SIByL::GFX
                                     vertexBufferV.push_back(vx);
                                     vertexBufferV.push_back(vy);
                                     vertexBufferV.push_back(vz);
+                                    if (vertexPosOnlyBuffer) {
+                                        vertexBufferPosOnlyV.push_back(vx);
+                                        vertexBufferPosOnlyV.push_back(vy);
+                                        vertexBufferPosOnlyV.push_back(vz);
+                                    }
                                 }
                             }
                             else if (entry.info == MeshDataLayout::VertexInfo::NORMAL) {
@@ -149,6 +160,34 @@ namespace SIByL::GFX
                 *indexBuffer = Core::Buffer(sizeof(uint16_t) * indexBufferV.size());
                 memcpy(indexBuffer->data, indexBufferV.data(), indexBuffer->size);
             }
+            if (vertexPosOnlyBuffer) {
+                *vertexPosOnlyBuffer = Core::Buffer(sizeof(float) * vertexBufferPosOnlyV.size());
+                memcpy(vertexPosOnlyBuffer->data, vertexBufferPosOnlyV.data(), vertexPosOnlyBuffer->size);
+            }
 		}
+
+        static auto loadMeshResource(std::filesystem::path const& path,
+            MeshDataLayout const& layout,
+            bool usePosOnlyBuffer) noexcept -> Core::GUID {
+            Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Mesh>();
+            Core::Buffer vertex;
+            Core::Buffer index;
+            Core::Buffer vertexPosOnly;
+            GFX::MeshLoader_OBJ::loadOBJ(path, layout, &vertex, &index, &vertexPosOnly);
+            GFX::Mesh mesh;
+            mesh.vertexBuffer = GFX::GFXManager::get()->rhiLayer->getDevice()->createDeviceLocalBuffer(
+                (void*)vertex.data, vertex.size,
+                (uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::STORAGE);
+            mesh.indexBuffer = GFX::GFXManager::get()->rhiLayer->getDevice()->createDeviceLocalBuffer(
+                (void*)index.data, index.size,
+                (uint32_t)RHI::BufferUsage::INDEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
+                (uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
+            mesh.vertexBufferPosOnly = GFX::GFXManager::get()->rhiLayer->getDevice()->createDeviceLocalBuffer(
+                (void*)vertexPosOnly.data, vertexPosOnly.size,
+                (uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
+                (uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
+            Core::ResourceManager::get()->addResource<GFX::Mesh>(guid, std::move(mesh));
+            return guid;
+        }
 	};
 }

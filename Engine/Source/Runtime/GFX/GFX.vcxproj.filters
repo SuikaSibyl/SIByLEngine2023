@@ -60,5 +60,8 @@
     <ClCompile Include="Public\Resource\GFX.Resources-Buffer.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Resource\GFX.Resources-ASGroup.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
