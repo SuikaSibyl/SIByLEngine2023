@@ -559,7 +559,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			(uint32_t)RHI::MapMode::READ, 0, 800 * 600 * sizeof(vec4));
 		if (mapped.get()) {
 			void* data = Core::ResourceManager::get()->getResource<GFX::Texture>(copyDst)->texture->getMappedRange(0, 800 * 600 * sizeof(vec4));
-			Image::HDR::writeHDR("./out.hdr", 800, 600, 4, reinterpret_cast<float*>(data));
+			std::string filepath = mainWindow->saveFile("", Core::WorldTimePoint::get().to_string() + ".hdr");
+			Image::HDR::writeHDR(filepath, 800, 600, 4, reinterpret_cast<float*>(data));
 			Core::ResourceManager::get()->getResource<GFX::Texture>(copyDst)->texture->unmap();
 		}
 	}

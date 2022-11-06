@@ -49,6 +49,14 @@ namespace SIByL::Platform
 		/* return window framebuffer size */
 		virtual auto getFramebufferSize(int* width, int* height) noexcept -> void override;
 
+		// ---------------------------------
+		// System Functional
+		// ---------------------------------
+		/** open a local file using browser */
+		virtual auto openFile(const char* filter) noexcept -> std::string override;
+		/** save a local file using browser */
+		virtual auto saveFile(const char* filter, std::string const& name = {}) noexcept -> std::string override;
+
 	private:
 		std::wstring const	uniName;
 		bool				shouldQuit = false;

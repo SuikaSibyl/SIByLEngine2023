@@ -52,7 +52,7 @@ namespace SIByL::Platform
 		// ---------------------------------
 		/** resizie the window */
 		virtual auto resize(size_t x, size_t y) noexcept -> void = 0;
-		/* bind a block of CPU bitmap data to be drawn on the window */
+		/** bind a block of CPU bitmap data to be drawn on the window */
 		virtual auto bindPaintingBitmapRGB8(size_t width, size_t height, char* data) noexcept -> void = 0;
 		/** connect resize signal events */
 		virtual auto connectResizeEvent(std::function<void(size_t, size_t)> const& func) noexcept -> void = 0;
@@ -66,7 +66,15 @@ namespace SIByL::Platform
 		virtual auto getVendor() noexcept -> WindowVendor = 0;
 		/** return window handle */
 		virtual auto getHandle() noexcept -> void* = 0;
-		/* return window framebuffer size */
+		/** return window framebuffer size */
 		virtual auto getFramebufferSize(int* width, int* height) noexcept -> void = 0;
+
+		// ---------------------------------
+		// System Functional
+		// ---------------------------------
+		/** open a local file using browser */
+		virtual auto openFile(const char* filter) noexcept -> std::string = 0;
+		/** save a local file using browser */
+		virtual auto saveFile(const char* filter, std::string const& name = {}) noexcept -> std::string = 0;
 	};
 }

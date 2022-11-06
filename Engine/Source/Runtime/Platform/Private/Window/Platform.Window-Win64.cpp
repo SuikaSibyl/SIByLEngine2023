@@ -237,6 +237,41 @@ namespace SIByL::Platform
 		*h = height;
 	}
 
+	auto Window_Win64::openFile(const char* filter) noexcept -> std::string {
+		OPENFILENAMEA ofn;
+		CHAR szFile[260] = { 0 };
+		ZeroMemory(&ofn, sizeof(OPENFILENAME));
+		ofn.lStructSize = sizeof(OPENFILENAME);
+		ofn.hwndOwner = wndHandle;
+		ofn.lpstrFile = szFile;
+		ofn.nMaxFile = sizeof(szFile);
+		ofn.lpstrFilter = filter;
+		ofn.nFilterIndex = 1;
+		ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+		if (GetOpenFileNameA(&ofn) == TRUE) {
+			return ofn.lpstrFile;
+		}
+		return std::string();
+	}
+	
+	auto Window_Win64::saveFile(const char* filter, std::string const& name) noexcept -> std::string {
+		OPENFILENAMEA ofn;
+		CHAR szFile[260] = { 0 };
+		memcpy(szFile, name.c_str(), name.size() + 1);
+		ZeroMemory(&ofn, sizeof(OPENFILENAME));
+		ofn.lStructSize = sizeof(OPENFILENAME);
+		ofn.hwndOwner = wndHandle;
+		ofn.lpstrFile = szFile;
+		ofn.nMaxFile = sizeof(szFile);
+		ofn.lpstrFilter = filter;
+		ofn.nFilterIndex = 1;
+		ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+		if (GetSaveFileNameA(&ofn) == TRUE) {
+			return ofn.lpstrFile;
+		}
+		return std::string();
+	}
+
 	auto paintRGB8Bitmap(HDC& hdc, size_t width, size_t height, char* data) -> void
 	{
 		BITMAPINFO bminfo;

@@ -20,6 +20,16 @@ namespace SIByL::Core
 		double _deltaTime = 0.f;
 	};
 
+	export struct WorldTimePoint {
+		static auto get() noexcept -> WorldTimePoint;
+		auto to_string() noexcept -> std::string;
+		std::chrono::years y;
+		std::chrono::days d;
+		std::chrono::hours h;
+		std::chrono::minutes m;
+		std::chrono::seconds s;
+	};
+
 #pragma region TIMER_IMPL
 
 	Timer::Timer() {
@@ -44,4 +54,34 @@ namespace SIByL::Core
 	}
 
 #pragma endregion
+
+	auto WorldTimePoint::get() noexcept -> WorldTimePoint {
+		WorldTimePoint wtp;
+		using namespace std;
+		using namespace std::chrono;
+		typedef duration<int, ratio_multiply<hours::period, ratio<24> >::type> days;
+		system_clock::time_point now = system_clock::now();
+		system_clock::duration tp = now.time_since_epoch();
+		wtp.y = duration_cast<years>(tp);
+		tp -= wtp.y;
+		wtp.d = duration_cast<days>(tp);
+		tp -= wtp.d;
+		wtp.h = duration_cast<hours>(tp);
+		tp -= wtp.h;
+		wtp.m = duration_cast<minutes>(tp);
+		tp -= wtp.m;
+		wtp.s = duration_cast<seconds>(tp);
+		tp -= wtp.s;
+		return wtp;
+	}
+
+	auto WorldTimePoint::to_string() noexcept -> std::string {
+		std::string str;
+		str += std::to_string(y.count());
+		str += std::to_string(d.count());
+		str += std::to_string(h.count());
+		str += std::to_string(m.count());
+		str += std::to_string(s.count());
+		return str;
+	}
 }

@@ -1,4 +1,5 @@
 module;
+#include <string>
 #include <Windows.h>
 export module Platform.System:Win64;
 
