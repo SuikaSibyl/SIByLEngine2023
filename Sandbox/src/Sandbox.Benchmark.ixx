@@ -30,16 +30,16 @@ namespace Sandbox
 			lwb_primary_ray_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 			aaf_secondary_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 			aaf_secondary_rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-			aaf_shadow_ray_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-			aaf_shadow_ray_rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			lwb_shadow_ray_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			lwb_shadow_ray_rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 			// load Shaders
 			GFX::GFXManager::get()->registerShaderModuleResource(lwb_primary_ray_rgen, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/lightweight_benchmark/lwb_primary_ray_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
 			GFX::GFXManager::get()->registerShaderModuleResource(lwb_primary_ray_rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/lightweight_benchmark/lwb_primary_ray_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
 			GFX::GFXManager::get()->registerShaderModuleResource(lwb_primary_ray_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/lightweight_benchmark/lwb_primary_ray_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
 			GFX::GFXManager::get()->registerShaderModuleResource(aaf_secondary_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_gi/aaf_gi_secondary_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
 			GFX::GFXManager::get()->registerShaderModuleResource(aaf_secondary_rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_gi/aaf_gi_secondary_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
-			GFX::GFXManager::get()->registerShaderModuleResource(aaf_shadow_ray_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_gi/aaf_gi_shadow_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
-			GFX::GFXManager::get()->registerShaderModuleResource(aaf_shadow_ray_rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_gi/aaf_gi_shadow_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
+			GFX::GFXManager::get()->registerShaderModuleResource(lwb_shadow_ray_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/lightweight_benchmark/lwb_shadow_ray_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
+			GFX::GFXManager::get()->registerShaderModuleResource(lwb_shadow_ray_rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/lightweight_benchmark/lwb_shadow_ray_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
 			// Create rt pipeline
 			for (int i = 0; i < 2; ++i) {
 				raytracingPipeline[i] = rhiLayer->getDevice()->createRayTracingPipeline(RHI::RayTracingPipelineDescriptor{
@@ -47,12 +47,12 @@ namespace Sandbox
 						RHI::SBTsDescriptor::RayGenerationSBT{{ Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lwb_primary_ray_rgen)->shaderModule.get() }},
 						RHI::SBTsDescriptor::MissSBT{{
 							{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lwb_primary_ray_rmiss)->shaderModule.get()},
-							{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(aaf_secondary_rmiss)->shaderModule.get()},
-							{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(aaf_shadow_ray_rmiss)->shaderModule.get()} }},
+							{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lwb_shadow_ray_rmiss)->shaderModule.get()},
+							{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(aaf_secondary_rmiss)->shaderModule.get()} }},
 						RHI::SBTsDescriptor::HitGroupSBT{{
 							{{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lwb_primary_ray_rchit)->shaderModule.get()}, nullptr, nullptr},
-							{{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(aaf_secondary_rchit)->shaderModule.get()}, nullptr, nullptr},
-							{{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(aaf_shadow_ray_rchit)->shaderModule.get()}, nullptr, nullptr} }}
+							{{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lwb_shadow_ray_rchit)->shaderModule.get()}, nullptr, nullptr},
+							{{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(aaf_secondary_rchit)->shaderModule.get()}, nullptr, nullptr} }}
 					} });
 			}
 		}
@@ -86,8 +86,8 @@ namespace Sandbox
 		Core::GUID aaf_secondary_rchit;
 		Core::GUID aaf_secondary_rmiss;
 		Core::GUID lwb_primary_ray_rchit;
-		Core::GUID aaf_shadow_ray_rchit;
-		Core::GUID aaf_shadow_ray_rmiss;
+		Core::GUID lwb_shadow_ray_rchit;
+		Core::GUID lwb_shadow_ray_rmiss;
 
 		std::unique_ptr<RHI::RayTracingPipeline> raytracingPipeline[2];
 		std::unique_ptr<RHI::RayTracingPassEncoder> rtEncoder[2] = {};

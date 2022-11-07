@@ -20,8 +20,18 @@ layout(binding = 7, set = 0, rgba32f) uniform image2D storageImage;
 layout(binding = 8, set = 0) readonly buffer useFilterBlurTmpBuffer     { uint use_filter_tmp[]; };
 layout(binding = 9, set = 0, scalar) readonly buffer visBlurTmpBuffer   { float vis_tmp[]; };
 layout(binding = 10, set = 0, scalar) readonly buffer slopeBlurTmpBuffer   { vec2 slope_tmp[]; };
+layout(binding = 11, set = 0, scalar) readonly buffer sppBuffer   { float spp[]; };
+layout(binding = 12, set = 0, scalar) readonly buffer betaBuffer           { float beta[]; };
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+// 1: result
+// 2: scale beta
+// 3: slope min
+// 4: slope max
+// 5: spp
+// 6: scale
+const int VIEW_MODE = 1;
 
 void main()
 {
@@ -44,12 +54,35 @@ void main()
     // display brdf
     // pixelColor = vec3(brdf[gid]);
     // ccombined
-    pixelColor = vec3(vis_tmp[gid]);
+    if(VIEW_MODE == 1) {
+        pixelColor = (brdf[gid].x >= 0.) ? vec3(brdf[gid]) * vec3(vis_blurred[gid].x) : vec3(0.34f, 0.55f, 0.85f);
+    }
+    else if (VIEW_MODE == 2) {
+        float wxf = compute_omega_x_f(slope[gid].y, proj_dist[gid]);
+        float vis_color = 1/(wxf*lightSigma) * 8.0;
+        pixelColor = vec3( colorMap_naive(vis_color) );
+        if (vis_color > 5)
+        pixelColor = vec3(0);
+    }
+    else if (VIEW_MODE == 3) {
+        pixelColor = colorMap_naive(slope[gid].x);
+    }
+    else if (VIEW_MODE == 4) {
+        pixelColor = colorMap_naive(slope[gid].y);
+    }
+    else if (VIEW_MODE == 5) {
+        pixelColor = colorMap_naive(spp[gid]/100);
+    }
+    else if (VIEW_MODE == 6) {
+        pixelColor = colorMap_naive(beta[gid] * 4);
+    }
+    
     // pixelColor = colorMap_naive(slope[gid].x);
     // display slope min
     // pixelColor = vec3(colorMap_naive(slope[gid].y));
 
     // pixelColor = vec3(float(use_filter_tmp[gid]));
+    // imageStore(storageImage, ivec2(pixel), vec4(colorMap_naive(float(pixel.x)/resolution.x), 1.0));
 
     imageStore(storageImage, ivec2(pixel), vec4(pixelColor, 1.0));
 }

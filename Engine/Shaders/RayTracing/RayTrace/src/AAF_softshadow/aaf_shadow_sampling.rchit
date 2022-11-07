@@ -16,15 +16,6 @@ layout(binding = 0, set = 0) uniform accelerationStructureEXT tlas;
 
 const float phongExp = 100;
 
-vec3 sampleAreaLight(inout uint rngState) {
-    vec2 lsample = vec2(stepAndOutputRNGFloat(rngState), stepAndOutputRNGFloat(rngState));
-    return lightPos0 + lsample.x * lightVec1 + lsample.y * lightVec2;
-}
-
-vec3 sampleAreaLight(in vec2 lsample) {
-    return lightPos0 + lsample.x * lightVec1 + lsample.y * lightVec2;
-}
-
 void main() {
     // get primary hit info
     HitInfo hitInfo = getObjectHitInfo();
@@ -46,7 +37,6 @@ void main() {
         const float NdH = max(dot(hitInfo.worldNormal, H),0.0f);
         vec3 color = vec3(0);
         // white light
-        const vec3 Kd = vec3(1.);
         color += Kd * NdL;
         // do not ocnsider specular now
         // if (NdH > 0)
@@ -91,10 +81,8 @@ void main() {
                 // if hit any shadow caster
                 if(shadowPayLoad.hit) {
                     primaryPayLoad.rayShadow = true;
-                    float d2min = distanceToLight - shadowPayLoad.distanceMax;
-                    const float d2max = distanceToLight - shadowPayLoad.distanceMin;
-                    if (shadowPayLoad.distanceMax < 0.000000001)
-                        d2min = distanceToLight;
+                    const float d2min = min(max(distanceToLight - shadowPayLoad.distanceMax, 0), distanceToLight);
+                    const float d2max = min(max(distanceToLight - shadowPayLoad.distanceMin, 0), distanceToLight);
                     const float s1 = distanceToLight/d2min - 1.0;
                     const float s2 = distanceToLight/d2max - 1.0;
                     primaryPayLoad.s1 = max(primaryPayLoad.s1, s1);

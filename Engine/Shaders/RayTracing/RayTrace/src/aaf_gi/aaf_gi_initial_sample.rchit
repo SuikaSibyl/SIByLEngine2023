@@ -74,7 +74,7 @@ void main() {
             secondarySampleSeed.x = invNSamples* (i + stepAndOutputRNGFloat(primaryPayLoad.rngState));
             secondarySampleSeed.y = invNSamples* (j + stepAndOutputRNGFloat(primaryPayLoad.rngState));
             vec3 sampleDir = uniformSampleHemisphere(secondarySampleSeed);
-            float const NdL = abs(sampleDir.z);
+            const float NdL = abs(sampleDir.z);
             sampleDir = TBN * sampleDir;
             const float strength = 1;
 
@@ -116,7 +116,6 @@ void main() {
                 // white light
                 const vec3 Kd = vec3(1.);
                 color += getAlbedo(hitInfo.worldNormal) * NdL * 2;
-
                 primaryPayLoad.accumGI += secondaryPayload.L * color;
             }
         }

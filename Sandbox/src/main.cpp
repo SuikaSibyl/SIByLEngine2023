@@ -127,8 +127,32 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::COLOR}},
 				RHI::IndexFormat::UINT16_t },
 				true);
+		floor = GFX::MeshLoader_OBJ::loadMeshResource(
+			"./content/grids2/floor.obj",
+			GFX::MeshDataLayout{ 
+				{{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::POSITION},
+				{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::COLOR}},
+				RHI::IndexFormat::UINT16_t },
+				true);
+		grid2 = GFX::MeshLoader_OBJ::loadMeshResource(
+			"./content/grids2/grid2.obj",
+			GFX::MeshDataLayout{ 
+				{{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::POSITION},
+				{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::COLOR}},
+				RHI::IndexFormat::UINT16_t },
+				true);
+		grid3 = GFX::MeshLoader_OBJ::loadMeshResource(
+			"./content/grids2/grid3.obj",
+			GFX::MeshDataLayout{ 
+				{{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::POSITION},
+				{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::COLOR}},
+				RHI::IndexFormat::UINT16_t },
+				true);
 		GFX::Mesh* conrnell_resource = ResourceManager::get()->getResource<GFX::Mesh>(cornellBox);
+		GFX::Mesh* floor_mesh = ResourceManager::get()->getResource<GFX::Mesh>(floor);
 		GFX::Mesh* grid1_mesh = ResourceManager::get()->getResource<GFX::Mesh>(grid1);
+		GFX::Mesh* grid2_mesh = ResourceManager::get()->getResource<GFX::Mesh>(grid2);
+		GFX::Mesh* grid3_mesh = ResourceManager::get()->getResource<GFX::Mesh>(grid3);
 		indexCount = conrnell_resource->indexBuffer->size() / sizeof(uint16_t);
 
 		struct Vertex {
@@ -144,33 +168,73 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			RHI::IndexFormat::UINT16_t,
 			(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION });
 		
-		blas2 = device->createBLAS(RHI::BLASDescriptor{
+		blas_floor = device->createBLAS(RHI::BLASDescriptor{
+			floor_mesh->vertexBufferPosOnly.get(),
+			floor_mesh->indexBuffer.get(),
+			(uint32_t)floor_mesh->vertexBufferPosOnly->size() / (sizeof(float) * 3),
+			(uint32_t)floor_mesh->indexBuffer->size() / (3 * sizeof(uint16_t)),
+			RHI::IndexFormat::UINT16_t,
+			(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION });
+		
+		blas_grid1 = device->createBLAS(RHI::BLASDescriptor{
 			grid1_mesh->vertexBufferPosOnly.get(),
 			grid1_mesh->indexBuffer.get(),
 			(uint32_t)grid1_mesh->vertexBufferPosOnly->size() / (sizeof(float) * 3),
 			(uint32_t)grid1_mesh->indexBuffer->size() / (3 * sizeof(uint16_t)),
 			RHI::IndexFormat::UINT16_t,
 			(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION });
+		
+		blas_grid2 = device->createBLAS(RHI::BLASDescriptor{
+			grid2_mesh->vertexBufferPosOnly.get(),
+			grid2_mesh->indexBuffer.get(),
+			(uint32_t)grid2_mesh->vertexBufferPosOnly->size() / (sizeof(float) * 3),
+			(uint32_t)grid2_mesh->indexBuffer->size() / (3 * sizeof(uint16_t)),
+			RHI::IndexFormat::UINT16_t,
+			(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION });
+		
+		blas_grid3 = device->createBLAS(RHI::BLASDescriptor{
+			grid3_mesh->vertexBufferPosOnly.get(),
+			grid3_mesh->indexBuffer.get(),
+			(uint32_t)grid3_mesh->vertexBufferPosOnly->size() / (sizeof(float) * 3),
+			(uint32_t)grid3_mesh->indexBuffer->size() / (3 * sizeof(uint16_t)),
+			RHI::IndexFormat::UINT16_t,
+			(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION });
+
+		Math::mat4 floor_transform = {
+			4.0f, 0.0f, 0.0f, 0.0778942f,
+			0.0f, 1.0f, 0.0f, 0.0f,
+			0.0f, 0.0f, 4.0f, 0.17478f,
+			0.0f, 0.0f, 0.0f, 1.0f };
 
 		Math::mat4 grid1_transform = {
 			0.75840f, -0.465828, 0.455878, 2.18526,
 			0.6232783f, 0.693876, -0.343688, 1.0795,
 			-0.156223f, 0.549127, 0.821008, 1.23179,
 			0.0, 0.0, 0.0, 1.0};
+		
+		Math::mat4 grid2_transform = {
+			0.893628f, 0.105897f, 0.436135f, 0.142805,
+			0.203204f, 0.770988f, -0.603561f, 1.0837,
+			-0.40017f, 0.627984f, 0.667458f, 0.288514,
+			0.0, 0.0, 0.0, 1.0};
+		
+		Math::mat4 grid3_transform = {
+			0.109836f, 0.652392f, 0.74988f, -2.96444f,
+			0.392525f, 0.664651f, -0.635738f, 1.86879f,
+			-0.913159, 0.364174f, -0.183078f, 1.00696f,
+			0.0, 0.0, 0.0, 1.0};
 
 		ASGroup = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ASGroup>();
 		GFX::GFXManager::get()->registerAsGroupResource(ASGroup,
 			RHI::TLASDescriptor{ {
-				{blas.get(), Math::mul(Math::translate(Math::vec3{0,0.00,0}).m, Math::scale(1,1, 1).m),0,0},
-				//{blas2.get(), grid1_transform,0,0},
+				{blas_floor.get(), floor_transform,0,0},
+				{blas_grid1.get(), grid1_transform,0,0},
+				{blas_grid2.get(), grid2_transform,0,0},
+				{blas_grid3.get(), grid3_transform,0,0},
 			} },
-			std::vector<Core::GUID>{ cornellBox }
+			std::vector<Core::GUID>{ floor, grid1, grid2, grid3 }
 			//std::vector<Core::GUID>{ cornellBox, grid1 }
 			);
-		tlas = device->createTLAS(RHI::TLASDescriptor{ {
-			{blas.get(), Math::mul(Math::translate(Math::vec3{0,0.00,0}).m, Math::scale(1,1, 1).m),0,0},
-			{blas2.get(), grid1_transform,0,0},
-			}});
 
 		{
 			std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> img = Image::JPEG::fromJPEG("./content/texture.jpg");
@@ -248,7 +312,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				bindGroup_RT[i] = device->createBindGroup(RHI::BindGroupDescriptor{
 					bindGroupLayout_RT.get(),
 					std::vector<RHI::BindGroupEntry>{
-						{0,RHI::BindingResource{tlas.get()}},
+						{0,RHI::BindingResource{Core::ResourceManager::get()->getResource<GFX::ASGroup>(ASGroup)->tlas.get()}},
 						{1,RHI::BindingResource{Core::ResourceManager::get()->getResource<GFX::Texture>(rtTarget)->originalView.get()}},
 						{2,RHI::BindingResource{{conrnell_resource->vertexBufferPosOnly.get(), 0, conrnell_resource->vertexBufferPosOnly.get()->size()}}},
 						{3,RHI::BindingResource{{conrnell_resource->indexBuffer.get(), 0, conrnell_resource->indexBuffer->size()}}}
@@ -295,10 +359,12 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		directTracer = std::make_unique<Sandbox::DirectTracer>(rhiLayer.get(), std::array<RHI::PipelineLayout*, 2>{ pipelineLayout_RT[0].get() ,pipelineLayout_RT[1].get() });
 
-		aafPipeline = std::make_unique<Sandbox::AAFPipeline>(rhiLayer.get(), tlas.get(), rtTarget, conrnell_resource->vertexBufferPosOnly.get(),
-			conrnell_resource->indexBuffer.get(), rtBindGroupLayout.get(), std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()});
-		aafGIPipeline = std::make_unique<Sandbox::AAF_GI_Pipeline>(rhiLayer.get(), tlas.get(), rtTarget, conrnell_resource->vertexBufferPosOnly.get(),
-			conrnell_resource->indexBuffer.get(), rtBindGroupLayout.get(), std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()});
+		aafPipeline = std::make_unique<Sandbox::AAFPipeline>(rhiLayer.get(),
+			Core::ResourceManager::get()->getResource<GFX::ASGroup>(ASGroup), rtTarget,
+			rtBindGroupLayout.get(), std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()});
+		aafGIPipeline = std::make_unique<Sandbox::AAF_GI_Pipeline>(rhiLayer.get(),
+			Core::ResourceManager::get()->getResource<GFX::ASGroup>(ASGroup), rtTarget, 
+			rtBindGroupLayout.get(), std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()});
 		benchmarkPipeline = std::make_unique<Sandbox::Benchmark_Pipeline>(rhiLayer.get(), 
 			Core::ResourceManager::get()->getResource<GFX::ASGroup>(ASGroup), rtTarget, 
 			rtBindGroupLayout.get(), std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()});
@@ -338,14 +404,18 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		height = 600;
 
 		UniformBufferObject ubo;
-		Math::vec4 campos = Math::mul(Math::rotateY(0 * 20).m, Math::vec4(-0.001, 1.0, 6.0, 1));
-		//ubo.model = Math::transpose(Math::rotate(timer.totalTime() * 80, Math::vec3(0, 1, 0)).m);
-		ubo.view = Math::transpose(Math::lookAt(Math::vec3(campos.x, campos.y, campos.z) , Math::vec3(0, 1, 0), Math::vec3(0, 1, 0)).m);
-		ubo.proj = Math::transpose(Math::perspective(22.f, 1.f * 800 / 600, 0.1f, 10.f).m);
 		//Math::vec4 campos = Math::mul(Math::rotateY(0 * 20).m, Math::vec4(-0.001, 1.0, 6.0, 1));
 		////ubo.model = Math::transpose(Math::rotate(timer.totalTime() * 80, Math::vec3(0, 1, 0)).m);
-		//ubo.view = Math::transpose(Math::lookAt(Math::vec3(campos.x, campos.y, campos.z), Math::vec3(0, 0.5f, 0), Math::vec3(0, 1, 0)).m);
-		//ubo.proj = Math::transpose(Math::perspective(60.f, 1.f * 800 / 600, 0.1f, 10.f).m);
+		//ubo.view = Math::transpose(Math::lookAt(Math::vec3(campos.x, campos.y, campos.z) , Math::vec3(0, 1, 0), Math::vec3(0, 1, 0)).m);
+		//ubo.proj = Math::transpose(Math::perspective(22.f, 1.f * 800 / 600, 0.1f, 10.f).m);
+		Math::vec4 campos = Math::vec4(-4.5f, 2.5f, 5.5f, 1);
+		{
+			campos.x = (float)(campos.x * sin(timer.totalTime() * 1));
+			campos.y = (float)(campos.y + cos(timer.totalTime() * 1 * 1.5));
+			campos.z = (float)(campos.z * cos(timer.totalTime() * 1));
+		}
+		ubo.view = Math::transpose(Math::lookAt(Math::vec3(campos.x, campos.y, campos.z), Math::vec3(-1, 0.5f, 0), Math::vec3(0, 1, 0)).m);
+		ubo.proj = Math::transpose(Math::perspective(60.f, 1.f * 800 / 600, 0.1f, 10.f).m);
 		ubo.viewInverse = Math::inverse(ubo.view);
 		//ubo.proj.data[1][1] *= -1;
 		ubo.projInverse = Math::inverse(ubo.proj);
@@ -392,9 +462,9 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			}}
 			});
 
-		//aafPipeline->composeCommands(commandEncoder.get(), index);
+		aafPipeline->composeCommands(commandEncoder.get(), index);
 		//aafGIPipeline->composeCommands(commandEncoder.get(), index);
-		benchmarkPipeline->composeCommands(commandEncoder.get(), index);
+		//benchmarkPipeline->composeCommands(commandEncoder.get(), index);
 
 		//{
 		//	commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
@@ -598,9 +668,11 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		vert_module = nullptr;
 		frag_module = nullptr;
-		tlas = nullptr;
 		blas = nullptr;
-		blas2 = nullptr;
+		blas_floor = nullptr;
+		blas_grid1 = nullptr;
+		blas_grid2 = nullptr;
+		blas_grid3 = nullptr;
 
 		rtBindGroupLayout = nullptr;
 		uniformBuffer[0] = nullptr;
@@ -635,7 +707,7 @@ private:
 	std::unique_ptr<RHI::BindGroup> bindGroup_RT[2];
 	
 	Core::GUID cornellBox;
-	Core::GUID grid1;
+	Core::GUID floor, grid1, grid2, grid3;
 	Core::GUID ASGroup;
 
 	std::unique_ptr<RHI::Buffer> uniformBuffer[2];
@@ -648,8 +720,10 @@ private:
 	std::unique_ptr<RHI::RenderPassEncoder> passEncoder[2] = {};
 	std::unique_ptr<RHI::ComputePassEncoder> compEncoder[2] = {};
 	std::unique_ptr<RHI::BLAS> blas = nullptr;
-	std::unique_ptr<RHI::BLAS> blas2 = nullptr;
-	std::unique_ptr<RHI::TLAS> tlas = nullptr;
+	std::unique_ptr<RHI::BLAS> blas_floor = nullptr;
+	std::unique_ptr<RHI::BLAS> blas_grid1 = nullptr;
+	std::unique_ptr<RHI::BLAS> blas_grid2 = nullptr;
+	std::unique_ptr<RHI::BLAS> blas_grid3 = nullptr;
 
 	std::unique_ptr<Sandbox::DirectTracer> directTracer = nullptr;
 	std::unique_ptr<Sandbox::AAFPipeline> aafPipeline = nullptr;

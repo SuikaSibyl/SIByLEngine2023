@@ -8,9 +8,12 @@
 
 layout(binding = 0, set = 0) writeonly buffer slopeBuffer        { vec2 slope[]; };
 layout(binding = 6, set = 0) writeonly buffer useFilterBuffer    { uint use_filter[]; };
+layout(binding = 2, set = 0) writeonly  buffer projDistBuffer     { float proj_dist[]; };
 
 layout(binding = 8, set = 0) readonly buffer useFilterBlurTmpBuffer        { uint use_filter_tmp[]; };
 layout(binding = 10, set = 0, scalar) readonly buffer slopeBlurTmpBuffer   { vec2 slope_tmp[]; };
+layout(binding = 11, set = 0, scalar) writeonly buffer sppBuffer           { float spp[]; };
+layout(binding = 12, set = 0, scalar) writeonly buffer betaBuffer           { float beta[]; };
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
@@ -47,5 +50,8 @@ void main()
     }
     use_filter[gid] |= center_use_filter;
     slope[gid] = filterd_slope;
+    const float omegaxf = compute_omega_x_f(slope[gid].y, proj_dist[gid]);
+    spp[gid] = computeSPP(slope[gid].x, slope[gid].y, proj_dist[gid], omegaxf);
+    beta[gid] = computeBeta(slope[gid].y, proj_dist[gid]);
     return;
 }

@@ -8,26 +8,9 @@
 layout(location = 1) rayPayloadInEXT ShadowRayPayload shadowPayLoad;
 
 void main() {
-    // get the intersection position
-    // Get the ID of the triangle
-    const int primitiveID = gl_PrimitiveID;
-    // Get the indices of the vertices of the triangle
-    const uint i0 = indices[3 * primitiveID + 0];
-    const uint i1 = indices[3 * primitiveID + 1];
-    const uint i2 = indices[3 * primitiveID + 2];
-    // Get the vertices of the triangle
-    const vec3 v0 = vertices[i0];
-    const vec3 v1 = vertices[i1];
-    const vec3 v2 = vertices[i2];
-    // Get the barycentric coordinates of the intersection
-    vec3 barycentrics = vec3(0.0, attributes.x, attributes.y);
-    barycentrics.x    = 1.0 - barycentrics.y - barycentrics.z;
-    // Compute the coordinates of the intersection
-    const vec3 objectPosition = v0 * barycentrics.x + v1 * barycentrics.y + v2 * barycentrics.z;
-    // Transform from object space to world space:
-    const vec3 worldPosition = gl_ObjectToWorldEXT * vec4(objectPosition, 1.0f);
+    HitInfo hitInfo = getObjectHitInfo();
     // Compute the distance
-    const float tHit = length(worldPosition - gl_WorldRayOriginEXT);
+    const float tHit = length(hitInfo.worldPosition - gl_WorldRayOriginEXT);
     // Fill payload
     shadowPayLoad.hit           = true;
     shadowPayLoad.attenuation   = vec3(0.f);

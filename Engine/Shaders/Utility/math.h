@@ -1,6 +1,8 @@
 #ifndef _MATH_HEADER_
 #define _MATH_HEADER_
 
+const float k_inf = 1.0 / 0.0;
+
 /** float value of PI */
 const float k_pi = 3.14159265;
 

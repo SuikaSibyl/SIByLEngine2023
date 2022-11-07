@@ -31,7 +31,7 @@ layout(binding = 4, set = 2) writeonly  buffer worldNormalBuffer  { vec3 world_n
 layout(binding = 5, set = 2, scalar) writeonly buffer brdfBuffer  { vec3 brdf[]; };
 layout(binding = 6, set = 2) writeonly buffer useFilterBuffer     { uint use_filter[]; };
 layout(binding = 8, set = 2) writeonly buffer useFilterBlurTmpBuffer { uint use_filter_tmp[]; };
-layout(binding = 11, set = 2, scalar) writeonly buffer sppBuffer           { uint spp[]; };
+layout(binding = 11, set = 2, scalar) readonly buffer sppBuffer           { uint spp[]; };
 
 // layout(binding = 6, set = 2, rgba32f) uniform image2D storageImage;
 // Global uniforms carrying camera information.
@@ -66,12 +66,15 @@ void main()
     const vec3 rayDirection = normalize(direction.xyz);
     const vec3 rayOrigin    = origin.xyz;
 
+    uint gid = pixel.x + pixel.y * resolution.x;
     // Initialize payload.
     // Set the state of the random number generator with an initial seed.
     pld.rngState = uint((pushConstants.sample_batch * resolution.y + pixel.y) * resolution.x + pixel.x);
     pld.rayShadow = false;
     pld.accumVis = 0.f;
-    pld.accumWeights = 0.f;
+    pld.accumWeights = spp[gid] - 9;
+    pld.accumWeights = min(100, max(pld.accumWeights, 0));
+    if(pld.accumWeights==0) return;
     pld.s1 = 0.0;
     pld.s2 = k_inf;
     pld.brdf = vec3(0.);
@@ -89,37 +92,7 @@ void main()
                 10000.0,               // Maximum t-value
                 0);                    // Location of payload
 
-//   // Blend with the averaged image in the buffer:
-    // vec3 averagePixelColor = summedPixelColor / float(NUM_SAMPLES);
-//   if(pushConstants.sample_batch != 0)
-//   {
-//     // Read the storage image:
-//     const vec3 previousAverageColor = imageLoad(storageImage, pixel).rgb;
-//     // Compute the new average:
-//     averagePixelColor =
-//         (pushConstants.sample_batch * previousAverageColor + averagePixelColor) / (pushConstants.sample_batch + 1);
-//   }
-    // Initialize the pixel color.
-
-  const float tHit = distance(pld.hitPoint, rayOrigin);
-  const float proj_tHit = tHit * dot(normalize(target.xyz), vec3(0,0,1));
-  const float proj_distance  = 2.f * (proj_tHit * tan(half_fov* k_pi / 180.0)) / resolution.y;
-
-  const float avgVis = (pld.rayShadow && pld.accumWeights > 0.01) ? pld.accumVis/pld.accumWeights : 1.0;
+  const float avgVis = (pld.accumWeights > 0.01) ? pld.accumVis/pld.accumWeights : 1.0;
   // fill in output buffers
-  uint gid = pixel.x + pixel.y * resolution.x;
-  slope[gid] = vec2(pld.s1, pld.s2);
   vis[gid] = vec3(avgVis, pld.accumWeights, pld.accumVis);
-  world_position[gid] = pld.hitPoint;
-  world_normal[gid] = normalize(pld.hitNormal);
-  brdf[gid] = pld.rayHitSky ? vec3(-1) : pld.brdf;
-  use_filter[gid] = pld.rayShadow ? 1:0;
-  use_filter_tmp[gid] = 0;
-  proj_dist[gid] = proj_distance;
-  spp[gid] = 0;
-  // // output image visualization
-  // const vec3 background_color = vec3(0.34f, 0.55f, 0.85f);
-  // vec3 pixelColor = pld.rayHitSky ? background_color : (pld.rayShadow ? colorMap_naive(pld.distanceMax): vec3(0.f));
-  // // Set the color of the pixel `pixel` in the storage image to `averagePixelColor`:
-  // imageStore(storageImage, pixel, vec4(pixelColor, 1.0));
 }

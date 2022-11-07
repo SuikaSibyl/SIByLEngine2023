@@ -127,6 +127,78 @@ namespace Sandbox
 		std::array<RHI::BindGroup*, 2> bufferBindGroups = {};
 	};
 
+	export struct AAF_SoftShadow_Sparse_ContinueSampling_Pass {
+		AAF_SoftShadow_Sparse_ContinueSampling_Pass(RHI::RHILayer* rhiLayer, RHI::PipelineLayout* rtPipelineLayout,
+			std::array<RHI::BindGroup*, 2> const& rtBindGroups,
+			std::array<RHI::BindGroup*, 2> const& camBindGroups,
+			std::array<RHI::BindGroup*, 2> const& bufferBindGroups)
+			: rtBindGroups(rtBindGroups)
+			, camBindGroups(camBindGroups)
+			, bufferBindGroups(bufferBindGroups) {
+			// require GUID
+			aaf_continue_rgen = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			aaf_continue_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			aaf_continue_rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			aaf_shadow_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			aaf_shadow_rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			// load Shaders
+			GFX::GFXManager::get()->registerShaderModuleResource(aaf_continue_rgen, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_softshadow/aaf_continue_sample_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
+			GFX::GFXManager::get()->registerShaderModuleResource(aaf_continue_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_softshadow/aaf_continue_sample_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
+			GFX::GFXManager::get()->registerShaderModuleResource(aaf_continue_rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_softshadow/aaf_initial_sample_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
+			GFX::GFXManager::get()->registerShaderModuleResource(aaf_shadow_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_softshadow/aaf_continue_shadow_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
+			GFX::GFXManager::get()->registerShaderModuleResource(aaf_shadow_rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_softshadow/aaf_continue_shadow_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
+			// Create rt pipeline
+			for (int i = 0; i < 2; ++i) {
+				raytracingPipeline[i] = rhiLayer->getDevice()->createRayTracingPipeline(RHI::RayTracingPipelineDescriptor{
+					rtPipelineLayout, 2, RHI::SBTsDescriptor{
+						RHI::SBTsDescriptor::RayGenerationSBT{{ Core::ResourceManager::get()->getResource<GFX::ShaderModule>(aaf_continue_rgen)->shaderModule.get() }},
+						RHI::SBTsDescriptor::MissSBT{{
+							{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(aaf_continue_rmiss)->shaderModule.get()},
+							{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(aaf_shadow_rmiss)->shaderModule.get()} }},
+						RHI::SBTsDescriptor::HitGroupSBT{{
+								{{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(aaf_continue_rchit)->shaderModule.get()}, nullptr, nullptr},
+								{{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(aaf_shadow_rchit)->shaderModule.get()}, nullptr, nullptr} }}
+					} });
+			}
+		}
+
+		~AAF_SoftShadow_Sparse_ContinueSampling_Pass() {
+			raytracingPipeline[0] = nullptr;
+			raytracingPipeline[1] = nullptr;
+		}
+
+		auto composeCommands(RHI::CommandEncoder* encoder, int index) noexcept -> void {
+			static uint32_t batchIdx = 0;
+			rtEncoder[index] = encoder->beginRayTracingPass(RHI::RayTracingPassDescriptor{});
+			rtEncoder[index]->setPipeline(raytracingPipeline[index].get());
+			rtEncoder[index]->setBindGroup(0, rtBindGroups[index], 0, 0);
+			rtEncoder[index]->setBindGroup(1, camBindGroups[index], 0, 0);
+			rtEncoder[index]->setBindGroup(2, bufferBindGroups[index], 0, 0);
+			rtEncoder[index]->pushConstants(&batchIdx,
+				(uint32_t)RHI::ShaderStages::RAYGEN
+				| (uint32_t)RHI::ShaderStages::COMPUTE
+				| (uint32_t)RHI::ShaderStages::CLOSEST_HIT
+				| (uint32_t)RHI::ShaderStages::MISS
+				| (uint32_t)RHI::ShaderStages::ANY_HIT,
+				0, sizeof(uint32_t));
+			rtEncoder[index]->traceRays(800, 600, 1);
+			rtEncoder[index]->end();
+			++batchIdx;
+		}
+
+		Core::GUID aaf_continue_rgen;
+		Core::GUID aaf_continue_rchit;
+		Core::GUID aaf_continue_rmiss;
+		Core::GUID aaf_shadow_rchit;
+		Core::GUID aaf_shadow_rmiss;
+
+		std::unique_ptr<RHI::RayTracingPipeline> raytracingPipeline[2];
+		std::unique_ptr<RHI::RayTracingPassEncoder> rtEncoder[2] = {};
+		std::array<RHI::BindGroup*, 2> rtBindGroups = {};
+		std::array<RHI::BindGroup*, 2> camBindGroups = {};
+		std::array<RHI::BindGroup*, 2> bufferBindGroups = {};
+	};
+
 	export struct AAF_SoftShadow_SlopeFilter_Pass {
 		AAF_SoftShadow_SlopeFilter_Pass(RHI::RHILayer* rhiLayer, RHI::PipelineLayout* slopleFilterPipelineLayout,
 			std::array<RHI::BindGroup*, 2> const& bufferBindGroups)
@@ -296,7 +368,7 @@ namespace Sandbox
 	export struct AAFPipeline {
 		Core::GUID rtTarget;
 
-		AAFPipeline(RHI::RHILayer* rhiLayer, RHI::TLAS* tlas, Core::GUID rtTarget, RHI::Buffer* vb, RHI::Buffer* ib, 
+		AAFPipeline(RHI::RHILayer* rhiLayer, GFX::ASGroup* asgroup, Core::GUID rtTarget,
 			RHI::BindGroupLayout* cameraBindGroupLayout, std::array<RHI::BindGroup*, 2> const& camBindGroup)
 			: rtTarget(rtTarget)
 		{
@@ -311,6 +383,8 @@ namespace Sandbox
 			useFilterBlurredBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
 			visBlurredBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
 			slopeBlurredBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
+			sppBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
+			betaBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
 
 			GFX::GFXManager::get()->registerBufferResource(slopeBuffer, RHI::BufferDescriptor{
 				width * height * sizeof(float) * 2, // pixel size * sizeof(vec2)
@@ -342,6 +416,12 @@ namespace Sandbox
 			GFX::GFXManager::get()->registerBufferResource(slopeBlurredBuffer, RHI::BufferDescriptor{
 				width * height * sizeof(float) * 2, // pixel size * sizeof(align(float2))
 				(uint32_t)RHI::BufferUsage::STORAGE });
+			GFX::GFXManager::get()->registerBufferResource(sppBuffer, RHI::BufferDescriptor{
+				width * height * sizeof(unsigned int) * 1, // pixel size * sizeof(align(uint))
+				(uint32_t)RHI::BufferUsage::STORAGE });
+			GFX::GFXManager::get()->registerBufferResource(betaBuffer, RHI::BufferDescriptor{
+				width * height * sizeof(float) * 1, // pixel size * sizeof(align(uint))
+				(uint32_t)RHI::BufferUsage::STORAGE });
 			GFX::Buffer* pSlopeBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(slopeBuffer);
 			GFX::Buffer* pVisBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(visBuffer);
 			GFX::Buffer* pProjDistBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(projDistBuffer);
@@ -352,6 +432,8 @@ namespace Sandbox
 			GFX::Buffer* pUseFilterBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(useFilterBuffer);
 			GFX::Buffer* pUseFilterBlurredBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(useFilterBlurredBuffer);
 			GFX::Buffer* pSlopeBlurredBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(slopeBlurredBuffer);
+			GFX::Buffer* pSppBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(sppBuffer);
+			GFX::Buffer* pBetaBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(betaBuffer);
 			// create bind group layout - buffers + rt
 			RHI::ShaderStagesFlags stages =
 				(uint32_t)RHI::ShaderStages::RAYGEN
@@ -372,6 +454,8 @@ namespace Sandbox
 					RHI::BindGroupLayoutEntry{8, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},	// use filter tmp buffer
 					RHI::BindGroupLayoutEntry{9, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},	// vis blur tmp buffer
 					RHI::BindGroupLayoutEntry{10, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},	// vis blur tmp buffer
+					RHI::BindGroupLayoutEntry{11, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},	// vis blur tmp buffer
+					RHI::BindGroupLayoutEntry{12, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},	// vis blur tmp buffer
 				} });
 			// create bind groups
 			for (int i = 0; i < 2; ++i) {
@@ -389,6 +473,8 @@ namespace Sandbox
 						{8,RHI::BindingResource{{pUseFilterBlurredBuffer->buffer.get(), 0, pUseFilterBlurredBuffer->buffer->size()}}},
 						{9,RHI::BindingResource{{pVisBlurredBuffer->buffer.get(), 0, pVisBlurredBuffer->buffer->size()}}},
 						{10,RHI::BindingResource{{pSlopeBlurredBuffer->buffer.get(), 0, pSlopeBlurredBuffer->buffer->size()}}},
+						{11,RHI::BindingResource{{pSppBuffer->buffer.get(), 0, pSppBuffer->buffer->size()}}},
+						{12,RHI::BindingResource{{pBetaBuffer->buffer.get(), 0, pBetaBuffer->buffer->size()}}},
 				} });
 			}
 			// create bind group layout
@@ -398,16 +484,18 @@ namespace Sandbox
 					RHI::BindGroupLayoutEntry{1, stages, RHI::StorageTextureBindingLayout{}},							// output image
 					RHI::BindGroupLayoutEntry{2, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},	// vertex buffer
 					RHI::BindGroupLayoutEntry{3, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},	// index buffer
+					RHI::BindGroupLayoutEntry{4, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},	// index buffer
 					} });
 			// create bind groups
 			for (int i = 0; i < 2; ++i) {
 				rtBindGroup[i] = rhiLayer->getDevice()->createBindGroup(RHI::BindGroupDescriptor{
 					rtBindGroupLayout.get(),
 					std::vector<RHI::BindGroupEntry>{
-						{0,RHI::BindingResource{tlas}},
+						{0,RHI::BindingResource{asgroup->tlas.get()}},
 						{1,RHI::BindingResource{Core::ResourceManager::get()->getResource<GFX::Texture>(rtTarget)->originalView.get()}},
-						{2,RHI::BindingResource{{vb, 0, vb->size()}}},
-						{3,RHI::BindingResource{{ib, 0, ib->size()}}},
+						{2,RHI::BindingResource{{asgroup->vertexBufferArray.get(), 0, asgroup->vertexBufferArray->size()}}},
+						{3,RHI::BindingResource{{asgroup->indexBufferArray.get(), 0, asgroup->indexBufferArray->size()}}},
+						{4,RHI::BindingResource{{asgroup->GeometryInfoBuffer.get(), 0, asgroup->GeometryInfoBuffer->size()}}},
 				} });
 			}
 			pipelineLayout = rhiLayer->getDevice()->createPipelineLayout(RHI::PipelineLayoutDescriptor{
@@ -423,6 +511,10 @@ namespace Sandbox
 				std::array<RHI::BindGroup*, 2>{camBindGroup[0], camBindGroup[1]},
 				std::array<RHI::BindGroup*, 2>{bufferBindGroup[0].get(), bufferBindGroup[1].get()});
 			slope_filter_pass = std::make_unique<AAF_SoftShadow_SlopeFilter_Pass>(rhiLayer, displayPipelineLayout.get(),
+				std::array<RHI::BindGroup*, 2>{bufferBindGroup[0].get(), bufferBindGroup[1].get()});
+			continue_sampling_pass = std::make_unique<AAF_SoftShadow_Sparse_ContinueSampling_Pass>(rhiLayer, pipelineLayout.get(),
+				std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()},
+				std::array<RHI::BindGroup*, 2>{camBindGroup[0], camBindGroup[1]},
 				std::array<RHI::BindGroup*, 2>{bufferBindGroup[0].get(), bufferBindGroup[1].get()});
 			vis_filter_pass = std::make_unique<AAF_SoftShadow_VisibilityFilter_Pass>(rhiLayer, displayPipelineLayout.get(),
 				std::array<RHI::BindGroup*, 2>{bufferBindGroup[0].get(), bufferBindGroup[1].get()});
@@ -524,7 +616,7 @@ namespace Sandbox
 				bufferComp2Comp_W2R.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(useFilterBuffer)->buffer.get();
 				encoder->pipelineBarrier(bufferComp2Comp_W2R);
 			}
-
+			continue_sampling_pass->composeCommands(encoder, index);
 			{
 				bufferRT2Comp.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(visBuffer)->buffer.get();
 				encoder->pipelineBarrier(bufferRT2Comp);
@@ -584,6 +676,8 @@ namespace Sandbox
 		Core::GUID useFilterBlurredBuffer;
 		Core::GUID visBlurredBuffer;
 		Core::GUID slopeBlurredBuffer;
+		Core::GUID sppBuffer;
+		Core::GUID betaBuffer;
 
 		std::unique_ptr<RHI::BindGroupLayout> buffersBindGroupLayout = nullptr;
 		std::unique_ptr<RHI::BindGroup> bufferBindGroup[2];
@@ -597,6 +691,7 @@ namespace Sandbox
 		// Pipelines
 		std::unique_ptr<AAF_SoftShadow_Sparse_InitialSampling_Pass> initial_sampling_pass = nullptr;
 		std::unique_ptr<AAF_SoftShadow_SlopeFilter_Pass> slope_filter_pass = nullptr;
+		std::unique_ptr<AAF_SoftShadow_Sparse_ContinueSampling_Pass> continue_sampling_pass = nullptr;
 		std::unique_ptr<AAF_SoftShadow_VisibilityFilter_Pass> vis_filter_pass = nullptr;
 		std::unique_ptr<AAF_SoftShadow_Display_Pass> display_pass = nullptr;
 	};

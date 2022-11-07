@@ -29,16 +29,16 @@ namespace Sandbox
 			lwb_primary_ray_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 			aaf_secondary_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 			aaf_secondary_rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-			aaf_shadow_ray_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-			aaf_shadow_ray_rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			lwb_shadow_ray_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			lwb_shadow_ray_rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 			// load Shaders
 			GFX::GFXManager::get()->registerShaderModuleResource(lwb_primary_ray_rgen, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_gi/aaf_gi_initial_sample_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
 			GFX::GFXManager::get()->registerShaderModuleResource(lwb_primary_ray_rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_gi/aaf_gi_initial_sample_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
 			GFX::GFXManager::get()->registerShaderModuleResource(lwb_primary_ray_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_gi/aaf_gi_initial_sample_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
 			GFX::GFXManager::get()->registerShaderModuleResource(aaf_secondary_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_gi/aaf_gi_secondary_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
 			GFX::GFXManager::get()->registerShaderModuleResource(aaf_secondary_rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_gi/aaf_gi_secondary_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
-			GFX::GFXManager::get()->registerShaderModuleResource(aaf_shadow_ray_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_gi/aaf_gi_shadow_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
-			GFX::GFXManager::get()->registerShaderModuleResource(aaf_shadow_ray_rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_gi/aaf_gi_shadow_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
+			GFX::GFXManager::get()->registerShaderModuleResource(lwb_shadow_ray_rchit, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_gi/aaf_gi_shadow_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
+			GFX::GFXManager::get()->registerShaderModuleResource(lwb_shadow_ray_rmiss, "../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_gi/aaf_gi_shadow_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
 			// Create rt pipeline
 			for (int i = 0; i < 2; ++i) {
 				raytracingPipeline[i] = rhiLayer->getDevice()->createRayTracingPipeline(RHI::RayTracingPipelineDescriptor{
@@ -47,11 +47,11 @@ namespace Sandbox
 						RHI::SBTsDescriptor::MissSBT{{
 							{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lwb_primary_ray_rmiss)->shaderModule.get()},
 							{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(aaf_secondary_rmiss)->shaderModule.get()},
-							{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(aaf_shadow_ray_rmiss)->shaderModule.get()} }},
+							{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lwb_shadow_ray_rmiss)->shaderModule.get()} }},
 						RHI::SBTsDescriptor::HitGroupSBT{{
 							{{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lwb_primary_ray_rchit)->shaderModule.get()}, nullptr, nullptr},
 							{{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(aaf_secondary_rchit)->shaderModule.get()}, nullptr, nullptr},
-							{{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(aaf_shadow_ray_rchit)->shaderModule.get()}, nullptr, nullptr} }}
+							{{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lwb_shadow_ray_rchit)->shaderModule.get()}, nullptr, nullptr} }}
 					} });
 			}
 		}
@@ -85,8 +85,8 @@ namespace Sandbox
 		Core::GUID aaf_secondary_rchit;
 		Core::GUID aaf_secondary_rmiss;
 		Core::GUID lwb_primary_ray_rchit;
-		Core::GUID aaf_shadow_ray_rchit;
-		Core::GUID aaf_shadow_ray_rmiss;
+		Core::GUID lwb_shadow_ray_rchit;
+		Core::GUID lwb_shadow_ray_rmiss;
 
 		std::unique_ptr<RHI::RayTracingPipeline> raytracingPipeline[2];
 		std::unique_ptr<RHI::RayTracingPassEncoder> rtEncoder[2] = {};
@@ -139,7 +139,7 @@ namespace Sandbox
 	};
 
 	export struct AAF_GI_Pipeline {
-		AAF_GI_Pipeline(RHI::RHILayer* rhiLayer, RHI::TLAS* tlas, Core::GUID rtTarget, RHI::Buffer* vb, RHI::Buffer* ib,
+		AAF_GI_Pipeline(RHI::RHILayer* rhiLayer, GFX::ASGroup* asgroup, Core::GUID rtTarget,
 			RHI::BindGroupLayout* cameraBindGroupLayout, std::array<RHI::BindGroup*, 2> const& camBindGroup)
 			: rtTarget(rtTarget)
 		{
@@ -154,6 +154,7 @@ namespace Sandbox
 			useFilterBlurredBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
 			visBlurredBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
 			slopeBlurredBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
+			sppBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
 
 			GFX::GFXManager::get()->registerBufferResource(slopeBuffer, RHI::BufferDescriptor{
 				width * height * sizeof(float) * 2, // pixel size * sizeof(vec2)
@@ -185,6 +186,9 @@ namespace Sandbox
 			GFX::GFXManager::get()->registerBufferResource(slopeBlurredBuffer, RHI::BufferDescriptor{
 				width * height * sizeof(float) * 2, // pixel size * sizeof(align(float2))
 				(uint32_t)RHI::BufferUsage::STORAGE });
+			GFX::GFXManager::get()->registerBufferResource(sppBuffer, RHI::BufferDescriptor{
+				width * height * sizeof(unsigned int) * 1, // pixel size * sizeof(align(uint))
+				(uint32_t)RHI::BufferUsage::STORAGE });
 			GFX::Buffer* pSlopeBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(slopeBuffer);
 			GFX::Buffer* pVisBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(visBuffer);
 			GFX::Buffer* pProjDistBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(projDistBuffer);
@@ -195,6 +199,7 @@ namespace Sandbox
 			GFX::Buffer* pUseFilterBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(useFilterBuffer);
 			GFX::Buffer* pUseFilterBlurredBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(useFilterBlurredBuffer);
 			GFX::Buffer* pSlopeBlurredBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(slopeBlurredBuffer);
+			GFX::Buffer* pSppBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(sppBuffer);
 			// create bind group layout - buffers + rt
 			RHI::ShaderStagesFlags stages =
 				(uint32_t)RHI::ShaderStages::RAYGEN
@@ -215,6 +220,7 @@ namespace Sandbox
 					RHI::BindGroupLayoutEntry{8, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},	// use filter tmp buffer
 					RHI::BindGroupLayoutEntry{9, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},	// vis blur tmp buffer
 					RHI::BindGroupLayoutEntry{10, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},	// vis blur tmp buffer
+					RHI::BindGroupLayoutEntry{11, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},	// vis blur tmp buffer
 				} });
 			// create bind groups
 			for (int i = 0; i < 2; ++i) {
@@ -241,16 +247,18 @@ namespace Sandbox
 					RHI::BindGroupLayoutEntry{1, stages, RHI::StorageTextureBindingLayout{}},							// output image
 					RHI::BindGroupLayoutEntry{2, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},	// vertex buffer
 					RHI::BindGroupLayoutEntry{3, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},	// index buffer
+					RHI::BindGroupLayoutEntry{4, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},	// index buffer
 					} });
 			// create bind groups
 			for (int i = 0; i < 2; ++i) {
 				rtBindGroup[i] = rhiLayer->getDevice()->createBindGroup(RHI::BindGroupDescriptor{
 					rtBindGroupLayout.get(),
 					std::vector<RHI::BindGroupEntry>{
-						{0,RHI::BindingResource{tlas}},
+						{0,RHI::BindingResource{asgroup->tlas.get()}},
 						{1,RHI::BindingResource{Core::ResourceManager::get()->getResource<GFX::Texture>(rtTarget)->originalView.get()}},
-						{2,RHI::BindingResource{{vb, 0, vb->size()}}},
-						{3,RHI::BindingResource{{ib, 0, ib->size()}}},
+						{2,RHI::BindingResource{{asgroup->vertexBufferArray.get(), 0, asgroup->vertexBufferArray->size()}}},
+						{3,RHI::BindingResource{{asgroup->indexBufferArray.get(), 0, asgroup->indexBufferArray->size()}}},
+						{4,RHI::BindingResource{{asgroup->GeometryInfoBuffer.get(), 0, asgroup->GeometryInfoBuffer->size()}}},
 				} });
 			}
 			pipelineLayout = rhiLayer->getDevice()->createPipelineLayout(RHI::PipelineLayoutDescriptor{
@@ -334,6 +342,7 @@ namespace Sandbox
 		Core::GUID useFilterBlurredBuffer;
 		Core::GUID visBlurredBuffer;
 		Core::GUID slopeBlurredBuffer;
+		Core::GUID sppBuffer;
 
 		std::unique_ptr<RHI::BindGroupLayout> buffersBindGroupLayout = nullptr;
 		std::unique_ptr<RHI::BindGroup> bufferBindGroup[2];

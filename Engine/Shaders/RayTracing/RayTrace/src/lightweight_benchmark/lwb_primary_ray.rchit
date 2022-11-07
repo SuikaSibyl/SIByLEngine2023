@@ -11,17 +11,51 @@
 #include "../../../../Utility/sampling.h"
 
 layout(location = 0) rayPayloadInEXT PrimaryRayPayload primaryPayLoad;
-// layout(location = 1) rayPayloadEXT   SecondaryRayPayload  secondaryPayload;
+layout(location = 1) rayPayloadEXT   bool  hitOccluder;
 // layout(location = 2) rayPayloadEXT   ShadowRayPayload shadowRayPayLoad;
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT tlas;
 
 void main() {
     // get primary hit info
+
     HitInfo hitInfo = getObjectHitInfo();
     primaryPayLoad.hitPoint = hitInfo.worldPosition;
     primaryPayLoad.hitNormal = hitInfo.worldNormal;
     primaryPayLoad.color = vec3(0.5);
+
+#if BENCHMARK == 1
+    const vec3 shadowRayOrigin = offsetPositionAlongNormal(hitInfo.worldPosition, hitInfo.worldNormal);
+    vec3 color = vec3(0);
+    const int shadowRayCount = 9;
+    for(int i = 0; i < shadowRayCount; ++i) {
+        const vec3 lightSample = sampleAreaLight(primaryPayLoad.rngState);
+        const vec3 lightDir = normalize(lightSample - shadowRayOrigin);
+        const float NdL = dot(hitInfo.worldNormal, lightDir);
+        if(NdL > 0.0f) {
+            const float lightDist = length(lightSample - shadowRayOrigin);
+            hitOccluder = false;            
+            traceRayEXT(tlas,           // Top-level acceleration structure
+                gl_RayFlagsOpaqueEXT,   // Ray flags, here saying "treat all geometry as opaque"
+                0xFF,                   // 8-bit instance mask, here saying "trace against all instances"
+                1,                      // SBT record offset
+                0,                      // SBT record stride for offset
+                1,                      // Miss index
+                shadowRayOrigin,        // Ray origin
+                0.0,                    // Minimum t-value
+                lightDir,               // Ray direction
+                lightDist,              // Maximum t-value
+                1);                     // Location of payload
+            if(!hitOccluder) {
+                const vec3 tlightDir = normalize(lightCenter - shadowRayOrigin);
+                const float tNdL = dot(hitInfo.worldNormal, tlightDir);
+                color += Kd * tNdL;
+            }
+        }
+    }
+    color /= shadowRayCount;
+    primaryPayLoad.color = color;
+#endif
     // const vec3 secondaryRayOrigin = offsetPositionAlongNormal(hitInfo.worldPosition, hitInfo.worldNormal);
 
     // const vec3 toLight = lightPos - secondaryRayOrigin;

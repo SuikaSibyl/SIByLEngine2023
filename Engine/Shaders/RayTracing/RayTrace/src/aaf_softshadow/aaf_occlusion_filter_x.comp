@@ -14,6 +14,7 @@ layout(binding = 4, set = 0) readonly buffer worldNormalBuffer  { vec3 world_nor
 layout(binding = 5, set = 0, scalar) readonly buffer brdfBuffer { vec3 brdf[]; };
 layout(binding = 6, set = 0) readonly buffer useFilterBuffer    { uint use_filter[]; };
 layout(binding = 9, set = 0, scalar) writeonly buffer visBlurTmpBuffer   { float vis_tmp[]; };
+layout(binding = 12, set = 0, scalar) readonly buffer betaBuffer           { float beta[]; };
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
@@ -34,6 +35,7 @@ void main()
     const float center_omega_x_f = compute_omega_x_f(slope[gid].y, proj_dist[gid]);
     const vec3  center_world_pos = world_position[gid];
     const vec3  center_world_norm = world_normal[gid];
+    const float center_beta = beta[gid];
 
     if(use_filter[gid] == 0) { // TODO: use filter n?
         vis_tmp[gid] = center_vis.x;
@@ -63,7 +65,8 @@ void main()
             {
                 const vec3 neighbor_world_norm = world_normal[neighbor_gid];
                 if(acos(dot(center_world_norm, neighbor_world_norm)) < angle_threshold) {
-                    const float weight = gaussian_filter(distancesq, center_omega_x_f);
+                    const float weight = gaussian(distancesq, center_beta);
+                    // const float weight = gaussian_filter(distancesq, center_omega_x_f);
                     // const float weight = 1;
                     accum_blurred_vis += weight * neighbor_vis;
                     accum_vis_weights += weight;
