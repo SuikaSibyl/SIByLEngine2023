@@ -27,12 +27,18 @@ void main() {
 #if BENCHMARK == 1
     const vec3 shadowRayOrigin = offsetPositionAlongNormal(hitInfo.worldPosition, hitInfo.worldNormal);
     vec3 color = vec3(0);
+    float weight = 0;
+    const vec3 tlightDir = normalize(lightCenter - shadowRayOrigin);
+    const float tNdL = dot(hitInfo.worldNormal, tlightDir);
     const int shadowRayCount = 9;
     for(int i = 0; i < shadowRayCount; ++i) {
         const vec3 lightSample = sampleAreaLight(primaryPayLoad.rngState);
         const vec3 lightDir = normalize(lightSample - shadowRayOrigin);
         const float NdL = dot(hitInfo.worldNormal, lightDir);
+        const vec3 center2Sample = lightCenter - lightSample;
+        const float strength = exp(-0.5 * dot(center2Sample,center2Sample) / (lightSigma * lightSigma));
         if(NdL > 0.0f) {
+            weight += strength;
             const float lightDist = length(lightSample - shadowRayOrigin);
             hitOccluder = false;            
             traceRayEXT(tlas,           // Top-level acceleration structure
@@ -47,13 +53,12 @@ void main() {
                 lightDist,              // Maximum t-value
                 1);                     // Location of payload
             if(!hitOccluder) {
-                const vec3 tlightDir = normalize(lightCenter - shadowRayOrigin);
-                const float tNdL = dot(hitInfo.worldNormal, tlightDir);
-                color += Kd * tNdL;
+                color += strength;
             }
         }
     }
-    color /= shadowRayCount;
+    color /= weight;
+    color *= Kd * tNdL;
     primaryPayLoad.color = color;
 #endif
     // const vec3 secondaryRayOrigin = offsetPositionAlongNormal(hitInfo.worldPosition, hitInfo.worldNormal);

@@ -410,9 +410,9 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		//ubo.proj = Math::transpose(Math::perspective(22.f, 1.f * 800 / 600, 0.1f, 10.f).m);
 		Math::vec4 campos = Math::vec4(-4.5f, 2.5f, 5.5f, 1);
 		{
-			campos.x = (float)(campos.x * sin(timer.totalTime() * 1));
-			campos.y = (float)(campos.y + cos(timer.totalTime() * 1 * 1.5));
-			campos.z = (float)(campos.z * cos(timer.totalTime() * 1));
+			//campos.x = (float)(campos.x * sin(timer.totalTime() * 1));
+			//campos.y = (float)(campos.y + cos(timer.totalTime() * 1 * 1.5));
+			//campos.z = (float)(campos.z * cos(timer.totalTime() * 1));
 		}
 		ubo.view = Math::transpose(Math::lookAt(Math::vec3(campos.x, campos.y, campos.z), Math::vec3(-1, 0.5f, 0), Math::vec3(0, 1, 0)).m);
 		ubo.proj = Math::transpose(Math::perspective(60.f, 1.f * 800 / 600, 0.1f, 10.f).m);
@@ -462,9 +462,9 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			}}
 			});
 
-		aafPipeline->composeCommands(commandEncoder.get(), index);
+		//aafPipeline->composeCommands(commandEncoder.get(), index);
 		//aafGIPipeline->composeCommands(commandEncoder.get(), index);
-		//benchmarkPipeline->composeCommands(commandEncoder.get(), index);
+		benchmarkPipeline->composeCommands(commandEncoder.get(), index);
 
 		//{
 		//	commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
