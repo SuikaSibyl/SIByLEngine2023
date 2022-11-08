@@ -25,6 +25,8 @@ struct PrimaryRayPayload {
     bool    rayHitSky;      // True if the ray hit the sky.
     bool    rayHitReflector;   // True if one of shadow rays hit sth.
     bool    rayHitShadow;
+
+    vec3    direct;
 };
 
 vec3 skyColor(in vec3 rayDir) {

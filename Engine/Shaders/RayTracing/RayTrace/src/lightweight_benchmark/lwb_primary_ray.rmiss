@@ -8,5 +8,9 @@ layout(location = 0) rayPayloadInEXT PrimaryRayPayload pld;
 
 void main() {
     pld.rayHitSky = true;
+#if BENCHMARK == 1
     pld.color = skyColor(gl_WorldRayDirectionEXT);
+#elif BENCHMARK == 2
+    pld.color = vec3(0.f);
+#endif
 }

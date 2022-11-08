@@ -15,13 +15,13 @@ const float dist_scale_threshold = 10.0;
 const float dist_threshold = 0.1;
 const float angle_threshold = 20.0 * k_pi /180.0;
 
-const float mu = 0.9f;
-const float alpha = 0.3f;
+const float mu = 1.6f;
+const float alpha = 1.0f;
 const vec3 Kd = vec3(1);
 
-const float maximumSceneDim = 2.f;
-const float zMIN = 0.02 * maximumSceneDim;
-const float zMAXMIN = 10 * zMIN;
+const float maximumSceneDim = 0.f;
+const float zMIN = 0.02 * 2.f;
+const float zMINNONE = 0.02 * 20.f;
 const float omegaHMax = 2.8;
 const float gamma = 0.4;
 
@@ -67,6 +67,7 @@ float computeOmegaXMax(in float proj_dist) {
 }
 
 float computeSPP(in float zmin, in float zmax, in float proj_dist) {
+    // const float mu = 0.9;
     const float sqrtAp = proj_dist;
     const float term1 = mu * omegaHMax * sqrtAp / zmin + alpha;
     const float term2 = omegaHMax;
@@ -77,12 +78,15 @@ float computeSPP(in float zmin, in float zmax, in float proj_dist) {
 float computeBeta(in float zmin, in float proj_dist) {
     const float omegaXMax = computeOmegaXMax(proj_dist);
     const float omegaXR = mu * min(omegaHMax/zmin, omegaXMax);
-    return 2 / omegaXR; //beta = 2/omega_x^r
+    return 1 / omegaXR; //beta = 2/omega_x^r
 }
 
 float gaussian(float distsq, float beta) {
     const float sqrt_2_pi = sqrt(2*k_pi);
     const float exponent = - distsq / (2 * beta * beta);
+    if (exponent < -3) {
+        return 0.0;
+    }
     return exp(exponent) / (sqrt_2_pi * beta);
 }
 

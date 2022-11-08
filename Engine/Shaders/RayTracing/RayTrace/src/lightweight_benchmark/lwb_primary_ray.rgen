@@ -133,33 +133,67 @@ void main()
     }
 #endif
 #if BENCHMARK == 2
-    vec3 attenuation = vec3(1.);
-    const int NUM_BOUNCE = 1;
-    for(int i=0; i<NUM_BOUNCE; ++i) {
-      // When do initial sampling for AAF, only trace single primary ray
-      traceRayEXT(tlas,                  // Top-level acceleration structure
-                  gl_RayFlagsOpaqueEXT,  // Ray flags, here saying "treat all geometry as opaque"
-                  0xFF,                  // 8-bit instance mask, here saying "trace against all instances"
-                  0,                     // SBT record offset
-                  0,                     // SBT record stride for offset
-                  0,                     // Miss index
-                  rayOrigin,             // Ray origin
-                  0.0,                   // Minimum t-value
-                  rayDirection,          // Ray direction
-                  10000.0,               // Maximum t-value
-                  0);                    // Location of payload
-      if(pld.rayHitSky) {
-        pixelColor = attenuation * pld.color;
-        break;
-      }
-      else {
-        attenuation *= pld.color;
-        vec3 color = getAlbedo(pld.hitNormal);
-        rayOrigin = offsetPositionAlongNormal(pld.hitPoint, pld.hitNormal);
-        rayDirection = pld.hitNormal + randomPointInSphere(pld.rngState);        
-        attenuation *= color;
-      }
+    // trace the primary ray
+    traceRayEXT(tlas,                  // Top-level acceleration structure
+                gl_RayFlagsOpaqueEXT,  // Ray flags, here saying "treat all geometry as opaque"
+                0xFF,                  // 8-bit instance mask, here saying "trace against all instances"
+                0,                     // SBT record offset
+                0,                     // SBT record stride for offset
+                0,                     // Miss index
+                rayOrigin,             // Ray origin
+                0.0,                   // Minimum t-value
+                rayDirection,          // Ray direction
+                10000.0,               // Maximum t-value
+                0);                    // Location of payload
+    if(pld.rayHitSky == true) {
+      pixelColor = vec3(0.f);
     }
+    else {
+      vec3 secondaryRayOrigin = offsetPositionAlongNormal(pld.hitPoint, pld.hitNormal);
+      // direct illumination
+      vec3 attenuation = pld.color;
+      vec3 direct = attenuation * pld.direct;
+      // indirect illumination
+      const int bounceNum = 1;
+      const int nSPP = 64;
+      vec3 normal = pld.hitNormal;
+      vec3 pRayDir;
+      vec3 indirect = vec3(0);
+      for(int i=0; i<nSPP; ++i) {
+          // cosine sampling the hemisphere
+          vec3 pRayOrigin = secondaryRayOrigin;
+          pRayDir = normalize(normal + randomPointInSphere(pld.rngState));
+          vec3 atten = vec3(1.);
+          vec3 Li = vec3(0.);
+          for(int k=0; k<bounceNum; ++k) {
+              // cast secondary ray
+              pld.rayHitSky = true;
+              pld.direct = vec3(0.);
+              pld.color = vec3(0.);
+              traceRayEXT(tlas,   // acceleration structure
+                      gl_RayFlagsOpaqueEXT,       // rayFlags
+                      0xFF,        // cullMask
+                      0,           // sbtRecordOffset
+                      0,           // sbtRecordStride
+                      0,           // missIndex
+                      pRayOrigin,  // ray origin
+                      0.0,         // ray min range
+                      pRayDir,      // ray direction
+                      10000.0,        // ray max range
+                      0            // payload (location = 1)
+              );
+              if(pld.rayHitSky == true)
+                  break;
+              pRayOrigin = offsetPositionAlongNormal(pld.hitPoint, pld.hitNormal);
+              pRayDir = pld.hitNormal + randomPointInSphere(pld.rngState);
+              atten *= pld.color;
+              Li += atten  * pld.direct;
+          }
+          indirect += Li; // if do uniform sample: * secNdL * 2
+      }
+      pixelColor = attenuation * indirect / nSPP + direct;
+    }
+
 #endif
 
   if(pushConstants.sample_batch != 0) {

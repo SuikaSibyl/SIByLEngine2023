@@ -91,15 +91,16 @@ void main()
                 0);                    // Location of payload
 
   const float tHit = distance(pld.hitPoint, rayOrigin);
-  const float proj_distance  = 2.f / resolution.y * (tHit * tan(half_fov* k_pi / 180.0));
+  const float proj_tHit = tHit * dot(normalize(target.xyz), vec3(0,0,1));
+  const float proj_distance  = 2.f * (proj_tHit * tan(half_fov* k_pi / 180.0)) / resolution.y;
 
   uint gid = pixel.x + pixel.y * resolution.x;
   
   pld.z_min = max(pld.z_min, zMIN); // clamp z_min
   pld.z_max = max(pld.z_max, zMIN);
   if(pld.z_min == k_inf) {
-    pld.z_min = zMIN * 10;
-    pld.z_max = zMIN * 10;
+    pld.z_min = zMINNONE;
+    pld.z_max = zMINNONE;
   }
   z_min_max[gid] = vec2(pld.z_min, pld.z_max);
 

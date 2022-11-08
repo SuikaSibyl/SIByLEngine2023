@@ -63,7 +63,7 @@ void main()
     vec3 indirect_16spp = indirect[gid];
     uint nSPP = int(min(max(spp[gid], 16), 100)) - 16;
     if(nSPP == 0) return; // if no more sample needed
-
+    
     const vec3 origin       = world_position[gid];
     const vec3 normal       = world_normal[gid];
     const vec3 rayOrigin    = offsetPositionAlongNormal(origin, normal);
@@ -119,10 +119,11 @@ void main()
     }
 
     if(pld.z_min == k_inf) {
-        pld.z_min = zMIN * 10;
+        pld.z_min = zMINNONE;
     }
     pld.z_min = max(pld.z_min, zMIN); // clamp z_min
-    pld.z_min = min(z_min_max[gid].x, pld.z_min);
+    pld.z_min = min(z_min_max[gid].x, pld.z_min); // clamp z_min
+    pld.z_max = max(z_min_max[gid].x, pld.z_max);
 
     beta[gid] = computeBeta(pld.z_min, proj_dist[gid]);
     indirect[gid] = (pld.indirect + indirect_16spp*16) /(nSPP+16);

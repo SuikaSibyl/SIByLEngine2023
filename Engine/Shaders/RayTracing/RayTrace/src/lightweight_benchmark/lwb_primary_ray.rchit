@@ -62,10 +62,31 @@ void main() {
     primaryPayLoad.color = color;
 #endif
 #if BENCHMARK == 2
-
+    // estimate direct illumination
+    const vec3 shadowRayOrigin = offsetPositionAlongNormal(hitInfo.worldPosition, hitInfo.worldNormal);
+    const vec3 lightDir = lightPos - shadowRayOrigin;
+    const float NdL = dot(hitInfo.worldNormal, normalize(lightDir));
+    primaryPayLoad.direct = vec3(0.);
+    if(NdL > 0.0f) {
+        hitOccluder = false;            
+        traceRayEXT(tlas,           // Top-level acceleration structure
+            gl_RayFlagsOpaqueEXT,   // Ray flags, here saying "treat all geometry as opaque"
+            0xFF,                   // 8-bit instance mask, here saying "trace against all instances"
+            1,                      // SBT record offset
+            0,                      // SBT record stride for offset
+            1,                      // Miss index
+            shadowRayOrigin,        // Ray origin
+            0.0,                    // Minimum t-value
+            normalize(lightDir),    // Ray direction
+            length(lightDir),       // Maximum t-value
+            1);                     // Location of payload
+        if(!hitOccluder) {
+            primaryPayLoad.direct = NdL * vec3(1.);
+        }
+    }
+    primaryPayLoad.color = getAlbedo(hitInfo.worldNormal);
+    primaryPayLoad.rayHitSky = false;
 #endif
-    const vec3 secondaryRayOrigin = offsetPositionAlongNormal(hitInfo.worldPosition, hitInfo.worldNormal);
-    const vec3 toLight = lightPos - secondaryRayOrigin;
 
     // // compute BRDF
     // if(true) {

@@ -62,7 +62,7 @@ void main()
     else if(DISPLAY_MODE == 7)
         pixelColor = vec3(normalToColor(world_normal[gid]));
     else if(DISPLAY_MODE == 8)
-        pixelColor = vec3(colorMap_naive(beta[gid] / 2));
+        pixelColor = vec3(colorMap_naive(beta[gid] * 5));
     else if(DISPLAY_MODE == 9)
         pixelColor = vec3(indirect[gid]);
 
