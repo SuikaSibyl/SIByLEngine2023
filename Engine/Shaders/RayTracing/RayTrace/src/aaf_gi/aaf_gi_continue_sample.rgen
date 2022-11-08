@@ -1,0 +1,129 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_ray_query : require
+#extension GL_EXT_scalar_block_layout : require
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+#include "aaf_gi_common.h"
+#include "../../../../Utility/random.h"
+#include "../../../../Utility/Visualization.h"
+#include "../../include/rtCommon.h"
+
+struct PushConstants {
+    uint sample_batch;
+};
+
+layout(push_constant) uniform PushConsts {
+  PushConstants pushConstants;
+};
+
+layout(binding = 0, set = 0) uniform accelerationStructureEXT tlas;
+
+layout(binding = 7, set = 2, rgba32f) uniform image2D storageImage;
+
+// buffers
+layout(binding = 0, set = 2, scalar) readonly buffer zMinMaxBuffer     { vec2 z_min_max[]; };
+layout(binding = 1, set = 2, scalar) buffer indirectBuffer             { vec3 indirect[]; };
+layout(binding = 2, set = 2, scalar) readonly buffer albedoBuffer      { vec3 albedo[]; };
+layout(binding = 3, set = 2, scalar) readonly buffer projDistBuffer    { float proj_dist[]; };
+layout(binding = 4, set = 2, scalar) readonly buffer worldPosBuffer    { vec3 world_position[]; };
+layout(binding = 5, set = 2, scalar) readonly buffer worldNormalBuffer { vec3 world_normal[]; };
+layout(binding = 6, set = 2, scalar) readonly buffer useFilterBuffer   { uint use_filter[]; };
+layout(binding = 8, set = 2, scalar) readonly buffer directBuffer      { vec3 direct[]; };
+layout(binding = 9, set = 2, scalar) readonly buffer sppBuffer         { float spp[]; };
+layout(binding = 10, set = 2, scalar) buffer betaBuffer       { float beta[]; };
+
+// Global uniforms carrying camera information.
+struct GlobalUniforms {
+  mat4 model;
+  mat4 view;
+  mat4 proj;
+  mat4 viewInverse;  // Camera inverse view matrix
+  mat4 projInverse;  // Camera inverse projection matrix
+};
+layout(binding = 0, set = 1) uniform _GlobalUniforms { GlobalUniforms uni; };
+
+// Primary ray payload.
+layout(location = 0) rayPayloadEXT PrimarySamplePayload pld;
+layout(location = 1) rayPayloadEXT SecondaryRayPayload  secondaryPayload;
+
+void main()
+{   
+    // The resolution of the image, which is the same as the launch size:
+    const ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
+    // If the pixel is outside of the image, don't do anything:
+    if((pixel.x >= resolution.x) || (pixel.y >= resolution.y)) {
+        return;
+    }
+
+    uint gid = pixel.x + pixel.y * resolution.x;
+    if(use_filter[gid] == 0) return; // if on sky
+    vec3 indirect_16spp = indirect[gid];
+    uint nSPP = int(min(max(spp[gid], 16), 100)) - 16;
+    if(nSPP == 0) return; // if no more sample needed
+
+    const vec3 origin       = world_position[gid];
+    const vec3 normal       = world_normal[gid];
+    const vec3 rayOrigin    = offsetPositionAlongNormal(origin, normal);
+
+    pld.rngState = uint((pushConstants.sample_batch * resolution.y + pixel.y) * resolution.x + pixel.x);
+    pld.rayHitReflector = false;
+    pld.rayHitShadow = false;
+    pld.indirect = vec3(0.f);
+    pld.direct = vec3(0.f);
+    pld.z_min = k_inf;
+    pld.z_max = 0.0;
+    pld.albedo = vec3(0.);
+
+    const int bounceNum = 1;
+    for(int i=0; i<nSPP; ++i) {
+        // cosine sampling the hemisphere
+        const vec3 sampleDir = normalize(normal + randomPointInSphere(pld.rngState));
+        const float NdL = dot(sampleDir, normal);
+        vec3 pRayOrigin = rayOrigin;
+        vec3 pRayDir = sampleDir;
+        vec3 attenuation = vec3(1.);
+        vec3 Li = vec3(0.);
+        for(int k=0; k<bounceNum; ++k) {
+            // cast secondary ray
+            secondaryPayload.hit = false;
+            secondaryPayload.distanceToReflector = 0;
+            secondaryPayload.L = vec3(0.);
+            traceRayEXT(tlas,   // acceleration structure
+                    gl_RayFlagsOpaqueEXT,       // rayFlags
+                    0xFF,        // cullMask
+                    1,           // sbtRecordOffset
+                    0,           // sbtRecordStride
+                    1,           // missIndex
+                    pRayOrigin,  // ray origin
+                    0.0,         // ray min range
+                    pRayDir,      // ray direction
+                    10000.0,        // ray max range
+                    1            // payload (location = 1)
+            );
+            if(secondaryPayload.hit == false)
+                break;
+            if(k==0) {
+                pld.z_min = min(pld.z_min, secondaryPayload.distanceToReflector);
+                pld.z_max = max(pld.z_max, secondaryPayload.distanceToReflector);
+            }
+            pRayOrigin = secondaryPayload.worldPosition;
+            vec3 tmpNormal = secondaryPayload.worldNormal;
+            pRayDir = tmpNormal + randomPointInSphere(pld.rngState);
+            attenuation *= secondaryPayload.albedo;
+            Li += attenuation  * secondaryPayload.L;
+        }
+        pld.indirect += Li; // if do uniform sample: * secNdL * 2
+    }
+
+    if(pld.z_min == k_inf) {
+        pld.z_min = zMIN * 10;
+    }
+    pld.z_min = max(pld.z_min, zMIN); // clamp z_min
+    pld.z_min = min(z_min_max[gid].x, pld.z_min);
+
+    beta[gid] = computeBeta(pld.z_min, proj_dist[gid]);
+    indirect[gid] = (pld.indirect + indirect_16spp*16) /(nSPP+16);
+}

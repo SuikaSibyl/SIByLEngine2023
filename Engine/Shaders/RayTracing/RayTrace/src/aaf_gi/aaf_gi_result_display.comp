@@ -7,21 +7,32 @@
 #include "aaf_gi_common.h"
 #include "../../../../Utility/Visualization.h"
 
-layout(binding = 0, set = 0) readonly buffer slopeBuffer        { vec2 slope[]; };
-layout(binding = 1, set = 0, scalar) readonly buffer visBlurredBuffer   { vec3 vis_blurred[]; };
-layout(binding = 2, set = 0) readonly buffer projDistBuffer     { float proj_dist[]; };
-layout(binding = 3, set = 0) readonly buffer worldPosBuffer     { vec3 world_position[]; };
-layout(binding = 4, set = 0) readonly buffer worldNormalBuffer  { vec3 world_normal[]; };
-layout(binding = 5, set = 0, scalar) readonly buffer brdfBuffer { vec3 brdf[]; };
-layout(binding = 6, set = 0) readonly buffer useFilterBuffer    { uint use_filter[]; };
+layout(binding = 0, set = 0, scalar) readonly buffer zMinMaxBuffer     { vec2 z_min_max[]; };
+layout(binding = 1, set = 0, scalar) readonly buffer indirectBuffer    { vec3 indirect[]; };
+layout(binding = 2, set = 0, scalar) readonly buffer albedoBuffer      { vec3 albedo[]; };
+layout(binding = 3, set = 0, scalar) readonly buffer projDistBuffer    { float proj_dist[]; };
+layout(binding = 4, set = 0, scalar) readonly buffer worldPosBuffer    { vec3 world_position[]; };
+layout(binding = 5, set = 0, scalar) readonly buffer worldNormalBuffer { vec3 world_normal[]; };
+layout(binding = 6, set = 0, scalar) readonly buffer useFilterBuffer   { uint use_filter[]; };
+layout(binding = 8, set = 0, scalar) readonly buffer directBuffer      { vec3 direct[]; };
+layout(binding = 9, set = 0, scalar) readonly buffer sppBuffer         { float spp[]; };
+layout(binding = 10, set = 0, scalar) readonly buffer betaBuffer       { float beta[]; };
+layout(binding = 11, set = 0, scalar) readonly buffer tmpGIBuffer      { vec3 tmpGI[]; };
 
 layout(binding = 7, set = 0, rgba32f) uniform image2D storageImage;
 
-layout(binding = 8, set = 0) readonly buffer useFilterBlurTmpBuffer     { uint use_filter_tmp[]; };
-layout(binding = 9, set = 0, scalar) readonly buffer visBlurTmpBuffer   { float vis_tmp[]; };
-layout(binding = 10, set = 0, scalar) readonly buffer slopeBlurTmpBuffer   { vec2 slope_tmp[]; };
-
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+// 1: output
+// 2: z_min
+// 3: z_max
+// 4: use filter
+// 5: spp
+// 6: proj_dist
+// 7: normal
+// 8: beta
+// 9: Indirect Only
+const int DISPLAY_MODE = 1;
 
 void main()
 {
@@ -35,21 +46,26 @@ void main()
     
     // the output color
     vec3 pixelColor = vec3(0.f);
-    // display vis
-    // pixelColor = vec3(vis_blurred[gid].x);
-    // display world position
-    // pixelColor = vec3(0.25 * (world_position[gid] + vec3(2)));
-    // display world normal
-    // pixelColor = vec3(0.5 * (world_normal[gid] + vec3(1)));
-    // display brdf
-    // pixelColor = vec3(brdf[gid]);
-    // ccombined
-    pixelColor = vec3(brdf[gid]) * vec3(vis_blurred[gid].x);
-    // pixelColor = colorMap_naive(slope[gid].x);
-    // display slope min
-    // pixelColor = vec3(colorMap_naive(slope[gid].y));
 
-    // pixelColor = vec3(float(use_filter_tmp[gid]));
+    if(DISPLAY_MODE == 1)
+        pixelColor = vec3(indirect[gid] * albedo[gid] + direct[gid]);
+    else if(DISPLAY_MODE == 2)
+        pixelColor = vec3(colorMap_naive(z_min_max[gid].x / 4));
+    else if(DISPLAY_MODE == 3)
+        pixelColor = vec3(colorMap_naive(z_min_max[gid].y / 3));
+    else if(DISPLAY_MODE == 4)
+        pixelColor = vec3(use_filter[gid]);
+    else if(DISPLAY_MODE == 5)
+        pixelColor = vec3(colorMap_naive(spp[gid] / 100));
+    else if(DISPLAY_MODE == 6)
+        pixelColor = vec3(colorMap_naive(proj_dist[gid] * 10));
+    else if(DISPLAY_MODE == 7)
+        pixelColor = vec3(normalToColor(world_normal[gid]));
+    else if(DISPLAY_MODE == 8)
+        pixelColor = vec3(colorMap_naive(beta[gid] / 2));
+    else if(DISPLAY_MODE == 9)
+        pixelColor = vec3(indirect[gid]);
 
-    // imageStore(storageImage, ivec2(pixel), vec4(pixelColor, 1.0));
+
+    imageStore(storageImage, ivec2(pixel), vec4(pixelColor, 1.0));
 }

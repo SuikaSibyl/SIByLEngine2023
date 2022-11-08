@@ -2,7 +2,8 @@
 #define _LIGHTWEIGHT_BENCHMARK_HEADER_
 
 // 1: aaf softshadow
-#define BENCHMARK 1
+// 2: aaf gi
+#define BENCHMARK 2
 
 #if BENCHMARK == 0
 /** output image resolution */
@@ -10,6 +11,9 @@ const uvec2 resolution = uvec2(800, 600);
 #endif
 #if BENCHMARK == 1
 #include "../aaf_softshadow/aaf_common.h"
+#endif
+#if BENCHMARK == 2
+#include "../aaf_gi/aaf_gi_common.h"
 #endif
 
 struct PrimaryRayPayload {

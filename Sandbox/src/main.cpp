@@ -227,12 +227,9 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		ASGroup = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ASGroup>();
 		GFX::GFXManager::get()->registerAsGroupResource(ASGroup,
 			RHI::TLASDescriptor{ {
-				{blas_floor.get(), floor_transform,0,0},
-				{blas_grid1.get(), grid1_transform,0,0},
-				{blas_grid2.get(), grid2_transform,0,0},
-				{blas_grid3.get(), grid3_transform,0,0},
+				{blas.get(), mat4{},0,0},
 			} },
-			std::vector<Core::GUID>{ floor, grid1, grid2, grid3 }
+			std::vector<Core::GUID>{ cornellBox }
 			//std::vector<Core::GUID>{ cornellBox, grid1 }
 			);
 
@@ -404,18 +401,18 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		height = 600;
 
 		UniformBufferObject ubo;
-		//Math::vec4 campos = Math::mul(Math::rotateY(0 * 20).m, Math::vec4(-0.001, 1.0, 6.0, 1));
-		////ubo.model = Math::transpose(Math::rotate(timer.totalTime() * 80, Math::vec3(0, 1, 0)).m);
-		//ubo.view = Math::transpose(Math::lookAt(Math::vec3(campos.x, campos.y, campos.z) , Math::vec3(0, 1, 0), Math::vec3(0, 1, 0)).m);
-		//ubo.proj = Math::transpose(Math::perspective(22.f, 1.f * 800 / 600, 0.1f, 10.f).m);
-		Math::vec4 campos = Math::vec4(-4.5f, 2.5f, 5.5f, 1);
-		{
-			//campos.x = (float)(campos.x * sin(timer.totalTime() * 1));
-			//campos.y = (float)(campos.y + cos(timer.totalTime() * 1 * 1.5));
-			//campos.z = (float)(campos.z * cos(timer.totalTime() * 1));
-		}
-		ubo.view = Math::transpose(Math::lookAt(Math::vec3(campos.x, campos.y, campos.z), Math::vec3(-1, 0.5f, 0), Math::vec3(0, 1, 0)).m);
-		ubo.proj = Math::transpose(Math::perspective(60.f, 1.f * 800 / 600, 0.1f, 10.f).m);
+		Math::vec4 campos = Math::mul(Math::rotateY(0 * 20).m, Math::vec4(-0.001, 1.0, 6.0, 1));
+		//ubo.model = Math::transpose(Math::rotate(timer.totalTime() * 80, Math::vec3(0, 1, 0)).m);
+		ubo.view = Math::transpose(Math::lookAt(Math::vec3(campos.x, campos.y, campos.z) , Math::vec3(0, 1, 0), Math::vec3(0, 1, 0)).m);
+		ubo.proj = Math::transpose(Math::perspective(22.f, 1.f * 800 / 600, 0.1f, 10.f).m);
+		//Math::vec4 campos = Math::vec4(-4.5f, 2.5f, 5.5f, 1);
+		//{
+		//	//campos.x = (float)(campos.x * sin(timer.totalTime() * 1));
+		//	//campos.y = (float)(campos.y + cos(timer.totalTime() * 1 * 1.5));
+		//	//campos.z = (float)(campos.z * cos(timer.totalTime() * 1));
+		//}
+		//ubo.view = Math::transpose(Math::lookAt(Math::vec3(campos.x, campos.y, campos.z), Math::vec3(-1, 0.5f, 0), Math::vec3(0, 1, 0)).m);
+		//ubo.proj = Math::transpose(Math::perspective(60.f, 1.f * 800 / 600, 0.1f, 10.f).m);
 		ubo.viewInverse = Math::inverse(ubo.view);
 		//ubo.proj.data[1][1] *= -1;
 		ubo.projInverse = Math::inverse(ubo.proj);
@@ -463,8 +460,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			});
 
 		//aafPipeline->composeCommands(commandEncoder.get(), index);
-		//aafGIPipeline->composeCommands(commandEncoder.get(), index);
-		benchmarkPipeline->composeCommands(commandEncoder.get(), index);
+		aafGIPipeline->composeCommands(commandEncoder.get(), index);
+		//benchmarkPipeline->composeCommands(commandEncoder.get(), index);
 
 		//{
 		//	commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{

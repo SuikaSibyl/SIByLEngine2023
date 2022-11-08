@@ -61,9 +61,11 @@ void main() {
     color *= Kd * tNdL;
     primaryPayLoad.color = color;
 #endif
-    // const vec3 secondaryRayOrigin = offsetPositionAlongNormal(hitInfo.worldPosition, hitInfo.worldNormal);
+#if BENCHMARK == 2
 
-    // const vec3 toLight = lightPos - secondaryRayOrigin;
+#endif
+    const vec3 secondaryRayOrigin = offsetPositionAlongNormal(hitInfo.worldPosition, hitInfo.worldNormal);
+    const vec3 toLight = lightPos - secondaryRayOrigin;
 
     // // compute BRDF
     // if(true) {

@@ -19,26 +19,14 @@ layout(binding = 0, set = 0) uniform accelerationStructureEXT tlas;
 void main() {
     // get primary hit info
     HitInfo hitInfo = getObjectHitInfo();
+    // set albedo of hit point
+    primaryPayLoad.albedo = Kd * getAlbedo(hitInfo.worldNormal);
+    // prepare for secondary ray
     const vec3 secondaryRayOrigin = offsetPositionAlongNormal(hitInfo.worldPosition, hitInfo.worldNormal);
-
     const vec3 toLight = lightPos - secondaryRayOrigin;
-
-    // compute BRDF
-    if(true) {
-        const vec3 L = normalize(toLight);
-        const float NdL = max(dot(hitInfo.worldNormal, L),0.0f);
-        const vec3 H = normalize(L - normalize(gl_WorldRayDirectionEXT));
-        const float NdH = max(dot(hitInfo.worldNormal, H),0.0f);
-        vec3 color = vec3(0);
-        // white light
-        const vec3 Kd = vec3(1.);
-        color += Kd * NdL;
-        // do not ocnsider specular now
-        // if (NdH > 0)
-        //     color += Ks * pow(NdH, phongExp);
-        primaryPayLoad.brdf = color * getAlbedo(hitInfo.worldNormal);
-    }
-
+    // compute direct
+    const vec3 L = normalize(toLight);
+    const float NdL = max(dot(hitInfo.worldNormal, L),0.0f);
     const vec3 lightDir = lightPos - secondaryRayOrigin;
     traceRayEXT(tlas,           // acceleration structure
         gl_RayFlagsOpaqueEXT,   // rayFlags
@@ -54,78 +42,68 @@ void main() {
     );
     if(shadowRayPayLoad.hit == false) {
         primaryPayLoad.rayHitShadow = true;
+        primaryPayLoad.direct = NdL * primaryPayLoad.albedo;
     }
-
-    // secondaryPayload.hit = false;
-    // secondaryPayload.attenuation = vec3(1,0,0);
-    // secondaryPayload.distanceMin = 9999;
-    // secondaryPayload.distanceMax = 0;
-    const vec3 seedVec = normalize(vec3(primaryPayLoad.rngState,primaryPayLoad.rngState,0));
+    // perpare TBN for secondary rays' normal
+    const vec3 seedVec = normalize(vec3(stepAndOutputRNGFloat(primaryPayLoad.rngState),stepAndOutputRNGFloat(primaryPayLoad.rngState),0));
     const vec3 tangent = normalize(seedVec - hitInfo.worldNormal*dot(seedVec, hitInfo.worldNormal));
     const vec3 bitangent = cross(hitInfo.worldNormal, tangent);
     const mat3 TBN = mat3(tangent, bitangent, hitInfo.worldNormal);
-
+    // sample secondary ray
     const int sqrtSecondaryRaySamples = 4;
     const float invNSamples = 1.f/sqrtSecondaryRaySamples;
+    const int bounceNum = 1;
     vec2 secondarySampleSeed;
     for(int i=0; i<sqrtSecondaryRaySamples; ++i) {
         for(int j=0; j<sqrtSecondaryRaySamples; ++j) {
             // stratified sampling the hemisphere
             secondarySampleSeed.x = invNSamples* (i + stepAndOutputRNGFloat(primaryPayLoad.rngState));
             secondarySampleSeed.y = invNSamples* (j + stepAndOutputRNGFloat(primaryPayLoad.rngState));
-            vec3 sampleDir = uniformSampleHemisphere(secondarySampleSeed);
-            const float NdL = abs(sampleDir.z);
+            vec3 sampleDir = cosineSampleHemisphere(secondarySampleSeed);
+            const float secNdL = abs(sampleDir.z);
             sampleDir = TBN * sampleDir;
-            const float strength = 1;
+            vec3 rayOrigin = secondaryRayOrigin;
+            vec3 rayDir = normalize(sampleDir);
+            vec3 attenuation = vec3(1.);
+            vec3 Li = vec3(0.);
+            for(int k=0; k<bounceNum; ++k) {
+                // cast secondary ray
+                secondaryPayload.hit = false;
+                secondaryPayload.distanceToReflector = 0;
+                secondaryPayload.L = vec3(0.);
+                traceRayEXT(tlas,   // acceleration structure
+                        gl_RayFlagsOpaqueEXT,       // rayFlags
+                        0xFF,        // cullMask
+                        1,           // sbtRecordOffset
+                        0,           // sbtRecordStride
+                        1,           // missIndex
+                        rayOrigin,  // ray origin
+                        0.0,         // ray min range
+                        rayDir,      // ray direction
+                        10000.0,        // ray max range
+                        1            // payload (location = 1)
+                );
+                if(secondaryPayload.hit == false)
+                    break;
+                if(k==0) {
+                    primaryPayLoad.z_min = min(primaryPayLoad.z_min, secondaryPayload.distanceToReflector);
+                    primaryPayLoad.z_max = max(primaryPayLoad.z_max, secondaryPayload.distanceToReflector);
+                }
+                rayOrigin = secondaryPayload.worldPosition;
+                vec3 tmpNormal = secondaryPayload.worldNormal;
+                rayDir = tmpNormal + randomPointInSphere(primaryPayLoad.rngState);
+                attenuation *= secondaryPayload.albedo;
+                Li += attenuation  * secondaryPayload.L;
 
-            // accumulate weights for vis
-            primaryPayLoad.accumWeights += strength;
-            // cast shadow ray
-            secondaryPayload.hit = false;
-            secondaryPayload.distanceToReflector = 0;
-            secondaryPayload.L = vec3(0.);
-            // shadowPayLoad.attenuation = vec3(0,0,1);
-            uint  flags = gl_RayFlagsOpaqueEXT;
-            traceRayEXT(tlas,   // acceleration structure
-                    flags,       // rayFlags
-                    0xFF,        // cullMask
-                    1,           // sbtRecordOffset
-                    0,           // sbtRecordStride
-                    1,           // missIndex
-                    secondaryRayOrigin,  // ray origin
-                    0.0,         // ray min range
-                    normalize(sampleDir),      // ray direction
-                    10000.0,        // ray max range
-                    1            // payload (location = 1)
-            );
-            // if hit any shadow caster
-            if(secondaryPayload.hit) {
-                // primaryPayLoad.rayShadow = true;
-                // float d2min = distanceToLight - shadowPayLoad.distanceMax;
-                // const float d2max = distanceToLight - shadowPayLoad.distanceMin;
-                // if (shadowPayLoad.distanceMax < 0.000000001)
-                //     d2min = distanceToLight;
-                // const float s1 = distanceToLight/d2min - 1.0;
-                // const float s2 = distanceToLight/d2max - 1.0;
-                // primaryPayLoad.s1 = max(primaryPayLoad.s1, s1);
-                // primaryPayLoad.s2 = min(primaryPayLoad.s2, s2);
             }
-            // if shadow ray hit no objects
-            else {
-                vec3 color = vec3(0);
-                // white light
-                const vec3 Kd = vec3(1.);
-                color += getAlbedo(hitInfo.worldNormal) * NdL * 2;
-                primaryPayLoad.accumGI += secondaryPayload.L * color;
-            }
+            primaryPayLoad.indirect += Li; // if do uniform sample: * secNdL * 2
         }
     }
 
-    if(primaryPayLoad.accumWeights > 0)
-        primaryPayLoad.accumGI /= primaryPayLoad.accumWeights;
-    // primaryPayLoad.accumGI = getAlbedo(hitInfo.worldNormal) * primaryPayLoad.brdf;
-    // // write to primary ray payload
-    // primaryPayLoad.rayHitSky = false;
-    // primaryPayLoad.hitPoint = hitInfo.worldPosition;
-    // primaryPayLoad.hitNormal = hitInfo.worldNormal;
+    primaryPayLoad.indirect /= sqrtSecondaryRaySamples * sqrtSecondaryRaySamples;
+
+    // write to primary ray payload
+    primaryPayLoad.rayHitSky = false;
+    primaryPayLoad.hitPoint = hitInfo.worldPosition;
+    primaryPayLoad.hitNormal = hitInfo.worldNormal;
 }

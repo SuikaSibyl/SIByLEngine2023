@@ -24,16 +24,17 @@ layout(binding = 0, set = 0) uniform accelerationStructureEXT tlas;
 layout(binding = 7, set = 2, rgba32f) uniform image2D storageImage;
 
 // buffers
-// layout(binding = 0, set = 2) writeonly  buffer slopeBuffer        { vec2 slope[]; };
-// layout(binding = 1, set = 2, scalar) writeonly  buffer giBuffer   { vec3 gi[]; };
-// layout(binding = 2, set = 2) writeonly  buffer projDistBuffer     { float proj_dist[]; };
-// layout(binding = 3, set = 2) writeonly  buffer worldPosBuffer     { vec3 world_position[]; };
-// layout(binding = 4, set = 2) writeonly  buffer worldNormalBuffer  { vec3 world_normal[]; };
-// layout(binding = 5, set = 2, scalar) writeonly buffer brdfBuffer  { vec3 brdf[]; };
-// layout(binding = 6, set = 2) writeonly buffer useFilterBuffer     { uint use_filter[]; };
-// layout(binding = 8, set = 2) writeonly buffer useFilterBlurTmpBuffer { uint use_filter_tmp[]; };
+layout(binding = 0, set = 2, scalar) writeonly buffer zMinMaxBuffer     { vec2 z_min_max[]; };
+layout(binding = 1, set = 2, scalar) writeonly buffer indirectBuffer    { vec3 indirect[]; };
+layout(binding = 2, set = 2, scalar) writeonly buffer albedoBuffer      { vec3 albedo[]; };
+layout(binding = 3, set = 2, scalar) writeonly buffer projDistBuffer    { float proj_dist[]; };
+layout(binding = 4, set = 2, scalar) writeonly buffer worldPosBuffer    { vec3 world_position[]; };
+layout(binding = 5, set = 2, scalar) writeonly buffer worldNormalBuffer { vec3 world_normal[]; };
+layout(binding = 6, set = 2, scalar) writeonly buffer useFilterBuffer   { uint use_filter[]; };
+layout(binding = 8, set = 2, scalar) writeonly buffer directBuffer      { vec3 direct[]; };
+layout(binding = 9, set = 2, scalar) writeonly buffer sppBuffer         { float spp[]; };
+layout(binding = 10, set = 2, scalar) writeonly buffer betaBuffer       { float beta[]; };
 
-// layout(binding = 6, set = 2, rgba32f) uniform image2D storageImage;
 // Global uniforms carrying camera information.
 struct GlobalUniforms {
   mat4 model;
@@ -71,11 +72,11 @@ void main()
     pld.rngState = uint((pushConstants.sample_batch * resolution.y + pixel.y) * resolution.x + pixel.x);
     pld.rayHitReflector = false;
     pld.rayHitShadow = false;
-    pld.accumGI = vec3(0.f);
-    pld.accumWeights = 0.f;
-    pld.slope1 = 0.0;
-    pld.slope2 = 10000.0;
-    pld.brdf = vec3(0.);
+    pld.indirect = vec3(0.f);
+    pld.direct = vec3(0.f);
+    pld.z_min = k_inf;
+    pld.z_max = 0.0;
+    pld.albedo = vec3(0.);
     // When do initial sampling for AAF, only trace single primary ray
     traceRayEXT(tlas,                  // Top-level acceleration structure
                 gl_RayFlagsOpaqueEXT,  // Ray flags, here saying "treat all geometry as opaque"
@@ -89,18 +90,26 @@ void main()
                 10000.0,               // Maximum t-value
                 0);                    // Location of payload
 
-  // const float tHit = distance(pld.hitPoint, rayOrigin);
-  // const float proj_distance  = 2.f / resolution.y * (tHit * tan(half_fov* k_pi / 180.0));
-  vec3 pixelColor = pld.accumGI + (pld.rayHitShadow ? pld.brdf : vec3(0));
-  imageStore(storageImage, ivec2(pixel), vec4(pixelColor, 1.0));
-  // const float avgVis = (pld.rayShadow && pld.accumWeights > 0.01) ? pld.accumVis/pld.accumWeights : 1.0;
-  // // fill in output buffers
-  // uint gid = pixel.x + pixel.y * resolution.x;
-  // slope[gid] = vec2(pld.s1, pld.s2);
-  // vis[gid] = vec3(avgVis, pld.accumWeights, pld.accumVis);
-  // world_position[gid] = pld.hitPoint;
-  // world_normal[gid] = normalize(pld.hitNormal);
-  // brdf[gid] = pld.brdf;
-  // use_filter[gid] = pld.rayShadow ? 1:0;
-  // use_filter_tmp[gid] = 0;
+  const float tHit = distance(pld.hitPoint, rayOrigin);
+  const float proj_distance  = 2.f / resolution.y * (tHit * tan(half_fov* k_pi / 180.0));
+
+  uint gid = pixel.x + pixel.y * resolution.x;
+  
+  pld.z_min = max(pld.z_min, zMIN); // clamp z_min
+  pld.z_max = max(pld.z_max, zMIN);
+  if(pld.z_min == k_inf) {
+    pld.z_min = zMIN * 10;
+    pld.z_max = zMIN * 10;
+  }
+  z_min_max[gid] = vec2(pld.z_min, pld.z_max);
+
+  albedo[gid] = pld.albedo;
+  direct[gid] = pld.direct;
+  indirect[gid] = pld.indirect;
+  proj_dist[gid] = proj_distance;
+  spp[gid] = computeSPP(pld.z_min, pld.z_max, proj_distance);
+  beta[gid] = computeBeta(pld.z_min, proj_distance);
+  use_filter[gid] = pld.rayHitSky ? 0 : 1;
+  world_position[gid] = pld.hitPoint;
+  world_normal[gid] = normalize(pld.hitNormal);
 }

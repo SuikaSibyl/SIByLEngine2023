@@ -373,12 +373,12 @@ namespace Sandbox
 			: rtTarget(rtTarget)
 		{
 			// allocate buffers
-			slopeBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
-			visBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
-			projDistBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
+			zMinMaxBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
+			loBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
+			colorBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
 			worldPosBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
 			worldNormalBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
-			brdfBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
+			projDistBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
 			useFilterBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
 			useFilterBlurredBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
 			visBlurredBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
@@ -386,13 +386,13 @@ namespace Sandbox
 			sppBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
 			betaBuffer = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
 
-			GFX::GFXManager::get()->registerBufferResource(slopeBuffer, RHI::BufferDescriptor{
+			GFX::GFXManager::get()->registerBufferResource(zMinMaxBuffer, RHI::BufferDescriptor{
 				width * height * sizeof(float) * 2, // pixel size * sizeof(vec2)
 				(uint32_t)RHI::BufferUsage::STORAGE });
-			GFX::GFXManager::get()->registerBufferResource(visBuffer, RHI::BufferDescriptor{
+			GFX::GFXManager::get()->registerBufferResource(loBuffer, RHI::BufferDescriptor{
 				width * height * sizeof(float) * 4, // pixel size * sizeof(align(vec3))
 				(uint32_t)RHI::BufferUsage::STORAGE });
-			GFX::GFXManager::get()->registerBufferResource(projDistBuffer, RHI::BufferDescriptor{
+			GFX::GFXManager::get()->registerBufferResource(colorBuffer, RHI::BufferDescriptor{
 				width * height * sizeof(float) * 1, // pixel size * sizeof(align(float))
 				(uint32_t)RHI::BufferUsage::STORAGE });
 			GFX::GFXManager::get()->registerBufferResource(worldPosBuffer, RHI::BufferDescriptor{
@@ -401,7 +401,7 @@ namespace Sandbox
 			GFX::GFXManager::get()->registerBufferResource(worldNormalBuffer, RHI::BufferDescriptor{
 				width * height * sizeof(float) * 4, // pixel size * sizeof(align(vec3))
 				(uint32_t)RHI::BufferUsage::STORAGE });
-			GFX::GFXManager::get()->registerBufferResource(brdfBuffer, RHI::BufferDescriptor{
+			GFX::GFXManager::get()->registerBufferResource(projDistBuffer, RHI::BufferDescriptor{
 				width * height * sizeof(float) * 3, // pixel size * sizeof(float3)
 				(uint32_t)RHI::BufferUsage::STORAGE });
 			GFX::GFXManager::get()->registerBufferResource(useFilterBuffer, RHI::BufferDescriptor{
@@ -422,13 +422,13 @@ namespace Sandbox
 			GFX::GFXManager::get()->registerBufferResource(betaBuffer, RHI::BufferDescriptor{
 				width * height * sizeof(float) * 1, // pixel size * sizeof(align(uint))
 				(uint32_t)RHI::BufferUsage::STORAGE });
-			GFX::Buffer* pSlopeBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(slopeBuffer);
-			GFX::Buffer* pVisBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(visBuffer);
-			GFX::Buffer* pProjDistBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(projDistBuffer);
+			GFX::Buffer* pSlopeBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(zMinMaxBuffer);
+			GFX::Buffer* pVisBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(loBuffer);
+			GFX::Buffer* pProjDistBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(colorBuffer);
 			GFX::Buffer* pWorldPosBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(worldPosBuffer);
 			GFX::Buffer* pWorldNormalBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(worldNormalBuffer);
 			GFX::Buffer* pVisBlurredBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(visBlurredBuffer);
-			GFX::Buffer* pBRDFBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(brdfBuffer);
+			GFX::Buffer* pBRDFBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(projDistBuffer);
 			GFX::Buffer* pUseFilterBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(useFilterBuffer);
 			GFX::Buffer* pUseFilterBlurredBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(useFilterBlurredBuffer);
 			GFX::Buffer* pSlopeBlurredBuffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(slopeBlurredBuffer);
@@ -589,7 +589,7 @@ namespace Sandbox
 			// slope filtering
 			{
 				// ready slopeBuffer/useFilterBuffer from RT
-				bufferRT2Comp.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(slopeBuffer)->buffer.get();
+				bufferRT2Comp.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(zMinMaxBuffer)->buffer.get();
 				encoder->pipelineBarrier(bufferRT2Comp);
 				bufferRT2Comp.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(useFilterBuffer)->buffer.get();
 				encoder->pipelineBarrier(bufferRT2Comp);
@@ -605,22 +605,22 @@ namespace Sandbox
 				encoder->pipelineBarrier(bufferComp2Comp_W2R);
 				bufferComp2Comp_W2R.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(useFilterBlurredBuffer)->buffer.get();
 				encoder->pipelineBarrier(bufferComp2Comp_W2R);
-				bufferComp2Comp_R2W.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(slopeBuffer)->buffer.get();
+				bufferComp2Comp_R2W.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(zMinMaxBuffer)->buffer.get();
 				encoder->pipelineBarrier(bufferComp2Comp_R2W);
 				bufferComp2Comp_R2W.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(useFilterBuffer)->buffer.get();
 				encoder->pipelineBarrier(bufferComp2Comp_R2W);
 				// compose commands y
 				slope_filter_pass->composeCommands_y(encoder, index);
-				bufferComp2Comp_W2R.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(slopeBuffer)->buffer.get();
+				bufferComp2Comp_W2R.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(zMinMaxBuffer)->buffer.get();
 				encoder->pipelineBarrier(bufferComp2Comp_W2R);
 				bufferComp2Comp_W2R.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(useFilterBuffer)->buffer.get();
 				encoder->pipelineBarrier(bufferComp2Comp_W2R);
 			}
 			continue_sampling_pass->composeCommands(encoder, index);
 			{
-				bufferRT2Comp.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(visBuffer)->buffer.get();
+				bufferRT2Comp.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(loBuffer)->buffer.get();
 				encoder->pipelineBarrier(bufferRT2Comp);
-				bufferRT2Comp.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(projDistBuffer)->buffer.get();
+				bufferRT2Comp.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(colorBuffer)->buffer.get();
 				encoder->pipelineBarrier(bufferRT2Comp);
 				bufferRT2Comp.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(worldPosBuffer)->buffer.get();
 				encoder->pipelineBarrier(bufferRT2Comp);
@@ -634,15 +634,15 @@ namespace Sandbox
 
 				bufferComp2Comp_W2R.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(visBlurredBuffer)->buffer.get();
 				encoder->pipelineBarrier(bufferComp2Comp_W2R);
-				bufferComp2Comp_R2W.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(visBuffer)->buffer.get();
+				bufferComp2Comp_R2W.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(loBuffer)->buffer.get();
 				encoder->pipelineBarrier(bufferComp2Comp_R2W);
 
 				vis_filter_pass->composeCommands_y(encoder, index);
-				bufferComp2Comp_W2R.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(visBuffer)->buffer.get();
+				bufferComp2Comp_W2R.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(loBuffer)->buffer.get();
 				encoder->pipelineBarrier(bufferComp2Comp_W2R);
 			}
 
-			bufferRT2Comp.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(brdfBuffer)->buffer.get();
+			bufferRT2Comp.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(projDistBuffer)->buffer.get();
 			encoder->pipelineBarrier(bufferRT2Comp);
 
 			display_pass->composeCommands(encoder, index);
@@ -666,12 +666,12 @@ namespace Sandbox
 
 		size_t width = 800, height = 600;
 
-		Core::GUID slopeBuffer;
-		Core::GUID visBuffer;
-		Core::GUID projDistBuffer;
+		Core::GUID zMinMaxBuffer;
+		Core::GUID loBuffer;
+		Core::GUID colorBuffer;
 		Core::GUID worldPosBuffer;
 		Core::GUID worldNormalBuffer;
-		Core::GUID brdfBuffer;
+		Core::GUID projDistBuffer;
 		Core::GUID useFilterBuffer;
 		Core::GUID useFilterBlurredBuffer;
 		Core::GUID visBlurredBuffer;

@@ -7,4 +7,6 @@
 layout(location = 1) rayPayloadInEXT SecondaryRayPayload secondaryPayLoad;
 
 void main() {
+    secondaryPayLoad.L = vec3(0.f);
+    secondaryPayLoad.hit = false;
 }
