@@ -1,0 +1,191 @@
+#version 460
+#extension GL_EXT_scalar_block_layout : require
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+#include "maaf_common.h"
+#include "../../../../Utility/Visualization.h"
+
+layout(binding = 0, set = 0, scalar) readonly buffer defocusSlopeBuffer                 { vec2 defocus_slope[]; };
+layout(binding = 1, set = 0, scalar) readonly buffer directSlopeBuffer                  { vec2 direct_slope[]; };
+layout(binding = 2, set = 0, scalar) readonly buffer indirectSlopeBuffer                { vec2 indirect_slope[]; };
+layout(binding = 3, set = 0, scalar) readonly buffer worldPositionBuffer                { vec4 world_position[]; };
+layout(binding = 4, set = 0, scalar) readonly buffer worldNormalBuffer                  { vec3 world_normal[]; };
+layout(binding = 5, set = 0, scalar) readonly buffer useFilterBuffer                    { uint use_filter[]; };
+layout(binding = 6, set = 0, scalar) readonly buffer MAAFParametersBuffer               { MAAFParametersGroup params[]; };
+layout(binding = 7, set = 0, scalar) readonly buffer MAAFIntermediateDirectBuffer       { IntermediateStruct directIntermediate[]; };
+layout(binding = 8, set = 0, scalar) readonly buffer MAAFIntermediateIndirectBuffer     { IntermediateStruct indirectIntermediate[]; };
+layout(binding = 9, set = 0, rgba32f) uniform image2D storageImage;
+// intermediate temp buffers
+layout(binding = 10, set = 0, scalar) readonly buffer defocusSlopeTmpBuffer     { vec2 defocus_slope_tmp[]; };
+layout(binding = 11, set = 0, scalar) readonly buffer directSlopeTmpBuffer      { vec2 direct_slope_tmp[]; };
+layout(binding = 12, set = 0, scalar) readonly buffer indirectSlopeTmpBuffer    { vec2 indirect_slope_tmp[]; };
+layout(binding = 13, set = 0, scalar) readonly buffer worldPositionTmpBuffer    { vec4 world_position_tmp[]; };
+layout(binding = 14, set = 0, scalar) readonly buffer worldNormalTmpBuffer      { vec3 world_normal_tmp[]; };
+layout(binding = 15, set = 0, scalar) readonly buffer useFilterTmpBuffer        { uint use_filter_tmp[]; };
+layout(binding = 16, set = 0, scalar) readonly buffer MAAFIntermediateDirectTmpBuffer      { IntermediateStruct directIntermediateTmp[]; };
+layout(binding = 17, set = 0, scalar) readonly buffer MAAFIntermediateIndirectTmpBuffer    { IntermediateStruct indirectIntermediateTmp[]; };
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+// 0: projected depth
+// 1: world position
+// 2: world normal
+// 3: defocus_slope
+// 4: direct_slope
+// 5: indirect_slope
+// 6: use filter
+// 7: normal
+// 8: beta
+// 9: Indirect Only
+const int DISPLAY_MODE = 7;
+
+void main()
+{
+    // Get current pixel position and global index.
+    const uvec2 pixel = gl_GlobalInvocationID.xy;
+    const uint gid = pixel.x + pixel.y * resolution.x;
+    // If the pixel is outside of the image, don't do anything:
+    if((pixel.x >= resolution.x) || (pixel.y >= resolution.y)) {
+        return;
+    }
+    
+    // the output color
+    vec3 pixelColor = vec3(0.f);
+    if(DISPLAY_MODE == 0)
+        pixelColor = vec3(world_position[gid].w);
+    else if(DISPLAY_MODE == 1)
+        pixelColor = (world_position[gid].rgb + vec3(2))/4;
+    else if(DISPLAY_MODE == 2)
+        pixelColor = normalToColor(world_normal[gid]);
+    else if(DISPLAY_MODE == 3)
+        pixelColor = (colorMap_naive(abs(defocus_slope[gid].x) / 100));
+    else if(DISPLAY_MODE == 4)
+        pixelColor = use_filter[gid]==1 ? (colorMap_naive(direct_slope_tmp[gid].x)) : vec3(0);
+    else if(DISPLAY_MODE == 5)
+        pixelColor = (colorMap_naive(indirect_slope[gid].x / 4));
+    else if(DISPLAY_MODE == 6)
+        pixelColor = (vec3(float(use_filter[gid])));
+    else if(DISPLAY_MODE == 7) {
+        const float s[5] = {1,2,2,-2,-2};
+        vec3 accumdir = vec3(0);
+        int i=4, j=2;
+        for(int i=0; i<5; i+=1) {
+            for(int j=0; j<5; j+=1) {
+                accumdir += s[i]*s[j]*directIntermediate[gid].data[i*5+j].xyz/directIntermediate[gid].data[i*5+j].w;
+            }
+        }
+        // vec3 c00 = directIntermediate[gid].data[0].xyz/directIntermediate[gid].data[0].w;
+        // vec3 c01 = vec3(0);
+        // c01 += directIntermediate[gid].data[1].xyz/directIntermediate[gid].data[1].w;
+        // c01 -= directIntermediate[gid].data[3].xyz/directIntermediate[gid].data[3].w;
+        // c01 *= 2;
+        // vec3 c10 = vec3(0);
+        // c10 += directIntermediate[gid].data[5].xyz/directIntermediate[gid].data[5].w;
+        // c10 -= directIntermediate[gid].data[15].xyz/directIntermediate[gid].data[15].w;
+        // c10 *= 2;
+        // vec3 c11 = vec3(0);
+        // c11 += directIntermediate[gid].data[6].xyz/directIntermediate[gid].data[6].w;
+        // c11 -= directIntermediate[gid].data[8].xyz/directIntermediate[gid].data[8].w;
+        // c11 += directIntermediate[gid].data[18].xyz/directIntermediate[gid].data[18].w;
+        // c11 -= directIntermediate[gid].data[16].xyz/directIntermediate[gid].data[16].w;
+        // c11 *= 4;
+        // vec3 c02 = vec3(0);
+        // c02 += directIntermediate[gid].data[2].xyz/directIntermediate[gid].data[2].w;
+        // c02 -= directIntermediate[gid].data[4].xyz/directIntermediate[gid].data[4].w;
+        // c02 *= 2;
+        // vec3 c20 = vec3(0);
+        // c20 += directIntermediate[gid].data[10].xyz/directIntermediate[gid].data[10].w;
+        // c20 -= directIntermediate[gid].data[20].xyz/directIntermediate[gid].data[20].w;
+        // c20 *= 2;
+        // vec3 c12 = vec3(0);
+        // c12 += directIntermediate[gid].data[7].xyz/directIntermediate[gid].data[7].w;
+        // c12 -= directIntermediate[gid].data[9].xyz/directIntermediate[gid].data[9].w;
+        // c12 += directIntermediate[gid].data[19].xyz/directIntermediate[gid].data[19].w;
+        // c12 -= directIntermediate[gid].data[17].xyz/directIntermediate[gid].data[17].w;
+        // c12 *= 4;
+        // vec3 c21 = vec3(0);
+        // c21 += directIntermediate[gid].data[11].xyz/directIntermediate[gid].data[11].w;
+        // c21 -= directIntermediate[gid].data[13].xyz/directIntermediate[gid].data[13].w;
+        // c21 += directIntermediate[gid].data[23].xyz/directIntermediate[gid].data[23].w;
+        // c21 -= directIntermediate[gid].data[21].xyz/directIntermediate[gid].data[21].w;
+        // c21 *= 4;
+        // vec3 c22 = vec3(0);
+        // c22 += directIntermediate[gid].data[12].xyz/directIntermediate[gid].data[12].w;
+        // c22 -= directIntermediate[gid].data[14].xyz/directIntermediate[gid].data[14].w;
+        // c22 += directIntermediate[gid].data[24].xyz/directIntermediate[gid].data[24].w;
+        // c22 -= directIntermediate[gid].data[22].xyz/directIntermediate[gid].data[22].w;
+        // c22 *= 4;
+        // accumdir = c11;
+
+                // vec3 res = c00 + c01 + c10 + c11 + c12 + c21 + c22 + c20 + c02;
+                // // vec3 res = c01;
+                // if(res.x < 0) {
+                //     res = abs(res);
+                //     res.r = 0;
+                // }
+                // accumdir/=2;
+                // if(accumdir.r < 0) {
+                //     accumdir = abs(accumdir);
+                //     accumdir.r = 1;
+                // }
+            // }
+        // }
+        pixelColor = accumdir;
+
+        // imageStore(storageImage, ivec2(pixel), vec4(accumdir, 1.0));
+        // imageStore(storageImage, ivec2(pixel), vec4(vec3(params[gid].directParams.sigmaxp[0]), 1.0));
+
+        // pixelColor = directIntermediate[gid].data[0].rgb / directIntermediate[gid].data[0].w;
+        // const vec2 slope = defocus_slope[gid];
+        // pixelColor = (vec3(slope.x));
+        // if(slope.x == k_inf)
+        //     pixelColor = vec3(1,0,0);
+        // else
+        //     pixelColor = vec3(0,0,0);
+        // uint c = 0;
+        // vec3 direct = vec3(0);
+        // vec3 indirect = vec3(0);
+
+        // for(int i=0; i<25; ++i) {
+        //     direct += directIntermediate[gid].data[i].rgb / directIntermediate[gid].data[i].w;
+        //     indirect += indirectIntermediate[gid].data[i].rgb / indirectIntermediate[gid].data[i].w;
+        // }
+        // pixelColor = indirect;
+    }
+
+    imageStore(storageImage, ivec2(pixel), vec4(pixelColor, 1.0));
+
+    // pixelColor = direct_slope[gid].x == k_inf ? vec3(1,0,0) : vec3(0);
+    // else if(DISPLAY_MODE == 6) {
+    //     vec4 accum = vec4(0);
+    //     for(int i=0; i<16; ++i) {
+    //         accum += directIntermediate[gid].data[i];
+    //         accum += indirectIntermediate[gid].data[i];
+    //     }
+    //     accum.xyz /= accum.w/2;
+    //     pixelColor = accum.xyz;
+    // }
+    // if(DISPLAY_MODE == 1)
+    //     pixelColor = vec3(indirect[gid] * albedo[gid] + direct[gid]);
+    // else if(DISPLAY_MODE == 2)
+    //     pixelColor = vec3(colorMap_naive(z_min_max[gid].x / 4));
+    // else if(DISPLAY_MODE == 3)
+    //     pixelColor = vec3(colorMap_naive(z_min_max[gid].y / 3));
+    // else if(DISPLAY_MODE == 4)
+    //     pixelColor = vec3(use_filter[gid]);
+    // else if(DISPLAY_MODE == 5)
+    //     pixelColor = vec3(colorMap_naive(spp[gid] / 100));
+    // else if(DISPLAY_MODE == 6)
+    //     pixelColor = vec3(colorMap_naive(proj_dist[gid] * 10));
+    // else if(DISPLAY_MODE == 7)
+    //     pixelColor = vec3(normalToColor(world_normal[gid]));
+    // else if(DISPLAY_MODE == 8)
+    //     pixelColor = vec3(colorMap_naive(beta[gid] * 5));
+    // else if(DISPLAY_MODE == 9)
+    //     pixelColor = vec3(indirect[gid]);
+
+
+    // imageStore(storageImage, ivec2(pixel), vec4(pixelColor, 1.0));
+}

@@ -186,6 +186,7 @@
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\Sandbox.AAF_GI.ixx" />
     <ClCompile Include="src\Sandbox.Benchmark.ixx" />
+    <ClCompile Include="src\Sandbox.MAAF.ixx" />
     <ClCompile Include="src\Sandbox.Tracer.ixx" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

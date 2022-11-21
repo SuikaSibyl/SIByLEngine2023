@@ -266,23 +266,23 @@ namespace Sandbox
 			std::array<RHI::BindGroup*, 2> const& bufferBindGroups)
 			: slopleFilterPipelineLayout(slopleFilterPipelineLayout), bufferBindGroups(bufferBindGroups)
 		{
-			aaf_vis_filter_x_comp = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-			aaf_vis_filter_y_comp = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-			GFX::GFXManager::get()->registerShaderModuleResource(aaf_vis_filter_x_comp,
+			maaf_prefilter_x_comp = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			maaf_prefilter_y_comp = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			GFX::GFXManager::get()->registerShaderModuleResource(maaf_prefilter_x_comp,
 				"../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_softshadow/aaf_occlusion_filter_x_comp.spv",
 				{ nullptr, RHI::ShaderStages::COMPUTE });
-			GFX::GFXManager::get()->registerShaderModuleResource(aaf_vis_filter_y_comp,
+			GFX::GFXManager::get()->registerShaderModuleResource(maaf_prefilter_y_comp,
 				"../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/aaf_softshadow/aaf_occlusion_filter_y_comp.spv",
 				{ nullptr, RHI::ShaderStages::COMPUTE });
 			// create compute pipeline
 			for (int i = 0; i < 2; ++i) {
 				computePipelineX[i] = rhiLayer->getDevice()->createComputePipeline(RHI::ComputePipelineDescriptor{
 					slopleFilterPipelineLayout,
-					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(aaf_vis_filter_x_comp)->shaderModule.get(), "main"}
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(maaf_prefilter_x_comp)->shaderModule.get(), "main"}
 					});
 				computePipelineY[i] = rhiLayer->getDevice()->createComputePipeline(RHI::ComputePipelineDescriptor{
 					slopleFilterPipelineLayout,
-					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(aaf_vis_filter_y_comp)->shaderModule.get(), "main"}
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(maaf_prefilter_y_comp)->shaderModule.get(), "main"}
 					});
 			}
 
@@ -313,8 +313,8 @@ namespace Sandbox
 			compEncoderY[index]->end();
 		}
 
-		Core::GUID aaf_vis_filter_x_comp;
-		Core::GUID aaf_vis_filter_y_comp;
+		Core::GUID maaf_prefilter_x_comp;
+		Core::GUID maaf_prefilter_y_comp;
 		RHI::PipelineLayout* slopleFilterPipelineLayout;
 		std::unique_ptr<RHI::ComputePipeline> computePipelineX[2];
 		std::unique_ptr<RHI::ComputePipeline> computePipelineY[2];

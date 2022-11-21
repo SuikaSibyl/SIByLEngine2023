@@ -1,0 +1,20 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_ray_tracing : require
+
+#include "maaf_common.h"
+#include "../../include/closestHitCommon.h"
+
+layout(location = 1) rayPayloadInEXT ShadowRayPayload shadowPayLoad;
+
+void main() {
+    HitInfo hitInfo = getObjectHitInfo();
+    // Compute the distance
+    const float tHit = length(hitInfo.worldPosition - gl_WorldRayOriginEXT);
+    // Fill payload
+    shadowPayLoad.hitOccluder   = true;
+    shadowPayLoad.distanceMin   = min(shadowPayLoad.distanceMin, tHit);
+    shadowPayLoad.distanceMax   = max(shadowPayLoad.distanceMax, tHit);
+    // ignore the intersection
+    ignoreIntersectionEXT;
+}

@@ -63,6 +63,7 @@ import Editor.Config;
 import Sandbox.Tracer;
 import Sandbox.AAF_GI;
 import Sandbox.Benchmark;
+import Sandbox.MAAF;
 
 import Image.FileFormat;
 
@@ -365,6 +366,9 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		benchmarkPipeline = std::make_unique<Sandbox::Benchmark_Pipeline>(rhiLayer.get(), 
 			Core::ResourceManager::get()->getResource<GFX::ASGroup>(ASGroup), rtTarget, 
 			rtBindGroupLayout.get(), std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()});
+		maafPipeline = std::make_unique<Sandbox::MAAF_Pipeline>(rhiLayer.get(),
+			Core::ResourceManager::get()->getResource<GFX::ASGroup>(ASGroup), rtTarget, 
+			rtBindGroupLayout.get(), std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()});
 	};
 
 	/** Update the application every loop */
@@ -460,8 +464,9 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			});
 
 		//aafPipeline->composeCommands(commandEncoder.get(), index);
-		aafGIPipeline->composeCommands(commandEncoder.get(), index);
+		//aafGIPipeline->composeCommands(commandEncoder.get(), index);
 		//benchmarkPipeline->composeCommands(commandEncoder.get(), index);
+		maafPipeline->composeCommands(commandEncoder.get(), index);
 
 		//{
 		//	commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
@@ -642,6 +647,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		aafPipeline = nullptr;
 		aafGIPipeline = nullptr;
+		maafPipeline = nullptr;
 		benchmarkPipeline = nullptr;
 		directTracer = nullptr;
 		renderPipeline[0] = nullptr;
@@ -726,6 +732,7 @@ private:
 	std::unique_ptr<Sandbox::AAFPipeline> aafPipeline = nullptr;
 	std::unique_ptr<Sandbox::AAF_GI_Pipeline> aafGIPipeline = nullptr;
 	std::unique_ptr<Sandbox::Benchmark_Pipeline> benchmarkPipeline = nullptr;
+	std::unique_ptr<Sandbox::MAAF_Pipeline> maafPipeline = nullptr;
 
 	std::unique_ptr<RHI::ComputePipeline> computePipeline[2];
 	std::unique_ptr<RHI::RenderPipeline> renderPipeline[2];

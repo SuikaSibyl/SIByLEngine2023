@@ -1,0 +1,93 @@
+#version 460
+#extension GL_EXT_scalar_block_layout : require
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+#include "maaf_common.h"
+
+layout(binding = 0, set = 0, scalar) readonly buffer defocusSlopeBuffer     { vec2 defocus_slope[]; };
+layout(binding = 1, set = 0, scalar) readonly buffer directSlopeBuffer      { vec2 direct_slope[]; };
+layout(binding = 2, set = 0, scalar) readonly buffer indirectSlopeBuffer    { vec2 indirect_slope[]; };
+layout(binding = 3, set = 0, scalar) readonly buffer worldPositionBuffer    { vec4 world_position[]; };
+layout(binding = 4, set = 0, scalar) readonly buffer worldNormalBuffer      { vec3 world_normal[]; };
+layout(binding = 5, set = 0, scalar) readonly buffer useFilterBuffer        { uint use_filter[]; };
+
+layout(binding = 10, set = 0, scalar) writeonly buffer defocusSlopeTmpBuffer     { vec2 defocus_slope_tmp[]; };
+layout(binding = 11, set = 0, scalar) writeonly buffer directSlopeTmpBuffer      { vec2 direct_slope_tmp[]; };
+layout(binding = 12, set = 0, scalar) writeonly buffer indirectSlopeTmpBuffer    { vec2 indirect_slope_tmp[]; };
+layout(binding = 13, set = 0, scalar) writeonly buffer worldPositionTmpBuffer    { vec4 world_position_tmp[]; };
+layout(binding = 14, set = 0, scalar) writeonly buffer worldNormalTmpBuffer      { vec3 world_normal_tmp[]; };
+layout(binding = 15, set = 0, scalar) writeonly buffer useFilterTmpBuffer        { uint use_filter_tmp[]; };
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+// Average the values over a 5x5 image window
+// + double wedge slopes
+// + world locations
+// + normal
+void main()
+{
+    // Get current pixel position and global index.
+    const uvec2 pixel = gl_GlobalInvocationID.xy;
+    const uint gid = pixel.x + pixel.y * resolution.x;
+    // If the pixel is outside of the image, don't do anything:
+    if((pixel.x >= resolution.x) || (pixel.y >= resolution.y)) {
+        return;
+    }
+        
+    vec2 accum_defocus_slope  = vec2(0,0);
+    vec2 accum_direct_slope   = vec2(0,0);
+    vec2 accum_indirect_slope = vec2(0,0);
+    vec4 accum_world_position = vec4(0);
+    vec3 accum_world_normal   = vec3(0);
+    uint accum_use_filter     = 0;
+    float accum_weight = 0.f;
+    float accum_direct_weight = 0.f;
+
+    for (int i=int(pixel.x)-prefilter_radius; i<=int(pixel.x)+prefilter_radius; i++) {
+        if (i < 0 || i >= resolution.x) continue;
+        uint neighbor_id = i + pixel.y*resolution.x;
+        vec2 neighbor_defocus_slope   = defocus_slope[neighbor_id];
+        vec2 neighbor_direct_slope    = direct_slope[neighbor_id];
+        vec2 neighbor_indirect_slope  = indirect_slope[neighbor_id];
+        vec4 neighbor_world_position  = world_position[neighbor_id];
+        vec3 neighbor_world_normal    = world_normal[neighbor_id];
+        uint neighbor_use_filter      = use_filter[neighbor_id];
+        if (neighbor_use_filter != 0) {
+            accum_defocus_slope += neighbor_defocus_slope;
+            accum_indirect_slope += neighbor_indirect_slope;
+            accum_world_position += neighbor_world_position;
+            accum_world_normal += neighbor_world_normal;
+            accum_use_filter |= neighbor_use_filter;
+            accum_weight+=1;
+            if(neighbor_direct_slope.x != k_inf) {
+                accum_direct_slope += neighbor_direct_slope;
+                accum_direct_weight  += 1.f;
+            }
+        }
+    }
+
+    if(accum_weight > 0.0001) {
+        accum_defocus_slope /= accum_weight;
+        accum_indirect_slope /= accum_weight;
+        accum_world_position /= accum_weight;
+        accum_world_normal /= accum_weight;
+        if(accum_direct_weight > 0) {
+            accum_direct_slope /= accum_direct_weight;
+        }
+        else {
+            accum_direct_slope = vec2(k_inf, -k_inf);
+        }
+    }
+
+    if(accum_use_filter!=0) {
+        defocus_slope_tmp[gid]  = accum_defocus_slope;
+        direct_slope_tmp[gid]   = accum_direct_slope;
+        indirect_slope_tmp[gid] = accum_indirect_slope;
+        world_position_tmp[gid] = accum_world_position;
+        world_normal_tmp[gid] = accum_world_normal;
+        use_filter_tmp[gid] = accum_use_filter;
+    }
+    return;
+}
