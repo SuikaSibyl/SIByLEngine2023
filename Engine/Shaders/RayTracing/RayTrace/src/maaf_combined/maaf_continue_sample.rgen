@@ -29,7 +29,7 @@ layout(binding = 2, set = 2, scalar) readonly buffer indirectSlopeBuffer        
 layout(binding = 3, set = 2, scalar) readonly buffer worldPositionBuffer               { vec4 world_position[]; };
 layout(binding = 4, set = 2, scalar) readonly buffer worldNormalBuffer                 { vec3 world_normal[]; };
 layout(binding = 5, set = 2, scalar) readonly buffer useFilterBuffer                   { uint use_filter[]; };
-layout(binding = 6, set = 2, scalar) buffer MAAFParametersBuffer              { MAAFParametersGroup params[]; };
+layout(binding = 6, set = 2, scalar) writeonly buffer MAAFParametersBuffer              { MAAFParametersGroup params[]; };
 layout(binding = 7, set = 2, scalar) buffer MAAFIntermediateDirectBuffer      { MAAFIntermediate directInterm[]; };
 layout(binding = 8, set = 2, scalar) buffer MAAFIntermediateIndirectBuffer    { MAAFIntermediate indirectInterm[]; };
 layout(binding = 9, set = 2, rgba32f) uniform image2D storageImage;
@@ -59,7 +59,6 @@ void main()
     uint gid = pixel.x + pixel.y * resolution.x;
     // if do not use filter, return
     if(use_filter[gid] == 0) {
-        imageStore(storageImage, ivec2(pixel), vec4(vec3(1,0,1), 1.0));
         return;
     }
     // fetch information
@@ -76,36 +75,35 @@ void main()
     // - indirect
     const float omega_x_max_ind = compute_omega_x_max_ind(
         proj_dist, ind_slope.x, min(abs(dof_slope.x), abs(dof_slope.y)));
-    const float omega_y_max_ind = min(2.8, omega_x_max_ind * ind_slope.y / proj_dist);
+    const float omega_y_max_ind = min(2.2, omega_x_max_ind * ind_slope.y / proj_dist);
     const float omega_u_max_ind = min(inv_sigma_lens, omega_x_max_ind * max(abs(dof_slope.x), abs(dof_slope.y)));
-
+    // const float omega_y_max_ind = 2.2;
+    // const float omega_u_max_ind = inv_sigma_lens;
     // compute MAAF parameters
+    // -------------------------
+    // direct
     MAAFParameters directParams;
-    MAAFParameters indirectParams;
-
     computeMAAFParameters(
         omega_x_max_dir, omega_y_max_dir, omega_u_max_dir,
         dir_slope.x, dir_slope.y,
         dof_slope.x, dof_slope.y,
         proj_dist,
         directParams);
-
-    // if(directParams.padding[0]==0.f) {
-    //     imageStore(storageImage, ivec2(pixel), vec4(vec3(1,0,1), 1.0));
-    //     return;
-    // }
+    // indirect
+    MAAFParameters indirectParams;
     computeMAAFParameters(
         omega_x_max_ind, omega_y_max_ind, omega_u_max_ind,
         ind_slope.x, ind_slope.y,
         dof_slope.x, dof_slope.y,
         proj_dist,
         indirectParams);
-
+    // save parameters
     MAAFParametersGroup group;
     group.directParams = directParams;
     group.indirectParams = indirectParams;
     params[gid] = group;
     // pre integral the first pass samples
+    // ------------------------------------
     MAAFIntermediate directRecord = directInterm[gid];
     MAAFIntermediate indirectRecord = indirectInterm[gid];
     MAAFIntermediate directAccum;
@@ -116,74 +114,49 @@ void main()
     }
     for(int i=0; i<8; ++i) {
         preIntegralMAAF_dir(directParams, 
-            directRecord.data[16+i].x, directRecord.data[16+i].x,
-            directRecord.data[16+i].y, directRecord.data[16+i].y,
+            directRecord.data[16+i].x, directRecord.data[16+i].y,
+            directRecord.data[i*2+0].w, indirectRecord.data[i*2+0].w,
             directRecord.data[i*2+0].xyz, directAccum);
         preIntegralMAAF_dir(directParams, 
-            directRecord.data[16+i].z, directRecord.data[16+i].z,
-            directRecord.data[16+i].w, directRecord.data[16+i].w,
+            directRecord.data[16+i].z, directRecord.data[16+i].w,
+            directRecord.data[i*2+1].w, indirectRecord.data[i*2+1].w,
             directRecord.data[i*2+1].xyz, directAccum);
 
         preIntegralMAAF_ind(indirectParams, 
-            indirectRecord.data[16+i].x, indirectRecord.data[16+i].x,
-            indirectRecord.data[16+i].y, indirectRecord.data[16+i].y,
+            indirectRecord.data[16+i].x, indirectRecord.data[16+i].y,
+            directRecord.data[i*2+0].w, indirectRecord.data[i*2+0].w,
             indirectRecord.data[i*2+0].xyz, indirectAccum);
         preIntegralMAAF_ind(indirectParams, 
-            indirectRecord.data[16+i].z, indirectRecord.data[16+i].z,
-            indirectRecord.data[16+i].w, indirectRecord.data[16+i].w,
+            indirectRecord.data[16+i].z, indirectRecord.data[16+i].w,
+            directRecord.data[i*2+1].w, indirectRecord.data[i*2+1].w,
             indirectRecord.data[i*2+1].xyz, indirectAccum);
     }
-    directInterm[gid] = directAccum;
-    indirectInterm[gid] = indirectAccum;
+
+    // // compute spp
+    // vec3 spp = computeSPP(
+    //     dir_slope.y, ind_slope.y, 
+    //     max(abs(dof_slope.x), abs(dof_slope.y)),
+    //     proj_dist, omega_x_max_dir, omega_x_max_ind);
     
-    vec4 accumdir = vec4(0);
-    const float s[5] = {1,1,1,-1,-1};
-    
-    // if(directParams.sigmayp[0] >= 1e8f || directParams.sigmaup[0] >= 1e8f)
-    //     imageStore(storageImage, ivec2(pixel), vec4(vec3(directParams.sigmayp[0]), 1.0));
-    // else
-        // imageStore(storageImage, ivec2(pixel), vec4(vec3(directAccum.data[0].xyz / directAccum.data[0].w), 1.0));
-    // int i=2;
-    // int j=1;
-    for(int i=0; i<5; ++i) {
-        for(int j=0; j<5; ++j) {
-            const int id = i*5+j;
-            accumdir.rgb += s[i] * s[j] * indirectAccum.data[id].xyz/indirectAccum.data[id].w;
-        }
-    }
-    // imageStore(storageImage, ivec2(pixel), vec4(accumdir.rgb, 1.0));
-    // int id = 2;
-    // const vec3 value = indirectAccum.data[id].xyz/indirectAccum.data[id].w;
-    // imageStore(storageImage, ivec2(pixel), vec4(accumdir.rgb, 1.0));
+    // const int continue_spp_p = max(min(int(sqrt(max(spp.x*spp.x - 16, 0)) + 0.5), 10), 1);
+    // int continue_spp_d = dir_slope.x == k_inf ? 0 : int(sqrt(max(spp.y*spp.y - 16, 0)) + 0.5);
+    // continue_spp_d = min(min(continue_spp_d, int(10.f/continue_spp_p)),10);
+    // int continue_spp_i = int(sqrt(max(spp.z*spp.z - 16, 0)) + 0.5);
+    // continue_spp_i = min(min(continue_spp_i, int(10.f/continue_spp_p)),10);
 
     // // initialize primary payload
-    // pld.rngState = uint(((pushConstants.sample_batch + 999) * resolution.y + pixel.y) * resolution.x + pixel.x);
+    // pld.rngState = uint(((pushConstants.sample_batch+999) * resolution.y + pixel.y) * resolution.x + pixel.x);
+    // // pld.spp_d = continue_spp_d * continue_spp_d;
+    // // pld.spp_i = 0;
+    // pld.reflectorDistMinMax = vec2(k_inf, -k_inf);
+    // pld.direcetSlopeMinMax = vec2(k_inf, -k_inf);
     // // find the central ray status.
     // const vec2 pixelCenter  = vec2(pixel.xy) + vec2(0.5);       // [+0,+resolution] pixel uv
     // const vec2 inUV         = pixelCenter/vec2(resolution.xy);  // [+0,+1] pixel uv
     // const vec2 d            = inUV * 2.0 - 1.0;                 // [-1,+1] pixel uv
     // const vec3 targetOnFocusPlane = (uni.projInverse * vec4(d.x, d.y, 1, 1)).xyz * focus_dist;
-    // // sample 16 path samples per pixel
-    // // each sample consists of:
-    // // + a primary lens ray
-    // // + a shadow ray
-    // // + a one-bounce indirect illumination sample.
-    // vec3 albedo = vec3(0.);
-    // float apeture_weight = 0.f;
-
-    // vec2 directSlopes   = vec2(k_inf, 0);
-    // vec2 indirectSlopes = vec2(k_inf, 0);
-    // vec2 defocusSlopes  = vec2(k_inf, 0);
-
-    // pld.reflectorDistMinMax = vec2(k_inf, 0);
-    // pld.direcetSlopeMinMax = vec2(k_inf, 0);
-
-    // vec3 avgWorldPosition = vec3(0);
-    // vec3 avgWorldNormal = vec3(0);
-    // float weights = 0.f;
-
-    // const int spp = 50;
-    // for(int i=0; i<spp; ++i) {
+    
+    // for(int i=0; i<continue_spp_p*continue_spp_p; ++i) {
     //     const vec2 diskSample = uniformSampleDisk(vec2(stepAndOutputRNGFloat(pld.rngState), stepAndOutputRNGFloat(pld.rngState)));
     //     const vec3 apetureSample = vec3(length_radius * diskSample, 0);
     //     // find the pimary sample
@@ -195,6 +168,7 @@ void main()
     //     // reset payload
     //     pld.visibility = 0.f;
     //     pld.indirect = vec3(0.f);
+    //     pld.rayHitSky = true;
     //     // emit primary ray
     //     traceRayEXT(tlas,                  // Top-level acceleration structure
     //                 gl_RayFlagsOpaqueEXT,  // Ray flags, here saying "treat all geometry as opaque"
@@ -208,33 +182,18 @@ void main()
     //                 10000.0,               // Maximum t-value
     //                 0);                    // Location of payload
 
-    //     albedo += pld.brdf;
-    //     apeture_weight += 1;
-
     //     if(!pld.rayHitSky) {
-    //         // accum worldPos worldNormal
-    //         avgWorldPosition += pld.worldLocation;
-    //         avgWorldNormal += pld.worldNormal;
-    //         weights += 1;
-    //         // projected distance
-    //         const float tHit = distance(pld.worldLocation, rayOrigin);
-    //         const float proj_tHit = tHit * dot(toTarget, vec3(0,0,1));
-    //         const float proj_distance  = 2.f * (proj_tHit * tan(half_fov* k_pi / 180.0)) / resolution.y;
-    //         // direct slope
-    //         const float slopeDefocusBlur = computeDefocusBlurSlope(proj_tHit);
-    //         defocusSlopes.x = min(defocusSlopes.x, slopeDefocusBlur);
-    //         defocusSlopes.y = max(defocusSlopes.y, slopeDefocusBlur);
-    //         // record
-    //         // directRecord[gid].illumination[i] = vec4(pld.brdf * pld.visibility, 1);
-    //         // indirectRecord[gid].illumination[i] = vec4(pld.brdf * pld.indirect, 1);
-    //         // const float u = length(diskSample);
-    //         // directRecord[gid].yu[i] = vec2(pld.yd, u);
-    //         // indirectRecord[gid].yu[i] = vec2(pld.yi, u);
-    //     }
-    //     else {
-    //         // directRecord[gid].illumination[i] = vec4(0,0,0,0);
-    //         // indirectRecord[gid].illumination[i] = vec4(0,0,0,0);
-    //         // indirectRecord[gid].yu[i] = vec2(0,0);
+    //         preIntegralMAAF_dir(directParams, 
+    //             pld.y0, pld.y1,
+    //             diskSample.x, diskSample.y,
+    //             pld.brdf * pld.visibility, directAccum);
+    //         preIntegralMAAF_ind(indirectParams, 
+    //             pld.v0, pld.v1,
+    //             diskSample.x, diskSample.y,
+    //             pld.brdf * pld.indirect, indirectAccum);
     //     }
     // }
+
+    directInterm[gid] = directAccum;
+    indirectInterm[gid] = indirectAccum;
 }

@@ -13,7 +13,7 @@ const float half_fov = 11.0;
 const float focus_dist = 5.5f;
 const float length_radius = 0.5;
 const float focal_plane_half_width = focus_dist * tan(half_fov*k_pi/180)*float(resolution.x)/float(resolution.y);
-const float sigma_lens = 1.f;
+const float sigma_lens = 0.33f;
 const float inv_sigma_lens = 1.f/sigma_lens;
 // GI Setting
 const float zMIN = 0.02 * 2.f;
@@ -26,7 +26,7 @@ const float dist_scale_threshold = 10.0;
 const float dist_threshold = 0.1;
 const float angle_threshold = 20.0 * k_pi /180.0;
 const float cos_angle_threshold = abs(cos(20.0 * k_pi /180.0));
-
+const float defocus_threashold = 100;
 
 float computeDefocusBlurSlope(in float z) {
     return length_radius * (resolution.x/2) / focal_plane_half_width * (focus_dist/z - 1);
@@ -38,11 +38,13 @@ struct PrimaryRayPayload {
     vec3 worldNormal;
     float visibility;
     vec3 brdf;
-    float yd;
+    float y0;
     vec3 indirect;
-    float yi;
+    float y1;
     vec2 reflectorDistMinMax;
     vec2 direcetSlopeMinMax;
+    float v0;
+    float v1;
     bool rayHitSky;
 };
 
@@ -71,7 +73,7 @@ struct MAAFIntermediate {
 // 24 * vec4(pairs);
 struct InitialSampleRecord {
     vec4 illumination[16];  // 16 vec4
-    vec2 yu[16];            // 8  vec4
+    vec2 y[16];            // 8  vec4
     vec4 padding;
 };
 
@@ -85,14 +87,15 @@ void clearIntermediateStruct(inout IntermediateStruct interm) {
 }
 
 // cornell box light setting
-const vec3 lightPos0 = vec3(-0.240, 1.975, -0.220);
-const vec3 lightPos1 = vec3(-0.240, 1.975, 0.160);
-const vec3 lightPos2 = vec3(0.230, 1.975, 0.160);
+const vec3 lightPos0 = vec3(-0.240, 1.975, -0.240);
+const vec3 lightPos1 = vec3(-0.240, 1.975, +0.240);
+const vec3 lightPos2 = vec3(+0.240, 1.975, -0.240);
 const vec3 lightVec1 = lightPos1 - lightPos0;
 const vec3 lightVec2 = lightPos2 - lightPos0;
 const vec3 lightCenter = lightPos0 + 0.5 * (lightVec1 + lightVec2);
 const float lightSigma = sqrt(length(cross(lightVec1,lightVec2))/4.0f);
 const float invLightSigma = 1.f / lightSigma;
+const float omega_light_max = invLightSigma;
 const vec3  light_normal = vec3(0,-1,0);
 vec3 sampleAreaLight(inout uint rngState) {
     vec2 lsample = vec2(stepAndOutputRNGFloat(rngState), stepAndOutputRNGFloat(rngState));
@@ -332,6 +335,14 @@ void computeMAAFParameters(
                 unnormalized_gaussian(params.cxp[i], omega_x_max * 0.5) *
 				unnormalized_gaussian(params.cyp[i], omega_y_max * 0.5) *
 				unnormalized_gaussian(params.cup[i], omega_u_max * 0.5);
+            // if(params.sigmaxp[i] < 1.f/20)
+            //     params.scaling[i-1] = 0;
+            // if(params.sigmayp[i] < 0.00001)
+            //     params.scaling[i-1] = 0;
+            if(abs(params.cxp[i])*10 < 3.14)
+            // || abs(params.cyp[i])*lightSigma < 3.14
+            // || abs(params.cup[i])*lightSigma < 3.14)
+                params.scaling[i-1] = 0;
         }
     }
     // if su_min is minus, su_max is positive
@@ -354,7 +365,7 @@ void computeMAAFParameters(
         params.sigmaup[0]   = 0.5 * (max_u - min_u);
         // outer components
         for(int i=1; i<N; ++i) {
-            params.scaling[i-1] = 0;
+            params.scaling[i-1] = -1;
         }
     }
 
@@ -398,7 +409,6 @@ float compute_omega_x_max_dir(
     in float direct_slope_min,
     in float apeture_slope_abs_min) 
 {
-    // TODO:: omega_u_max ?
     const float omega_u_max = 1.;
     const float omega_y_max = invLightSigma;
     float omega_x_max = 0.5; // maximum allowed pixel bandlimit
@@ -422,7 +432,6 @@ float compute_omega_x_max_ind(
     in float indirect_slope_min,
     in float apeture_slope_abs_min) 
 {
-    // TODO:: omega_u_max ?
     const float omega_u_max = 1.;
     const float omega_y_max = 2.2;
     float omega_x_max = 0.5; // maximum allowed pixel bandlimit
@@ -459,10 +468,10 @@ void preIntegralMAAF_dir(
     axis0weights[3] = axis0weights[1];
     axis0weights[4] = axis0weights[2];
     axis0comp[0] = axis0weights[0];
-    axis0comp[1] = cos((params.cyp[1]*y0 + params.cup[1]*u0)*2*k_pi)* axis0weights[1];
-    axis0comp[2] = cos((params.cyp[2]*y0 + params.cup[2]*u0)*2*k_pi)* axis0weights[2];
-    axis0comp[3] = sin((params.cyp[1]*y0 + params.cup[1]*u0)*2*k_pi)* axis0weights[3];
-    axis0comp[4] = sin((params.cyp[2]*y0 + params.cup[2]*u0)*2*k_pi)* axis0weights[4];
+    axis0comp[1] = cos((params.cyp[1]*y0 + params.cup[1]*u0))* axis0weights[1];
+    axis0comp[2] = cos((params.cyp[2]*y0 + params.cup[2]*u0))* axis0weights[2];
+    axis0comp[3] = sin((params.cyp[1]*y0 + params.cup[1]*u0))* axis0weights[3];
+    axis0comp[4] = sin((params.cyp[2]*y0 + params.cup[2]*u0))* axis0weights[4];
 
     const float gaussian_10 = unnormalized_gaussian(y1, params.sigmayp[0]) * unnormalized_gaussian(u1, params.sigmaup[0]);
     const float gaussian_11 = unnormalized_gaussian(y1, params.sigmayp[1]) * unnormalized_gaussian(u1, params.sigmaup[1]);
@@ -473,16 +482,16 @@ void preIntegralMAAF_dir(
     axis1weights[3] = axis1weights[1];
     axis1weights[4] = axis1weights[2];
     axis1comp[0] = axis1weights[0];
-    axis1comp[1] = cos((params.cyp[1]*y1 + params.cup[1]*u1)*2*k_pi)* axis1weights[1];
-    axis1comp[2] = cos((params.cyp[2]*y1 + params.cup[2]*u1)*2*k_pi)* axis1weights[2];
-    axis1comp[3] = sin((params.cyp[1]*y1 + params.cup[1]*u1)*2*k_pi)* axis1weights[3];
-    axis1comp[4] = sin((params.cyp[2]*y1 + params.cup[2]*u1)*2*k_pi)* axis1weights[4];
+    axis1comp[1] = cos((params.cyp[1]*y1 + params.cup[1]*u1))* axis1weights[1];
+    axis1comp[2] = cos((params.cyp[2]*y1 + params.cup[2]*u1))* axis1weights[2];
+    axis1comp[3] = sin((params.cyp[1]*y1 + params.cup[1]*u1))* axis1weights[3];
+    axis1comp[4] = sin((params.cyp[2]*y1 + params.cup[2]*u1))* axis1weights[4];
 
     for(int i=0; i<5; ++i)
         for(int j=0; j<5; ++j) {
             const float weight = axis0weights[i] * axis1weights[j];
             const float comp = axis0comp[i] * axis1comp[j];
-            intermediate.data[i*5+j] += vec4(vec3(comp), weight);
+            intermediate.data[i*5+j] += vec4(comp*f, weight);
         }
 }
 
@@ -501,40 +510,61 @@ void preIntegralMAAF_ind(
     float axis1comp[5];
     float axis1weights[5];
 
-    const float gaussian_y00 = 1;
-    const float gaussian_y01 = 1;
-    const float gaussian_y02 = 1;
+    const float gaussian_y00 = unnormalized_gaussian(u0, params.sigmaup[0]);
+    const float gaussian_y01 = unnormalized_gaussian(u0, params.sigmaup[1]);
+    const float gaussian_y02 = unnormalized_gaussian(u0, params.sigmaup[2]);
     axis0weights[0] = gaussian_y00;
     axis0weights[1] = gaussian_y01;
     axis0weights[2] = gaussian_y02;
     axis0weights[3] = axis0weights[1];
     axis0weights[4] = axis0weights[2];
     axis0comp[0] = axis0weights[0];
-    axis0comp[1] = cos(params.cyp[1]*y0*2*k_pi)* axis0weights[1];
-    axis0comp[2] = cos(params.cyp[2]*y0*2*k_pi)* axis0weights[2];
-    axis0comp[3] = sin(params.cyp[1]*y0*2*k_pi)* axis0weights[3];
-    axis0comp[4] = sin(params.cyp[2]*y0*2*k_pi)* axis0weights[4];
+    axis0comp[1] = cos((params.cyp[1]*y0 + params.cup[1]*u0))* axis0weights[1];
+    axis0comp[2] = cos((params.cyp[2]*y0 + params.cup[2]*u0))* axis0weights[2];
+    axis0comp[3] = sin((params.cyp[1]*y0 + params.cup[1]*u0))* axis0weights[3];
+    axis0comp[4] = sin((params.cyp[2]*y0 + params.cup[2]*u0))* axis0weights[4];
 
-    const float gaussian_y10 = 1;
-    const float gaussian_y11 = 1;
-    const float gaussian_y12 = 1;
+    const float gaussian_y10 = unnormalized_gaussian(u1, params.sigmaup[0]);
+    const float gaussian_y11 = unnormalized_gaussian(u1, params.sigmaup[1]);
+    const float gaussian_y12 = unnormalized_gaussian(u1, params.sigmaup[2]);
     axis1weights[0] = gaussian_y10;
     axis1weights[1] = gaussian_y11;
     axis1weights[2] = gaussian_y12;
     axis1weights[3] = axis1weights[1];
     axis1weights[4] = axis1weights[2];
     axis1comp[0] = axis1weights[0];
-    axis1comp[1] = cos(params.cyp[1]*y0*2*k_pi)* axis1weights[1];
-    axis1comp[2] = cos(params.cyp[2]*y0*2*k_pi)* axis1weights[2];
-    axis1comp[3] = sin(params.cyp[1]*y0*2*k_pi)* axis1weights[3];
-    axis1comp[4] = sin(params.cyp[2]*y0*2*k_pi)* axis1weights[4];
+    axis1comp[1] = cos((params.cyp[1]*y1 + params.cup[1]*u1))* axis1weights[1];
+    axis1comp[2] = cos((params.cyp[2]*y1 + params.cup[2]*u1))* axis1weights[2];
+    axis1comp[3] = sin((params.cyp[1]*y1 + params.cup[1]*u1))* axis1weights[3];
+    axis1comp[4] = sin((params.cyp[2]*y1 + params.cup[2]*u1))* axis1weights[4];
 
     for(int i=0; i<5; ++i)
         for(int j=0; j<5; ++j) {
             const float weight = axis0weights[i] * axis1weights[j];
             const float comp = axis0comp[i] * axis1comp[j];
-            intermediate.data[i*5+j] += vec4(vec3(comp), weight);
+            intermediate.data[i*5+j] += vec4(comp*f, weight);
         }
+}
+
+/*
+* Compute SPP for multi-effects continue sampling.
+* 
+*/
+
+vec3 computeSPP(
+    in float dir_slope_max,
+    in float ind_slope_max,
+    in float dof_slope_max,
+    in float proj_dist,
+    in float omega_x_max_dir,
+    in float omega_x_max_ind) 
+{
+    const int initial_spp = 16;
+    const float omega_pix_max = 0.5f;
+    const float np_sqrt = (omega_pix_max + omega_x_max_dir) * (1 + dof_slope_max * omega_x_max_dir);
+    const float ndir_sqrt = 1 + lightSigma * dir_slope_max * omega_x_max_dir / proj_dist;
+    const float nind_sqrt = omega_x_max_ind + ind_slope_max * omega_x_max_ind / proj_dist;
+    return vec3(np_sqrt, ndir_sqrt, nind_sqrt);
 }
 
 #endif

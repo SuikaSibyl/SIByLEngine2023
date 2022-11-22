@@ -87,11 +87,12 @@ void main()
             accum_direct_slope = vec2(k_inf, -k_inf);
         }
     }
-
+    
+    // TODO:: Checkout prefilter
     if(accum_use_filter!=0) {
-        // defocus_slope[gid]  = accum_defocus_slope;
-        // direct_slope[gid]   = accum_direct_slope;
-        // indirect_slope[gid] = accum_indirect_slope;
+        defocus_slope[gid]  = accum_defocus_slope;
+        direct_slope[gid]   = accum_direct_slope;
+        indirect_slope[gid] = accum_indirect_slope;
         world_position[gid] = accum_world_position;
         world_normal[gid] = normalize(accum_world_normal);
         use_filter[gid] = accum_use_filter;

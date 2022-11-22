@@ -9,6 +9,7 @@
 #include "../../include/closestHitCommon.h"
 #include "../../../../Utility/random.h"
 #include "../../../../Utility/sampling.h"
+#include "../../../../Utility/geometry.h"
 
 layout(location = 0) rayPayloadInEXT PrimaryRayPayload  primaryPayLoad;
 layout(location = 1) rayPayloadEXT   ShadowRayPayload   shadowRayPayLoad;
@@ -26,15 +27,18 @@ void main() {
     primaryPayLoad.rayHitSky = false;
     // prepare for secondary ray
     const vec3 secondaryRayOrigin = offsetPositionAlongNormal(hitInfo.worldPosition, hitInfo.worldNormal);
+    
     // shadow ray
+    // ---------------------
     const vec2 lsample = vec2(stepAndOutputRNGFloat(primaryPayLoad.rngState), stepAndOutputRNGFloat(primaryPayLoad.rngState));
     const vec3 lightSample = sampleAreaLight(lsample);
-    const vec3 center2Sample = lightCenter - lightSample;
-    primaryPayLoad.yd = length(center2Sample);
+    const vec3 center2Sample = lightSample - lightCenter;
+    primaryPayLoad.y0 = center2Sample.x;
+    primaryPayLoad.y1 = center2Sample.z;
     const float strength = exp(-0.5 * dot(center2Sample,center2Sample) / (lightSigma * lightSigma));
     const vec3 lightDir = lightSample - secondaryRayOrigin;
     const vec3 toLight = lightCenter - secondaryRayOrigin;
-    const float distanceToLight = length(toLight);
+    const float distanceToLight = length(lightDir);
     if(dot(hitInfo.worldNormal, lightDir) > 0.f) {
         // cast shadow ray
         shadowRayPayLoad.hitOccluder = false;
@@ -70,12 +74,19 @@ void main() {
     }
 
     // indirect ray
+    // -------------------------------------
     const int bounceNum = 1;
+    // create ONB from world normal
+    vec3 u,v,w;
+    createONB(hitInfo.worldNormal, u, v, w);
+    // create indirect sample
     const vec3 indirectDirSample = hitInfo.worldNormal + randomPointInSphere(primaryPayLoad.rngState);
-    const float cosTheta = dot(normalize(indirectDirSample), normalize(hitInfo.worldNormal));
-    primaryPayLoad.yi = sqrt(1 - cosTheta*cosTheta) / cosTheta;
     vec3 rayOrigin = secondaryRayOrigin;
     vec3 rayDir = normalize(indirectDirSample);
+    // get sample v0, v1
+    const float vl = 1.f / dot(rayDir, w);
+    primaryPayLoad.v0 = dot(rayDir, u) * vl;
+    primaryPayLoad.v1 = dot(rayDir, v) * vl;
     vec3 attenuation = vec3(1.);
     vec3 Li = vec3(0.);
     for(int k=0; k<bounceNum; ++k) {

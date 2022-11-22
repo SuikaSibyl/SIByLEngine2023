@@ -29,9 +29,13 @@ layout(binding = 2, set = 2, scalar) writeonly buffer indirectSlopeBuffer       
 layout(binding = 3, set = 2, scalar) writeonly buffer worldPositionBuffer               { vec4 world_position[]; };
 layout(binding = 4, set = 2, scalar) writeonly buffer worldNormalBuffer                 { vec3 world_normal[]; };
 layout(binding = 5, set = 2, scalar) writeonly buffer useFilterBuffer                   { uint use_filter[]; };
-layout(binding = 6, set = 2, scalar) writeonly buffer MAAFParametersBuffer              { MAAFParameters params[]; };
+// layout(binding = 6, set = 2, scalar) writeonly buffer MAAFParametersBuffer              { MAAFParameters params[]; };
 layout(binding = 7, set = 2, scalar) writeonly buffer MAAFIntermediateDirectBuffer      { InitialSampleRecord directRecord[]; };
 layout(binding = 8, set = 2, scalar) writeonly buffer MAAFIntermediateIndirectBuffer    { InitialSampleRecord indirectRecord[]; };
+
+#ifdef BENCHMARK
+    layout(binding = 9, set = 2, rgba32f) uniform image2D storageImage;
+#endif
 
 // Global uniforms carrying camera information.
 struct GlobalUniforms {
@@ -69,20 +73,17 @@ void main()
     // + a primary lens ray
     // + a shadow ray
     // + a one-bounce indirect illumination sample.
-    vec3 albedo = vec3(0.);
-    float apeture_weight = 0.f;
-
-    vec2 directSlopes   = vec2(k_inf, -k_inf);
-    vec2 indirectSlopes = vec2(k_inf, -k_inf);
-    vec2 defocusSlopes  = vec2(k_inf, -k_inf);
-
     pld.reflectorDistMinMax = vec2(k_inf, -k_inf);
     pld.direcetSlopeMinMax = vec2(k_inf, -k_inf);
-
+    
+    vec2 defocusSlopes  = vec2(k_inf, -k_inf);
     vec3 avgWorldPosition = vec3(0);
     vec3 avgWorldNormal = vec3(0);
     float avgProjDist = 0.f;
     float weights = 0.f;
+
+    InitialSampleRecord drecord;
+    InitialSampleRecord irecord;
 
     const int spp = 16;
     for(int i=0; i<spp; ++i) {
@@ -111,16 +112,15 @@ void main()
                     10000.0,               // Maximum t-value
                     0);                    // Location of payload
 
-        albedo += pld.brdf;
-        apeture_weight += 1;
-
         if(!pld.rayHitSky) {
             // projected distance
             const float tHit = distance(pld.worldLocation, rayOrigin);
             const float proj_tHit = tHit * dot(toTarget, vec3(0,0,1));
             const float proj_distance  = 2.f * (proj_tHit * tan(half_fov* k_pi / 180.0)) / resolution.y;
             // lens weight
-            const float lens_weight = unnormalized_gaussian(diskSample.x, inv_sigma_lens) * unnormalized_gaussian(diskSample.y, inv_sigma_lens);
+            const float lens_weight =
+                  unnormalized_gaussian(diskSample.x, sigma_lens)
+                * unnormalized_gaussian(diskSample.y, sigma_lens);
             // accum worldPos worldNormal ProjDist
             avgWorldPosition += lens_weight * pld.worldLocation;
             avgWorldNormal += lens_weight * pld.worldNormal;
@@ -131,39 +131,58 @@ void main()
             defocusSlopes.x = min(defocusSlopes.x, slopeDefocusBlur);
             defocusSlopes.y = max(defocusSlopes.y, slopeDefocusBlur);
             // record
-            directRecord[gid].illumination[i] = vec4(pld.brdf * pld.visibility, 1);
-            indirectRecord[gid].illumination[i] = vec4(pld.brdf * pld.indirect, 1);
+            drecord.illumination[i] = vec4(pld.brdf * pld.visibility, diskSample.x);
+            irecord.illumination[i] = vec4(pld.brdf * pld.indirect, diskSample.y);
             const float u = length(diskSample);
-            directRecord[gid].yu[i] = vec2(pld.yd, u);
-            indirectRecord[gid].yu[i] = vec2(pld.yi, u);
+            drecord.y[i] = vec2(pld.y0, pld.y1);
+            irecord.y[i] = vec2(pld.v0, pld.v1);
         }
         else {
-            directRecord[gid].illumination[i] = vec4(0,0,0,0);
-            indirectRecord[gid].illumination[i] = vec4(0,0,0,0);
-            indirectRecord[gid].yu[i] = vec2(0,0);
+            drecord.illumination[i] = vec4(0,0,0,0);
+            irecord.illumination[i] = vec4(0,0,0,0);
+            drecord.y[i] = vec2(0,0);
+            irecord.y[i] = vec2(0,0);
         }
     }
 
-    indirectSlopes = pld.reflectorDistMinMax;
+    directRecord[gid] = drecord;
+    indirectRecord[gid] = irecord;
 
-    albedo = albedo / apeture_weight;
+#ifdef BENCHMARK
+    vec3 pixelColor = vec3(0,0,0);
+    for(int i=0; i<16; ++i) {
+        // pixelColor += directRecord[gid].illumination[i].xyz;
+        pixelColor += indirectRecord[gid].illumination[i].xyz;
+    }
+    pixelColor/=16;
+    if(pushConstants.sample_batch != 0) {
+        vec3 color = imageLoad(storageImage, ivec2(pixel)).rgb;
+        pixelColor = (pushConstants.sample_batch * color + pixelColor) / (pushConstants.sample_batch + 1);
+    }
+    imageStore(storageImage, ivec2(pixel), vec4(pixelColor, 1.0));
+#endif
 
     if(weights > 0.0001) {
         avgWorldPosition = avgWorldPosition / weights;
         avgWorldNormal =  avgWorldNormal / weights;
         avgProjDist = avgProjDist / weights;
-
+        // set minimum indirect slopes
         pld.reflectorDistMinMax.x = max(pld.reflectorDistMinMax.x, zMIN); // clamp z_min
         pld.reflectorDistMinMax.y = max(pld.reflectorDistMinMax.y, zMIN);
         if(pld.reflectorDistMinMax.x == k_inf) {
             pld.reflectorDistMinMax.x = zMINNONE;
             pld.reflectorDistMinMax.y = zMINNONE;
         }
+        // set minimum lens slopes
+		if (defocusSlopes.x >= 0) defocusSlopes.x = max(defocusSlopes.x, 0.05f);
+        else                      defocusSlopes.x = min(defocusSlopes.x, -0.05f);
+		if (defocusSlopes.y >= 0) defocusSlopes.y = max(defocusSlopes.y, 0.05f);
+		else                      defocusSlopes.y = min(defocusSlopes.y, -0.05f);
     }
     use_filter[gid] = weights > 0.0001 ? 1:0;
-    defocus_slope[gid] = defocusSlopes;
+    defocus_slope[gid] = (weights > 0.0001) ? defocusSlopes : vec2(k_inf, -k_inf);
     direct_slope[gid] = (weights > 0.0001) ? pld.direcetSlopeMinMax : vec2(k_inf, -k_inf);
-    indirect_slope[gid] = pld.reflectorDistMinMax;
+    indirect_slope[gid] = (weights > 0.0001) ? pld.reflectorDistMinMax : vec2(k_inf, -k_inf);
     world_position[gid] = vec4(avgWorldPosition, avgProjDist);
     world_normal[gid] = normalize(avgWorldNormal);
 }

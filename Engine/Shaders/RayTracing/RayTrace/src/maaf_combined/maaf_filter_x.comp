@@ -6,25 +6,15 @@
 
 #include "maaf_common.h"
 
-layout(binding = 0, set = 0, scalar) readonly buffer defocusSlopeBuffer     { vec2 defocus_slope[]; };
-layout(binding = 1, set = 0, scalar) readonly buffer directSlopeBuffer      { vec2 direct_slope[]; };
-layout(binding = 2, set = 0, scalar) readonly buffer indirectSlopeBuffer    { vec2 indirect_slope[]; };
-layout(binding = 3, set = 0, scalar) readonly buffer worldPositionBuffer    { vec4 world_position[]; };
-layout(binding = 4, set = 0, scalar) readonly buffer worldNormalBuffer      { vec3 world_normal[]; };
-layout(binding = 5, set = 0, scalar) readonly buffer useFilterBuffer        { uint use_filter[]; };
+layout(binding = 3, set = 0, scalar) readonly buffer worldPositionBuffer                { vec4 world_position[]; };
+layout(binding = 4, set = 0, scalar) readonly buffer worldNormalBuffer                  { vec3 world_normal[]; };
+layout(binding = 5, set = 0, scalar) readonly buffer useFilterBuffer                    { uint use_filter[]; };
 layout(binding = 6, set = 0, scalar) readonly buffer MAAFParametersBuffer               { MAAFParametersGroup params[]; };
 layout(binding = 7, set = 0, scalar) readonly buffer MAAFIntermediateDirectBuffer       { IntermediateStruct directIntermediate[]; };
 layout(binding = 8, set = 0, scalar) readonly buffer MAAFIntermediateIndirectBuffer     { IntermediateStruct indirectIntermediate[]; };
-layout(binding = 9, set = 0, rgba32f) uniform image2D storageImage;
 
-layout(binding = 10, set = 0, scalar) writeonly buffer defocusSlopeTmpBuffer     { vec2 defocus_slope_tmp[]; };
-layout(binding = 11, set = 0, scalar) writeonly buffer directSlopeTmpBuffer      { vec2 direct_slope_tmp[]; };
-layout(binding = 12, set = 0, scalar) writeonly buffer indirectSlopeTmpBuffer    { vec2 indirect_slope_tmp[]; };
-layout(binding = 13, set = 0, scalar) writeonly buffer worldPositionTmpBuffer    { vec4 world_position_tmp[]; };
-layout(binding = 14, set = 0, scalar) writeonly buffer worldNormalTmpBuffer      { vec3 world_normal_tmp[]; };
-layout(binding = 15, set = 0, scalar) writeonly buffer useFilterTmpBuffer        { uint use_filter_tmp[]; };
-layout(binding = 16, set = 0, scalar) writeonly buffer MAAFIntermediateDirectTmpBuffer      { IntermediateStruct directIntermediateTmp[]; };
-layout(binding = 17, set = 0, scalar) writeonly buffer MAAFIntermediateIndirectTmpBuffer    { IntermediateStruct indirectIntermediateTmp[]; };
+layout(binding = 16, set = 0, scalar) writeonly buffer MAAFIntermediateDirectTmpBuffer  { IntermediateStruct directIntermediateTmp[]; };
+layout(binding = 17, set = 0, scalar) writeonly buffer MAAFIntermediateIndirectTmpBuffer{ IntermediateStruct indirectIntermediateTmp[]; };
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
@@ -53,20 +43,24 @@ void main()
     clearIntermediateStruct(indircInterm);
 
     // go through the whole filter
-    for (int i=int(pixel.x)-filter_radius; i<=int(pixel.x)+filter_radius; i++) {
+    bool on_focus_plane = false;
+    int valid_filter_radius = min(min(int(pixel.x), filter_radius), int(resolution.x)-1-int(pixel.x));
+    for (int i=int(pixel.x)-valid_filter_radius; i<=int(pixel.x)+valid_filter_radius; i++) {
         if (i < 0 || i >= resolution.x) continue;
         uint neighbor_gid = i + pixel.y*resolution.x;
         if(use_filter[neighbor_gid] == 0) continue;
         // neighbor information fetching
         const vec4 neighbor_world_pos = world_position[neighbor_gid];
         const vec3 neighbor_world_norm = world_normal[neighbor_gid];
-        // if(abs(dot(center_world_norm, neighbor_world_norm)) < cos_angle_threshold) continue;
+        if(abs(dot(center_world_norm, neighbor_world_norm)) < cos_angle_threshold) continue;
         const vec3 diff = center_world_pos.xyz - neighbor_world_pos.xyz;
         const float euclidean_distancesq = dot(diff, diff);
         const float normcomp = dot(diff, light_normal);
         const float distancesq = euclidean_distancesq - normcomp*normcomp;
         // TODO:: Check whether use the condition (if has defocus blur)
-        // if (distancesq >= dist_threshold) continue;
+        if(distancesq >= dist_threshold) continue;
+        if(group.directParams.cxp[1] * params[neighbor_gid].directParams.cxp[1]<0)
+            on_focus_plane = true;
 
         IntermediateStruct neighbor_directInterm = directIntermediate[neighbor_gid];
         IntermediateStruct neighbor_indirectInterm = indirectIntermediate[neighbor_gid];
@@ -79,41 +73,81 @@ void main()
         const float pix_dist_sq = pix_dist*pix_dist;
         float scaling_1 = group.directParams.scaling[0];
         float scaling_2 = group.directParams.scaling[1];
-        float weight_1 = unnormalized_gaussian_sq(pix_dist_sq, group.directParams.sigmaxp[1]) * scaling_1;
-        float weight_2 = unnormalized_gaussian_sq(pix_dist_sq, group.directParams.sigmaxp[2]) * scaling_2;
-        // TODO :: pix_dist*2*k_pi?
-        triweight[0] = unnormalized_gaussian_sq(pix_dist_sq, group.directParams.sigmaxp[0]);
-        triweight[1] = weight_1 * cos(group.directParams.cxp[1] * pix_dist * 2*k_pi);
-        triweight[2] = weight_2 * cos(group.directParams.cxp[2] * pix_dist * 2*k_pi);
-        triweight[3] = weight_1 * sin(group.directParams.cxp[1] * pix_dist * 2*k_pi);
-        triweight[4] = weight_2 * sin(group.directParams.cxp[2] * pix_dist * 2*k_pi);
-        weight[0] = triweight[0];
-        weight[1] = weight_1;
-        weight[2] = weight_2;
-        weight[3] = weight_1;
-        weight[4] = weight_2;
+        float weight_1;
+        float weight_2;
+        if(scaling_1!=-1 && scaling_2!=-1) {
+            weight_1 = unnormalized_gaussian_sq(pix_dist_sq, group.directParams.sigmaxp[1]);
+            weight_2 = unnormalized_gaussian_sq(pix_dist_sq, group.directParams.sigmaxp[2]);
+            // TODO :: pix_dist*2*k_pi?
+            triweight[0] = unnormalized_gaussian_sq(pix_dist_sq, group.directParams.sigmaxp[0]);
+            triweight[1] = weight_1 * cos(group.directParams.cxp[1] * pix_dist) * scaling_1;
+            triweight[2] = weight_2 * cos(group.directParams.cxp[2] * pix_dist) * scaling_2;
+            triweight[3] = weight_1 * sin(group.directParams.cxp[1] * pix_dist);
+            triweight[4] = weight_2 * sin(group.directParams.cxp[2] * pix_dist);
+            weight[0] = triweight[0];
+            weight[1] = weight_1;
+            weight[2] = weight_2;
+            weight[3] = weight_1;
+            weight[4] = weight_2;
+        }
+        else {
+            triweight[0] = unnormalized_gaussian_sq(pix_dist_sq, group.directParams.sigmaxp[0]);
+            triweight[1] = 0;
+            triweight[2] = 0;
+            triweight[3] = 0;
+            triweight[4] = 0;
+            weight[0] = triweight[0];
+            weight[1] = 0;
+            weight[2] = 0;
+            weight[3] = 0;
+            weight[4] = 0;
+        }
         for(int j=0; j<5; ++j)
             for(int k=0; k<5; ++k)
                 directInterm.data[j*5+k] += neighbor_directInterm.data[j*5+k] * vec4(vec3(triweight[j]), weight[j]);
 
         scaling_1 = group.indirectParams.scaling[0];
         scaling_2 = group.indirectParams.scaling[1];
-        weight_1 = unnormalized_gaussian_sq(pix_dist_sq, group.indirectParams.sigmaxp[1]) * scaling_1;
-        weight_2 = unnormalized_gaussian_sq(pix_dist_sq, group.indirectParams.sigmaxp[2]) * scaling_2;
-        triweight[0] = unnormalized_gaussian_sq(pix_dist_sq, group.indirectParams.sigmaxp[0]);
-        triweight[1] = weight_1 * cos(group.indirectParams.cxp[1] * pix_dist * 2*k_pi);
-        triweight[2] = weight_2 * cos(group.indirectParams.cxp[2] * pix_dist * 2*k_pi);
-        triweight[3] = weight_1 * sin(group.indirectParams.cxp[1] * pix_dist * 2*k_pi);
-        triweight[4] = weight_2 * sin(group.indirectParams.cxp[2] * pix_dist * 2*k_pi);
-        weight[0] = triweight[0];
-        weight[1] = weight_1;
-        weight[2] = weight_2;
-        weight[3] = weight_1;
-        weight[4] = weight_2;
+        if(scaling_1!=-1 && scaling_2!=-1) {
+            weight_1 = unnormalized_gaussian_sq(pix_dist_sq, group.indirectParams.sigmaxp[1]);
+            weight_2 = unnormalized_gaussian_sq(pix_dist_sq, group.indirectParams.sigmaxp[2]);
+            triweight[0] = unnormalized_gaussian_sq(pix_dist_sq, group.indirectParams.sigmaxp[0]);
+            triweight[1] = weight_1 * cos(group.indirectParams.cxp[1] * pix_dist) * scaling_1;
+            triweight[2] = weight_2 * cos(group.indirectParams.cxp[2] * pix_dist) * scaling_2;
+            triweight[3] = weight_1 * sin(group.indirectParams.cxp[1] * pix_dist);
+            triweight[4] = weight_2 * sin(group.indirectParams.cxp[2] * pix_dist);
+            weight[0] = triweight[0];
+            weight[1] = weight_1;
+            weight[2] = weight_2;
+            weight[3] = weight_1;
+            weight[4] = weight_2;
+        }
+        else {
+            triweight[0] = unnormalized_gaussian_sq(pix_dist_sq, group.indirectParams.sigmaxp[0]);
+            triweight[1] = 0;
+            triweight[2] = 0;
+            triweight[3] = 0;
+            triweight[4] = 0;
+            weight[0] = triweight[0];
+            weight[1] = 0;
+            weight[2] = 0;
+            weight[3] = 0;
+            weight[4] = 0;
+        }
 
         for(int j=0; j<5; ++j)
             for(int k=0; k<5; ++k)
                 indircInterm.data[j*5+k] += neighbor_indirectInterm.data[j*5+k] * vec4(vec3(triweight[j]), weight[j]);
+    }
+
+    float hq_terms[5] = {1,0,0,0,0};
+    float sin_terms[5] = {1,1,1,0,0};
+    if(on_focus_plane) {
+        for(int j=0; j<5; ++j)
+            for(int k=0; k<5; ++k) {
+                directInterm.data[j*5+k] *= vec4(hq_terms[j]);
+                indircInterm.data[j*5+k] *= vec4(sin_terms[j]);
+            }
     }
 
     directIntermediateTmp[gid]   = directInterm;

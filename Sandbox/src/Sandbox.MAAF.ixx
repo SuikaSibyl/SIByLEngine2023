@@ -571,6 +571,7 @@ namespace Sandbox
 		}
 
 		auto composeCommands(RHI::CommandEncoder* encoder, int index) noexcept -> void {
+
 			encoder->pipelineBarrier(RHI::BarrierDescriptor{
 				(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
 				(uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT,
@@ -640,11 +641,26 @@ namespace Sandbox
 				} }, {}
 			};
 
-			{
+			{	// emit intial sample
+				bufferCOMP2RT_RW2RW.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(defocusSlopeBuffer)->buffer.get();
+				encoder->pipelineBarrier(bufferCOMP2RT_RW2RW);
+				bufferCOMP2RT_RW2RW.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(directSlopeBuffer)->buffer.get();
+				encoder->pipelineBarrier(bufferCOMP2RT_RW2RW);
+				bufferCOMP2RT_RW2RW.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(indirectSlopeBuffer)->buffer.get();
+				encoder->pipelineBarrier(bufferCOMP2RT_RW2RW);
+				bufferCOMP2RT_RW2RW.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(worldPositionBuffer)->buffer.get();
+				encoder->pipelineBarrier(bufferCOMP2RT_RW2RW);
+				bufferCOMP2RT_RW2RW.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(worldNormalBuffer)->buffer.get();
+				encoder->pipelineBarrier(bufferCOMP2RT_RW2RW);
 				bufferCOMP2RT_RW2RW.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(useFilterBuffer)->buffer.get();
 				encoder->pipelineBarrier(bufferCOMP2RT_RW2RW);
+				bufferCOMP2RT_RW2RW.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(MAAFIntermediateDirectBuffer)->buffer.get();
+				encoder->pipelineBarrier(bufferCOMP2RT_RW2RW);
+				bufferCOMP2RT_RW2RW.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(MAAFIntermediateIndirectBuffer)->buffer.get();
+				encoder->pipelineBarrier(bufferCOMP2RT_RW2RW);
+
+				initial_sampling_pass->composeCommands(encoder, index);
 			}
-			initial_sampling_pass->composeCommands(encoder, index);
 
 			// pre filtering
 			{
@@ -760,6 +776,7 @@ namespace Sandbox
 				bufferComp2Comp_W2R.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(MAAFIntermediateIndirectBuffer)->buffer.get();
 				encoder->pipelineBarrier(bufferComp2Comp_W2R);
 			}
+
 			result_display_pass->composeCommands(encoder, index);
 
 			// ready output image for display
