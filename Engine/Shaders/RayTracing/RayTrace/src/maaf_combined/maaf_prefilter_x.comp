@@ -35,7 +35,9 @@ void main()
     if((pixel.x >= resolution.x) || (pixel.y >= resolution.y)) {
         return;
     }
-        
+   
+    use_filter_tmp[gid] = 0;
+
     vec2 accum_defocus_slope  = vec2(0,0);
     vec2 accum_direct_slope   = vec2(0,0);
     vec2 accum_indirect_slope = vec2(0,0);

@@ -38,7 +38,7 @@ void main()
         sWorldNormal[gl_LocalInvocationID.x] = world_normal[lid];
     }
     if(gl_LocalInvocationID.x >= 32-10) {
-        const uint lid = min(gl_GlobalInvocationID.x + 10, resolution.x) + pixel.y * resolution.x;
+        const uint lid = min(gl_GlobalInvocationID.x + 10, resolution.x-1) + pixel.y * resolution.x;
         sDirectIntermediate[gl_LocalInvocationID.x + 20] = directIntermediate[lid];
         sIndirtIntermediate[gl_LocalInvocationID.x + 20] = indirectIntermediate[lid];
         sWorldPosition[gl_LocalInvocationID.x + 20] = world_position[lid];
@@ -66,7 +66,7 @@ void main()
     if(center_use_filter==0) return;
 
     // TODO:: Further restrict the filter size by sigmaxp
-    const MAAFParametersGroup group = params[gid];
+    MAAFParametersGroup group = params[gid];
     const vec4 center_world_pos = world_position[gid];
     const vec3 center_world_norm = world_normal[gid];
     IntermediateStruct directInterm;
@@ -74,6 +74,11 @@ void main()
     
     clearIntermediateStruct(directInterm);
     clearIntermediateStruct(indircInterm);
+
+    if(center_use_filter==2) {
+        group.directParams.sigmaxp[0] *= use_AAF_para;
+        group.indirectParams.sigmaxp[0] *= use_AAF_para;
+    }
 
     // go through the whole filter
     bool on_focus_plane = false;

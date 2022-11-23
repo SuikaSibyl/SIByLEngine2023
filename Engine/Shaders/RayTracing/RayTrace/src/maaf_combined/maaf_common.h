@@ -27,6 +27,7 @@ const float dist_threshold = 0.1;
 const float angle_threshold = 20.0 * k_pi /180.0;
 const float cos_angle_threshold = abs(cos(20.0 * k_pi /180.0));
 const float defocus_threashold = 100;
+const float use_AAF_para = 1.f;
 
 float computeDefocusBlurSlope(in float z) {
     return length_radius * (resolution.x/2) / focal_plane_half_width * (focus_dist/z - 1);

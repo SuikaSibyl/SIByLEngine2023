@@ -79,6 +79,10 @@ void main()
             }
         }
 
+        // if(use_filter[gid] == 2) {
+        //     accumdir = vec3(1,1,0);
+        // }
+
         // // vec3 c00 = directIntermediateTmp[gid].data[0].xyz/directIntermediateTmp[gid].data[0].w;
         // vec3 c01 = vec3(0);
         // int i = 5;

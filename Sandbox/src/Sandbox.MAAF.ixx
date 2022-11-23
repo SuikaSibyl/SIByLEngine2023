@@ -253,7 +253,68 @@ namespace Sandbox
 		std::array<RHI::BindGroup*, 2> bufferBindGroups = {};
 	};
 
-	
+	export struct MAAF_FindFocus_Filter_Pass {
+		MAAF_FindFocus_Filter_Pass(RHI::RHILayer* rhiLayer, RHI::PipelineLayout* slopleFilterPipelineLayout,
+			std::array<RHI::BindGroup*, 2> const& bufferBindGroups)
+			: slopleFilterPipelineLayout(slopleFilterPipelineLayout), bufferBindGroups(bufferBindGroups)
+		{
+			maaf_prefilter_x_comp = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			maaf_prefilter_y_comp = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			GFX::GFXManager::get()->registerShaderModuleResource(maaf_prefilter_x_comp,
+				"../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/maaf_combined/maaf_findfocus_filter_x_comp.spv",
+				{ nullptr, RHI::ShaderStages::COMPUTE });
+			GFX::GFXManager::get()->registerShaderModuleResource(maaf_prefilter_y_comp,
+				"../Engine/Binaries/Runtime/spirv/RayTracing/RayTrace/src/maaf_combined/maaf_findfocus_filter_y_comp.spv",
+				{ nullptr, RHI::ShaderStages::COMPUTE });
+			// create compute pipeline
+			for (int i = 0; i < 2; ++i) {
+				computePipelineX[i] = rhiLayer->getDevice()->createComputePipeline(RHI::ComputePipelineDescriptor{
+					slopleFilterPipelineLayout,
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(maaf_prefilter_x_comp)->shaderModule.get(), "main"}
+					});
+				computePipelineY[i] = rhiLayer->getDevice()->createComputePipeline(RHI::ComputePipelineDescriptor{
+					slopleFilterPipelineLayout,
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(maaf_prefilter_y_comp)->shaderModule.get(), "main"}
+					});
+			}
+
+		}
+
+		~MAAF_FindFocus_Filter_Pass() {
+			for (int i = 0; i < 2; ++i) {
+				computePipelineX[i] = nullptr;
+				computePipelineY[i] = nullptr;
+				compEncoderX[i] = nullptr;
+				compEncoderY[i] = nullptr;
+			}
+		}
+
+		auto composeCommands_x(RHI::CommandEncoder* encoder, int index) noexcept -> void {
+			compEncoderX[index] = encoder->beginComputePass({});
+			compEncoderX[index]->setPipeline(computePipelineX[index].get());
+			compEncoderX[index]->setBindGroup(0, bufferBindGroups[index], 0, 0);
+			compEncoderX[index]->dispatchWorkgroups((800 + 159) / 160, (600) / 1, 1);
+			compEncoderX[index]->end();
+		}
+
+		auto composeCommands_y(RHI::CommandEncoder* encoder, int index) noexcept -> void {
+			compEncoderY[index] = encoder->beginComputePass({});
+			compEncoderY[index]->setPipeline(computePipelineY[index].get());
+			compEncoderY[index]->setBindGroup(0, bufferBindGroups[index], 0, 0);
+			compEncoderY[index]->dispatchWorkgroups((800 + 0) / 1, (600 + 159) / 160, 1);
+			compEncoderY[index]->end();
+		}
+
+		Core::GUID maaf_prefilter_x_comp;
+		Core::GUID maaf_prefilter_y_comp;
+		RHI::PipelineLayout* slopleFilterPipelineLayout;
+		std::unique_ptr<RHI::ComputePipeline> computePipelineX[2];
+		std::unique_ptr<RHI::ComputePipeline> computePipelineY[2];
+		std::array<RHI::BindGroup*, 2> bufferBindGroups;
+		std::unique_ptr<RHI::ComputePassEncoder> compEncoderX[2] = {};
+		std::unique_ptr<RHI::ComputePassEncoder> compEncoderY[2] = {};
+	};
+
 	export struct MAAF_Filter_Pass {
 		MAAF_Filter_Pass(RHI::RHILayer* rhiLayer, RHI::PipelineLayout* slopleFilterPipelineLayout,
 			std::array<RHI::BindGroup*, 2> const& bufferBindGroups)
@@ -547,6 +608,8 @@ namespace Sandbox
 				std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()},
 				std::array<RHI::BindGroup*, 2>{camBindGroup[0], camBindGroup[1]},
 				std::array<RHI::BindGroup*, 2>{bufferBindGroup[0].get(), bufferBindGroup[1].get()});
+			find_focus_pass = std::make_unique<MAAF_FindFocus_Filter_Pass>(rhiLayer, displayPipelineLayout.get(),
+				std::array<RHI::BindGroup*, 2>{bufferBindGroup[0].get(), bufferBindGroup[1].get()});
 			filter_pass = std::make_unique<MAAF_Filter_Pass>(rhiLayer, displayPipelineLayout.get(),
 				std::array<RHI::BindGroup*, 2>{bufferBindGroup[0].get(), bufferBindGroup[1].get()});
 			result_display_pass = std::make_unique<MAAF_Display_Pass>(rhiLayer, displayPipelineLayout.get(),
@@ -559,6 +622,7 @@ namespace Sandbox
 			prefilter_pass = nullptr;
 			filter_pass = nullptr;
 			continue_sampling_pass = nullptr;
+			find_focus_pass = nullptr;
 			result_display_pass = nullptr;
 			pipelineLayout = nullptr;
 			displayPipelineLayout = nullptr;
@@ -597,6 +661,17 @@ namespace Sandbox
 					(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
 				} }, {}
 			};
+			
+			RHI::BarrierDescriptor bufferRT2Comp_R2RW{
+				(uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR,
+				(uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT,
+				(uint32_t)RHI::DependencyType::NONE,
+				{}, { RHI::BufferMemoryBarrierDescriptor{
+					nullptr,
+					(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
+					(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT | (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
+				} }, {}
+			};
 
 			RHI::BarrierDescriptor bufferComp2Comp_R2W{
 				(uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT,
@@ -616,6 +691,17 @@ namespace Sandbox
 					nullptr,
 					(uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
 					(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
+				} }, {}
+			};
+			
+			RHI::BarrierDescriptor bufferComp2Comp_RW2RW{
+				(uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT,
+				(uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT,
+				(uint32_t)RHI::DependencyType::NONE,
+				{}, { RHI::BufferMemoryBarrierDescriptor{
+					nullptr,
+					(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT | (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
+					(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT | (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
 				} }, {}
 			};
 
@@ -751,6 +837,21 @@ namespace Sandbox
 				bufferRT2Comp.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(MAAFIntermediateIndirectBuffer)->buffer.get();
 				encoder->pipelineBarrier(bufferRT2Comp);
 			}
+			// find focus
+			{
+				bufferRT2Comp_R2RW.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(useFilterBuffer)->buffer.get();
+				encoder->pipelineBarrier(bufferRT2Comp_R2RW);
+
+				find_focus_pass->composeCommands_x(encoder, index);
+
+				bufferComp2Comp_RW2RW.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(useFilterBuffer)->buffer.get();
+				encoder->pipelineBarrier(bufferComp2Comp_RW2RW);
+
+				find_focus_pass->composeCommands_y(encoder, index);
+
+				bufferComp2Comp_RW2RW.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(useFilterBuffer)->buffer.get();
+				encoder->pipelineBarrier(bufferComp2Comp_RW2RW);
+			}
 			// filter
 			{
 				bufferComp2Comp_R2W.bufferMemoryBarriers[0].buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(MAAFIntermediateDirectTmpBuffer)->buffer.get();
@@ -831,6 +932,7 @@ namespace Sandbox
 		std::unique_ptr<MAAF_Initial_Sample_Pass> initial_sampling_pass = nullptr;
 		std::unique_ptr<MAAF_Prefilter_Pass> prefilter_pass = nullptr;
 		std::unique_ptr<MAAF_Continue_Sample_Pass> continue_sampling_pass = nullptr;
+		std::unique_ptr<MAAF_FindFocus_Filter_Pass> find_focus_pass = nullptr;
 		std::unique_ptr<MAAF_Filter_Pass> filter_pass = nullptr;
 		std::unique_ptr<MAAF_Display_Pass> result_display_pass = nullptr;
 	};

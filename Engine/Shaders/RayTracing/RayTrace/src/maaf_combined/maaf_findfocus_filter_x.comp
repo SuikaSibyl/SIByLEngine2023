@@ -1,0 +1,74 @@
+#version 460
+#extension GL_EXT_scalar_block_layout : require
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+#include "maaf_common.h"
+
+layout(binding = 5, set = 0, scalar) buffer useFilterBuffer                    { uint use_filter[]; };
+layout(binding = 6, set = 0, scalar) readonly buffer MAAFParametersBuffer               { MAAFParametersGroup params[]; };
+
+layout(local_size_x = 160, local_size_y = 1, local_size_z = 1) in;
+
+shared float s_cxp[160 + 20];
+shared float s_scaling[160 + 20];
+shared uint  s_use_filter[160 + 20];
+
+void main()
+{
+    // Get current pixel position and global index.
+    const uvec2 pixel = gl_GlobalInvocationID.xy;
+    // else compute the gid
+    const uint gid = pixel.x + pixel.y * resolution.x;
+
+    if(gl_LocalInvocationID.x < 10) {
+        const uint lid = max(gl_GlobalInvocationID.x - 10, 0) + pixel.y * resolution.x;
+        s_cxp[gl_LocalInvocationID.x] = params[lid].directParams.cxp[1];
+        s_scaling[gl_LocalInvocationID.x] = params[lid].directParams.scaling[0];
+        s_use_filter[gl_LocalInvocationID.x] = use_filter[lid];
+    }
+    if(gl_LocalInvocationID.x >= 160-10) {
+        const uint lid = min(gl_GlobalInvocationID.x + 10, resolution.x) + pixel.y * resolution.x;
+        s_cxp[gl_LocalInvocationID.x + 20] = params[lid].directParams.cxp[1];
+        s_scaling[gl_LocalInvocationID.x + 20] = params[lid].directParams.scaling[0];
+        s_use_filter[gl_LocalInvocationID.x + 20] = use_filter[lid];
+    }
+    const uint max_index = resolution.x - 1 + pixel.y * resolution.x;
+    const uint clamped_idx = min(gid, max_index);
+    s_cxp[gl_LocalInvocationID.x + 10] = params[clamped_idx].directParams.cxp[1];
+    s_scaling[gl_LocalInvocationID.x + 10] = params[clamped_idx].directParams.scaling[0];
+    s_use_filter[gl_LocalInvocationID.x + 10] = use_filter[clamped_idx];
+    barrier();
+
+    // If the pixel is outside of the image, don't do anything:
+    if((pixel.x >= resolution.x) || (pixel.y >= resolution.y))
+        return;
+
+    // return if do not use filter
+    uint center_use_filter = use_filter[gid];
+    if(center_use_filter==0) return;
+
+    const float center_cxp = s_cxp[10+int(gl_LocalInvocationID.x)];
+
+    // go through the whole filter
+    bool on_focus_plane = false;
+    int valid_filter_radius = min(min(int(pixel.x), filter_radius), int(resolution.x)-1-int(pixel.x));
+    for (int i=int(pixel.x)-valid_filter_radius; i<=int(pixel.x)+valid_filter_radius; i++) {
+        if (i < 0 || i >= resolution.x) continue;
+        uint neighbor_gid = i + pixel.y*resolution.x;
+        const int sid = i-int(pixel.x)+10+int(gl_LocalInvocationID.x);
+        if(s_use_filter[sid] == 0) continue;
+        if(center_cxp * s_cxp[sid]<=0 || s_scaling[sid] == -1) {
+            on_focus_plane = true;
+            break;
+        }
+
+    }
+
+    if(on_focus_plane) {
+        use_filter[gid] = 2;
+    }
+
+    return;
+}
