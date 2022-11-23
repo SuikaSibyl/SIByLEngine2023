@@ -46,6 +46,8 @@ struct PrimaryRayPayload {
     vec2 direcetSlopeMinMax;
     float v0;
     float v1;
+    int spp_d;
+    int spp_i;
     bool rayHitSky;
 };
 

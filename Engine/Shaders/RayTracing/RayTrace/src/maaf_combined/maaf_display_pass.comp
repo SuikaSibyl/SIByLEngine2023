@@ -203,26 +203,6 @@ void main()
             // }
         // }
         pixelColor = accumdir;
-
-        // imageStore(storageImage, ivec2(pixel), vec4(accumdir, 1.0));
-        // imageStore(storageImage, ivec2(pixel), vec4(vec3(params[gid].directParams.sigmaxp[0]), 1.0));
-
-        // pixelColor = directIntermediate[gid].data[0].rgb / directIntermediate[gid].data[0].w;
-        // const vec2 slope = defocus_slope[gid];
-        // pixelColor = (vec3(slope.x));
-        // if(slope.x == k_inf)
-        //     pixelColor = vec3(1,0,0);
-        // else
-        //     pixelColor = vec3(0,0,0);
-        // uint c = 0;
-        // vec3 direct = vec3(0);
-        // vec3 indirect = vec3(0);
-
-        // for(int i=0; i<25; ++i) {
-        //     direct += directIntermediate[gid].data[i].rgb / directIntermediate[gid].data[i].w;
-        //     indirect += indirectIntermediate[gid].data[i].rgb / indirectIntermediate[gid].data[i].w;
-        // }
-        // pixelColor = indirect;
     }
 
     imageStore(storageImage, ivec2(pixel), vec4(pixelColor, 1.0));

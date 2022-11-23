@@ -146,8 +146,8 @@ void main()
 
     // // initialize primary payload
     // pld.rngState = uint(((pushConstants.sample_batch+2) * resolution.y + pixel.y) * resolution.x + pixel.x);
-    // // pld.spp_d = continue_spp_d * continue_spp_d;
-    // // pld.spp_i = 0;
+    // pld.spp_d = continue_spp_d * continue_spp_d;
+    // pld.spp_i = continue_spp_i * continue_spp_i;
     // pld.reflectorDistMinMax = vec2(k_inf, -k_inf);
     // pld.direcetSlopeMinMax = vec2(k_inf, -k_inf);
     // // find the central ray status.
@@ -156,7 +156,7 @@ void main()
     // const vec2 d            = inUV * 2.0 - 1.0;                 // [-1,+1] pixel uv
     // const vec3 targetOnFocusPlane = (uni.projInverse * vec4(d.x, d.y, 1, 1)).xyz * focus_dist;
     
-    // for(int i=0; i<64; ++i) {
+    // for(int i=0; i<continue_spp_p*continue_spp_p; ++i) {
     //     const vec2 diskSample = uniformSampleDisk(vec2(stepAndOutputRNGFloat(pld.rngState), stepAndOutputRNGFloat(pld.rngState)));
     //     const vec3 apetureSample = vec3(length_radius * diskSample, 0);
     //     // find the pimary sample
