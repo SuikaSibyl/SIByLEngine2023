@@ -405,7 +405,10 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		height = 600;
 
 		UniformBufferObject ubo;
-		Math::vec4 campos = Math::mul(Math::rotateY(0 * 20).m, Math::vec4(-0.001, 1.0, 6.0, 1));
+		Math::vec4 campos = Math::mul(Math::rotateX(std::sin(timer.totalTime()*0.5) * 10).m,
+			Math::mul(Math::rotateY(std::sin(timer.totalTime()) * 20).m, Math::vec4(-0.001, 1.0, 6.0, 1)));
+		//Math::vec4 campos = Math::mul(Math::rotateY(0 * 20).m, Math::vec4(-0.001, 1.0, 6.0, 1));
+
 		//ubo.model = Math::transpose(Math::rotate(timer.totalTime() * 80, Math::vec3(0, 1, 0)).m);
 		ubo.view = Math::transpose(Math::lookAt(Math::vec3(campos.x, campos.y, campos.z) , Math::vec3(0, 1, 0), Math::vec3(0, 1, 0)).m);
 		ubo.proj = Math::transpose(Math::perspective(22.f, 1.f * 800 / 600, 0.1f, 10.f).m);

@@ -78,13 +78,25 @@ void main()
                 accumdir += s[i]*s[j]*indirectIntermediate[gid].data[i*5+j].xyz/indirectIntermediate[gid].data[i*5+j].w;
             }
         }
-        // accumdir -= indirectIntermediate[gid].data[0].xyz/indirectIntermediate[gid].data[0].w;
-        // accumdir = abs(accumdir);
-        // vec3 c00 = directIntermediate[gid].data[0].xyz/directIntermediate[gid].data[0].w;
+
+        // // vec3 c00 = directIntermediateTmp[gid].data[0].xyz/directIntermediateTmp[gid].data[0].w;
         // vec3 c01 = vec3(0);
-        // c01 += directIntermediate[gid].data[1].xyz/directIntermediate[gid].data[1].w;
-        // c01 -= directIntermediate[gid].data[3].xyz/directIntermediate[gid].data[3].w;
+        // int i = 5;
+        // if(directIntermediate[gid].data[1].w == 0)
+        //     c01 = vec3(1,1,0);
+        // else {
+        //     for(int i=1; i<25; ++i) {
+        //         // if(i>=3 && i<25) continue;
+        //         if(directIntermediate[gid].data[i].w < 0.0001 || isnan(directIntermediate[gid].data[i].x)) {
+
+        //         }
+        //         else
+        //         c01 += directIntermediate[gid].data[i].xyz/directIntermediate[gid].data[i].w;
+        //     }
+        // }
+        //     // c01 -= directIntermediateTmp[gid].data[3].xyz/directIntermediateTmp[gid].data[3].w;
         // c01 *= 2;
+        // accumdir = abs(c01*10);
         // vec3 c10 = vec3(0);
         // c10 += directIntermediate[gid].data[5].xyz/directIntermediate[gid].data[5].w;
         // c10 -= directIntermediate[gid].data[15].xyz/directIntermediate[gid].data[15].w;
@@ -123,44 +135,44 @@ void main()
         // c22 *= 4;
         // accumdir =  c00;
 
-        vec3 c00 = indirectIntermediate[gid].data[0].xyz/indirectIntermediate[gid].data[0].w;
-        vec3 c01 = vec3(0);
-        // if(indirectIntermediate[gid].data[1].w > 0.0001)
-        //     c01 += indirectIntermediate[gid].data[1].xyz/indirectIntermediate[gid].data[1].w;
-        if(indirectIntermediate[gid].data[3].w > 0.0001)
-            c01 -= indirectIntermediate[gid].data[3].xyz/indirectIntermediate[gid].data[3].w;
-        c01 *= 2;
-        // accumdir = abs(c01)*20;
-        vec3 c10 = vec3(0);
-        if(indirectIntermediate[gid].data[5].w > 0.0001)
-            c10 += indirectIntermediate[gid].data[5].xyz/indirectIntermediate[gid].data[5].w;
-        if(indirectIntermediate[gid].data[15].w > 0.0001)
-            c10 -= indirectIntermediate[gid].data[15].xyz/indirectIntermediate[gid].data[15].w;
-        c10 *= 2;
-        vec3 c11 = vec3(0);
-        if(indirectIntermediate[gid].data[6].w > 0.0001)
-            c11 += indirectIntermediate[gid].data[6].xyz/indirectIntermediate[gid].data[6].w;
-        if(indirectIntermediate[gid].data[8].w > 0.0001)
-            c11 -= indirectIntermediate[gid].data[8].xyz/indirectIntermediate[gid].data[8].w;
-        if(indirectIntermediate[gid].data[18].w > 0.0001)
-            c11 += indirectIntermediate[gid].data[18].xyz/indirectIntermediate[gid].data[18].w;
-        if(indirectIntermediate[gid].data[16].w > 0.0001)
-            c11 -= indirectIntermediate[gid].data[16].xyz/indirectIntermediate[gid].data[16].w;
-        c11 *= 4;
-        vec3 c02 = vec3(0);
-        c02 += indirectIntermediate[gid].data[2].xyz/indirectIntermediate[gid].data[2].w;
-        c02 -= indirectIntermediate[gid].data[4].xyz/indirectIntermediate[gid].data[4].w;
-        c02 *= 2;
-        vec3 c20 = vec3(0);
-        c20 += directIntermediate[gid].data[10].xyz/indirectIntermediate[gid].data[10].w;
-        c20 -= directIntermediate[gid].data[20].xyz/indirectIntermediate[gid].data[20].w;
-        c20 *= 2;
-        vec3 c12 = vec3(0);
-        c12 += indirectIntermediate[gid].data[7].xyz/indirectIntermediate[gid].data[7].w;
-        c12 -= indirectIntermediate[gid].data[9].xyz/indirectIntermediate[gid].data[9].w;
-        c12 += indirectIntermediate[gid].data[19].xyz/indirectIntermediate[gid].data[19].w;
-        c12 -= indirectIntermediate[gid].data[17].xyz/indirectIntermediate[gid].data[17].w;
-        c12 *= 4;
+        // vec3 c00 = indirectIntermediate[gid].data[0].xyz/indirectIntermediate[gid].data[0].w;
+        // vec3 c01 = vec3(0);
+        // // if(indirectIntermediate[gid].data[1].w > 0.0001)
+        // //     c01 += indirectIntermediate[gid].data[1].xyz/indirectIntermediate[gid].data[1].w;
+        // if(indirectIntermediate[gid].data[3].w > 0.0001)
+        //     c01 -= indirectIntermediate[gid].data[3].xyz/indirectIntermediate[gid].data[3].w;
+        // c01 *= 2;
+        // // accumdir = abs(c01)*20;
+        // vec3 c10 = vec3(0);
+        // if(indirectIntermediate[gid].data[5].w > 0.0001)
+        //     c10 += indirectIntermediate[gid].data[5].xyz/indirectIntermediate[gid].data[5].w;
+        // if(indirectIntermediate[gid].data[15].w > 0.0001)
+        //     c10 -= indirectIntermediate[gid].data[15].xyz/indirectIntermediate[gid].data[15].w;
+        // c10 *= 2;
+        // vec3 c11 = vec3(0);
+        // if(indirectIntermediate[gid].data[6].w > 0.0001)
+        //     c11 += indirectIntermediate[gid].data[6].xyz/indirectIntermediate[gid].data[6].w;
+        // if(indirectIntermediate[gid].data[8].w > 0.0001)
+        //     c11 -= indirectIntermediate[gid].data[8].xyz/indirectIntermediate[gid].data[8].w;
+        // if(indirectIntermediate[gid].data[18].w > 0.0001)
+        //     c11 += indirectIntermediate[gid].data[18].xyz/indirectIntermediate[gid].data[18].w;
+        // if(indirectIntermediate[gid].data[16].w > 0.0001)
+        //     c11 -= indirectIntermediate[gid].data[16].xyz/indirectIntermediate[gid].data[16].w;
+        // c11 *= 4;
+        // vec3 c02 = vec3(0);
+        // c02 += indirectIntermediate[gid].data[2].xyz/indirectIntermediate[gid].data[2].w;
+        // c02 -= indirectIntermediate[gid].data[4].xyz/indirectIntermediate[gid].data[4].w;
+        // c02 *= 2;
+        // vec3 c20 = vec3(0);
+        // c20 += directIntermediate[gid].data[10].xyz/indirectIntermediate[gid].data[10].w;
+        // c20 -= directIntermediate[gid].data[20].xyz/indirectIntermediate[gid].data[20].w;
+        // c20 *= 2;
+        // vec3 c12 = vec3(0);
+        // c12 += indirectIntermediate[gid].data[7].xyz/indirectIntermediate[gid].data[7].w;
+        // c12 -= indirectIntermediate[gid].data[9].xyz/indirectIntermediate[gid].data[9].w;
+        // c12 += indirectIntermediate[gid].data[19].xyz/indirectIntermediate[gid].data[19].w;
+        // c12 -= indirectIntermediate[gid].data[17].xyz/indirectIntermediate[gid].data[17].w;
+        // c12 *= 4;
         // vec3 c21 = vec3(0);
         // c21 += indirectIntermediate[gid].data[11].xyz/indirectIntermediate[gid].data[11].w;
         // c21 -= indirectIntermediate[gid].data[13].xyz/indirectIntermediate[gid].data[13].w;

@@ -145,7 +145,7 @@ void main()
     // continue_spp_i = min(min(continue_spp_i, int(10.f/continue_spp_p)),10);
 
     // // initialize primary payload
-    // pld.rngState = uint(((pushConstants.sample_batch+999) * resolution.y + pixel.y) * resolution.x + pixel.x);
+    // pld.rngState = uint(((pushConstants.sample_batch+2) * resolution.y + pixel.y) * resolution.x + pixel.x);
     // // pld.spp_d = continue_spp_d * continue_spp_d;
     // // pld.spp_i = 0;
     // pld.reflectorDistMinMax = vec2(k_inf, -k_inf);
@@ -156,7 +156,7 @@ void main()
     // const vec2 d            = inUV * 2.0 - 1.0;                 // [-1,+1] pixel uv
     // const vec3 targetOnFocusPlane = (uni.projInverse * vec4(d.x, d.y, 1, 1)).xyz * focus_dist;
     
-    // for(int i=0; i<continue_spp_p*continue_spp_p; ++i) {
+    // for(int i=0; i<64; ++i) {
     //     const vec2 diskSample = uniformSampleDisk(vec2(stepAndOutputRNGFloat(pld.rngState), stepAndOutputRNGFloat(pld.rngState)));
     //     const vec3 apetureSample = vec3(length_radius * diskSample, 0);
     //     // find the pimary sample

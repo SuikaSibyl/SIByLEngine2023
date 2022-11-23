@@ -344,13 +344,15 @@ void computeMAAFParameters(
             // || abs(params.cup[i])*lightSigma < 3.14)
                 params.scaling[i-1] = 0;
         }
+        if(params.scaling[0]==0)
+            params.scaling[1] = 0;
     }
     // if su_min is minus, su_max is positive
     // will degenerate into box filter
     else {
         // central components
-        float min_u = -0.5f * bar_width_u;
-        float max_u = min_u + bar_width_u;
+        float min_u = -omega_u_max;
+        float max_u = omega_u_max;
         float max_x = omega_x_max;
         float min_x = -omega_x_max;
         float max_y = (s_min == k_inf)

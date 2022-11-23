@@ -49,6 +49,10 @@ void main()
         if (i < 0 || i >= resolution.x) continue;
         uint neighbor_gid = i + pixel.y*resolution.x;
         if(use_filter[neighbor_gid] == 0) continue;
+        if(group.directParams.cxp[1] * params[neighbor_gid].directParams.cxp[1]<=0
+        || params[neighbor_gid].directParams.scaling[0] == -1)
+            on_focus_plane = true;
+
         // neighbor information fetching
         const vec4 neighbor_world_pos = world_position[neighbor_gid];
         const vec3 neighbor_world_norm = world_normal[neighbor_gid];
@@ -59,8 +63,6 @@ void main()
         const float distancesq = euclidean_distancesq - normcomp*normcomp;
         // TODO:: Check whether use the condition (if has defocus blur)
         if(distancesq >= dist_threshold) continue;
-        if(group.directParams.cxp[1] * params[neighbor_gid].directParams.cxp[1]<0)
-            on_focus_plane = true;
 
         IntermediateStruct neighbor_directInterm = directIntermediate[neighbor_gid];
         IntermediateStruct neighbor_indirectInterm = indirectIntermediate[neighbor_gid];
@@ -145,8 +147,10 @@ void main()
     if(on_focus_plane) {
         for(int j=0; j<5; ++j)
             for(int k=0; k<5; ++k) {
-                directInterm.data[j*5+k] *= vec4(hq_terms[j]);
-                indircInterm.data[j*5+k] *= vec4(sin_terms[j]);
+                directInterm.data[j*5+k] *= vec4(hq_terms[j])*vec4(hq_terms[k]);
+                if(directInterm.data[j*5+k].w==0) directInterm.data[j*5+k].a = -1;
+                indircInterm.data[j*5+k] *= vec4(hq_terms[j])*vec4(hq_terms[k]);
+                if(indircInterm.data[j*5+k].w==0) indircInterm.data[j*5+k].a = -1;
             }
     }
 
