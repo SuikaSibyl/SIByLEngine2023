@@ -45,7 +45,7 @@ struct GlobalUniforms {
 layout(binding = 0, set = 1) uniform _GlobalUniforms { GlobalUniforms uni; };
 
 // Primary ray payload.
-layout(location = 0) rayPayloadEXT PrimaryRayPayload pld;;
+layout(location = 0) rayPayloadEXT PrimaryRayPayload pld;
 
 void main()
 {   

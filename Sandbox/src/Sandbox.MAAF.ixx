@@ -294,7 +294,7 @@ namespace Sandbox
 			compEncoderX[index] = encoder->beginComputePass({});
 			compEncoderX[index]->setPipeline(computePipelineX[index].get());
 			compEncoderX[index]->setBindGroup(0, bufferBindGroups[index], 0, 0);
-			compEncoderX[index]->dispatchWorkgroups((800 + 15) / 16, (600 + 15) / 16, 1);
+			compEncoderX[index]->dispatchWorkgroups((800 + 31) / 32, (600) / 1, 1);
 			compEncoderX[index]->end();
 		}
 
@@ -302,7 +302,7 @@ namespace Sandbox
 			compEncoderY[index] = encoder->beginComputePass({});
 			compEncoderY[index]->setPipeline(computePipelineY[index].get());
 			compEncoderY[index]->setBindGroup(0, bufferBindGroups[index], 0, 0);
-			compEncoderY[index]->dispatchWorkgroups((800 + 15) / 16, (600 + 15) / 16, 1);
+			compEncoderY[index]->dispatchWorkgroups((800 + 0) / 1, (600 + 31) / 32, 1);
 			compEncoderY[index]->end();
 		}
 
