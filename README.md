@@ -3,6 +3,9 @@
 `SIByLEngine` is a personal toy game engine by [@SuikaSibyl](https://github.com/SuikaSibyl). I am planning to keep working on it for a long time and implement lots of realtime & offline effects in it.
 
 Previous version could be find in: [SibylEngine2021](https://github.com/SuikaSibyl/SibylEngine2021). Version 2022 is a complete refactoring including better and more extendable structure, solution, design.
+
+![EditorDemoImg](https://imagehost-suikasibyl-us.oss-us-west-1.aliyuncs.com/SIByLEngine20221123_editor.jpg)
+
 ## Builds
 
 For now, no build tool has been set up. Just open `SIByLEngine.sln` with `VisualStudio 2022` on Windows 10/11.
@@ -18,7 +21,12 @@ By default, Nvidia GPU with Turing or higher architecture is required to correct
   - [RHI module](./docs/SIByLDocument_004_RHI.md), with `WebGPU`-style API (only Vulkan backend supported now).
   - [Tracer module](./docs/SIByLDocument_005_Tracer.md) (CPU/GPU implementation are not integrated yet)
     - GPU based raytracing
-    - CPU based raytracing (now only a core part of PBRT)
+      - Realtime Denoiser
+        - Local Frequency Analysis Based Approaches [[summary](https://suikasibyl.github.io/CSE274-RealtimeDenoiser-WebPage/)]
+          - [*AAF Softshadow*](http://graphics.berkeley.edu/papers/UdayMehta-AAF-2012-12/)
+          - [*AAF Global Illumination*](https://cseweb.ucsd.edu/~ravir/filtering_GI_final.pdf)
+          - [*MAAF Combined Effects*](https://cseweb.ucsd.edu/~ravir/paper_maaf.pdf)
+    - CPU based raytracing (now only a core subset of PBRT)
 - Physics
   - // TODO.
 - Editor Toolchain
