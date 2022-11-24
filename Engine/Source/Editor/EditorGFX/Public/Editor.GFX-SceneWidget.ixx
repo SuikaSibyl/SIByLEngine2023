@@ -65,7 +65,8 @@ namespace SIByL::Editor
 			if (ImGui::Button("Load")) {
 				if (scene != nullptr) {
 					std::string path = ImGuiLayer::get()->rhiLayer->getRHILayerDescriptor().windowBinded->openFile("scene");
-					scene->deserialize(path);
+					if (path != "")
+						scene->deserialize(path);
 					//scene->isDirty = false;
 				}
 			}

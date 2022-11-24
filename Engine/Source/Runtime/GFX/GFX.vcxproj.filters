@@ -63,5 +63,8 @@
     <ClCompile Include="Public\Resource\GFX.Resources-ASGroup.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Resource\GFX.SerializeUtils.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

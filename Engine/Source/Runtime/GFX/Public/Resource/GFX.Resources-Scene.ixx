@@ -16,15 +16,49 @@ import Math.Vector;
 import Math.Matrix;
 import Math.Transform;
 import RHI;
+import GFX.SerializeUtils;
 
 namespace SIByL::GFX
 {
 	export struct TagComponent {
+		/** constructor */
+		TagComponent(std::string const& name = "New GameObject") :name(name) {}
 		// game object name
 		std::string name;
+		/** serialize */
+		static auto serialize(void* emitter, Core::EntityHandle const& handle) -> void;
+		/** deserialize */
+		static auto deserialize(void* compAoS, Core::EntityHandle const& handle) -> void;
 	};
 
+#pragma region TAG_COMPONENT_IMPL
+
+	auto TagComponent::serialize(void* pemitter, Core::EntityHandle const& handle) -> void {
+		YAML::Emitter& emitter = *reinterpret_cast<YAML::Emitter*>(pemitter);
+		Core::Entity entity(handle);
+		TagComponent* tag = entity.getComponent<TagComponent>();
+		if (tag != nullptr) {
+			emitter << YAML::Key << "TagComponent";
+			std::string const& name = tag->name;
+			emitter << YAML::Value << name;
+		}
+	}
+
+	auto TagComponent::deserialize(void* compAoS, Core::EntityHandle const& handle) -> void {
+		YAML::NodeAoS& components = *reinterpret_cast<YAML::NodeAoS*>(compAoS);
+		Core::Entity entity(handle);
+		auto tagComponentAoS = components["TagComponent"];
+		if (tagComponentAoS) {
+			entity.getComponent<TagComponent>()->name = tagComponentAoS.as<std::string>();
+		}
+	}
+
+#pragma endregion
+
+
 	export struct TransformComponent {
+		/** constructor */
+		TransformComponent() = default;
 		/** decomposed transform - translation */
 		Math::vec3 translation = { 0.0f, 0.0f, 0.0f };
 		/** decomposed transform - eulerAngles */
@@ -35,7 +69,44 @@ namespace SIByL::GFX
 		Math::Transform transform = {};
 		/** previous integrated world transform */
 		Math::Transform previousTransform = {};
+		/** serialize */
+		static auto serialize(void* emitter, Core::EntityHandle const& handle) -> void;
+		/** deserialize */
+		static auto deserialize(void* compAoS, Core::EntityHandle const& handle) -> void;
 	};
+
+#pragma region TRANSFORM_COMPONENT_IMPL
+
+	auto TransformComponent::serialize(void* pemitter, Core::EntityHandle const& handle) -> void {
+		YAML::Emitter& emitter = *reinterpret_cast<YAML::Emitter*>(pemitter);
+		Core::Entity entity(handle);
+		TransformComponent* transform = entity.getComponent<TransformComponent>();
+		if (transform != nullptr) {
+			emitter << YAML::Key << "Transform";
+			emitter << YAML::Value << YAML::BeginMap;
+			emitter << YAML::Key << "translation" << YAML::Value << transform->translation;
+			emitter << YAML::Key << "eulerAngles" << YAML::Value << transform->eulerAngles;
+			emitter << YAML::Key << "scale" << YAML::Value << transform->scale;
+			emitter << YAML::EndMap;
+		}
+	}
+
+	auto TransformComponent::deserialize(void* compAoS, Core::EntityHandle const& handle) -> void {
+		YAML::NodeAoS& components = *reinterpret_cast<YAML::NodeAoS*>(compAoS);
+		Core::Entity entity(handle);
+		auto transformComponentAoS = components["Transform"];
+		if (transformComponentAoS) {
+			TransformComponent* transform = entity.getComponent<TransformComponent>();
+			Math::vec3 translation = transformComponentAoS["translation"].as<Math::vec3>();
+			Math::vec3 eulerAngles = transformComponentAoS["eulerAngles"].as<Math::vec3>();
+			Math::vec3 scale = transformComponentAoS["scale"].as<Math::vec3>();
+			transform->translation = translation;
+			transform->eulerAngles = eulerAngles;
+			transform->scale = scale;
+		}
+	}
+
+#pragma endregion
 
 	/** Game object handle is also the entity handle contained */
 	export using GameObjectHandle = Core::EntityHandle;
@@ -108,6 +179,12 @@ namespace SIByL::GFX
 	}
 
 	auto Scene::serialize(std::filesystem::path path) noexcept -> void {
+		std::unordered_map<GameObjectHandle, uint64_t> mapper;
+		uint64_t index = 0;
+		mapper[Core::NULL_ENTITY] = Core::NULL_ENTITY;
+		for (auto iter = gameObjects.begin(); iter != gameObjects.end(); iter++) {
+			mapper[iter->first] = index++;
+		}
 		YAML::Emitter out;
 		out << YAML::BeginMap;
 		// output name
@@ -115,7 +192,25 @@ namespace SIByL::GFX
 		// output nodes
 		out << YAML::Key << "SceneNodes" << YAML::Value << YAML::BeginSeq;
 		for (auto iter = gameObjects.begin(); iter != gameObjects.end(); iter++) {
-
+			out << YAML::BeginMap;
+			// uid
+			out << YAML::Key << "uid" << YAML::Value << mapper[iter->first];
+			// parent
+			out << YAML::Key << "parent" << YAML::Value << mapper[iter->second.parent];
+			// children
+			if (iter->second.children.size() > 0) {
+				out << YAML::Key << "children" << YAML::Value << YAML::BeginSeq;
+				for (int i = 0; i < iter->second.children.size(); i++)
+					out << mapper[iter->second.children[i]];
+				out << YAML::EndSeq;
+			}
+			// components
+			out << YAML::Key << "components" << YAML::Value;
+			out << YAML::BeginMap;
+			Core::ComponentManager::get()->trySerialize(&out, iter->second.entity);
+			out << YAML::EndMap;
+			// end
+			out << YAML::EndMap;
 		}
 		out << YAML::EndSeq;
 		// output tail
@@ -129,32 +224,42 @@ namespace SIByL::GFX
 	}
 
 	auto Scene::deserialize(std::filesystem::path path) noexcept -> void {
-		gameObjects.clear();
+		//gameObjects.clear();
 		Core::Buffer scene_proxy;
 		Core::syncReadFile(path, scene_proxy);
 		YAML::NodeAoS data = YAML::Load(reinterpret_cast<char*>(scene_proxy.data));
 		// check scene name
 		if (!data["SceneName"] || !data["SceneNodes"]) {
 			Core::LogManager::Error(std::format("GFX :: Scene Name not found when deserializing {0}", path.string()));
+			return;
 		}
+		name = data["SceneName"].as<std::string>();
+		std::unordered_map<uint64_t, GameObjectHandle> mapper;
+		mapper[Core::NULL_ENTITY] = Core::NULL_ENTITY;
+		uint32_t index = 0;
 		auto scene_nodes = data["SceneNodes"];
 		for (auto node : scene_nodes) {
-			//uint64_t uid = node["uid"].as<uint64_t>();
-			//uint64_t parent = node["parent"].as<uint64_t>();
-			//auto components = node["components"];
-			//auto tagComponent = components["TagComponent"].as<std::string>();
-			//auto children = node["children"];
-			//std::vector<uint64_t> children_uids(children.size());
-			//uint32_t idx = 0;
-			//if (children)
-			//	for (auto child : children)
-			//		children_uids[idx++] = child.as<uint64_t>();
-			//tree.addNode(tagComponent, uid, parent, std::move(children_uids));
+			uint64_t uid = node["uid"].as<uint64_t>();
+			uint64_t parent = node["parent"].as<uint64_t>();
+			GameObjectHandle gohandle = createGameObject(Core::NULL_ENTITY);
+			GameObject* go = getGameObject(gohandle);
+			go->parent = parent;
+			auto children = node["children"];
+			go->children = std::vector<uint64_t>(children.size());
+			uint32_t idx = 0;
+			if (children)
+				for (auto child : children)
+					go->children[idx++] = child.as<uint64_t>();
+			mapper[uid] = gohandle;
 
-			//deserializeEntity(components, tree.nodes[uid].entity, asset_layer);
-
-			//if (parent == 0)
-			//	tree.appointRoot(uid);
+			auto components = node["components"];
+			Core::ComponentManager::get()->tryDeserialize(&components, gohandle);
+		}
+		for (auto iter = gameObjects.begin(); iter != gameObjects.end(); iter++) {
+			iter->second.parent = mapper[iter->second.parent];
+			for (int i = 0; i < iter->second.children.size(); ++i) {
+				iter->second.children[i] = mapper[iter->second.children[i]];
+			}
 		}
 	}
 

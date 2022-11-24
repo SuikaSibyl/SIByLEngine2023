@@ -9,6 +9,7 @@ module;
 #include <unordered_map>
 #include <memory>
 #include <utility>
+#include <functional>
 export module Core.ECS;
 import Core.Log;
 import Core.System;
@@ -104,6 +105,9 @@ namespace SIByL::Core
 	};
 
 	export struct ComponentManager :public Manager {
+		/** callback to each component serialize / deserialzie */
+		using SerializeFn = std::function<void(void*, EntityHandle const&)>;
+		using DeserializeFn = std::function<void(void*, EntityHandle const&)>;
 		/** start up component manager singleton */
 		virtual auto startUp() noexcept -> void override;
 		/** get the singleton */
@@ -115,6 +119,26 @@ namespace SIByL::Core
 			componentTypes.insert({ typeName, nextComponentType });
 			componentPools.insert({ typeName, std::make_unique<ComponentPool<T>>() });
 			++nextComponentType;
+			SerializeFn serializeFunc = [](void* emitter, EntityHandle const& handle)->void {
+				auto func = std::bind(&(T::serialize), emitter, handle);
+				func();
+			};
+			serializeFuncs.push_back(serializeFunc);
+			DeserializeFn deserializeFunc = [](void* emitter, EntityHandle const& handle)->void {
+				auto func = std::bind(&(T::deserialize), emitter, handle);
+				func();
+			};
+			deserializeFuncs.push_back(deserializeFunc);
+		}
+		/** try serialize all registered components */
+		auto trySerialize(void* emitter, EntityHandle const& handle) noexcept -> void {
+			for (auto& func : serializeFuncs)
+				func(emitter, handle);
+		}
+		/** try serialize all registered components */
+		auto tryDeserialize(void* aos, EntityHandle const& handle) noexcept -> void {
+			for (auto& func : deserializeFuncs)
+				func(aos, handle);
 		}
 		/** get component type */
 		template <class T>
@@ -161,6 +185,9 @@ namespace SIByL::Core
 			char const* typeName = typeid(T).name();
 			return static_cast<ComponentPool<T>*>(componentPools[typeName].get());
 		}
+		/* */
+		std::vector<SerializeFn> serializeFuncs;
+		std::vector<DeserializeFn> deserializeFuncs;
 	};
 
 	export struct Entity {

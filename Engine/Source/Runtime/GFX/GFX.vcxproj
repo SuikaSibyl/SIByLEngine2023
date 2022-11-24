@@ -175,6 +175,7 @@
     <ClCompile Include="Public\Resource\GFX.Resources-Texture.ixx" />
     <ClCompile Include="Public\Resource\GFX.Resources.ixx" />
     <ClCompile Include="Public\Resource\GFX.SceneNodeLoader.ixx" />
+    <ClCompile Include="Public\Resource\GFX.SerializeUtils.ixx" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
