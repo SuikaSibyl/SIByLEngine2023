@@ -8,6 +8,7 @@ module;
 #include <imgui_internal.h>
 export module Editor.GFX:SceneWidget;
 import :InspectorWidget;
+import Editor.Core;
 import Editor.Framework;
 import GFX.Resource;
 
@@ -50,6 +51,24 @@ namespace SIByL::Editor
 		ImGui::Begin("Scene", 0, ImGuiWindowFlags_MenuBar);
 		ImGui::PushItemWidth(ImGui::GetFontSize() * -12);
 		if (ImGui::BeginMenuBar()) {
+			if (ImGui::Button("New")) {
+
+			}
+			if (ImGui::Button("Save")) {
+				if (scene != nullptr) {
+					std::string name = scene->name + ".scene";
+					std::string path = ImGuiLayer::get()->rhiLayer->getRHILayerDescriptor().windowBinded->saveFile(nullptr, name);
+					scene->serialize(path);
+					scene->isDirty = false;
+				}
+			}
+			if (ImGui::Button("Load")) {
+				if (scene != nullptr) {
+					std::string path = ImGuiLayer::get()->rhiLayer->getRHILayerDescriptor().windowBinded->openFile("scene");
+					scene->deserialize(path);
+					//scene->isDirty = false;
+				}
+			}
 			//// Menu - Scene
 			//if (ImGui::BeginMenu("Scene")) {
 			//	// Menu - File - Load

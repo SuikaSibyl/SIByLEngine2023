@@ -6,6 +6,7 @@ module;
 #include <format>
 #include <iostream>
 #include <string>
+#include <functional>
 export module Core.Log:Logger;
 import Core.System;
 import :LogStream;

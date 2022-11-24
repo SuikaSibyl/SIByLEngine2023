@@ -8,3 +8,4 @@ export import :SceneWidget;
 export import :InspectorFragments;
 export import :ContentWidget;
 export import :TextureFragment;
+export import :LogWidget;

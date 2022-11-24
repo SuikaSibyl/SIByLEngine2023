@@ -3,6 +3,7 @@ module;
 #include <memory>
 #include <ostream>
 #include <string>
+#include <functional>
 export module Core.Log:LogManager;
 import Core.Memory;
 import Core.System;
@@ -17,6 +18,7 @@ namespace SIByL::Core
 		virtual auto startUp() noexcept -> void override;
 		virtual auto shutDown() noexcept -> void override;
 
+		static auto get() noexcept -> LogManager* { return singleton; }
 		static auto getLogger() noexcept -> Logger& { return get()->logger; }
 
 		static auto Debug(std::string const& s) noexcept -> void;
@@ -24,10 +26,10 @@ namespace SIByL::Core
 		static auto Warning(std::string const& s) noexcept -> void;
 		static auto Error(std::string const& s) noexcept -> void;
 
+		std::function<void(std::string const&)> editorCallback = nullptr;
+
 	private:
 		Logger logger;
-
-		static auto get() noexcept -> LogManager* { return singleton; }
 		static LogManager* singleton;
 	};
 
@@ -48,24 +50,32 @@ namespace SIByL::Core
 	auto LogManager::Debug(std::string const& s) noexcept -> void { 
 #ifdef _NEED_LOG 
 		getLogger().debug(s); 
+		if (singleton->editorCallback)
+			singleton->editorCallback("[D]" + s);
 #endif 
 	}
 
 	auto LogManager::Log(std::string const& s) noexcept -> void {
 #ifdef _NEED_LOG 
 		getLogger().log(s);
+		if (singleton->editorCallback)
+			singleton->editorCallback("[L]" + s);
 #endif 
 	}
 
 	auto LogManager::Warning(std::string const& s) noexcept -> void {
 #ifdef _NEED_LOG 
 		getLogger().warning(s);
+		if (singleton->editorCallback)
+			singleton->editorCallback("[W]" + s);
 #endif 
 	}
 	
 	auto LogManager::Error(std::string const& s) noexcept -> void {
 #ifdef _NEED_LOG 
 		getLogger().error(s);
+		if (singleton->editorCallback)
+			singleton->editorCallback("[E]" + s);
 #endif 
 	}
 

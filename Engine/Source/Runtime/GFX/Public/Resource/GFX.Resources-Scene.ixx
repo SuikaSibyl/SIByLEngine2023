@@ -1,9 +1,17 @@
 module;
+#include <string>
+#include <format>
 #include <memory>
 #include <vector>
 #include <unordered_map>
+#include <filesystem>
+#include <yaml-cpp/yaml.h>
+#include <yaml-cpp/node/node.h>
 export module GFX.Resource:Scene;
 import Core.ECS;
+import Core.Memory;
+import Core.IO;
+import Core.Log;
 import Math.Vector;
 import Math.Matrix;
 import Math.Transform;
@@ -49,8 +57,16 @@ namespace SIByL::GFX
 		auto getGameObject(GameObjectHandle handle) noexcept -> GameObject*;
 		/** move an game object */
 		auto moveGameObject(GameObjectHandle handle) noexcept -> void;
+		/** serialize scene */
+		auto serialize(std::filesystem::path path) noexcept -> void;
+		/** deserialize scene */
+		auto deserialize(std::filesystem::path path) noexcept -> void;
+		/** name description */
+		std::string name = "new scene";
 		/** mapping handle to GameObject */
 		std::unordered_map<GameObjectHandle, GameObject> gameObjects;
+		/** show wether the scene is modified */
+		bool isDirty = false;
 	};
 
 #pragma region SCENE_IMPL
@@ -89,6 +105,57 @@ namespace SIByL::GFX
 	auto Scene::getGameObject(GameObjectHandle handle) noexcept -> GameObject* {
 		if (gameObjects.find(handle) == gameObjects.end()) return nullptr;
 		else return &gameObjects[handle];
+	}
+
+	auto Scene::serialize(std::filesystem::path path) noexcept -> void {
+		YAML::Emitter out;
+		out << YAML::BeginMap;
+		// output name
+		out << YAML::Key << "SceneName" << YAML::Value << name;
+		// output nodes
+		out << YAML::Key << "SceneNodes" << YAML::Value << YAML::BeginSeq;
+		for (auto iter = gameObjects.begin(); iter != gameObjects.end(); iter++) {
+
+		}
+		out << YAML::EndSeq;
+		// output tail
+		out << YAML::Key << "SceneEnd" << YAML::Value << "TRUE";
+		out << YAML::EndMap;
+		Core::Buffer scene_proxy;
+		scene_proxy.data = (void*)out.c_str();
+		scene_proxy.size = out.size();
+		Core::syncWriteFile(path, scene_proxy);
+		scene_proxy.data = nullptr;
+	}
+
+	auto Scene::deserialize(std::filesystem::path path) noexcept -> void {
+		gameObjects.clear();
+		Core::Buffer scene_proxy;
+		Core::syncReadFile(path, scene_proxy);
+		YAML::NodeAoS data = YAML::Load(reinterpret_cast<char*>(scene_proxy.data));
+		// check scene name
+		if (!data["SceneName"] || !data["SceneNodes"]) {
+			Core::LogManager::Error(std::format("GFX :: Scene Name not found when deserializing {0}", path.string()));
+		}
+		auto scene_nodes = data["SceneNodes"];
+		for (auto node : scene_nodes) {
+			//uint64_t uid = node["uid"].as<uint64_t>();
+			//uint64_t parent = node["parent"].as<uint64_t>();
+			//auto components = node["components"];
+			//auto tagComponent = components["TagComponent"].as<std::string>();
+			//auto children = node["children"];
+			//std::vector<uint64_t> children_uids(children.size());
+			//uint32_t idx = 0;
+			//if (children)
+			//	for (auto child : children)
+			//		children_uids[idx++] = child.as<uint64_t>();
+			//tree.addNode(tagComponent, uid, parent, std::move(children_uids));
+
+			//deserializeEntity(components, tree.nodes[uid].entity, asset_layer);
+
+			//if (parent == 0)
+			//	tree.appointRoot(uid);
+		}
 	}
 
 #pragma endregion

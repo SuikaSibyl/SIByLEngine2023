@@ -36,5 +36,8 @@
     <ClCompile Include="Public\Editor.GFX-TextureFragment.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Editor.GFX-LogWidget.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
