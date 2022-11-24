@@ -2,12 +2,14 @@ module;
 #include <cstring>
 #include <cstdint>
 #include <memory>
+#include <cmath>
 #include <pmmintrin.h>
 #include <xmmintrin.h>
 export module Math.Matrix:Matrix4x4;
 import :Matrix3x3;
 import Math.SIMD;
 import Math.Vector;
+import Math.Trigonometric;
 
 namespace SIByL::Math
 {
@@ -32,6 +34,15 @@ namespace SIByL::Math
 			{0,0,1,0},
 			{0,0,0,1},
 		};
+
+		static inline auto translate(Vector3<T> const& delta) noexcept -> Matrix4x4<T>;
+		static inline auto scale(float x, float y, float z) noexcept -> Matrix4x4<T>;
+		static inline auto scale(Vector3<T> const& scale) noexcept -> Matrix4x4<T>;
+		static inline auto rotateX(float theta) noexcept -> Matrix4x4<T>;
+		static inline auto rotateY(float theta) noexcept -> Matrix4x4<T>;
+		static inline auto rotateZ(float theta) noexcept -> Matrix4x4<T>;
+		static inline auto rotate(float theta, vec3 const& axis) noexcept -> Matrix4x4<T>;
+
 	};
 
 	template <class T>
@@ -108,8 +119,13 @@ namespace SIByL::Math
 		return s;
 	}
 
+	export template <class T>
+	auto operator*(Matrix4x4<T> const& m1, Matrix4x4<T> const& m2) -> Matrix4x4<T> {
+		return mul<T>(m1, m1);
+	}
+
 	export template <>
-		inline auto mul(Matrix4x4<float> const& m1, Matrix4x4<float> const& m2) noexcept -> Matrix4x4<float>
+	inline auto mul(Matrix4x4<float> const& m1, Matrix4x4<float> const& m2) noexcept -> Matrix4x4<float>
 	{
 		Matrix4x4<float> s;
 		
@@ -130,8 +146,13 @@ namespace SIByL::Math
 		return s;
 	}
 
+	export template <>
+	auto operator*(Matrix4x4<float> const& m1, Matrix4x4<float> const& m2) -> Matrix4x4<float> {
+		return mul<float>(m1, m2);
+	}
+
 	export template <class T>
-		inline auto mul(Matrix4x4<T> const& m, Vector4<T> const& v) noexcept -> Vector4<T>
+	inline auto mul(Matrix4x4<T> const& m, Vector4<T> const& v) noexcept -> Vector4<T>
 	{
 		Vector4<T> s;
 		for (size_t i = 0; i < 4; ++i) {
@@ -143,8 +164,13 @@ namespace SIByL::Math
 		return s;
 	}
 
+	export template <class T>
+	auto operator*(Matrix4x4<T> const& m, Vector4<T> const& v) -> Vector4<T> {
+		return mul<T>(m, v);
+	}
+
 	export template <>
-		inline auto mul(Matrix4x4<float> const& m, Vector4<float> const& v) noexcept -> Vector4<float>
+	inline auto mul(Matrix4x4<float> const& m, Vector4<float> const& v) noexcept -> Vector4<float>
 	{
 		Vector4<float> s;
 		__m128 mrow0, mrow1, mrow2, mrow3;
@@ -166,6 +192,11 @@ namespace SIByL::Math
 		acc_0 = _mm_hadd_ps(acc_0, acc_2);
 		_mm_store_ps(&s.data[0], acc_0);
 		return s;
+	}
+
+	export template <>
+	auto operator*(Matrix4x4<float> const& m, Vector4<float> const& v) -> Vector4<float> {
+		return mul<float>(m, v);
 	}
 
 	export template <class T>
@@ -191,6 +222,86 @@ namespace SIByL::Math
 				inv.data[i][j] /= origin.data[i][i];
 
 		return inv;
+	}
+
+	template <class T>
+	auto Matrix4x4<T>::translate(Vector3<T> const& delta) noexcept -> Matrix4x4<T> {
+		return Matrix4x4<T>(1, 0, 0, delta.x,
+			0, 1, 0, delta.y,
+			0, 0, 1, delta.z,
+			0, 0, 0, 1);
+	}
+
+	template <class T>
+	auto Matrix4x4<T>::scale(float x, float y, float z) noexcept -> Matrix4x4<T> {
+		return Matrix4x4<T>(x, 0, 0, 0,
+			0, y, 0, 0,
+			0, 0, z, 0,
+			0, 0, 0, 1);
+	}
+	
+	template <class T>
+	auto Matrix4x4<T>::scale(Vector3<T> const& scale) noexcept -> Matrix4x4<T> {
+		return Matrix4x4<T>(scale.x, 0, 0, 0,
+			0, scale.y, 0, 0,
+			0, 0, scale.z, 0,
+			0, 0, 0, 1);
+	}
+
+	template <class T>
+	auto Matrix4x4<T>::rotateX(float theta) noexcept -> Matrix4x4<T> {
+		float sinTheta = std::sin(Math::radians(theta));
+		float cosTheta = std::cos(Math::radians(theta));
+		return Matrix4x4<T>(1, 0, 0, 0,
+			0, cosTheta, -sinTheta, 0,
+			0, sinTheta, cosTheta, 0,
+			0, 0, 0, 1);
+	}
+
+	template <class T>
+	auto Matrix4x4<T>::rotateY(float theta) noexcept -> Matrix4x4<T> {
+		float sinTheta = std::sin(Math::radians(theta));
+		float cosTheta = std::cos(Math::radians(theta));
+		Matrix4x4<T> m(T(cosTheta), 0, T(sinTheta), 0,
+			0, 1, 0, 0,
+			T(-sinTheta), 0, T(cosTheta), 0,
+			0, 0, 0, 1);
+		return m;
+	}
+
+	template <class T>
+	auto Matrix4x4<T>::rotateZ(float theta) noexcept -> Matrix4x4<T> {
+		float sinTheta = std::sin(Math::radians(theta));
+		float cosTheta = std::cos(Math::radians(theta));
+		Matrix4x4<T> m(cosTheta, -sinTheta, 0, 0,
+			sinTheta, cosTheta, 0, 0,
+			0, 0, 1, 0,
+			0, 0, 0, 1);
+		return m;
+	}
+
+	template <class T>
+	auto Matrix4x4<T>::rotate(float theta, vec3 const& axis) noexcept -> Matrix4x4<T> {
+		vec3 a = normalize(axis);
+		float sinTheta = std::sin(Math::radians(theta));
+		float cosTheta = std::cos(Math::radians(theta));
+		Matrix4x4<T> m;
+		// Compute rotation of first basis vector
+		m.data[0][0] = a.x * a.x + (1 - a.x * a.x) * cosTheta;
+		m.data[0][1] = a.x * a.y * (1 - cosTheta) - a.z * sinTheta;
+		m.data[0][2] = a.x * a.z * (1 - cosTheta) + a.y * sinTheta;
+		m.data[0][3] = 0;
+		// Compute rotations of second and third basis vectors
+		m.data[1][0] = a.x * a.y * (1 - cosTheta) + a.z * sinTheta;
+		m.data[1][1] = a.y * a.y + (1 - a.y * a.y) * cosTheta;
+		m.data[1][2] = a.y * a.z * (1 - cosTheta) - a.x * sinTheta;
+		m.data[1][3] = 0;
+
+		m.data[2][0] = a.x * a.z * (1 - cosTheta) - a.y * sinTheta;
+		m.data[2][1] = a.y * a.z * (1 - cosTheta) + a.x * sinTheta;
+		m.data[2][2] = a.z * a.z + (1 - a.z * a.z) * cosTheta;
+		m.data[2][3] = 0;
+		return m;
 	}
 
 	export using mat4 = Matrix4x4<float>;

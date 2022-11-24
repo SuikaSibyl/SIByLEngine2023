@@ -69,6 +69,8 @@ namespace SIByL::GFX
 		Math::Transform transform = {};
 		/** previous integrated world transform */
 		Math::Transform previousTransform = {};
+		/** get transform */
+		auto getTransform() noexcept -> Math::mat4;
 		/** serialize */
 		static auto serialize(void* emitter, Core::EntityHandle const& handle) -> void;
 		/** deserialize */
@@ -76,6 +78,12 @@ namespace SIByL::GFX
 	};
 
 #pragma region TRANSFORM_COMPONENT_IMPL
+	
+	auto TransformComponent::getTransform() noexcept -> Math::mat4 {
+		return Math::mat4::translate(translation)
+			* Math::Quaternion(eulerAngles).toMat4()
+			* Math::mat4::scale(scale);
+	}
 
 	auto TransformComponent::serialize(void* pemitter, Core::EntityHandle const& handle) -> void {
 		YAML::Emitter& emitter = *reinterpret_cast<YAML::Emitter*>(pemitter);

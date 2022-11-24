@@ -184,6 +184,16 @@ namespace SIByL::Math
 		return (dot(n, v) < 0.0f) ? -n : n;
 	}
 
+	export template <class T>
+	inline auto cos(Vector3<T> const& v) noexcept -> Vector3<T> {
+		return Vector3<T>(std::cos(v.x), std::cos(v.y), std::cos(v.z));
+	}
+
+	export template <class T>
+	inline auto sin(Vector3<T> const& v) noexcept -> Vector3<T> {
+		return Vector3<T>(std::sin(v.x), std::sin(v.y), std::sin(v.z));
+	}
+
 	template <class T>
 	auto Vector3<T>::lengthSquared() const -> float
 	{

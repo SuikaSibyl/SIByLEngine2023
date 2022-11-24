@@ -13,10 +13,12 @@ namespace SIByL::Math
 		Quaternion() :v(0), s(1.f) {}
 		Quaternion(float x, float y, float z, float w) :v(x, y, z), s(w) {}
 		Quaternion(vec3 const& v, float s) :v(v), s(s) {}
+		Quaternion(vec3 const& eulerAngle);
 		Quaternion(mat3 const& m);
 		Quaternion(mat4 const& m);
 
 		auto toMat3() const noexcept -> mat3;
+		auto toMat4() const noexcept -> mat4;
 
 		auto lengthSquared() const -> float;
 		auto length() const -> float;
@@ -30,10 +32,8 @@ namespace SIByL::Math
 		auto operator+=(Quaternion const& q) -> Quaternion&;
 		auto operator-() const -> Quaternion;
 
-		union
-		{
-			struct
-			{
+		union {
+			struct {
 				vec3 v;
 				float s;
 			};
@@ -75,6 +75,15 @@ namespace SIByL::Math
 			Quaternion qperp = normalize(q2 - q1 * cosTheta);
 			return q1 * std::cos(thetap) + qperp * std::sin(thetap);
 		}
+	}
+
+	Quaternion::Quaternion(vec3 const& eulerAngle) {
+		vec3 c = Math::cos(eulerAngle * 0.5);
+		vec3 s = Math::sin(eulerAngle * 0.5);
+		this->w = c.x * c.y * c.z + s.x * s.y * s.z;
+		this->x = s.x * c.y * c.z - c.x * s.y * s.z;
+		this->y = c.x * s.y * c.z + s.x * c.y * s.z;
+		this->z = c.x * c.y * s.z - s.x * s.y * c.z;
 	}
 
 	// Quaternion::toMat3()
@@ -145,9 +154,19 @@ namespace SIByL::Math
 	auto Quaternion::toMat3() const noexcept -> mat3
 	{
 		return mat3(
-			1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * x * z - y * w,
+			1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * (x * z - y * w),
 			2 * (x * y - z * w), 1 - 2 * (x * x + z * z), 2 * (y * z + x * w),
-			w * (x * z + y * w), 2 * (y * z - x * w), 1 - 2 * (x * x + y * y));
+			2 * (x * z + y * w), 2 * (y * z - x * w), 1 - 2 * (x * x + y * y));
+	}
+	
+
+	auto Quaternion::toMat4() const noexcept -> mat4
+	{
+		return mat4(
+			1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * (x * z - y * w), 0,
+			2 * (x * y - z * w), 1 - 2 * (x * x + z * z), 2 * (y * z + x * w), 0,
+			2 * (x * z + y * w), 2 * (y * z - x * w), 1 - 2 * (x * x + y * y), 0,
+			0, 0, 0, 1);
 	}
 
 	auto Quaternion::conjugate() noexcept -> Quaternion

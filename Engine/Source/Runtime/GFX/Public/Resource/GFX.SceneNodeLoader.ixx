@@ -83,6 +83,7 @@ namespace SIByL::GFX
             std::unordered_map<tinygltf::Mesh const*, Core::GUID> meshMap = {};
             for (auto const& gltfMesh : model.meshes) {
                 std::vector<uint16_t> indexArray_uint16 = {};
+                std::vector<uint16_t> indexBuffer_uint16 = {};
                 std::vector<float> vertexBuffer = {};
                 std::vector<float> vertexBuffer_positionOnly = {};
                 std::vector<float> vertexBuffer_normalOnly = {};
@@ -294,12 +295,14 @@ namespace SIByL::GFX
                     vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 0]);
                     vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 1]);
                     vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 2]);
+
+                    indexBuffer_uint16.push_back(i);
                 }
                 // Create GFX mesh, and add it to resource manager
                 GFX::Mesh mesh;
                 mesh.vertexBuffer = device->createDeviceLocalBuffer((void*)vertexBuffer.data(), vertexBuffer.size() * sizeof(float), 
                     (uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::STORAGE);
-                mesh.indexBuffer = device->createDeviceLocalBuffer((void*)indexArray_uint16.data(), indexArray_uint16.size() * sizeof(uint16_t), 
+                mesh.indexBuffer = device->createDeviceLocalBuffer((void*)indexBuffer_uint16.data(), indexBuffer_uint16.size() * sizeof(uint16_t),
                     (uint32_t)RHI::BufferUsage::INDEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
                     (uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
                 Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Mesh>();

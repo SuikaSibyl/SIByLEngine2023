@@ -9,6 +9,7 @@
 #include <typeinfo>
 #include <glad/glad.h>
 #include <imgui.h>
+#include <stack>
 import Core.Log;
 import Core.Memory;
 import Core.IO;
@@ -51,6 +52,7 @@ import RHI.RHILayer;
 import GFX.Resource;
 import GFX.GFXManager;
 import GFX.MeshLoader;
+import GFX.Components;
 import GFX.SceneNodeLoader;
 import Application.Root;
 import Application.Base;
@@ -319,7 +321,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		}
 
 		for (int i = 0; i < 2; ++i) {
-			pipelineLayout[i] = device->createPipelineLayout(RHI::PipelineLayoutDescriptor{ {},
+			pipelineLayout[i] = device->createPipelineLayout(RHI::PipelineLayoutDescriptor{ 
+				{ {(uint32_t)RHI::ShaderStages::VERTEX, 0, sizeof(Math::mat4)}},
 				{ rtBindGroupLayout.get() }
 				});
 
@@ -471,60 +474,38 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		//benchmarkPipeline->composeCommands(commandEncoder.get(), index);
 		//maafPipeline->composeCommands(commandEncoder.get(), index);
 
-		//{
-		//	commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
-		//		(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
-		//		(uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT,
-		//		(uint32_t)RHI::DependencyType::NONE,
-		//		{}, {},
-		//		{ RHI::TextureMemoryBarrierDescriptor{
-		//			Core::ResourceManager::get()->getResource<GFX::Texture>(rtTarget)->texture.get(),
-		//			RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
-		//			(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
-		//			(uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
-		//			RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
-		//			RHI::TextureLayout::GENERAL
-		//		}}
-		//		});
-
-		//	static uint32_t batchIdx = 0;
-		//	compEncoder[index] = commandEncoder->beginComputePass({});
-		//	compEncoder[index]->setPipeline(computePipeline[index].get());
-		//	compEncoder[index]->setBindGroup(0, bindGroup_RT[index].get(), 0, 0);
-		//	compEncoder[index]->setBindGroup(1, rtBindGroup[index].get(), 0, 0);
-		//	compEncoder[index]->pushConstants(&batchIdx, (uint32_t)RHI::ShaderStages::COMPUTE
-		//		| (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::CLOSEST_HIT
-		//		| (uint32_t)RHI::ShaderStages::MISS, 0, sizeof(uint32_t));
-		//	compEncoder[index]->dispatchWorkgroups((800 + 15) / 16, (600 + 7) / 8, 1);
-		//	compEncoder[index]->end();
-		//	++batchIdx;
-
-		//	commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
-		//		(uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT,
-		//		(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
-		//		(uint32_t)RHI::DependencyType::NONE,
-		//		{}, {},
-		//		{ RHI::TextureMemoryBarrierDescriptor{
-		//			Core::ResourceManager::get()->getResource<GFX::Texture>(rtTarget)->texture.get(),
-		//			RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
-		//			(uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
-		//			(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
-		//			RHI::TextureLayout::GENERAL,
-		//			RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL
-		//		}}
-		//		});
-		//}
-
+		//objectMat = Math::transpose(Math::mul(Math::translate(Math::vec3(0, 1, 0)).m, objectMat));
 		passEncoder[index] = commandEncoder->beginRenderPass(renderPassDescriptor);
 		passEncoder[index]->setPipeline(renderPipeline[index].get());
 		passEncoder[index]->setViewport(0, 0, width, height, 0, 1);
 		passEncoder[index]->setScissorRect(0, 0, width, height);
-		passEncoder[index]->setVertexBuffer(0, ResourceManager::get()->getResource<GFX::Mesh>(cornellBox)->vertexBuffer.get(),
-			0, ResourceManager::get()->getResource<GFX::Mesh>(cornellBox)->vertexBuffer->size());
-		passEncoder[index]->setIndexBuffer(ResourceManager::get()->getResource<GFX::Mesh>(cornellBox)->indexBuffer.get(),
-			RHI::IndexFormat::UINT16_t, 0, ResourceManager::get()->getResource<GFX::Mesh>(cornellBox)->indexBuffer->size());
-		passEncoder[index]->setBindGroup(0, rtBindGroup[index].get(), 0, 0);
-		passEncoder[index]->drawIndexed(ResourceManager::get()->getResource<GFX::Mesh>(cornellBox)->indexBuffer->size()/sizeof(uint16_t), 1, 0, 0, 0);
+
+		for (auto handle : scene.gameObjects) {
+			auto* go = scene.getGameObject(handle.first);
+			Math::mat4 objectMat;
+			GFX::MeshReference* meshref = go->getEntity().getComponent<GFX::MeshReference>();
+			if (meshref) {
+				GFX::TransformComponent* transform = go->getEntity().getComponent<GFX::TransformComponent>();
+				objectMat = transform->getTransform() * objectMat;
+				while (go->parent != Core::NULL_ENTITY) {
+					go = scene.getGameObject(go->parent);
+					GFX::TransformComponent* transform = go->getEntity().getComponent<GFX::TransformComponent>();
+					objectMat = transform->getTransform() * objectMat;
+				}
+				objectMat = Math::transpose(objectMat);
+				passEncoder[index]->setVertexBuffer(0, meshref->mesh->vertexBuffer.get(),
+					0, meshref->mesh->vertexBuffer->size());
+				passEncoder[index]->setBindGroup(0, rtBindGroup[index].get(), 0, 0);
+				passEncoder[index]->setIndexBuffer(meshref->mesh->indexBuffer.get(),
+					RHI::IndexFormat::UINT16_t, 0, meshref->mesh->indexBuffer->size());
+				passEncoder[index]->pushConstants(&objectMat.data[0][0],
+					(uint32_t)RHI::ShaderStages::VERTEX,
+					0, sizeof(Math::mat4));
+				passEncoder[index]->drawIndexed(meshref->mesh->indexBuffer->size() / sizeof(uint16_t), 1, 0, 0, 0);
+			}
+		}
+
+
 		passEncoder[index]->end();
 
 		device->getGraphicsQueue()->submit({ commandEncoder->finish({}) }, 
