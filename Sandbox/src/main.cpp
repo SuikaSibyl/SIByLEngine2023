@@ -405,8 +405,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		height = 600;
 
 		UniformBufferObject ubo;
-		Math::vec4 campos = Math::mul(Math::rotateX(std::sin(timer.totalTime()*0.5) * 10).m,
-			Math::mul(Math::rotateY(std::sin(timer.totalTime()) * 20).m, Math::vec4(-0.001, 1.0, 6.0, 1)));
+		Math::vec4 campos = 
+			Math::mul(Math::rotateY(std::sin(timer.totalTime()) * 20).m, Math::vec4(-0.001, 1.0, 6.0, 1));
 		//Math::vec4 campos = Math::mul(Math::rotateY(0 * 20).m, Math::vec4(-0.001, 1.0, 6.0, 1));
 
 		//ubo.model = Math::transpose(Math::rotate(timer.totalTime() * 80, Math::vec3(0, 1, 0)).m);
@@ -467,9 +467,9 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			});
 
 		//aafPipeline->composeCommands(commandEncoder.get(), index);
-		//aafGIPipeline->composeCommands(commandEncoder.get(), index);
+		aafGIPipeline->composeCommands(commandEncoder.get(), index);
 		//benchmarkPipeline->composeCommands(commandEncoder.get(), index);
-		maafPipeline->composeCommands(commandEncoder.get(), index);
+		//maafPipeline->composeCommands(commandEncoder.get(), index);
 
 		//{
 		//	commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
