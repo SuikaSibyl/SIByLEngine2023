@@ -12,7 +12,7 @@ module;
 export module Editor.GFX:ContentWidget;
 import :InspectorWidget;
 import :TextureFragment;
-import Core.Resource.RuntimeManage;
+import Core.Resource;
 import Image.Color;
 import Image.Image;
 import Image.FileFormat;

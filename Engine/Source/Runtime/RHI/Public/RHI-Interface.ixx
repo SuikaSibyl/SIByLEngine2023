@@ -336,6 +336,8 @@ namespace SIByL::RHI
 		virtual auto bufferUsageFlags() const noexcept -> BufferUsagesFlags = 0;
 		/** readonly get map state on GPU */
 		virtual auto bufferMapState() const noexcept -> BufferMapState = 0;
+		/** readonly get device */
+		virtual auto getDevice() const noexcept -> Device* = 0;
 		// Map methods
 		// ---------------------------
 		/** Maps the given range of the GPUBuffer */

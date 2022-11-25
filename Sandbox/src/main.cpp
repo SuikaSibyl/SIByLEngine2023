@@ -16,7 +16,7 @@ import Core.IO;
 import Core.Event;
 import Core.Timer;
 import Core.ECS;
-import Core.Resource.RuntimeManage;
+import Core.Resource;
 
 import Math.Vector;
 import Math.Geometry;
@@ -114,8 +114,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		RHI::Device* device = rhiLayer->getDevice();
 		RHI::SwapChain* swapchain = rhiLayer->getSwapChain();
 
-		GFX::SceneNodeLoader_glTF::loadSceneNode("./content/scenes/cornellBox.gltf", scene);
-
+		//GFX::SceneNodeLoader_glTF::loadSceneNode("./content/scenes/cornellBox.gltf", scene);
+		
 		cornellBox = GFX::MeshLoader_OBJ::loadMeshResource(
 			"./content/CornellBox-Original-Merged.obj",
 			GFX::MeshDataLayout{ 

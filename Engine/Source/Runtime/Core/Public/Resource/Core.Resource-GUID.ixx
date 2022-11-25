@@ -2,7 +2,7 @@ module;
 #include <cstdint>
 #include <string>
 #include <filesystem>
-export module Core.Resource.RuntimeManage:GUID;
+export module Core.Resource:GUID;
 
 namespace SIByL::Core
 {

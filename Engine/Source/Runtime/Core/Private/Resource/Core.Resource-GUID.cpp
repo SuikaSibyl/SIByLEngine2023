@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <string>
 #include <filesystem>
-module Core.Resource.RuntimeManage:GUID;
+module Core.Resource:GUID;
 
 //Google CityHash
 using namespace std;

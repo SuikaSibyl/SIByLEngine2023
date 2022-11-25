@@ -24,7 +24,7 @@
     <ClCompile Include="Private\Memory\Core.Memory-MemoryArena.cpp" />
     <ClCompile Include="Private\Memory\Core.Memory-MemoryManager.cpp" />
     <ClCompile Include="Private\Memory\Core.Memory-StackAllocator.cpp" />
-    <ClCompile Include="Private\Resource\Core.Resource.RuntimeManage-GUID.cpp" />
+    <ClCompile Include="Private\Resource\Core.Resource-GUID.cpp" />
     <ClCompile Include="Public\ECS\Core.ECS.ixx" />
     <ClCompile Include="Public\ECS\Core.SparseSet.ixx" />
     <ClCompile Include="Public\Event\Core.Event-Event.ixx" />
@@ -49,10 +49,10 @@
     <ClCompile Include="Public\Memory\Core.Memory-MemoryManager.ixx" />
     <ClCompile Include="Public\Memory\Core.Memory-SmartPtr.ixx" />
     <ClCompile Include="Public\Memory\Core.Memory.ixx" />
-    <ClCompile Include="Public\Resource\Core.Resource.OfflineManage.ixx" />
-    <ClCompile Include="Public\Resource\Core.Resource.RuntimeManage-GUID.ixx" />
-    <ClCompile Include="Public\Resource\Core.Resource.RuntimeManage-ResourceManager.ixx" />
-    <ClCompile Include="Public\Resource\Core.Resource.RuntimeManage.ixx" />
+    <ClCompile Include="Public\Resource\Core.Resource-OfflineManage.ixx" />
+    <ClCompile Include="Public\Resource\Core.Resource-GUID.ixx" />
+    <ClCompile Include="Public\Resource\Core.Resource-ResourceManager.ixx" />
+    <ClCompile Include="Public\Resource\Core.Resource.ixx" />
     <ClCompile Include="Public\System\Core.System-Layer.ixx" />
     <ClCompile Include="Public\System\Core.System-Manager.ixx" />
     <ClCompile Include="Public\System\Core.System.ixx" />

@@ -4,7 +4,7 @@ module;
 #include <vector>
 export module GFX.Resource:ASGroup;
 import :Mesh;
-import Core.Resource.RuntimeManage;
+import Core.Resource;
 import RHI;
 
 namespace SIByL::GFX

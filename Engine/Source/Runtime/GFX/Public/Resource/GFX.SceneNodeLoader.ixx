@@ -14,7 +14,7 @@ export module GFX.SceneNodeLoader;
 import Core.Log;
 import Core.ECS;
 import Core.Memory;
-import Core.Resource.RuntimeManage;
+import Core.Resource;
 import Math.Vector;
 import Math.Matrix;
 import Math.Geometry;
@@ -129,7 +129,6 @@ namespace SIByL::GFX
                     default:
                         break;
                     }
-                    float a = 1.f;
                     // We re-arrange the indices so that it describe a simple list of triangles
                     switch (meshPrimitive.mode) {
                     //case TINYGLTF_MODE_TRIANGLE_FAN: // TODO
@@ -309,6 +308,9 @@ namespace SIByL::GFX
                 meshGUIDs.push_back(guid);
                 meshMap[&gltfMesh] = guid;
                 Core::ResourceManager::get()->addResource<GFX::Mesh>(guid, std::move(mesh));
+                Core::ResourceManager::get()->getResource<GFX::Mesh>(guid)->serialize();
+                Core::ResourceManager::get()->database.registerResource(
+                    Core::ResourceManager::get()->getResource<GFX::Mesh>(guid)->ORID, guid);
             }
 			// Bind scene
 			GameObjectHandle rootNode = gfxscene.createGameObject(GFX::NULL_GO);

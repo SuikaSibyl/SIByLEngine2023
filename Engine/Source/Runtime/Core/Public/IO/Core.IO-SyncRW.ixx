@@ -25,14 +25,12 @@ namespace SIByL::Core
 	}
 
 	export inline auto syncWriteFile(filepath const& path, Buffer& buffer) noexcept -> bool {
-		std::ofstream ofs(path.string().c_str(), std::ifstream::out);
-		if (ofs.is_open())
-		{
+		std::ofstream ofs(path.string().c_str(), std::ios::out | std::ios::binary);
+		if (ofs.is_open()) {
 			ofs.write((char*)buffer.data, buffer.size);
 			ofs.close();
 		}
-		else
-		{
+		else {
 			LogManager::Error(std::format("Core.IO:SyncRW::syncWriteFile() failed, file \'{}\' open failed.", path.string().c_str()));
 		}
 		return false;

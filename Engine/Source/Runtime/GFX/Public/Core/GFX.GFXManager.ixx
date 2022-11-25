@@ -10,7 +10,7 @@ import Core.System;
 import Core.ECS;
 import Core.Memory;
 import Core.IO;
-import Core.Resource.RuntimeManage;
+import Core.Resource;
 import RHI;
 import RHI.RHILayer;
 import Image.Color;
@@ -46,6 +46,7 @@ namespace SIByL::GFX
 		virtual auto shutDown() noexcept -> void override {}
 		/** register GFX resources */
 		auto registerBufferResource(Core::GUID guid, RHI::BufferDescriptor const& desc) noexcept -> void;
+		auto registerMeshResource(Core::GUID guid, Core::ORID orid) noexcept -> void;
 		auto registerTextureResource(Core::GUID guid, Image::Image<Image::COLOR_R8G8B8A8_UINT>* image) noexcept -> void;
 		auto registerTextureResource(Core::GUID guid, RHI::TextureDescriptor const& desc) noexcept -> void;
 		auto registerSamplerResource(Core::GUID guid, RHI::SamplerDescriptor const& desc) noexcept -> void;
@@ -136,6 +137,12 @@ namespace SIByL::GFX
 		textureResource.originalView = textureResource.texture->createView(RHI::TextureViewDescriptor{
 			RHI::TextureFormat::RGBA8_UNORM });
 		Core::ResourceManager::get()->addResource(guid, std::move(textureResource));
+	}
+
+	auto GFXManager::registerMeshResource(Core::GUID guid, Core::ORID orid) noexcept -> void {
+		GFX::Mesh mesh;
+		Core::ResourceManager::get()->addResource(guid, std::move(mesh));
+		Core::ResourceManager::get()->getResource<GFX::Mesh>(guid)->deserialize(rhiLayer->getDevice(), orid);
 	}
 
 	auto GFXManager::registerTextureResource(Core::GUID guid, RHI::TextureDescriptor const& desc) noexcept -> void {

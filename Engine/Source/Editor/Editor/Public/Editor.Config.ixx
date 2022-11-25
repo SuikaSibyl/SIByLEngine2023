@@ -2,7 +2,7 @@ module;
 #include <compare>
 #include <filesystem>
 export module Editor.Config;
-import Core.Resource.RuntimeManage;
+import Core.Resource;
 import GFX.Resource;
 import GFX.GFXManager;
 import Editor.Core;

@@ -4,7 +4,7 @@ module;
 #include <memory>
 #include <utility>
 export module Sandbox.Tracer;
-import Core.Resource.RuntimeManage;
+import Core.Resource;
 import Math.Vector;
 import RHI;
 import RHI.RHILayer;

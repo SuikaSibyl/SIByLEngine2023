@@ -4,7 +4,7 @@ module;
 #include <memory>
 #include <utility>
 export module Sandbox.AAF_GI;
-import Core.Resource.RuntimeManage;
+import Core.Resource;
 import Math.Vector;
 import RHI;
 import RHI.RHILayer;

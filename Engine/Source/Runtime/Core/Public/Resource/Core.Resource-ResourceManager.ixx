@@ -10,8 +10,9 @@ module;
 #include <unordered_map>
 #include <memory>
 #include <utility>
-export module Core.Resource.RuntimeManage:ResourceManager;
+export module Core.Resource:ResourceManager;
 import :GUID;
+import :OfflineManage;
 import Core.Log;
 import Core.System;
 
@@ -103,6 +104,8 @@ namespace SIByL::Core
 		}
 		/** resources registery */
 		std::unordered_map<GUID, std::unique_ptr<Resource>> registry = {};
+		/** resource database */
+		ResourceDatabase database;
 	private:
 		/* singleton */
 		static ResourceManager* singleton;

@@ -4,7 +4,7 @@ module;
 #include <string>
 #include <optional>
 export module GFX.Resource:ShaderModule;
-import Core.Resource.RuntimeManage;
+import Core.Resource;
 import RHI;
 
 namespace SIByL::GFX

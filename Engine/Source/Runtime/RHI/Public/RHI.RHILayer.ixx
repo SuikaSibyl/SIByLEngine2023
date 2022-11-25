@@ -37,6 +37,8 @@ namespace SIByL::RHI
 		auto getMultiFrameFlights() noexcept -> RHI::MultiFrameFlights* { return multiFrameFlights.get(); }
 		/** get descriptor */
 		auto getRHILayerDescriptor() const noexcept -> RHILayerDescriptor const& { return desc; }
+		/** get singleton */
+		static auto get() noexcept ->RHILayer* { return singleton; }
 	private:
 		RHILayerDescriptor const desc;
 		/** rhi context */
@@ -49,9 +51,14 @@ namespace SIByL::RHI
 		std::unique_ptr<RHI::SwapChain> swapChain = nullptr;
 		/** multi frame flights device */
 		std::unique_ptr<RHI::MultiFrameFlights> multiFrameFlights = nullptr;
+		/** singleton */
+		static RHILayer* singleton;
 	};
+	
+	RHILayer* RHILayer::singleton = nullptr;
 
 	RHILayer::RHILayer(RHILayerDescriptor const& desc) : desc(desc) {
+		singleton = this;
 		if (desc.backend == RHIBackend::Vulkan) {
 			context = std::make_unique<Context_VK>();
 			context->init(desc.windowBinded, desc.extensions);

@@ -1,7 +1,7 @@
 module;
 #include <memory>
 export module GFX.Resource:Texture;
-import Core.Resource.RuntimeManage;
+import Core.Resource;
 import RHI;
 
 namespace SIByL::GFX

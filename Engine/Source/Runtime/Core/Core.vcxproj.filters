@@ -111,19 +111,19 @@
     <ClCompile Include="Public\System\Core.System-Layer.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Resource\Core.Resource.RuntimeManage.ixx">
+    <ClCompile Include="Public\Resource\Core.Resource.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Resource\Core.Resource.RuntimeManage-GUID.ixx">
+    <ClCompile Include="Public\Resource\Core.Resource-GUID.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Private\Resource\Core.Resource.RuntimeManage-GUID.cpp">
+    <ClCompile Include="Private\Resource\Core.Resource-GUID.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Resource\Core.Resource.RuntimeManage-ResourceManager.ixx">
+    <ClCompile Include="Public\Resource\Core.Resource-ResourceManager.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Resource\Core.Resource.OfflineManage.ixx">
+    <ClCompile Include="Public\Resource\Core.Resource-OfflineManage.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

@@ -4,7 +4,7 @@ export module Application.Root;
 import Core.Log;
 import Core.Memory;
 import Core.ECS;
-import Core.Resource.RuntimeManage;
+import Core.Resource;
 import GFX.GFXManager;
 
 namespace SIByL::Application

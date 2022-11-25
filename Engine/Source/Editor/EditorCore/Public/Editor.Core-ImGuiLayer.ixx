@@ -5,7 +5,7 @@ module;
 #include <unordered_map>
 export module Editor.Core:ImGuiLayer;
 import Core.System;
-import Core.Resource.RuntimeManage;
+import Core.Resource;
 import RHI;
 import RHI.RHILayer;
 import :ImGuiBackend;

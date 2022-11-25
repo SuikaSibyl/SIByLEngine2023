@@ -7,7 +7,7 @@ module;
 export module GFX.MeshLoader;
 import Core.Log;
 import Core.Memory;
-import Core.Resource.RuntimeManage;
+import Core.Resource;
 import RHI;
 import RHI.RHILayer;
 import GFX.GFXManager;

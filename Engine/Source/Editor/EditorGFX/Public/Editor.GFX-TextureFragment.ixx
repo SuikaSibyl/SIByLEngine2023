@@ -8,7 +8,7 @@ module;
 #include <imgui_internal.h>
 export module Editor.GFX:TextureFragment;
 import :SceneWidget;
-import Core.Resource.RuntimeManage;
+import Core.Resource;
 import RHI;
 import GFX.Resource;
 import GFX.GFXManager;
