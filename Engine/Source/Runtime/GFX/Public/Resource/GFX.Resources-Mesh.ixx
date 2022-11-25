@@ -1,4 +1,5 @@
 module;
+#include <vector>
 #include <string>
 #include <format>
 #include <memory>
@@ -34,6 +35,13 @@ namespace SIByL::GFX
 		std::unique_ptr<RHI::Buffer> vertexBufferPosOnly = nullptr;
 		/** binded ORID */
 		Core::ORID ORID = Core::ORID_NONE;
+		/** submeshes */
+		struct Submesh {
+			uint32_t offset;
+			uint32_t size;
+			uint32_t baseVertex;
+		};
+		std::vector<Submesh> submeshes;
 		/** resource name */
 		std::string name = "New Mesh";
 		/** serialize */

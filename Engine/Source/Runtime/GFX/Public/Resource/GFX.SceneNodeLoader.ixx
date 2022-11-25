@@ -82,19 +82,25 @@ namespace SIByL::GFX
             std::vector<Core::GUID> meshGUIDs = {};
             std::unordered_map<tinygltf::Mesh const*, Core::GUID> meshMap = {};
             for (auto const& gltfMesh : model.meshes) {
-                std::vector<uint16_t> indexArray_uint16 = {};
                 std::vector<uint16_t> indexBuffer_uint16 = {};
                 std::vector<float> vertexBuffer = {};
-                std::vector<float> vertexBuffer_positionOnly = {};
-                std::vector<float> vertexBuffer_normalOnly = {};
+                std::vector<float> PositionBuffer = {};
+                // Create GFX mesh, and add it to resource manager
+                GFX::Mesh mesh;
+                uint32_t submesh_index_offset = 0;
+                uint32_t submesh_vertex_offset = 0;
                 // For each primitive
                 for (auto const& meshPrimitive : gltfMesh.primitives) {
+                    std::vector<uint16_t> indexArray_uint16 = {};
+                    std::vector<float> vertexBuffer_positionOnly = {};
+                    std::vector<float> vertexBuffer_normalOnly = {};
+
                     auto const& indicesAccessor = model.accessors[meshPrimitive.indices];
                     auto const& bufferView = model.bufferViews[indicesAccessor.bufferView];
                     auto const& buffer = model.buffers[bufferView.buffer];
                     auto const dataAddress = buffer.data.data() + bufferView.byteOffset + indicesAccessor.byteOffset;
                     auto const byteStride = indicesAccessor.ByteStride(bufferView);
-                    auto const count = indicesAccessor.count;
+                    uint64_t const count = indicesAccessor.count;
                     switch (indicesAccessor.componentType) {
                     case TINYGLTF_COMPONENT_TYPE_BYTE: {   
                         ArrayAdapter<char> originIndexArray(dataAddress, count, byteStride);
@@ -284,21 +290,22 @@ namespace SIByL::GFX
                         Core::LogManager::Error("GFX :: tinygltf :: primitive mode not implemented");
                         break;
                     }
-                }
-                // Assemble vertex buffer
-                for (size_t i = 0; i < indexArray_uint16.size(); ++i) {
-                    vertexBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 0]);
-                    vertexBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 1]);
-                    vertexBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 2]);
+                    // Assemble vertex buffer
+                    for (size_t i = 0; i < indexArray_uint16.size(); ++i) {
+                        vertexBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 0]);
+                        vertexBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 1]);
+                        vertexBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 2]);
 
-                    vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 0]);
-                    vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 1]);
-                    vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 2]);
+                        vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 0]);
+                        vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 1]);
+                        vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 2]);
 
-                    indexBuffer_uint16.push_back(i);
+                        indexBuffer_uint16.push_back(i);
+                    }
+                    mesh.submeshes.push_back(GFX::Mesh::Submesh{ submesh_index_offset, uint32_t(indexArray_uint16.size()), submesh_vertex_offset});
+                    submesh_index_offset = indexBuffer_uint16.size();
+                    submesh_vertex_offset = vertexBuffer.size() / 6;
                 }
-                // Create GFX mesh, and add it to resource manager
-                GFX::Mesh mesh;
                 mesh.vertexBuffer = device->createDeviceLocalBuffer((void*)vertexBuffer.data(), vertexBuffer.size() * sizeof(float), 
                     (uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::STORAGE);
                 mesh.indexBuffer = device->createDeviceLocalBuffer((void*)indexBuffer_uint16.data(), indexBuffer_uint16.size() * sizeof(uint16_t),
@@ -310,7 +317,7 @@ namespace SIByL::GFX
                 Core::ResourceManager::get()->addResource<GFX::Mesh>(guid, std::move(mesh));
                 Core::ResourceManager::get()->getResource<GFX::Mesh>(guid)->serialize();
                 Core::ResourceManager::get()->database.registerResource(
-                    Core::ResourceManager::get()->getResource<GFX::Mesh>(guid)->ORID, guid);
+                Core::ResourceManager::get()->getResource<GFX::Mesh>(guid)->ORID, guid);
             }
 			// Bind scene
 			GameObjectHandle rootNode = gfxscene.createGameObject(GFX::NULL_GO);
@@ -330,13 +337,15 @@ namespace SIByL::GFX
 		GameObjectHandle sceneNode = scene.createGameObject(parent);
 		scene.getGameObject(sceneNode)->getEntity().getComponent<TagComponent>()->name = node.name;
         TransformComponent* transform = scene.getGameObject(sceneNode)->getEntity().getComponent<TransformComponent>();
-        Math::mat4 matrix = {
-            (float)node.matrix[0],  (float)node.matrix[4],  (float)node.matrix[8],  (float)node.matrix[12],
-            (float)node.matrix[1],  (float)node.matrix[5],  (float)node.matrix[9],  (float)node.matrix[13],
-            (float)node.matrix[2],  (float)node.matrix[6],  (float)node.matrix[10], (float)node.matrix[14],
-            (float)node.matrix[3],  (float)node.matrix[7],  (float)node.matrix[11], (float)node.matrix[15],
-        };
-        Math::decompose(matrix, &transform->translation, &transform->eulerAngles, &transform->scale);
+        if (node.matrix.size() != 0) {
+            Math::mat4 matrix = {
+                (float)node.matrix[0],  (float)node.matrix[4],  (float)node.matrix[8],  (float)node.matrix[12],
+                (float)node.matrix[1],  (float)node.matrix[5],  (float)node.matrix[9],  (float)node.matrix[13],
+                (float)node.matrix[2],  (float)node.matrix[6],  (float)node.matrix[10], (float)node.matrix[14],
+                (float)node.matrix[3],  (float)node.matrix[7],  (float)node.matrix[11], (float)node.matrix[15],
+            };
+            Math::decompose(matrix, &transform->translation, &transform->eulerAngles, &transform->scale);
+        }
 
         // bind mesh
         if ((node.mesh >= 0) && (node.mesh < model.meshes.size())) {

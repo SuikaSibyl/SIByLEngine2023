@@ -114,7 +114,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		RHI::Device* device = rhiLayer->getDevice();
 		RHI::SwapChain* swapchain = rhiLayer->getSwapChain();
 
-		//GFX::SceneNodeLoader_glTF::loadSceneNode("./content/scenes/cornellBox.gltf", scene);
+		GFX::SceneNodeLoader_glTF::loadSceneNode("D:/Downloads/glTF-Sample-Models-master/glTF-Sample-Models-master/2.0/Sponza/glTF/Sponza.gltf", scene);
 		
 		cornellBox = GFX::MeshLoader_OBJ::loadMeshResource(
 			"./content/CornellBox-Original-Merged.obj",
@@ -501,7 +501,9 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				passEncoder[index]->pushConstants(&objectMat.data[0][0],
 					(uint32_t)RHI::ShaderStages::VERTEX,
 					0, sizeof(Math::mat4));
-				passEncoder[index]->drawIndexed(meshref->mesh->indexBuffer->size() / sizeof(uint16_t), 1, 0, 0, 0);
+				for (auto& submehs : meshref->mesh->submeshes) {
+					passEncoder[index]->drawIndexed(submehs.size, 1, submehs.offset, submehs.baseVertex, 0);
+				}
 			}
 		}
 
