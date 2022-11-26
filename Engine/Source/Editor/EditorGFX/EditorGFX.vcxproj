@@ -139,6 +139,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Public\Editor.GFX.CameraController.ixx" />
     <ClCompile Include="Public\Editor.GFX-ContentWidget.ixx" />
     <ClCompile Include="Public\Editor.GFX-InspectorFragments.ixx" />
     <ClCompile Include="Public\Editor.GFX-InspectorWidget.ixx" />

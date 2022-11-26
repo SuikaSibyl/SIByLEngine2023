@@ -48,6 +48,8 @@ namespace SIByL::Platform
 		virtual auto getHandle() noexcept -> void* { return (void*)wndHandle; }
 		/* return window framebuffer size */
 		virtual auto getFramebufferSize(int* width, int* height) noexcept -> void override;
+		/** return window input */
+		virtual auto getInput() noexcept -> Input* override;
 
 		// ---------------------------------
 		// System Functional

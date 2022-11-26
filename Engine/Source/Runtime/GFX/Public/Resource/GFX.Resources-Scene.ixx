@@ -1,4 +1,5 @@
 module;
+#include <cmath>
 #include <string>
 #include <format>
 #include <memory>
@@ -15,6 +16,7 @@ import Core.Log;
 import Math.Vector;
 import Math.Matrix;
 import Math.Transform;
+import Math.Trigonometric;
 import RHI;
 import GFX.SerializeUtils;
 
@@ -71,6 +73,14 @@ namespace SIByL::GFX
 		Math::Transform previousTransform = {};
 		/** get transform */
 		auto getTransform() noexcept -> Math::mat4;
+		/** get rotated forward */
+		auto getRotatedForward() noexcept -> Math::vec3 {
+			Math::vec3 front;
+			front.x = std::cos((eulerAngles.y)) * std::cos((eulerAngles.x));
+			front.y = std::sin((eulerAngles.x));
+			front.z = std::sin((eulerAngles.y)) * std::cos((eulerAngles.x));
+			return front;
+		}
 		/** serialize */
 		static auto serialize(void* emitter, Core::EntityHandle const& handle) -> void;
 		/** deserialize */

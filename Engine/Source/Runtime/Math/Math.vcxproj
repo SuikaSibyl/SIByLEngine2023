@@ -143,6 +143,8 @@
     <ClCompile Include="Private\Utility\Math.RoundingError.cpp" />
     <ClCompile Include="Private\Transform\Math.Transform-AnimatedTransform.cpp" />
     <ClCompile Include="Private\Transform\Math.Transform-Transform.cpp" />
+    <ClCompile Include="Public\Spline\Math.Spline-AnimationCurve.ixx" />
+    <ClCompile Include="Public\Spline\Math.Spline.ixx" />
     <ClCompile Include="Public\Deterministic\Math.FixedPoint.ixx" />
     <ClCompile Include="Public\Geometry\Math.Geometry-Bounds2.ixx" />
     <ClCompile Include="Public\Geometry\Math.Geometry-Bounds3.ixx" />

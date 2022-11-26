@@ -17,13 +17,13 @@ namespace SIByL::Platform
 	static bool gGLFWInitialized = false;
 	static int	gGLFWWindowCount = 0;
 
-	auto GLFWErrorCallback(int error, const char* description) -> void
-	{
+	auto GLFWErrorCallback(int error, const char* description) -> void {
 		Core::LogManager::Error(std::format("GLFW Error ({}): {}", error, description));
 	}
 
 	Window_GLFW::Window_GLFW(WindowOptions const& option)
-		:uniName(option.title), width(option.width), height(option.height), properties(option.properties)
+		: uniName(option.title), width(option.width), height(option.height), properties(option.properties)
+		, input(this)
 	{ init(); }
 
 	auto Window_GLFW::init() noexcept -> bool {
@@ -111,6 +111,10 @@ namespace SIByL::Platform
 
 	auto Window_GLFW::getFramebufferSize(int* width, int* height) noexcept -> void {
 		glfwGetFramebufferSize(wndHandle, width, height);
+	}
+	
+	auto Window_GLFW::getInput() noexcept -> Input* {
+		return &input;
 	}
 
 	auto Window_GLFW::openFile(const char* filter) noexcept -> std::string {

@@ -150,6 +150,10 @@ namespace SIByL::Platform
 
 		}
 	}
+	
+	auto Window_Win64::getInput() noexcept -> Input* {
+		return nullptr; // TODO
+	}
 
 	auto Window_Win64::wndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)noexcept -> LRESULT {
 		switch (msg)

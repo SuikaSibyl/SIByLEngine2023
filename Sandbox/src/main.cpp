@@ -61,6 +61,7 @@ import Editor.Core;
 import Editor.Framework;
 import Editor.GFX;
 import Editor.Config;
+import Editor.GFX.CameraController;
 
 import Sandbox.Tracer;
 import Sandbox.AAF_GI;
@@ -95,6 +96,7 @@ struct PushConstantRay {
 };
 
 struct SandBoxApplication :public Application::ApplicationBase {
+	GFX::GameObjectHandle camera_go;
 	/** Initialize the application */
 	virtual auto Init() noexcept -> void override {
 		// create optional layers: rhi, imgui, editor
@@ -115,7 +117,11 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		RHI::SwapChain* swapchain = rhiLayer->getSwapChain();
 
 		GFX::SceneNodeLoader_glTF::loadSceneNode("D:/Downloads/glTF-Sample-Models-master/glTF-Sample-Models-master/2.0/Sponza/glTF/Sponza.gltf", scene);
-		
+		camera_go = scene.createGameObject();
+		cameraController.init(mainWindow.get()->getInput(), &timer);
+		cameraController.bindTransform(scene.getGameObject(camera_go)->getEntity().getComponent<GFX::TransformComponent>());
+
+
 		cornellBox = GFX::MeshLoader_OBJ::loadMeshResource(
 			"./content/CornellBox-Original-Merged.obj",
 			GFX::MeshDataLayout{ 
@@ -376,6 +382,9 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 	/** Update the application every loop */
 	virtual auto Update(double deltaTime) noexcept -> void override {
+		{
+			cameraController.onUpdate();
+		}
 		// start new frame
 		imguiLayer->startNewFrame();
 		// frame start
@@ -385,6 +394,11 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		multiFrameFlights->frameStart();
 
 		std::unique_ptr<RHI::CommandEncoder> commandEncoder = device->createCommandEncoder({ multiFrameFlights->getCommandBuffer() });
+
+		auto* input = mainWindow.get()->getInput();
+		if (input->isKeyPressed(Platform::SIByL_KEY_ENTER)) {
+			Core::LogManager::Debug("Key pressed!");
+		}
 
 		RHI::RenderPassDescriptor renderPassDescriptor = {
 			{ RHI::RenderPassColorAttachment{
@@ -408,12 +422,16 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		height = 600;
 
 		UniformBufferObject ubo;
-		Math::vec4 campos = 
-			Math::mul(Math::rotateY(std::sin(timer.totalTime()) * 20).m, Math::vec4(-0.001, 1.0, 6.0, 1));
-		//Math::vec4 campos = Math::mul(Math::rotateY(0 * 20).m, Math::vec4(-0.001, 1.0, 6.0, 1));
+		//Math::vec4 campos = 
+		//	Math::mul(Math::rotateY(std::sin(timer.totalTime()) * 20).m, Math::vec4(-0.001, 1.0, 6.0, 1));
+		Math::vec4 campos = Math::mul(Math::rotateY(0 * 20).m, Math::vec4(-0.001, 1.0, 6.0, 1));
 
+		GFX::TransformComponent* transform = scene.getGameObject(camera_go)->getEntity().getComponent<GFX::TransformComponent>();
 		//ubo.model = Math::transpose(Math::rotate(timer.totalTime() * 80, Math::vec3(0, 1, 0)).m);
-		ubo.view = Math::transpose(Math::lookAt(Math::vec3(campos.x, campos.y, campos.z) , Math::vec3(0, 1, 0), Math::vec3(0, 1, 0)).m);
+		
+		//ubo.view = Math::transpose(Math::lookAt(Math::vec3(campos.x, campos.y, campos.z) , Math::vec3(0, 1, 0), Math::vec3(0, 1, 0)).m);
+
+		ubo.view = Math::transpose(Math::lookAt(transform->translation, transform->translation + transform->getRotatedForward(), Math::vec3(0, 1, 0)).m);
 		ubo.proj = Math::transpose(Math::perspective(22.f, 1.f * 800 / 600, 0.1f, 10.f).m);
 		//Math::vec4 campos = Math::vec4(-4.5f, 2.5f, 5.5f, 1);
 		//{
@@ -724,6 +742,9 @@ private:
 	std::unique_ptr<RHI::RenderPipeline> renderPipeline[2];
 	// the embedded scene, which should be removed in the future
 	GFX::Scene scene;
+
+	Editor::SimpleCameraController cameraController;
+	GFX::TransformComponent cameraTransform;
 };
 
 int main()

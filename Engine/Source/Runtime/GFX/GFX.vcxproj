@@ -159,6 +159,7 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Public\Component\GFX.Components-Camera.ixx" />
     <ClCompile Include="Public\Component\GFX.Components-MeshReference.ixx" />
     <ClCompile Include="Public\Component\GFX.Components-MeshRenderer.ixx" />
     <ClCompile Include="Public\Component\GFX.Components.ixx" />

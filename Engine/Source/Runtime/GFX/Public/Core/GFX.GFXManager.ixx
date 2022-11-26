@@ -32,6 +32,7 @@ namespace SIByL::GFX
 			Core::ComponentManager::get()->registerComponent<GFX::TransformComponent>();
 			Core::ComponentManager::get()->registerComponent<GFX::MeshReference>();
 			Core::ComponentManager::get()->registerComponent<GFX::MeshRenderer>();
+			Core::ComponentManager::get()->registerComponent<GFX::CameraComponent>();
 			// register resource types
 			Core::ResourceManager::get()->registerResource<GFX::Buffer>();
 			Core::ResourceManager::get()->registerResource<GFX::Mesh>();

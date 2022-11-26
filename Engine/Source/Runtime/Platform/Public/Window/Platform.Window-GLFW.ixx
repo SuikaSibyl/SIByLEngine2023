@@ -7,6 +7,29 @@ import Core.Event;
 
 namespace SIByL::Platform
 {
+	export struct InputGLFW : public Input {
+		InputGLFW(Window* attached_window);
+
+		virtual auto isKeyPressed(CodeEnum const& keycode) noexcept -> bool override;
+		virtual auto isMouseButtonPressed(CodeEnum const& button) noexcept -> bool override;
+		virtual auto getMousePosition(int button) noexcept -> std::pair<float, float> override;
+		virtual auto getMouseX() noexcept -> float override;
+		virtual auto getMouseY() noexcept -> float override;
+		virtual auto getMouseScrollX() noexcept -> float override { float tmp = scrollX; scrollX = 0; return tmp; }
+		virtual auto getMouseScrollY() noexcept -> float override { float tmp = scrollY; scrollY = 0; return tmp; }
+
+		virtual auto disableCursor() noexcept -> void override;
+		virtual auto enableCursor() noexcept -> void override;
+
+		virtual auto decodeCodeEnum(CodeEnum const& code) noexcept -> int override;
+
+		float scrollX = 0;
+		float scrollY = 0;
+
+	private:
+		Window* attached_window;
+	};
+
 	export struct Window_GLFW :public Window
 	{
 		Window_GLFW(WindowOptions const& option);
@@ -48,6 +71,8 @@ namespace SIByL::Platform
 		virtual auto getHandle() noexcept -> void* { return (void*)wndHandle; }
 		/* return window framebuffer size */
 		virtual auto getFramebufferSize(int* width, int* height) noexcept -> void override;
+		/** return window input */
+		virtual auto getInput() noexcept -> Input* override;
 
 		// ---------------------------------
 		// System Functional
@@ -61,10 +86,63 @@ namespace SIByL::Platform
 		std::wstring const	uniName;
 		bool				shouldQuit = false;
 		GLFWwindow*			wndHandle = nullptr;
+		InputGLFW			input;
 		Core::EventSignal<size_t, size_t> onResizeSignal;
 		uint32_t			width, height;
 		WindowProperties const properties;
 	};
 
-	//export auto paintRGB8Bitmap(HDC& hdc, size_t width, size_t height, char* data) -> void;
+#pragma region GLTF_INPUT_IMPL
+
+	InputGLFW::InputGLFW(Window* attached_window)
+		:attached_window(attached_window) {}
+
+	auto InputGLFW::isKeyPressed(CodeEnum const& keycode) noexcept -> bool {
+		auto window = static_cast<GLFWwindow*>(attached_window->getHandle());
+		auto state = glfwGetKey(window, keycode.GLFWCode);
+		return state == GLFW_PRESS || state == GLFW_REPEAT;
+	}
+
+	auto InputGLFW::isMouseButtonPressed(CodeEnum const& button) noexcept -> bool {
+		auto window = static_cast<GLFWwindow*>(attached_window->getHandle());
+		auto state = glfwGetMouseButton(window, button.GLFWCode);
+		return state == GLFW_PRESS;
+	}
+
+	auto InputGLFW::getMousePosition(int button) noexcept -> std::pair<float, float> {
+		auto window = static_cast<GLFWwindow*>(attached_window->getHandle());
+		double xpos, ypos;
+		glfwGetCursorPos(window, &xpos, &ypos);
+		return { (float)xpos, (float)ypos };
+	}
+
+	auto InputGLFW::getMouseX() noexcept -> float {
+		auto window = static_cast<GLFWwindow*>(attached_window->getHandle());
+		double xpos, ypos;
+		glfwGetCursorPos(window, &xpos, &ypos);
+		return (float)xpos;
+	}
+
+	auto InputGLFW::getMouseY() noexcept -> float {
+		auto window = static_cast<GLFWwindow*>(attached_window->getHandle());
+		double xpos, ypos;
+		glfwGetCursorPos(window, &xpos, &ypos);
+		return (float)ypos;
+	}
+
+	auto InputGLFW::disableCursor() noexcept -> void {
+		auto window = static_cast<GLFWwindow*>(attached_window->getHandle());
+		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	}
+
+	auto InputGLFW::enableCursor() noexcept -> void {
+		auto window = static_cast<GLFWwindow*>(attached_window->getHandle());
+		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+	}
+
+	auto InputGLFW::decodeCodeEnum(CodeEnum const& code) noexcept -> int {
+		return code.GLFWCode;
+	}
+
+#pragma endregion
 }

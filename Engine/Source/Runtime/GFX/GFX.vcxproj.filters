@@ -66,5 +66,8 @@
     <ClCompile Include="Public\Resource\GFX.SerializeUtils.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Component\GFX.Components-Camera.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
