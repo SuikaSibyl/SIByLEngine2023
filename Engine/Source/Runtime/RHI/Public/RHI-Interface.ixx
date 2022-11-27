@@ -93,6 +93,7 @@ namespace SIByL::RHI
 		SAMPLER_FILTER_MIN_MAX		= 1 << 3,
 		RAY_TRACING					= 1 << 4,
 		SHADER_NON_SEMANTIC_INFO	= 1 << 5,
+		BINDLESS_INDEXING			= 1 << 6,
 	};
 
 	export enum struct PowerPreference {
@@ -693,7 +694,8 @@ namespace SIByL::RHI
 		SAMPLER,
 		TEXTURE_VIEW,
 		BUFFER_BINDING,
-		EXTERNAL_TEXTURE
+		EXTERNAL_TEXTURE,
+		BINDLESS_TEXTURE,
 	};
 
 	export enum struct BufferBindingType {
@@ -746,6 +748,10 @@ namespace SIByL::RHI
 
 	};
 
+	export struct BindlessTexturesBindingLayout {
+
+	};
+
 	export struct AccelerationStructureBindingLayout {
 
 	};
@@ -768,6 +774,8 @@ namespace SIByL::RHI
 			: binding(binding), visibility(visibility), externalTexture(externalTexture) {}
 		BindGroupLayoutEntry(uint32_t binding, ShaderStagesFlags visibility, AccelerationStructureBindingLayout const& accelerationStructure)
 			: binding(binding), visibility(visibility), accelerationStructure(accelerationStructure) {}
+		BindGroupLayoutEntry(uint32_t binding, ShaderStagesFlags visibility, BindlessTexturesBindingLayout const& bindlessTextures)
+			: binding(binding), visibility(visibility), bindlessTextures(bindlessTextures) {}
 
 		/* A unique identifier for a resource binding within the BindGroupLayout */
 		uint32_t binding;
@@ -781,6 +789,7 @@ namespace SIByL::RHI
 		std::optional<StorageTextureBindingLayout>	storageTexture;
 		std::optional<ExternalTextureBindingLayout> externalTexture;
 		std::optional<AccelerationStructureBindingLayout> accelerationStructure;
+		std::optional<BindlessTexturesBindingLayout> bindlessTextures;
 	};
 
 	export struct BindGroupLayoutDescriptor {
@@ -804,10 +813,13 @@ namespace SIByL::RHI
 		BindingResource(Sampler* sampler) : type(BindingResourceType::SAMPLER), sampler(sampler) {}
 		BindingResource(TextureView* view) : type(BindingResourceType::TEXTURE_VIEW), textureView(view) {}
 		BindingResource(BufferBinding const& buffer) : type(BindingResourceType::BUFFER_BINDING), bufferBinding(buffer) {}
+		BindingResource(std::vector<TextureView*> const& bindlessTextures, Sampler* sampler)
+			: type(BindingResourceType::BINDLESS_TEXTURE), bindlessTextures(bindlessTextures), sampler(sampler) {}
 		BindingResource(TLAS* tlas) : tlas(tlas) {}
 		BindingResourceType type;
 		Sampler* sampler = nullptr;
 		TextureView* textureView = nullptr;
+		std::vector<TextureView*> bindlessTextures = {};
 		ExternalTexture* externalTexture = nullptr;
 		std::optional<BufferBinding> bufferBinding;
 		TLAS* tlas = nullptr;

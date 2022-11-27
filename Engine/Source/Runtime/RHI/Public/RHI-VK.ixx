@@ -1034,6 +1034,11 @@ namespace SIByL::RHI
 		}
 		VkPhysicalDeviceFeatures2 features2{
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+		void** pFeature2Tail = &(features2.pNext);
+		// sub : bindless
+		VkPhysicalDeviceDescriptorIndexingFeatures indexing_features{
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT };
+		// sub : ray tracing
 		VkPhysicalDeviceVulkan12Features features12{
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
 		VkPhysicalDeviceVulkan11Features features11{
@@ -1044,20 +1049,34 @@ namespace SIByL::RHI
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR };
 		VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures{
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR };
-
+		if (context->getContextExtensionsFlags() & (ContextExtensionsFlags)ContextExtension::BINDLESS_INDEXING) {
+			if (context->getContextExtensionsFlags() & (ContextExtensionsFlags)ContextExtension::RAY_TRACING) {
+				features12.descriptorIndexing = VK_TRUE;
+				features12.descriptorBindingPartiallyBound = VK_TRUE;
+				features12.runtimeDescriptorArray = VK_TRUE;
+			}
+			else {
+				*pFeature2Tail = &indexing_features;
+				pFeature2Tail = &(indexing_features.pNext);;
+				indexing_features.descriptorBindingPartiallyBound = VK_TRUE;
+				indexing_features.runtimeDescriptorArray = VK_TRUE;
+			}
+		}
 		if (context->getContextExtensionsFlags() & (ContextExtensionsFlags)ContextExtension::RAY_TRACING) {
-			features2.pNext = &rayQueryFeatures;
+			*pFeature2Tail = &rayQueryFeatures;
 			rayQueryFeatures.pNext = &features12;
 			features12.pNext = &features11;
 			features11.pNext = &asFeatures;
 			asFeatures.pNext = &rtPipelineFeatures;
-			vkGetPhysicalDeviceFeatures2(physicalDevice, &features2);
-			if (pNextChainTail == nullptr)
-				*pNextChainHead = &features2;
-			else
-				*pNextChainTail = &features2;
-			pNextChainTail = &(rtPipelineFeatures.pNext);
+			pFeature2Tail = &(rtPipelineFeatures.pNext);;
 		}
+		vkGetPhysicalDeviceFeatures2(physicalDevice, &features2);
+		if (pNextChainTail == nullptr)
+			*pNextChainHead = &features2;
+		else
+			*pNextChainTail = &features2;
+		pNextChainTail = pFeature2Tail;
+
 		// create logical device
 		std::unique_ptr<Device_VK> device = std::make_unique<Device_VK>();
 		device->getAdapterVk() = this;
@@ -2104,6 +2123,7 @@ namespace SIByL::RHI
 		if (entry.storageTexture.has_value()) return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 		if (entry.externalTexture.has_value()) return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 		if (entry.accelerationStructure.has_value()) return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+		if (entry.bindlessTextures.has_value()) return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	}
 
 	inline auto getVkShaderStageFlags(ShaderStagesFlags flags) noexcept ->  VkShaderStageFlags {
@@ -2170,7 +2190,7 @@ namespace SIByL::RHI
 	BindGroupPool_VK::BindGroupPool_VK(Device_VK* device)
 		: device(device)
 	{
-		std::vector<VkDescriptorPoolSize> poolSizes(6);
+		std::vector<VkDescriptorPoolSize> poolSizes(7);
 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		poolSizes[0].descriptorCount = static_cast<uint32_t>(99);
 		poolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -2183,11 +2203,14 @@ namespace SIByL::RHI
 		poolSizes[4].descriptorCount = static_cast<uint32_t>(99);
 		poolSizes[5].type = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
 		poolSizes[5].descriptorCount = static_cast<uint32_t>(99);
+		poolSizes[6].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		poolSizes[6].descriptorCount = static_cast<uint32_t>(99);
 		VkDescriptorPoolCreateInfo poolInfo{};
 		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 		poolInfo.poolSizeCount = poolSizes.size();
 		poolInfo.pPoolSizes = poolSizes.data();
 		poolInfo.maxSets = static_cast<uint32_t>(999);
+		poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT_EXT;
 		if (vkCreateDescriptorPool(device->getVkDevice(), &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
 			Core::LogManager::Error("VULKAN :: failed to create descriptor pool!");
 		}
@@ -4832,6 +4855,7 @@ namespace SIByL::RHI
 		std::vector<VkWriteDescriptorSet>	descriptorWrites = {};
 		std::vector<VkDescriptorBufferInfo> bufferInfos(bufferCounts);
 		std::vector<VkDescriptorImageInfo>	imageInfos(imageCounts);
+		std::vector<VkDescriptorImageInfo>	bindlessImageInfos = {};
 		std::vector<VkWriteDescriptorSetAccelerationStructureKHR> accelerationStructureInfos(accStructCounts);
 		int layoutEntryIdex = 0;
 		uint32_t bufferIndex = 0;
@@ -4889,6 +4913,29 @@ namespace SIByL::RHI
 				descriptorWrite.pImageInfo = nullptr;
 				descriptorWrite.pTexelBufferView = nullptr;
 				descriptorWrite.pNext = &descASInfo;
+			}
+			else if (entry.resource.bindlessTextures.size() != 0) {
+				for (int i = 0; i < entry.resource.bindlessTextures.size(); ++i) {
+					auto bindlessTexture = entry.resource.bindlessTextures[i];
+
+					bindlessImageInfos.push_back(VkDescriptorImageInfo{});
+					VkDescriptorImageInfo& imageInfo = bindlessImageInfos.back();
+					imageInfo.sampler = static_cast<Sampler_VK*>(entry.resource.sampler)->textureSampler;
+					imageInfo.imageView = static_cast<TextureView_VK*>(bindlessTexture)->imageView;
+					imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+					descriptorWrites.push_back(VkWriteDescriptorSet{});
+					VkWriteDescriptorSet& descriptorWrite = descriptorWrites.back();
+					descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+					descriptorWrite.dstSet = set;
+					descriptorWrite.dstBinding = entry.binding;
+					descriptorWrite.dstArrayElement = i;
+					descriptorWrite.descriptorType = getVkDecriptorType(desc.layout->getBindGroupLayoutDescriptor().entries[layoutEntryIdex++]);
+					descriptorWrite.descriptorCount = 1;
+					descriptorWrite.pBufferInfo = nullptr;
+					descriptorWrite.pImageInfo = &imageInfo;
+					descriptorWrite.pTexelBufferView = nullptr;
+				}
 			}
 		}
 		vkUpdateDescriptorSets(device->getVkDevice(), descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);

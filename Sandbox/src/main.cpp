@@ -102,7 +102,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		// create optional layers: rhi, imgui, editor
 		rhiLayer = std::make_unique<RHI::RHILayer>(RHI::RHILayerDescriptor{
 				RHI::RHIBackend::Vulkan,
-				(uint32_t)RHI::ContextExtension::RAY_TRACING,
+				(uint32_t)RHI::ContextExtension::RAY_TRACING
+				| (uint32_t)RHI::ContextExtension::BINDLESS_INDEXING,
 				mainWindow.get(),
 				true
 			});
@@ -160,49 +161,6 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			}
 		}
 
-		//cornellBox = GFX::MeshLoader_OBJ::loadMeshResource(
-		//	"./content/CornellBox-Original-Merged.obj",
-		//	GFX::MeshDataLayout{ 
-		//		{{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::POSITION},
-		//		{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::COLOR}},
-		//		RHI::IndexFormat::UINT16_t },
-		//		true);
-		//GFX::Mesh* conrnell_resource = ResourceManager::get()->getResource<GFX::Mesh>(cornellBox);
-		//indexCount = conrnell_resource->indexBuffer->size() / sizeof(uint16_t);
-
-		struct Vertex {
-			Math::vec3 pos;
-			Math::vec3 color;
-			Math::vec2 uv;
-		};
-
-		//blas = device->createBLAS(RHI::BLASDescriptor{
-		//	{RHI::BLASTriangleGeometry{
-		//		conrnell_resource->vertexBufferPosOnly.get(),
-		//		conrnell_resource->indexBuffer.get(),
-		//		conrnell_resource->vertexBuffer.get(),
-		//		RHI::IndexFormat::UINT16_t,
-		//		(uint32_t)conrnell_resource->vertexBufferPosOnly->size() / (sizeof(float) * 3),
-		//		0,
-		//		indexCount / 3,
-		//		0,
-		//		RHI::AffineTransformMatrix(Math::mat4::translate(Math::vec3(0, 0, 0))),
-		//		(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION
-		//	},
-		//	RHI::BLASTriangleGeometry{
-		//		conrnell_resource->vertexBufferPosOnly.get(),
-		//		conrnell_resource->indexBuffer.get(),
-		//		conrnell_resource->vertexBuffer.get(),
-		//		RHI::IndexFormat::UINT16_t,
-		//		(uint32_t)conrnell_resource->vertexBufferPosOnly->size() / (sizeof(float) * 3),
-		//		0,
-		//		indexCount / 3,
-		//		0,
-		//		RHI::AffineTransformMatrix(Math::mat4::translate(Math::vec3(2.5, 0, 0))),
-		//		(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION
-		//	}, },
-		//});
-
 		ASGroup = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ASGroup>();
 		RHI::TLASDescriptor tlasDesc;
 		uint32_t blasIdx = 0;
@@ -215,38 +173,43 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		}
 		GFX::GFXManager::get()->registerAsGroupResource(ASGroup, tlasDesc, 8);
 
-		{
-			std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> img = Image::JPEG::fromJPEG("./content/texture.jpg");
-			Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
-			GFX::GFXManager::get()->registerTextureResource(guid, img.get());
-			GFX::Texture* texture = Core::ResourceManager::get()->getResource<GFX::Texture>(guid);
+		struct Vertex {
+			Math::vec3 pos;
+			Math::vec3 color;
+			Math::vec2 uv;
+		};
 
-			GFX::GFXManager::get()->commonSampler.defaultSampler = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Sampler>();
-			GFX::GFXManager::get()->registerSamplerResource(GFX::GFXManager::get()->commonSampler.defaultSampler, RHI::SamplerDescriptor{});
-			Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler->setName("DefaultSampler");
-			//framebufferColorAttaches
-			framebufferColorAttach = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
-			framebufferDepthAttach = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
-			rtTarget = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
-			RHI::TextureDescriptor desc{
-				{800,600,1},
-				1, 1, RHI::TextureDimension::TEX2D,
-				RHI::TextureFormat::RGBA8_UNORM,
-				(uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT | (uint32_t)RHI::TextureUsage::TEXTURE_BINDING,
-				{ RHI::TextureFormat::RGBA8_UNORM }
-			};
-			GFX::GFXManager::get()->registerTextureResource(framebufferColorAttach, desc);
-			desc.format = RHI::TextureFormat::RGBA32_FLOAT;
-			desc.usage |= (uint32_t)RHI::TextureUsage::STORAGE_BINDING | (uint32_t)RHI::TextureUsage::COPY_SRC;
-			GFX::GFXManager::get()->registerTextureResource(rtTarget, desc);
-			desc.format = RHI::TextureFormat::DEPTH32_FLOAT;
-			desc.usage = (uint32_t)RHI::TextureUsage::DEPTH_ATTACHMENT | (uint32_t)RHI::TextureUsage::TEXTURE_BINDING;
-			desc.viewFormats = { RHI::TextureFormat::DEPTH32_FLOAT };
-			GFX::GFXManager::get()->registerTextureResource(framebufferDepthAttach, desc);
-		}
+		std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> img = Image::JPEG::fromJPEG("./content/texture.jpg");
+		Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
+		GFX::GFXManager::get()->registerTextureResource(guid, img.get());
+		GFX::Texture* texture = Core::ResourceManager::get()->getResource<GFX::Texture>(guid);
+
+		GFX::GFXManager::get()->commonSampler.defaultSampler = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Sampler>();
+		GFX::GFXManager::get()->registerSamplerResource(GFX::GFXManager::get()->commonSampler.defaultSampler, RHI::SamplerDescriptor{});
+		Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler->setName("DefaultSampler");
+		//framebufferColorAttaches
+		framebufferColorAttach = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
+		framebufferDepthAttach = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
+		rtTarget = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
+		RHI::TextureDescriptor desc{
+			{800,600,1},
+			1, 1, RHI::TextureDimension::TEX2D,
+			RHI::TextureFormat::RGBA8_UNORM,
+			(uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT | (uint32_t)RHI::TextureUsage::TEXTURE_BINDING,
+			{ RHI::TextureFormat::RGBA8_UNORM }
+		};
+		GFX::GFXManager::get()->registerTextureResource(framebufferColorAttach, desc);
+		desc.format = RHI::TextureFormat::RGBA32_FLOAT;
+		desc.usage |= (uint32_t)RHI::TextureUsage::STORAGE_BINDING | (uint32_t)RHI::TextureUsage::COPY_SRC;
+		GFX::GFXManager::get()->registerTextureResource(rtTarget, desc);
+		desc.format = RHI::TextureFormat::DEPTH32_FLOAT;
+		desc.usage = (uint32_t)RHI::TextureUsage::DEPTH_ATTACHMENT | (uint32_t)RHI::TextureUsage::TEXTURE_BINDING;
+		desc.viewFormats = { RHI::TextureFormat::DEPTH32_FLOAT };
+		GFX::GFXManager::get()->registerTextureResource(framebufferDepthAttach, desc);
+
 		Buffer vert, frag;
 		syncReadFile("../Engine/Binaries/Runtime/spirv/Common/test_shader_vert_vert.spv", vert);
-		syncReadFile("../Engine/Binaries/Runtime/spirv/Common/test_shader_frag.spv", frag);
+		syncReadFile("../Engine/Binaries/Runtime/spirv/Common/test_shader_frag_frag.spv", frag);
 		vert_module = device->createShaderModule({ &vert, RHI::ShaderStages::VERTEX });
 		frag_module = device->createShaderModule({ &frag, RHI::ShaderStages::FRAGMENT });
 
@@ -269,7 +232,20 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		{
 			rtBindGroupLayout = device->createBindGroupLayout(
 				RHI::BindGroupLayoutDescriptor{ {
-					RHI::BindGroupLayoutEntry{0, (uint32_t)RHI::ShaderStages::VERTEX | (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT | (uint32_t)RHI::ShaderStages::ANY_HIT, RHI::BufferBindingLayout{RHI::BufferBindingType::UNIFORM}}
+					RHI::BindGroupLayoutEntry{ 0, 
+						(uint32_t)RHI::ShaderStages::VERTEX 
+						| (uint32_t)RHI::ShaderStages::RAYGEN 
+						| (uint32_t)RHI::ShaderStages::COMPUTE
+						| (uint32_t)RHI::ShaderStages::CLOSEST_HIT 
+						| (uint32_t)RHI::ShaderStages::ANY_HIT, 
+						RHI::BufferBindingLayout{RHI::BufferBindingType::UNIFORM}},
+					RHI::BindGroupLayoutEntry{ 1,
+							(uint32_t)RHI::ShaderStages::FRAGMENT
+							| (uint32_t)RHI::ShaderStages::RAYGEN
+							| (uint32_t)RHI::ShaderStages::COMPUTE
+							| (uint32_t)RHI::ShaderStages::CLOSEST_HIT
+							| (uint32_t)RHI::ShaderStages::ANY_HIT,
+							RHI::BindlessTexturesBindingLayout{}},
 					} }
 			);
 
@@ -286,7 +262,9 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				rtBindGroup[i] = device->createBindGroup(RHI::BindGroupDescriptor{
 					rtBindGroupLayout.get(),
 					std::vector<RHI::BindGroupEntry>{
-						{0,RHI::BindingResource{RHI::BufferBinding{uniformBuffer[i].get(), 0, uniformBuffer[i]->size()}}}
+						{0,RHI::BindingResource{RHI::BufferBinding{uniformBuffer[i].get(), 0, uniformBuffer[i]->size()}}},
+						{1,RHI::BindingResource{std::vector<RHI::TextureView*>{texture->originalView.get()},
+							Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler.get()}},
 				} });
 			}
 		}
