@@ -64,6 +64,7 @@ namespace SIByL::GFX
 	export struct SceneNodeLoader_glTF {
 		/** Load glTF file */
 		static inline auto loadSceneNode(std::filesystem::path const& path, GFX::Scene& gfxscene) noexcept -> void {
+#define INDEX_TYPE uint32_t
 			// use tinygltf to load file
 			tinygltf::Model model;
 			tinygltf::TinyGLTF loader;
@@ -82,7 +83,7 @@ namespace SIByL::GFX
             std::vector<Core::GUID> meshGUIDs = {};
             std::unordered_map<tinygltf::Mesh const*, Core::GUID> meshMap = {};
             for (auto const& gltfMesh : model.meshes) {
-                std::vector<uint16_t> indexBuffer_uint16 = {};
+                std::vector<INDEX_TYPE> indexBuffer_uint = {};
                 std::vector<float> vertexBuffer = {};
                 std::vector<float> PositionBuffer = {};
                 // Create GFX mesh, and add it to resource manager
@@ -91,11 +92,10 @@ namespace SIByL::GFX
                 uint32_t submesh_vertex_offset = 0;
                 // For each primitive
                 for (auto const& meshPrimitive : gltfMesh.primitives) {
-                    std::vector<uint16_t> indexArray_uint16 = {};
+                    std::vector<INDEX_TYPE> indexArray_uint = {};
                     std::vector<float> vertexBuffer_positionOnly = {};
                     std::vector<float> vertexBuffer_normalOnly = {};
                     std::vector<float> vertexBuffer_uvOnly = {};
-
                     auto const& indicesAccessor = model.accessors[meshPrimitive.indices];
                     auto const& bufferView = model.bufferViews[indicesAccessor.bufferView];
                     auto const& buffer = model.buffers[bufferView.buffer];
@@ -106,32 +106,32 @@ namespace SIByL::GFX
                     case TINYGLTF_COMPONENT_TYPE_BYTE: {   
                         ArrayAdapter<char> originIndexArray(dataAddress, count, byteStride);
                         for (size_t i = 0; i < count; ++i)
-                            indexArray_uint16.emplace_back(uint16_t(originIndexArray[i])); }
+                            indexArray_uint.emplace_back(INDEX_TYPE(originIndexArray[i])); }
                         break;
                     case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE: {
                         ArrayAdapter<unsigned char> originIndexArray(dataAddress, count, byteStride);
                         for (size_t i = 0; i < count; ++i)
-                            indexArray_uint16.emplace_back(uint16_t(originIndexArray[i])); }
+                            indexArray_uint.emplace_back(INDEX_TYPE(originIndexArray[i])); }
                         break;
                     case TINYGLTF_COMPONENT_TYPE_SHORT: {
                         ArrayAdapter<short> originIndexArray(dataAddress, count, byteStride);
                         for (size_t i = 0; i < count; ++i)
-                            indexArray_uint16.emplace_back(uint16_t(originIndexArray[i])); }
+                            indexArray_uint.emplace_back(INDEX_TYPE(originIndexArray[i])); }
                         break;
                     case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: {
                         ArrayAdapter<unsigned short> originIndexArray(dataAddress, count, byteStride);
                         for (size_t i = 0; i < count; ++i)
-                            indexArray_uint16.emplace_back(uint16_t(originIndexArray[i])); }
+                            indexArray_uint.emplace_back(INDEX_TYPE(originIndexArray[i])); }
                         break;
                     case TINYGLTF_COMPONENT_TYPE_INT: {
                         ArrayAdapter<int> originIndexArray(dataAddress, count, byteStride);
                         for (size_t i = 0; i < count; ++i)
-                            indexArray_uint16.emplace_back(uint16_t(originIndexArray[i])); }
+                            indexArray_uint.emplace_back(INDEX_TYPE(originIndexArray[i])); }
                         break;
                     case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT: {
                         ArrayAdapter<unsigned int> originIndexArray(dataAddress, count, byteStride);
                         for (size_t i = 0; i < count; ++i)
-                            indexArray_uint16.emplace_back(uint16_t(originIndexArray[i])); }
+                            indexArray_uint.emplace_back(INDEX_TYPE(originIndexArray[i])); }
                         break;
                     default:
                         break;
@@ -156,11 +156,11 @@ namespace SIByL::GFX
                                     case TINYGLTF_COMPONENT_TYPE_FLOAT:
                                         // 3D vector of float
                                         ArrayAdapter<Math::vec3> positions (dataPtr, count, byte_stride);
-                                        for (size_t i{ 0 }; i < indexArray_uint16.size() / 3; ++i) {
+                                        for (size_t i{ 0 }; i < indexArray_uint.size() / 3; ++i) {
                                             // get the i'th triange's indexes
-                                            auto f0 = indexArray_uint16[3 * i + 0];
-                                            auto f1 = indexArray_uint16[3 * i + 1];
-                                            auto f2 = indexArray_uint16[3 * i + 2];
+                                            auto f0 = indexArray_uint[3 * i + 0];
+                                            auto f1 = indexArray_uint[3 * i + 1];
+                                            auto f2 = indexArray_uint[3 * i + 2];
                                             // get the 3 normal vectors for that face
                                             Math::vec3 p0, p1, p2;
                                             p0 = positions[f0];
@@ -185,11 +185,11 @@ namespace SIByL::GFX
                                     switch (attribAccessor.type) {
                                     case TINYGLTF_TYPE_VEC3: {
                                         ArrayAdapter<Math::dvec3> positions(dataPtr, count, byte_stride);
-                                        for (size_t i{ 0 }; i < indexArray_uint16.size() / 3; ++i) {
+                                        for (size_t i{ 0 }; i < indexArray_uint.size() / 3; ++i) {
                                             // get the i'th triange's indexes
-                                            auto f0 = indexArray_uint16[3 * i + 0];
-                                            auto f1 = indexArray_uint16[3 * i + 1];
-                                            auto f2 = indexArray_uint16[3 * i + 2];
+                                            auto f0 = indexArray_uint[3 * i + 0];
+                                            auto f1 = indexArray_uint[3 * i + 1];
+                                            auto f2 = indexArray_uint[3 * i + 2];
                                             // get the 3 normal vectors for that face
                                             Math::dvec3 p0, p1, p2;
                                             p0 = positions[f0];
@@ -227,11 +227,11 @@ namespace SIByL::GFX
                                     case TINYGLTF_COMPONENT_TYPE_FLOAT: {
                                         ArrayAdapter<Math::vec3> normals(dataPtr, count, byte_stride);
                                         // For each triangle :
-                                        for (size_t i{ 0 }; i < indexArray_uint16.size() / 3; ++i) {
+                                        for (size_t i{ 0 }; i < indexArray_uint.size() / 3; ++i) {
                                             // get the i'th triange's indexes
-                                            auto f0 = indexArray_uint16[3 * i + 0];
-                                            auto f1 = indexArray_uint16[3 * i + 1];
-                                            auto f2 = indexArray_uint16[3 * i + 2];
+                                            auto f0 = indexArray_uint[3 * i + 0];
+                                            auto f1 = indexArray_uint[3 * i + 1];
+                                            auto f2 = indexArray_uint[3 * i + 2];
                                             // get the 3 normal vectors for that face
                                             Math::vec3 n0, n1, n2;
                                             n0 = normals[f0];
@@ -256,11 +256,11 @@ namespace SIByL::GFX
                                         // IMPORTANT: We need to reorder normals (and texture
                                         // coordinates into "facevarying" order) for each face
                                         // For each triangle :
-                                        for (size_t i{ 0 }; i < indexArray_uint16.size() / 3; ++i) {
+                                        for (size_t i{ 0 }; i < indexArray_uint.size() / 3; ++i) {
                                             // get the i'th triange's indexes
-                                            auto f0 = indexArray_uint16[3 * i + 0];
-                                            auto f1 = indexArray_uint16[3 * i + 1];
-                                            auto f2 = indexArray_uint16[3 * i + 2];
+                                            auto f0 = indexArray_uint[3 * i + 0];
+                                            auto f1 = indexArray_uint[3 * i + 1];
+                                            auto f2 = indexArray_uint[3 * i + 2];
                                             // get the 3 normal vectors for that face
                                             Math::dvec3 n0, n1, n2;
                                             n0 = normals[f0];
@@ -290,11 +290,11 @@ namespace SIByL::GFX
                                     switch (attribAccessor.componentType) {
                                     case TINYGLTF_COMPONENT_TYPE_FLOAT: {
                                         ArrayAdapter<Math::vec2> uvs(dataPtr, count, byte_stride);
-                                        for (size_t i{ 0 }; i < indexArray_uint16.size() / 3; ++i) {
+                                        for (size_t i{ 0 }; i < indexArray_uint.size() / 3; ++i) {
                                             // get the i'th triange's indexes
-                                            auto f0 = indexArray_uint16[3 * i + 0];
-                                            auto f1 = indexArray_uint16[3 * i + 1];
-                                            auto f2 = indexArray_uint16[3 * i + 2];
+                                            auto f0 = indexArray_uint[3 * i + 0];
+                                            auto f1 = indexArray_uint[3 * i + 1];
+                                            auto f2 = indexArray_uint[3 * i + 2];
                                             // get the texture coordinates for each triangle's
                                             // vertices
                                             Math::vec2 uv0, uv1, uv2;
@@ -315,11 +315,11 @@ namespace SIByL::GFX
                                     } break;
                                     case TINYGLTF_COMPONENT_TYPE_DOUBLE: {
                                         ArrayAdapter<Math::dvec2> uvs(dataPtr, count, byte_stride);
-                                        for (size_t i{ 0 }; i < indexArray_uint16.size() / 3; ++i) {
+                                        for (size_t i{ 0 }; i < indexArray_uint.size() / 3; ++i) {
                                             // get the i'th triange's indexes
-                                            auto f0 = indexArray_uint16[3 * i + 0];
-                                            auto f1 = indexArray_uint16[3 * i + 1];
-                                            auto f2 = indexArray_uint16[3 * i + 2];
+                                            auto f0 = indexArray_uint[3 * i + 0];
+                                            auto f1 = indexArray_uint[3 * i + 1];
+                                            auto f2 = indexArray_uint[3 * i + 2];
 
                                             Math::dvec2 uv0, uv1, uv2;
                                             uv0 = uvs[f0];
@@ -352,7 +352,7 @@ namespace SIByL::GFX
                         break;
                     }
                     // Assemble vertex buffer
-                    for (size_t i = 0; i < indexArray_uint16.size(); ++i) {
+                    for (size_t i = 0; i < indexArray_uint.size(); ++i) {
                         vertexBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 0]);
                         vertexBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 1]);
                         vertexBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 2]);
@@ -368,20 +368,21 @@ namespace SIByL::GFX
                         PositionBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 1]);
                         PositionBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 2]);
 
-                        indexBuffer_uint16.push_back(i);
+                        indexBuffer_uint.push_back(i);
                     }
-                    mesh.submeshes.push_back(GFX::Mesh::Submesh{ submesh_index_offset, uint32_t(indexArray_uint16.size()), submesh_vertex_offset});
-                    submesh_index_offset = indexBuffer_uint16.size();
-                    submesh_vertex_offset = vertexBuffer.size() / 6;
+                    mesh.submeshes.push_back(GFX::Mesh::Submesh{ submesh_index_offset, uint32_t(indexArray_uint.size()), submesh_vertex_offset});
+                    submesh_index_offset = indexBuffer_uint.size();
+                    submesh_vertex_offset = vertexBuffer.size() / 8;
                 }
                 mesh.vertexBuffer = device->createDeviceLocalBuffer((void*)vertexBuffer.data(), vertexBuffer.size() * sizeof(float), 
                     (uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::STORAGE);
-                mesh.indexBuffer = device->createDeviceLocalBuffer((void*)indexBuffer_uint16.data(), indexBuffer_uint16.size() * sizeof(uint16_t),
+                mesh.indexBuffer = device->createDeviceLocalBuffer((void*)indexBuffer_uint.data(), indexBuffer_uint.size() * sizeof(INDEX_TYPE),
                     (uint32_t)RHI::BufferUsage::INDEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
                     (uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
                 mesh.vertexBufferPosOnly = device->createDeviceLocalBuffer((void*)PositionBuffer.data(), PositionBuffer.size() * sizeof(float),
                     (uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
                     (uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
+                mesh.primitiveState.stripIndexFormat = RHI::IndexFormat::UINT32_T;
                 Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Mesh>();
                 meshGUIDs.push_back(guid);
                 meshMap[&gltfMesh] = guid;

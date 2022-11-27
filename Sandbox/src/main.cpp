@@ -119,7 +119,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		//GFX::SceneNodeLoader_glTF::loadSceneNode("D:/Downloads/glTF-Sample-Models-master/glTF-Sample-Models-master/2.0/Sponza/glTF/Sponza.gltf", scene);
 		//GFX::SceneNodeLoader_glTF::loadSceneNode("P:/GitProjects/SIByLEngine2022/Sandbox/content/scenes/cornellBox.gltf", scene);
 		//scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/cornellBox.scene");
-		scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/cornellBoxSphere.scene");
+		//scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/cornellBoxSphere.scene");
+		scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/sponza.scene");
 
 		camera_go = scene.createGameObject();
 		cameraController.init(mainWindow.get()->getInput(), &timer);
@@ -145,11 +146,11 @@ struct SandBoxApplication :public Application::ApplicationBase {
 						meshref->mesh->vertexBufferPosOnly.get(),
 						meshref->mesh->indexBuffer.get(),
 						meshref->mesh->vertexBuffer.get(),
-						RHI::IndexFormat::UINT16_t,
+						RHI::IndexFormat::UINT32_T,
 						submehs.size,
 						submehs.baseVertex,
 						submehs.size / 3,
-						submehs.offset / 3,
+						uint32_t(submehs.offset * sizeof(uint32_t)),
 						RHI::AffineTransformMatrix(objectMat),
 						(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION
 						}
@@ -208,7 +209,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		for (auto& blas : blases) {
 			tlasDesc.instances.push_back(RHI::BLASInstance{
 				blas.get(),
-				mat4::translate(Math::vec3{0,0.2,0}),
+				mat4{},
 				blasIdx }
 			);
 		}
@@ -397,7 +398,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		//ubo.view = Math::transpose(Math::lookAt(Math::vec3(campos.x, campos.y, campos.z) , Math::vec3(0, 1, 0), Math::vec3(0, 1, 0)).m);
 
 		ubo.view = Math::transpose(Math::lookAt(transform->translation, transform->translation + transform->getRotatedForward(), Math::vec3(0, 1, 0)).m);
-		ubo.proj = Math::transpose(Math::perspective(22.f, 1.f * 800 / 600, 0.1f, 10.f).m);
+		ubo.proj = Math::transpose(Math::perspective(22.f, 1.f * 800 / 600, 0.1f, 1000.f).m);
 		//Math::vec4 campos = Math::vec4(-4.5f, 2.5f, 5.5f, 1);
 		//{
 		//	//campos.x = (float)(campos.x * sin(timer.totalTime() * 1));
@@ -480,7 +481,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 					0, meshref->mesh->vertexBuffer->size());
 				passEncoder[index]->setBindGroup(0, rtBindGroup[index].get(), 0, 0);
 				passEncoder[index]->setIndexBuffer(meshref->mesh->indexBuffer.get(),
-					RHI::IndexFormat::UINT16_t, 0, meshref->mesh->indexBuffer->size());
+					RHI::IndexFormat::UINT32_T, 0, meshref->mesh->indexBuffer->size());
 				passEncoder[index]->pushConstants(&objectMat.data[0][0],
 					(uint32_t)RHI::ShaderStages::VERTEX,
 					0, sizeof(Math::mat4));

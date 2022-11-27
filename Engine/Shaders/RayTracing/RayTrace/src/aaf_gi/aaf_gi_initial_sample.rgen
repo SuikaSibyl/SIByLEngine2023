@@ -113,4 +113,8 @@ void main()
   use_filter[gid] = pld.rayHitSky ? 0 : 1;
   world_position[gid] = pld.hitPoint;
   world_normal[gid] = normalize(pld.hitNormal);
+
+  // vec3 pixelColor = normalToColor(normalize(pld.hitNormal));
+  vec3 pixelColor = vec3(pld.hitNormal);
+  imageStore(storageImage, ivec2(pixel), vec4(pixelColor, 1.0));
 }

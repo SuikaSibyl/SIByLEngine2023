@@ -23,7 +23,8 @@ struct VertexLayout {
 layout(binding = 2, set = 0, scalar) buffer Vertices {
   VertexLayout vertices[];
 };
-layout(binding = 3, set = 0, scalar) buffer Indices { uint16_t indices[]; };
+
+layout(binding = 3, set = 0, scalar) buffer Indices { uint indices[]; };
 
 struct GeometryInfo {
   uint vertexOffset;

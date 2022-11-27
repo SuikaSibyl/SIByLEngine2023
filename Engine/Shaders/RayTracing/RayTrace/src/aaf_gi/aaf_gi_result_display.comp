@@ -67,5 +67,5 @@ void main()
         pixelColor = vec3(indirect[gid]);
 
 
-    imageStore(storageImage, ivec2(pixel), vec4(pixelColor, 1.0));
+    // imageStore(storageImage, ivec2(pixel), vec4(pixelColor, 1.0));
 }

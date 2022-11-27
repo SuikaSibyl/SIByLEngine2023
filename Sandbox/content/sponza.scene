@@ -1,0 +1,31 @@
+SceneName: new scene
+SceneNodes:
+  - uid: 0
+    parent: 18446744073709551615
+    children:
+      - 1
+    components:
+      TagComponent: Sponza.gltf
+      Transform:
+        translation: [0, 0, 0]
+        eulerAngles: [0, 0, 0]
+        scale: [0.00200000009, 0.00200000009, 0.00200000009]
+  - uid: 1
+    parent: 0
+    components:
+      TagComponent: ""
+      Transform:
+        translation: [0, 0, 0]
+        eulerAngles: [0, 0, 0]
+        scale: [1, 1, 1]
+      MeshReference:
+        ORID: 1634143580959390556
+  - uid: 2
+    parent: 18446744073709551615
+    components:
+      TagComponent: New GameObject
+      Transform:
+        translation: [-2.83298159, 1.26748693, -0.266673237]
+        eulerAngles: [0.043898616, -6.22338486, 0]
+        scale: [1, 1, 1]
+SceneEnd: TRUE

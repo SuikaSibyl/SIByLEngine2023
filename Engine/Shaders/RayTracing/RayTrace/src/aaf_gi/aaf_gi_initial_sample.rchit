@@ -105,5 +105,5 @@ void main() {
     // write to primary ray payload
     primaryPayLoad.rayHitSky = false;
     primaryPayLoad.hitPoint = hitInfo.worldPosition;
-    primaryPayLoad.hitNormal = hitInfo.worldNormal;
+    primaryPayLoad.hitNormal = vec3(hitInfo.uv, 0);
 }

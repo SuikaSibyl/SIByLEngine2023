@@ -272,11 +272,11 @@ namespace SIByL::GFX
 						IndexBufferEntry ibe{ indexOffset, triangleGeometry.indexBuffer };
 						indexBufferMaps[triangleGeometry.indexBuffer] = ibe;
 						indexBuffers.push_back(ibe);
-						indexOffset += triangleGeometry.indexBuffer->size() / sizeof(uint16_t);
+						indexOffset += triangleGeometry.indexBuffer->size() / sizeof(uint32_t);
 						findIndexBuffer = indexBufferMaps.find(triangleGeometry.indexBuffer);
 					}
 					IndexBufferEntry& indexEntry = findIndexBuffer->second;
-					geometryInfo.indexOffset = indexEntry.indexOffset + triangleGeometry.primitiveOffset * 3;
+					geometryInfo.indexOffset = indexEntry.indexOffset + triangleGeometry.primitiveOffset / sizeof(uint32_t);
 					geometryInfo.geometryTransform = Math::transpose(Math::mat4(triangleGeometry.transform));
 					asGroup.geometryInfo.push_back(geometryInfo);
 					++geometryEnd;
@@ -289,7 +289,7 @@ namespace SIByL::GFX
 		asGroup.tlas = rhiLayer->getDevice()->createTLAS(modified_desc);
 		// create Buffers
 		std::vector<float> vertexBuffer(vertexOffset * vertexStride);
-		std::vector<uint16_t> indexBuffer(indexOffset);
+		std::vector<uint32_t> indexBuffer(indexOffset);
 		vertexOffset = 0;
 		indexOffset = 0;
 		for (auto iter : vertexBuffers) {
@@ -302,7 +302,7 @@ namespace SIByL::GFX
 		for (auto iter : indexBuffers) {
 			rhiLayer->getDevice()->readbackDeviceLocalBuffer(
 				iter.indexBuffer,
-				(void*)&(indexBuffer[indexOffset / sizeof(uint16_t)]), 
+				(void*)&(indexBuffer[indexOffset / sizeof(uint32_t)]),
 				iter.indexBuffer->size());
 			indexOffset += iter.indexBuffer->size();
 		}
@@ -311,7 +311,7 @@ namespace SIByL::GFX
 			(uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
 			(uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
 		asGroup.indexBufferArray = GFX::GFXManager::get()->rhiLayer->getDevice()->createDeviceLocalBuffer(
-			(void*)indexBuffer.data(), indexBuffer.size() * sizeof(uint16_t), 
+			(void*)indexBuffer.data(), indexBuffer.size() * sizeof(uint32_t),
 			(uint32_t)RHI::BufferUsage::INDEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
 			(uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
 		asGroup.GeometryInfoBuffer = GFX::GFXManager::get()->rhiLayer->getDevice()->createDeviceLocalBuffer(
