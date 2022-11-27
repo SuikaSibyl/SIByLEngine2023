@@ -12,11 +12,12 @@ layout(push_constant) uniform PushConsts {
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inColor;
+layout(location = 2) in vec2 inUV;
 
 layout(location = 0) out vec3 fragColor;
 
 void main() {
     vec4 modelPos = model * vec4(inPosition, 1.0);
     gl_Position = ubo.proj * ubo.view * modelPos;
-    fragColor = vec3(0.5) + 0.25 * modelPos.xyz;
+    fragColor = modelPos.xyz;
 }

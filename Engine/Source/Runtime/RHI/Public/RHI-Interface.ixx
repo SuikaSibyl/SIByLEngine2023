@@ -1903,6 +1903,8 @@ namespace SIByL::RHI
 	export struct BLAS {
 		/** virtual destructor */
 		virtual ~BLAS() = default;
+		/** get descriptor */
+		virtual auto getDescriptor() noexcept -> BLASDescriptor = 0;
 	};
 
 	export enum struct BLASGeometryFlagBits :uint32_t {
@@ -1912,15 +1914,48 @@ namespace SIByL::RHI
 	};
 	export using BLASGeometryFlags = uint32_t;
 
+	/** Affline transform matrix */
+	export struct AffineTransformMatrix {
+		AffineTransformMatrix() = default;
+		AffineTransformMatrix(Math::mat4 const& mat) {
+			for (int i = 0; i < 3; ++i)
+				for (int j = 0; j < 4; ++j)
+					matrix[i][j] = mat.data[i][j];
+		}
+		operator Math::mat4() {
+			Math::mat4 mat;
+			for (int i = 0; i < 3; ++i)
+				for (int j = 0; j < 4; ++j)
+					mat.data[i][j] = matrix[i][j];
+			mat.data[3][0] = 0;
+			mat.data[3][1] = 0;
+			mat.data[3][2] = 0;
+			mat.data[3][3] = 1;
+			return mat;
+		}
+		float matrix[3][4] = {
+			{1,0,0,0},
+			{0,1,0,0},
+			{0,0,1,0} };
+	};
+
+	export struct BLASTriangleGeometry {
+		RHI::Buffer*			positionBuffer = nullptr;
+		RHI::Buffer*			indexBuffer = nullptr;
+		RHI::Buffer*			vertexBuffer = nullptr;
+		IndexFormat				indexFormat = IndexFormat::UINT16_t;
+		uint32_t				maxVertex = 0;
+		uint32_t				firstVertex = 0;
+		uint32_t				primitiveCount = 0;
+		uint32_t				primitiveOffset = 0;
+		AffineTransformMatrix	transform;
+		BLASGeometryFlags		geometryFlags = 0;
+	};
+
 	export struct BLASDescriptor {
-		Buffer*		vertexBuffer   = nullptr;
-		Buffer*		indexBuffer    = nullptr;
-		uint32_t	maxVertex	   = 0;
-		uint32_t	primitiveCount = 0;
-		IndexFormat	indexFormat    = IndexFormat::UINT16_t;
-		BLASGeometryFlags geometryFlags = 0;
-		bool		allowRefitting	= false;
-		bool		allowCompaction = false;
+		std::vector<BLASTriangleGeometry> triangleGeometries;
+		bool allowRefitting	= false;
+		bool allowCompaction = false;
 	};
 
 	export struct TLAS {
@@ -1931,7 +1966,7 @@ namespace SIByL::RHI
 	export struct BLASInstance {
 		BLAS*		blas		= nullptr;
 		Math::mat4	transform	= {};
-		uint32_t	instanceCustomIndex = 0;
+		uint32_t	instanceCustomIndex = 0; // is used by system now
 		uint32_t	instanceShaderBindingTableRecordOffset = 0;
 		uint32_t	mask = 0xFF;
 	};

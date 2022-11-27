@@ -4045,6 +4045,8 @@ namespace SIByL::RHI
 		BLAS_VK(Device_VK* device, BLAS_VK* descriptor);
 		/** virtual destructor */
 		virtual ~BLAS_VK();
+		/** get descriptor */
+		virtual auto getDescriptor() noexcept -> BLASDescriptor override { return descriptor; }
 		/** VULKAN BLAS object*/
 		VkAccelerationStructureKHR blas = {};
 		/** VULKAN BLAS buffer */
@@ -4064,41 +4066,65 @@ namespace SIByL::RHI
 		return flag;
 	}
 
-	BLAS_VK::BLAS_VK(Device_VK* device, BLASDescriptor const& descriptor) : device(device), descriptor(descriptor) {
-		// 1. Get the host or device addresses of the geometry’s buffers
+	inline auto getBufferVkDeviceAddress(Device_VK* device, Buffer* buffer) noexcept -> VkDeviceAddress {
 		VkBufferDeviceAddressInfo deviceAddressInfo = {};
 		deviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-		deviceAddressInfo.buffer = static_cast<Buffer_VK*>(descriptor.vertexBuffer)->getVkBuffer();
-		VkDeviceAddress vertexBufferAddress = vkGetBufferDeviceAddress(device->getVkDevice(), &deviceAddressInfo);
-		deviceAddressInfo.buffer = static_cast<Buffer_VK*>(descriptor.indexBuffer)->getVkBuffer();
-		VkDeviceAddress indexBufferAddress = vkGetBufferDeviceAddress(device->getVkDevice(), &deviceAddressInfo);
-		// 2. Describe the instance’s geometry
-		VkAccelerationStructureGeometryTrianglesDataKHR triangles = {};
-		triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
-		triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
-		triangles.vertexData.deviceAddress = vertexBufferAddress;
-		triangles.vertexStride = 3 * sizeof(float);
-		triangles.indexType = descriptor.indexFormat == IndexFormat::UINT16_t ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
-		triangles.indexData.deviceAddress = indexBufferAddress;
-		triangles.maxVertex = descriptor.maxVertex;
-		triangles.transformData.deviceAddress = 0; // No transform
-		VkAccelerationStructureGeometryKHR geometry = {};
-		geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
-		geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
-		geometry.geometry.triangles = triangles;
-		geometry.flags = getVkGeometryFlagsKHR(descriptor.geometryFlags);
-		// 3. Determine the worst-case memory requirements for the AS and 
-		//    for scratch storage required when building.
-		VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
-		rangeInfo.firstVertex = 0;
-		rangeInfo.primitiveCount = descriptor.primitiveCount;
-		rangeInfo.primitiveOffset = 0;
-		rangeInfo.transformOffset = 0;
+		deviceAddressInfo.buffer = static_cast<Buffer_VK*>(buffer)->getVkBuffer();
+		return vkGetBufferDeviceAddress(device->getVkDevice(), &deviceAddressInfo);
+	}
+
+	BLAS_VK::BLAS_VK(Device_VK* device, BLASDescriptor const& descriptor) : device(device), descriptor(descriptor) {
+		// 1. Declare BLAS geometry infos
+		std::vector<VkAccelerationStructureGeometryKHR> geometries;
+		std::vector<VkAccelerationStructureBuildRangeInfoKHR> rangeInfos;
+		std::vector<uint32_t> primitiveCountArray;
+		// transform buffer
+		std::vector<RHI::AffineTransformMatrix> affine_transforms;
+		for (BLASTriangleGeometry const& triangleDesc : descriptor.triangleGeometries)
+			affine_transforms.push_back(RHI::AffineTransformMatrix(triangleDesc.transform));
+		std::unique_ptr<RHI::Buffer> transformBuffer = device->createDeviceLocalBuffer(affine_transforms.data(), 
+			affine_transforms.size() * sizeof(RHI::AffineTransformMatrix),
+			(uint32_t)RHI::BufferUsage::STORAGE
+			| (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS
+			| (uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY);
+
+		uint32_t transformOffset = 0;
+		for (BLASTriangleGeometry const& triangleDesc : descriptor.triangleGeometries) {
+			// 1.1. Get the host / device addresses of the geometry’s buffers
+			VkDeviceAddress vertexBufferAddress = getBufferVkDeviceAddress(device, triangleDesc.positionBuffer);
+			VkDeviceAddress indexBufferAddress = getBufferVkDeviceAddress(device, triangleDesc.indexBuffer);
+			// 1.2. Describe the instance’s geometry
+			VkAccelerationStructureGeometryTrianglesDataKHR triangles = {};
+			triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+			triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+			triangles.vertexData.deviceAddress = vertexBufferAddress;
+			triangles.vertexStride = 3 * sizeof(float);
+			triangles.indexType = triangleDesc.indexFormat == IndexFormat::UINT16_t ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
+			triangles.indexData.deviceAddress = indexBufferAddress;
+			triangles.maxVertex = triangleDesc.maxVertex;
+			triangles.transformData.deviceAddress = getBufferVkDeviceAddress(device, transformBuffer.get());
+			VkAccelerationStructureGeometryKHR geometry = {};
+			geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+			geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+			geometry.geometry.triangles = triangles;
+			geometry.flags = getVkGeometryFlagsKHR(triangleDesc.geometryFlags);
+			geometries.push_back(geometry);
+			VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
+			rangeInfo.firstVertex = triangleDesc.firstVertex;
+			rangeInfo.primitiveCount = triangleDesc.primitiveCount;
+			rangeInfo.primitiveOffset = triangleDesc.primitiveOffset;
+			rangeInfo.transformOffset = transformOffset;
+			rangeInfos.push_back(rangeInfo);
+			primitiveCountArray.push_back(triangleDesc.primitiveCount);
+			transformOffset += sizeof(RHI::AffineTransformMatrix);
+		}
+		// 2. Partially specifying VkAccelerationStructureBuildGeometryInfoKHR and querying
+		//	  worst-case memory usage for scratch storage required when building.
 		VkAccelerationStructureBuildGeometryInfoKHR buildInfo = {};
 		buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
 		buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
-		buildInfo.geometryCount = 1;
-		buildInfo.pGeometries = &geometry;
+		buildInfo.geometryCount = geometries.size();
+		buildInfo.pGeometries = geometries.data();
 		buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
 		buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
 		buildInfo.srcAccelerationStructure = VK_NULL_HANDLE;
@@ -4110,10 +4136,10 @@ namespace SIByL::RHI
 		device->getAdapterVk()->getContext()->vkGetAccelerationStructureBuildSizesKHR(
 			device->getVkDevice(),
 			VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
-			&buildInfo,
-			&rangeInfo.primitiveCount, 
-			&sizeInfo);
-		// 4. Create an empty acceleration structure and its underlying VkBuffer.
+			&buildInfo,					// Pointer to build info
+			primitiveCountArray.data(),	// Array of number of primitives per geometry
+			&sizeInfo);					// Output pointer to store sizes
+		// 3. Create an empty acceleration structure and its underlying VkBuffer.
 		bufferBLAS = device->createBuffer(BufferDescriptor{
 			sizeInfo.accelerationStructureSize,
 			(uint32_t)BufferUsage::ACCELERATION_STRUCTURE_STORAGE | (uint32_t)BufferUsage::SHADER_DEVICE_ADDRESS | (uint32_t)BufferUsage::STORAGE,
@@ -4134,19 +4160,18 @@ namespace SIByL::RHI
 			(uint32_t)BufferUsage::SHADER_DEVICE_ADDRESS | (uint32_t)BufferUsage::STORAGE,
 			BufferShareMode::EXCLUSIVE,
 			(uint32_t)MemoryProperty::DEVICE_LOCAL_BIT });
-		deviceAddressInfo.buffer = static_cast<Buffer_VK*>(scratchBuffer.get())->getVkBuffer();
-		buildInfo.scratchData.deviceAddress = vkGetBufferDeviceAddress(device->getVkDevice(), &deviceAddressInfo);
+		buildInfo.scratchData.deviceAddress = getBufferVkDeviceAddress(device, scratchBuffer.get());
 		// 6. Call vkCmdBuildAccelerationStructuresKHR() with a populated
 		//	  VkAccelerationStructureBuildSizesInfoKHR structand range info to
 		//    build the geometry into an acceleration structure.
-		VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
+		VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = rangeInfos.data();
 		std::unique_ptr<CommandEncoder> commandEncoder = device->createCommandEncoder({ nullptr });
 		CommandEncoder_VK* commandEncoderVK = static_cast<CommandEncoder_VK*>(commandEncoder.get());
 		device->getAdapterVk()->getContext()->vkCmdBuildAccelerationStructuresKHR(
 			commandEncoderVK->commandBuffer->commandBuffer, // The command buffer to record the command
-			1, // Number of acceleration structures to build
-			&buildInfo, // Array of ...BuildGeometryInfoKHR objects
-			&pRangeInfo); // Array of ...RangeInfoKHR objects
+			1,				// Number of acceleration structures to build
+			&buildInfo,		// Array of ...BuildGeometryInfoKHR objects
+			&pRangeInfo);	// Array of ...RangeInfoKHR objects
 		device->getGraphicsQueue()->submit({ commandEncoder->finish({}) });
 		device->getGraphicsQueue()->waitIdle();
 	}
@@ -4154,70 +4179,70 @@ namespace SIByL::RHI
 	BLAS_VK::BLAS_VK(Device_VK* device, BLAS_VK* src)
 		:device(device), descriptor(src->descriptor)
 	{
-		// 1. Get the host or device addresses of the geometry’s buffers
-		VkBufferDeviceAddressInfo deviceAddressInfo = {};
-		deviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-		deviceAddressInfo.buffer = static_cast<Buffer_VK*>(descriptor.vertexBuffer)->getVkBuffer();
-		VkDeviceAddress vertexBufferAddress = vkGetBufferDeviceAddress(device->getVkDevice(), &deviceAddressInfo);
-		deviceAddressInfo.buffer = static_cast<Buffer_VK*>(descriptor.indexBuffer)->getVkBuffer();
-		VkDeviceAddress indexBufferAddress = vkGetBufferDeviceAddress(device->getVkDevice(), &deviceAddressInfo);
-		// 2. Describe the instance’s geometry
-		VkAccelerationStructureGeometryTrianglesDataKHR triangles = {};
-		triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
-		triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
-		triangles.vertexData.deviceAddress = vertexBufferAddress;
-		triangles.vertexStride = 3 * sizeof(float);
-		triangles.indexType = descriptor.indexFormat == IndexFormat::UINT16_t ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
-		triangles.indexData.deviceAddress = indexBufferAddress;
-		triangles.maxVertex = descriptor.maxVertex;
-		triangles.transformData.deviceAddress = 0; // No transform
-		VkAccelerationStructureGeometryKHR geometry = {};
-		geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
-		geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
-		geometry.geometry.triangles = triangles;
-		geometry.flags = getVkGeometryFlagsKHR(descriptor.geometryFlags);
-		// 3. Determine the worst-case memory requirements for the AS and 
-		//    for scratch storage required when building.
-		VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
-		rangeInfo.firstVertex = 0;
-		rangeInfo.primitiveCount = descriptor.primitiveCount;
-		rangeInfo.primitiveOffset = 0;
-		rangeInfo.transformOffset = 0;
-		VkAccelerationStructureBuildGeometryInfoKHR buildInfo = {};
-		buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
-		buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
-		buildInfo.geometryCount = 1;
-		buildInfo.pGeometries = &geometry;
-		buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-		buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-		buildInfo.srcAccelerationStructure = VK_NULL_HANDLE;
-		buildInfo.flags = 0;
-		if (descriptor.allowRefitting) buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
-		if (descriptor.allowCompaction) buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR;
-		// We will set dstAccelerationStructure and scratchData once
-		// we have created those objects.
-		VkAccelerationStructureBuildSizesInfoKHR sizeInfo = {};
-		sizeInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
-		device->getAdapterVk()->getContext()->vkGetAccelerationStructureBuildSizesKHR(
-			device->getVkDevice(),
-			VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
-			&buildInfo,
-			&rangeInfo.primitiveCount,
-			&sizeInfo);
-		// create blas
-		bufferBLAS = device->createBuffer(BufferDescriptor{
-			sizeInfo.accelerationStructureSize,
-			(uint32_t)BufferUsage::ACCELERATION_STRUCTURE_STORAGE | (uint32_t)BufferUsage::SHADER_DEVICE_ADDRESS | (uint32_t)BufferUsage::STORAGE,
-			BufferShareMode::EXCLUSIVE,
-			(uint32_t)MemoryProperty::DEVICE_LOCAL_BIT });
-		VkAccelerationStructureCreateInfoKHR createInfo = {};
-		createInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
-		createInfo.type = buildInfo.type;
-		createInfo.size = sizeInfo.accelerationStructureSize;
-		createInfo.buffer = static_cast<Buffer_VK*>(bufferBLAS.get())->getVkBuffer();
-		createInfo.offset = 0;
-		device->getAdapterVk()->getContext()->vkCreateAccelerationStructureKHR(device->getVkDevice(), &createInfo, nullptr, &blas);
-		buildInfo.dstAccelerationStructure = blas;
+		//// 1. Get the host or device addresses of the geometry’s buffers
+		//VkBufferDeviceAddressInfo deviceAddressInfo = {};
+		//deviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+		//deviceAddressInfo.buffer = static_cast<Buffer_VK*>(descriptor.vertexBuffer)->getVkBuffer();
+		//VkDeviceAddress vertexBufferAddress = vkGetBufferDeviceAddress(device->getVkDevice(), &deviceAddressInfo);
+		//deviceAddressInfo.buffer = static_cast<Buffer_VK*>(descriptor.indexBuffer)->getVkBuffer();
+		//VkDeviceAddress indexBufferAddress = vkGetBufferDeviceAddress(device->getVkDevice(), &deviceAddressInfo);
+		//// 2. Describe the instance’s geometry
+		//VkAccelerationStructureGeometryTrianglesDataKHR triangles = {};
+		//triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+		//triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+		//triangles.vertexData.deviceAddress = vertexBufferAddress;
+		//triangles.vertexStride = 3 * sizeof(float);
+		//triangles.indexType = descriptor.indexFormat == IndexFormat::UINT16_t ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
+		//triangles.indexData.deviceAddress = indexBufferAddress;
+		//triangles.maxVertex = descriptor.maxVertex;
+		//triangles.transformData.deviceAddress = 0; // No transform
+		//VkAccelerationStructureGeometryKHR geometry = {};
+		//geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+		//geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+		//geometry.geometry.triangles = triangles;
+		//geometry.flags = getVkGeometryFlagsKHR(descriptor.geometryFlags);
+		//// 3. Determine the worst-case memory requirements for the AS and 
+		////    for scratch storage required when building.
+		//VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
+		//rangeInfo.firstVertex = 0;
+		//rangeInfo.primitiveCount = descriptor.primitiveCount;
+		//rangeInfo.primitiveOffset = 0;
+		//rangeInfo.transformOffset = 0;
+		//VkAccelerationStructureBuildGeometryInfoKHR buildInfo = {};
+		//buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+		//buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+		//buildInfo.geometryCount = 1;
+		//buildInfo.pGeometries = &geometry;
+		//buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+		//buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+		//buildInfo.srcAccelerationStructure = VK_NULL_HANDLE;
+		//buildInfo.flags = 0;
+		//if (descriptor.allowRefitting) buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
+		//if (descriptor.allowCompaction) buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR;
+		//// We will set dstAccelerationStructure and scratchData once
+		//// we have created those objects.
+		//VkAccelerationStructureBuildSizesInfoKHR sizeInfo = {};
+		//sizeInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
+		//device->getAdapterVk()->getContext()->vkGetAccelerationStructureBuildSizesKHR(
+		//	device->getVkDevice(),
+		//	VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+		//	&buildInfo,
+		//	&rangeInfo.primitiveCount,
+		//	&sizeInfo);
+		//// create blas
+		//bufferBLAS = device->createBuffer(BufferDescriptor{
+		//	sizeInfo.accelerationStructureSize,
+		//	(uint32_t)BufferUsage::ACCELERATION_STRUCTURE_STORAGE | (uint32_t)BufferUsage::SHADER_DEVICE_ADDRESS | (uint32_t)BufferUsage::STORAGE,
+		//	BufferShareMode::EXCLUSIVE,
+		//	(uint32_t)MemoryProperty::DEVICE_LOCAL_BIT });
+		//VkAccelerationStructureCreateInfoKHR createInfo = {};
+		//createInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+		//createInfo.type = buildInfo.type;
+		//createInfo.size = sizeInfo.accelerationStructureSize;
+		//createInfo.buffer = static_cast<Buffer_VK*>(bufferBLAS.get())->getVkBuffer();
+		//createInfo.offset = 0;
+		//device->getAdapterVk()->getContext()->vkCreateAccelerationStructureKHR(device->getVkDevice(), &createInfo, nullptr, &blas);
+		//buildInfo.dstAccelerationStructure = blas;
 	}
 
 	BLAS_VK::~BLAS_VK() {
@@ -4241,75 +4266,75 @@ namespace SIByL::RHI
 	}
 	
 	auto CommandEncoder_VK::updateBLAS(BLAS* src, Buffer* vertexBuffer, Buffer* indexBuffer) noexcept -> void {
-		BLAS_VK* blas = static_cast<BLAS_VK*>(src);
-		blas->descriptor.vertexBuffer = vertexBuffer;
-		blas->descriptor.indexBuffer = indexBuffer;
-		// 1. Get the host or device addresses of the geometry’s buffers
-		VkBufferDeviceAddressInfo deviceAddressInfo = {};
-		deviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-		deviceAddressInfo.buffer = static_cast<Buffer_VK*>(blas->descriptor.vertexBuffer)->getVkBuffer();
-		VkDeviceAddress vertexBufferAddress = vkGetBufferDeviceAddress(blas->device->getVkDevice(), &deviceAddressInfo);
-		deviceAddressInfo.buffer = static_cast<Buffer_VK*>(blas->descriptor.indexBuffer)->getVkBuffer();
-		VkDeviceAddress indexBufferAddress = vkGetBufferDeviceAddress(blas->device->getVkDevice(), &deviceAddressInfo);
-		// 2. Describe the instance’s geometry
-		VkAccelerationStructureGeometryTrianglesDataKHR triangles = {};
-		triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
-		triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
-		triangles.vertexData.deviceAddress = vertexBufferAddress;
-		triangles.vertexStride = 3 * sizeof(float);
-		triangles.indexType = blas->descriptor.indexFormat == IndexFormat::UINT16_t ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
-		triangles.indexData.deviceAddress = indexBufferAddress;
-		triangles.maxVertex = blas->descriptor.maxVertex;
-		triangles.transformData.deviceAddress = 0; // No transform
-		VkAccelerationStructureGeometryKHR geometry = {};
-		geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
-		geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
-		geometry.geometry.triangles = triangles;
-		geometry.flags = getVkGeometryFlagsKHR(blas->descriptor.geometryFlags);
-		// 3. Determine the worst-case memory requirements for the AS and 
-		//    for scratch storage required when building.
-		VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
-		rangeInfo.firstVertex = 0;
-		rangeInfo.primitiveCount = blas->descriptor.primitiveCount;
-		rangeInfo.primitiveOffset = 0;
-		rangeInfo.transformOffset = 0;
-		VkAccelerationStructureBuildGeometryInfoKHR buildInfo = {};
-		buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
-		buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
-		buildInfo.geometryCount = 1;
-		buildInfo.pGeometries = &geometry;
-		buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
-		buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-		buildInfo.srcAccelerationStructure = blas->blas;
-		buildInfo.flags = blas->descriptor.allowRefitting ? VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR : 0;
-		// We will set dstAccelerationStructure and scratchData once
-		// we have created those objects.
-		VkAccelerationStructureBuildSizesInfoKHR sizeInfo = {};
-		sizeInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
-		blas->device->getAdapterVk()->getContext()->vkGetAccelerationStructureBuildSizesKHR(
-			blas->device->getVkDevice(),
-			VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
-			&buildInfo,
-			&rangeInfo.primitiveCount,
-			&sizeInfo);
-		buildInfo.dstAccelerationStructure = blas->blas;
-		// 5. Allocate scratch space.
-		std::unique_ptr<Buffer> scratchBuffer = blas->device->createBuffer(BufferDescriptor{
-			sizeInfo.buildScratchSize,
-			(uint32_t)BufferUsage::SHADER_DEVICE_ADDRESS | (uint32_t)BufferUsage::STORAGE,
-			BufferShareMode::EXCLUSIVE,
-			(uint32_t)MemoryProperty::DEVICE_LOCAL_BIT });
-		deviceAddressInfo.buffer = static_cast<Buffer_VK*>(scratchBuffer.get())->getVkBuffer();
-		buildInfo.scratchData.deviceAddress = vkGetBufferDeviceAddress(blas->device->getVkDevice(), &deviceAddressInfo);
-		// 6. Call vkCmdBuildAccelerationStructuresKHR() with a populated
-		//	  VkAccelerationStructureBuildSizesInfoKHR structand range info to
-		//    build the geometry into an acceleration structure.
-		VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
-		blas->device->getAdapterVk()->getContext()->vkCmdBuildAccelerationStructuresKHR(
-			commandBuffer->commandBuffer, // The command buffer to record the command
-			1, // Number of acceleration structures to build
-			&buildInfo, // Array of ...BuildGeometryInfoKHR objects
-			&pRangeInfo); // Array of ...RangeInfoKHR objects
+		//BLAS_VK* blas = static_cast<BLAS_VK*>(src);
+		//blas->descriptor.vertexBuffer = vertexBuffer;
+		//blas->descriptor.indexBuffer = indexBuffer;
+		//// 1. Get the host or device addresses of the geometry’s buffers
+		//VkBufferDeviceAddressInfo deviceAddressInfo = {};
+		//deviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+		//deviceAddressInfo.buffer = static_cast<Buffer_VK*>(blas->descriptor.vertexBuffer)->getVkBuffer();
+		//VkDeviceAddress vertexBufferAddress = vkGetBufferDeviceAddress(blas->device->getVkDevice(), &deviceAddressInfo);
+		//deviceAddressInfo.buffer = static_cast<Buffer_VK*>(blas->descriptor.indexBuffer)->getVkBuffer();
+		//VkDeviceAddress indexBufferAddress = vkGetBufferDeviceAddress(blas->device->getVkDevice(), &deviceAddressInfo);
+		//// 2. Describe the instance’s geometry
+		//VkAccelerationStructureGeometryTrianglesDataKHR triangles = {};
+		//triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+		//triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+		//triangles.vertexData.deviceAddress = vertexBufferAddress;
+		//triangles.vertexStride = 3 * sizeof(float);
+		//triangles.indexType = blas->descriptor.indexFormat == IndexFormat::UINT16_t ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
+		//triangles.indexData.deviceAddress = indexBufferAddress;
+		//triangles.maxVertex = blas->descriptor.maxVertex;
+		//triangles.transformData.deviceAddress = 0; // No transform
+		//VkAccelerationStructureGeometryKHR geometry = {};
+		//geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+		//geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+		//geometry.geometry.triangles = triangles;
+		//geometry.flags = getVkGeometryFlagsKHR(blas->descriptor.geometryFlags);
+		//// 3. Determine the worst-case memory requirements for the AS and 
+		////    for scratch storage required when building.
+		//VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
+		//rangeInfo.firstVertex = 0;
+		//rangeInfo.primitiveCount = blas->descriptor.primitiveCount;
+		//rangeInfo.primitiveOffset = 0;
+		//rangeInfo.transformOffset = 0;
+		//VkAccelerationStructureBuildGeometryInfoKHR buildInfo = {};
+		//buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+		//buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+		//buildInfo.geometryCount = 1;
+		//buildInfo.pGeometries = &geometry;
+		//buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
+		//buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+		//buildInfo.srcAccelerationStructure = blas->blas;
+		//buildInfo.flags = blas->descriptor.allowRefitting ? VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR : 0;
+		//// We will set dstAccelerationStructure and scratchData once
+		//// we have created those objects.
+		//VkAccelerationStructureBuildSizesInfoKHR sizeInfo = {};
+		//sizeInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
+		//blas->device->getAdapterVk()->getContext()->vkGetAccelerationStructureBuildSizesKHR(
+		//	blas->device->getVkDevice(),
+		//	VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+		//	&buildInfo,
+		//	&rangeInfo.primitiveCount,
+		//	&sizeInfo);
+		//buildInfo.dstAccelerationStructure = blas->blas;
+		//// 5. Allocate scratch space.
+		//std::unique_ptr<Buffer> scratchBuffer = blas->device->createBuffer(BufferDescriptor{
+		//	sizeInfo.buildScratchSize,
+		//	(uint32_t)BufferUsage::SHADER_DEVICE_ADDRESS | (uint32_t)BufferUsage::STORAGE,
+		//	BufferShareMode::EXCLUSIVE,
+		//	(uint32_t)MemoryProperty::DEVICE_LOCAL_BIT });
+		//deviceAddressInfo.buffer = static_cast<Buffer_VK*>(scratchBuffer.get())->getVkBuffer();
+		//buildInfo.scratchData.deviceAddress = vkGetBufferDeviceAddress(blas->device->getVkDevice(), &deviceAddressInfo);
+		//// 6. Call vkCmdBuildAccelerationStructuresKHR() with a populated
+		////	  VkAccelerationStructureBuildSizesInfoKHR structand range info to
+		////    build the geometry into an acceleration structure.
+		//VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
+		//blas->device->getAdapterVk()->getContext()->vkCmdBuildAccelerationStructuresKHR(
+		//	commandBuffer->commandBuffer, // The command buffer to record the command
+		//	1, // Number of acceleration structures to build
+		//	&buildInfo, // Array of ...BuildGeometryInfoKHR objects
+		//	&pRangeInfo); // Array of ...RangeInfoKHR objects
 	}
 
 #pragma endregion

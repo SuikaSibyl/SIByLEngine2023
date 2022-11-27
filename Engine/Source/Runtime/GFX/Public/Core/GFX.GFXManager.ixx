@@ -53,7 +53,7 @@ namespace SIByL::GFX
 		auto registerSamplerResource(Core::GUID guid, RHI::SamplerDescriptor const& desc) noexcept -> void;
 		auto registerShaderModuleResource(Core::GUID guid, RHI::ShaderModuleDescriptor const& desc) noexcept -> void;
 		auto registerShaderModuleResource(Core::GUID guid, std::filesystem::path const& path, RHI::ShaderModuleDescriptor const& desc) noexcept -> void;
-		auto registerAsGroupResource(Core::GUID guid, RHI::TLASDescriptor const& desc, std::vector<Core::GUID> const& meshes) noexcept -> void;
+		auto registerAsGroupResource(Core::GUID guid, RHI::TLASDescriptor const& desc, uint32_t vertexStride) noexcept -> void;
 		/** RHI layer */
 		RHI::RHILayer* rhiLayer = nullptr;
 		/** common samplers */
@@ -222,38 +222,89 @@ namespace SIByL::GFX
 		Core::ResourceManager::get()->addResource(guid, std::move(shaderModuleResource));
 	}
 
-	auto GFXManager::registerAsGroupResource(Core::GUID guid, RHI::TLASDescriptor const& desc, std::vector<Core::GUID> const& meshes) noexcept -> void {
+	auto GFXManager::registerAsGroupResource(Core::GUID guid, RHI::TLASDescriptor const& desc, uint32_t vertexStride) noexcept -> void {
 		GFX::ASGroup asGroup = {};
-		asGroup.tlas = rhiLayer->getDevice()->createTLAS(desc);
-		std::unordered_map<Core::GUID, uint32_t> map;
+		RHI::TLASDescriptor modified_desc = desc;
+		std::unordered_map<RHI::BLAS*, std::pair<uint32_t, uint32_t>> map;
 		uint32_t vertexOffset = 0;
 		uint32_t indexOffset = 0;
-		std::vector<Core::GUID> meshesToBind = {};
-		uint32_t vertexCount = 0;
-		uint32_t indexCount = 0;
-		for (auto& meshid : meshes) {
-			if (map.find(meshid) != map.end()) {
-				asGroup.geometryInfo.emplace_back(asGroup.geometryInfo[map[meshid]]);
+		struct VertexBufferEntry {
+			uint32_t	 vertexOffset = 0;
+			RHI::Buffer* vertexBuffer = nullptr;
+		};
+		struct IndexBufferEntry {
+			uint32_t	 indexOffset = 0;
+			RHI::Buffer* indexBuffer = nullptr;
+		};
+		std::unordered_map<RHI::Buffer*, VertexBufferEntry> vertexBufferMaps;
+		std::unordered_map<RHI::Buffer*, IndexBufferEntry> indexBufferMaps;
+		std::vector<VertexBufferEntry> vertexBuffers;
+		std::vector<IndexBufferEntry> indexBuffers;
+
+		for (int i = 0; i < desc.instances.size(); ++i) {
+			// if BLAS has pushed
+			if (map.find(desc.instances[i].blas) != map.end()) {
+				std::pair<uint32_t, uint32_t> geometryRange = map[desc.instances[i].blas];
+				modified_desc.instances[i].instanceCustomIndex = geometryRange.first;
 			}
-			GFX::Mesh* mesh = Core::ResourceManager::get()->getResource<GFX::Mesh>(meshid);
-			meshesToBind.emplace_back(meshid);
-			asGroup.geometryInfo.emplace_back(ASGroup::GeometryInfo{
-				uint32_t(vertexOffset / sizeof(float)),
-				uint32_t(indexOffset / sizeof(uint16_t)) });
-			map[meshid] = asGroup.geometryInfo.size() - 1;
-			vertexOffset += mesh->vertexBufferPosOnly->size();
-			indexOffset += mesh->indexBuffer->size();
+			/// else if BLAS has not pushed
+			else {
+				RHI::BLAS* blas = desc.instances[i].blas;
+				RHI::BLASDescriptor blasDesc = blas->getDescriptor();
+				uint32_t geometryBegin = asGroup.geometryInfo.size();
+				uint32_t geometryEnd = geometryBegin;
+				for (auto& triangleGeometry : blasDesc.triangleGeometries) {
+					ASGroup::GeometryInfo geometryInfo;
+					// vertex buffer
+					auto findVertexBuffer = vertexBufferMaps.find(triangleGeometry.vertexBuffer);
+					if (findVertexBuffer == vertexBufferMaps.end()) {
+						VertexBufferEntry vbt{ vertexOffset, triangleGeometry.vertexBuffer };
+						vertexBufferMaps[triangleGeometry.vertexBuffer] = vbt;
+						vertexBuffers.push_back(vbt);
+						vertexOffset += triangleGeometry.vertexBuffer->size() / (sizeof(float) * vertexStride);
+						findVertexBuffer = vertexBufferMaps.find(triangleGeometry.vertexBuffer);
+					}
+					VertexBufferEntry& vertexEntry = findVertexBuffer->second;
+					geometryInfo.vertexOffset = vertexEntry.vertexOffset + triangleGeometry.firstVertex;
+					// index buffer
+					auto findIndexBuffer = indexBufferMaps.find(triangleGeometry.indexBuffer);
+					if (findIndexBuffer == indexBufferMaps.end()) {
+						IndexBufferEntry ibe{ indexOffset, triangleGeometry.indexBuffer };
+						indexBufferMaps[triangleGeometry.indexBuffer] = ibe;
+						indexBuffers.push_back(ibe);
+						indexOffset += triangleGeometry.indexBuffer->size() / sizeof(uint16_t);
+						findIndexBuffer = indexBufferMaps.find(triangleGeometry.indexBuffer);
+					}
+					IndexBufferEntry& indexEntry = findIndexBuffer->second;
+					geometryInfo.indexOffset = indexEntry.indexOffset + triangleGeometry.primitiveOffset * 3;
+					geometryInfo.geometryTransform = Math::transpose(Math::mat4(triangleGeometry.transform));
+					asGroup.geometryInfo.push_back(geometryInfo);
+					++geometryEnd;
+				}
+				modified_desc.instances[i].instanceCustomIndex = geometryBegin;
+				map[desc.instances[i].blas] = std::pair<uint32_t, uint32_t>{ geometryBegin, geometryEnd };
+			}
 		}
-		std::vector<float> vertexBuffer(vertexOffset / sizeof(float));
-		std::vector<uint16_t> indexBuffer(indexOffset / sizeof(uint16_t));
+		// create TLAS
+		asGroup.tlas = rhiLayer->getDevice()->createTLAS(modified_desc);
+		// create Buffers
+		std::vector<float> vertexBuffer(vertexOffset * vertexStride);
+		std::vector<uint16_t> indexBuffer(indexOffset);
 		vertexOffset = 0;
 		indexOffset = 0;
-		for (auto& meshid : meshesToBind) {
-			GFX::Mesh* mesh = Core::ResourceManager::get()->getResource<GFX::Mesh>(meshid);
-			rhiLayer->getDevice()->readbackDeviceLocalBuffer(mesh->vertexBufferPosOnly.get(), (void*)&(vertexBuffer[vertexOffset / sizeof(float)]), mesh->vertexBufferPosOnly->size());
-			rhiLayer->getDevice()->readbackDeviceLocalBuffer(mesh->indexBuffer.get(), (void*)&(indexBuffer[indexOffset / sizeof(uint16_t)]), mesh->indexBuffer->size());
-			vertexOffset += mesh->vertexBufferPosOnly->size();
-			indexOffset += mesh->indexBuffer->size();
+		for (auto iter : vertexBuffers) {
+			rhiLayer->getDevice()->readbackDeviceLocalBuffer(
+				iter.vertexBuffer,
+				(void*)&(vertexBuffer[vertexOffset / sizeof(float)]),
+				iter.vertexBuffer->size());
+			vertexOffset += iter.vertexBuffer->size();
+		}
+		for (auto iter : indexBuffers) {
+			rhiLayer->getDevice()->readbackDeviceLocalBuffer(
+				iter.indexBuffer,
+				(void*)&(indexBuffer[indexOffset / sizeof(uint16_t)]), 
+				iter.indexBuffer->size());
+			indexOffset += iter.indexBuffer->size();
 		}
 		asGroup.vertexBufferArray = GFX::GFXManager::get()->rhiLayer->getDevice()->createDeviceLocalBuffer(
 			(void*)vertexBuffer.data(), vertexBuffer.size() * sizeof(float),

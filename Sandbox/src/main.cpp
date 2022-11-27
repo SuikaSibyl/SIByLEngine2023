@@ -116,131 +116,103 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		RHI::Device* device = rhiLayer->getDevice();
 		RHI::SwapChain* swapchain = rhiLayer->getSwapChain();
 
-		GFX::SceneNodeLoader_glTF::loadSceneNode("D:/Downloads/glTF-Sample-Models-master/glTF-Sample-Models-master/2.0/Sponza/glTF/Sponza.gltf", scene);
+		//GFX::SceneNodeLoader_glTF::loadSceneNode("D:/Downloads/glTF-Sample-Models-master/glTF-Sample-Models-master/2.0/Sponza/glTF/Sponza.gltf", scene);
+		//GFX::SceneNodeLoader_glTF::loadSceneNode("P:/GitProjects/SIByLEngine2022/Sandbox/content/scenes/cornellBox.gltf", scene);
+		//scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/cornellBox.scene");
+		scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/cornellBoxSphere.scene");
+
 		camera_go = scene.createGameObject();
 		cameraController.init(mainWindow.get()->getInput(), &timer);
 		cameraController.bindTransform(scene.getGameObject(camera_go)->getEntity().getComponent<GFX::TransformComponent>());
 
+		int i = 0;
+		GFX::MeshReference* meshref = nullptr;
+		for (auto handle : scene.gameObjects) {
+			auto* go = scene.getGameObject(handle.first);
+			Math::mat4 objectMat;
+			meshref = go->getEntity().getComponent<GFX::MeshReference>();
+			if (meshref) {
+				GFX::TransformComponent* transform = go->getEntity().getComponent<GFX::TransformComponent>();
+				objectMat = transform->getTransform() * objectMat;
+				while (go->parent != Core::NULL_ENTITY) {
+					go = scene.getGameObject(go->parent);
+					GFX::TransformComponent* transform = go->getEntity().getComponent<GFX::TransformComponent>();
+					objectMat = transform->getTransform() * objectMat;
+				}
+				RHI::BLASDescriptor blasDesc;
+				for (auto& submehs : meshref->mesh->submeshes) {
+					blasDesc.triangleGeometries.push_back(RHI::BLASTriangleGeometry{
+						meshref->mesh->vertexBufferPosOnly.get(),
+						meshref->mesh->indexBuffer.get(),
+						meshref->mesh->vertexBuffer.get(),
+						RHI::IndexFormat::UINT16_t,
+						submehs.size,
+						submehs.baseVertex,
+						submehs.size / 3,
+						submehs.offset / 3,
+						RHI::AffineTransformMatrix(objectMat),
+						(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION
+						}
+					);
+				}
+				blases.emplace_back(device->createBLAS(blasDesc));
+			}
+		}
 
-		cornellBox = GFX::MeshLoader_OBJ::loadMeshResource(
-			"./content/CornellBox-Original-Merged.obj",
-			GFX::MeshDataLayout{ 
-				{{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::POSITION},
-				{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::COLOR}},
-				RHI::IndexFormat::UINT16_t },
-				true);
-		grid1 = GFX::MeshLoader_OBJ::loadMeshResource(
-			"./content/grids2/grid1.obj",
-			GFX::MeshDataLayout{ 
-				{{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::POSITION},
-				{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::COLOR}},
-				RHI::IndexFormat::UINT16_t },
-				true);
-		floor = GFX::MeshLoader_OBJ::loadMeshResource(
-			"./content/grids2/floor.obj",
-			GFX::MeshDataLayout{ 
-				{{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::POSITION},
-				{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::COLOR}},
-				RHI::IndexFormat::UINT16_t },
-				true);
-		grid2 = GFX::MeshLoader_OBJ::loadMeshResource(
-			"./content/grids2/grid2.obj",
-			GFX::MeshDataLayout{ 
-				{{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::POSITION},
-				{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::COLOR}},
-				RHI::IndexFormat::UINT16_t },
-				true);
-		grid3 = GFX::MeshLoader_OBJ::loadMeshResource(
-			"./content/grids2/grid3.obj",
-			GFX::MeshDataLayout{ 
-				{{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::POSITION},
-				{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::COLOR}},
-				RHI::IndexFormat::UINT16_t },
-				true);
-		GFX::Mesh* conrnell_resource = ResourceManager::get()->getResource<GFX::Mesh>(cornellBox);
-		GFX::Mesh* floor_mesh = ResourceManager::get()->getResource<GFX::Mesh>(floor);
-		GFX::Mesh* grid1_mesh = ResourceManager::get()->getResource<GFX::Mesh>(grid1);
-		GFX::Mesh* grid2_mesh = ResourceManager::get()->getResource<GFX::Mesh>(grid2);
-		GFX::Mesh* grid3_mesh = ResourceManager::get()->getResource<GFX::Mesh>(grid3);
-		indexCount = conrnell_resource->indexBuffer->size() / sizeof(uint16_t);
+		//cornellBox = GFX::MeshLoader_OBJ::loadMeshResource(
+		//	"./content/CornellBox-Original-Merged.obj",
+		//	GFX::MeshDataLayout{ 
+		//		{{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::POSITION},
+		//		{RHI::VertexFormat::FLOAT32X3, GFX::MeshDataLayout::VertexInfo::COLOR}},
+		//		RHI::IndexFormat::UINT16_t },
+		//		true);
+		//GFX::Mesh* conrnell_resource = ResourceManager::get()->getResource<GFX::Mesh>(cornellBox);
+		//indexCount = conrnell_resource->indexBuffer->size() / sizeof(uint16_t);
 
 		struct Vertex {
 			Math::vec3 pos;
 			Math::vec3 color;
+			Math::vec2 uv;
 		};
 
-		blas = device->createBLAS(RHI::BLASDescriptor{
-			conrnell_resource->vertexBufferPosOnly.get(),
-			conrnell_resource->indexBuffer.get(),
-			(uint32_t)conrnell_resource->vertexBufferPosOnly->size() / (sizeof(float) * 3),
-			indexCount / 3,
-			RHI::IndexFormat::UINT16_t,
-			(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION });
-		
-		blas_floor = device->createBLAS(RHI::BLASDescriptor{
-			floor_mesh->vertexBufferPosOnly.get(),
-			floor_mesh->indexBuffer.get(),
-			(uint32_t)floor_mesh->vertexBufferPosOnly->size() / (sizeof(float) * 3),
-			(uint32_t)floor_mesh->indexBuffer->size() / (3 * sizeof(uint16_t)),
-			RHI::IndexFormat::UINT16_t,
-			(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION });
-		
-		blas_grid1 = device->createBLAS(RHI::BLASDescriptor{
-			grid1_mesh->vertexBufferPosOnly.get(),
-			grid1_mesh->indexBuffer.get(),
-			(uint32_t)grid1_mesh->vertexBufferPosOnly->size() / (sizeof(float) * 3),
-			(uint32_t)grid1_mesh->indexBuffer->size() / (3 * sizeof(uint16_t)),
-			RHI::IndexFormat::UINT16_t,
-			(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION });
-		
-		blas_grid2 = device->createBLAS(RHI::BLASDescriptor{
-			grid2_mesh->vertexBufferPosOnly.get(),
-			grid2_mesh->indexBuffer.get(),
-			(uint32_t)grid2_mesh->vertexBufferPosOnly->size() / (sizeof(float) * 3),
-			(uint32_t)grid2_mesh->indexBuffer->size() / (3 * sizeof(uint16_t)),
-			RHI::IndexFormat::UINT16_t,
-			(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION });
-		
-		blas_grid3 = device->createBLAS(RHI::BLASDescriptor{
-			grid3_mesh->vertexBufferPosOnly.get(),
-			grid3_mesh->indexBuffer.get(),
-			(uint32_t)grid3_mesh->vertexBufferPosOnly->size() / (sizeof(float) * 3),
-			(uint32_t)grid3_mesh->indexBuffer->size() / (3 * sizeof(uint16_t)),
-			RHI::IndexFormat::UINT16_t,
-			(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION });
-
-		Math::mat4 floor_transform = {
-			4.0f, 0.0f, 0.0f, 0.0778942f,
-			0.0f, 1.0f, 0.0f, 0.0f,
-			0.0f, 0.0f, 4.0f, 0.17478f,
-			0.0f, 0.0f, 0.0f, 1.0f };
-
-		Math::mat4 grid1_transform = {
-			0.75840f, -0.465828, 0.455878, 2.18526,
-			0.6232783f, 0.693876, -0.343688, 1.0795,
-			-0.156223f, 0.549127, 0.821008, 1.23179,
-			0.0, 0.0, 0.0, 1.0};
-		
-		Math::mat4 grid2_transform = {
-			0.893628f, 0.105897f, 0.436135f, 0.142805,
-			0.203204f, 0.770988f, -0.603561f, 1.0837,
-			-0.40017f, 0.627984f, 0.667458f, 0.288514,
-			0.0, 0.0, 0.0, 1.0};
-		
-		Math::mat4 grid3_transform = {
-			0.109836f, 0.652392f, 0.74988f, -2.96444f,
-			0.392525f, 0.664651f, -0.635738f, 1.86879f,
-			-0.913159, 0.364174f, -0.183078f, 1.00696f,
-			0.0, 0.0, 0.0, 1.0};
+		//blas = device->createBLAS(RHI::BLASDescriptor{
+		//	{RHI::BLASTriangleGeometry{
+		//		conrnell_resource->vertexBufferPosOnly.get(),
+		//		conrnell_resource->indexBuffer.get(),
+		//		conrnell_resource->vertexBuffer.get(),
+		//		RHI::IndexFormat::UINT16_t,
+		//		(uint32_t)conrnell_resource->vertexBufferPosOnly->size() / (sizeof(float) * 3),
+		//		0,
+		//		indexCount / 3,
+		//		0,
+		//		RHI::AffineTransformMatrix(Math::mat4::translate(Math::vec3(0, 0, 0))),
+		//		(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION
+		//	},
+		//	RHI::BLASTriangleGeometry{
+		//		conrnell_resource->vertexBufferPosOnly.get(),
+		//		conrnell_resource->indexBuffer.get(),
+		//		conrnell_resource->vertexBuffer.get(),
+		//		RHI::IndexFormat::UINT16_t,
+		//		(uint32_t)conrnell_resource->vertexBufferPosOnly->size() / (sizeof(float) * 3),
+		//		0,
+		//		indexCount / 3,
+		//		0,
+		//		RHI::AffineTransformMatrix(Math::mat4::translate(Math::vec3(2.5, 0, 0))),
+		//		(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION
+		//	}, },
+		//});
 
 		ASGroup = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ASGroup>();
-		GFX::GFXManager::get()->registerAsGroupResource(ASGroup,
-			RHI::TLASDescriptor{ {
-				{blas.get(), mat4{},0,0},
-			} },
-			std::vector<Core::GUID>{ cornellBox }
-			//std::vector<Core::GUID>{ cornellBox, grid1 }
+		RHI::TLASDescriptor tlasDesc;
+		uint32_t blasIdx = 0;
+		for (auto& blas : blases) {
+			tlasDesc.instances.push_back(RHI::BLASInstance{
+				blas.get(),
+				mat4::translate(Math::vec3{0,0.2,0}),
+				blasIdx }
 			);
+		}
+		GFX::GFXManager::get()->registerAsGroupResource(ASGroup, tlasDesc, 8);
 
 		{
 			std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> img = Image::JPEG::fromJPEG("./content/texture.jpg");
@@ -315,14 +287,6 @@ struct SandBoxApplication :public Application::ApplicationBase {
 					std::vector<RHI::BindGroupEntry>{
 						{0,RHI::BindingResource{RHI::BufferBinding{uniformBuffer[i].get(), 0, uniformBuffer[i]->size()}}}
 				} });
-				bindGroup_RT[i] = device->createBindGroup(RHI::BindGroupDescriptor{
-					bindGroupLayout_RT.get(),
-					std::vector<RHI::BindGroupEntry>{
-						{0,RHI::BindingResource{Core::ResourceManager::get()->getResource<GFX::ASGroup>(ASGroup)->tlas.get()}},
-						{1,RHI::BindingResource{Core::ResourceManager::get()->getResource<GFX::Texture>(rtTarget)->originalView.get()}},
-						{2,RHI::BindingResource{{conrnell_resource->vertexBufferPosOnly.get(), 0, conrnell_resource->vertexBufferPosOnly.get()->size()}}},
-						{3,RHI::BindingResource{{conrnell_resource->indexBuffer.get(), 0, conrnell_resource->indexBuffer->size()}}}
-				} });
 			}
 		}
 
@@ -345,7 +309,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 						// vertex attribute layout
 						{ RHI::VertexBufferLayout{sizeof(Vertex), RHI::VertexStepMode::VERTEX, {
 							{ RHI::VertexFormat::FLOAT32X3, 0, 0},
-							{ RHI::VertexFormat::FLOAT32X3, offsetof(Vertex,color), 1},}}}},
+							{ RHI::VertexFormat::FLOAT32X3, offsetof(Vertex,color), 1},
+							{ RHI::VertexFormat::FLOAT32X2, offsetof(Vertex,uv), 2},}}}},
 					RHI::PrimitiveState{ RHI::PrimitiveTopology::TRIANGLE_LIST, RHI::IndexFormat::UINT16_t },
 					RHI::DepthStencilState{ RHI::TextureFormat::DEPTH32_FLOAT, true, RHI::CompareFunction::LESS },
 					RHI::MultisampleState{},
@@ -670,16 +635,11 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		pipelineLayout_COMP[1] = nullptr;
 
 		bindGroupLayout_RT = nullptr;
-		bindGroup_RT[0] = nullptr;
-		bindGroup_RT[1] = nullptr;
 
 		vert_module = nullptr;
 		frag_module = nullptr;
 		blas = nullptr;
-		blas_floor = nullptr;
-		blas_grid1 = nullptr;
-		blas_grid2 = nullptr;
-		blas_grid3 = nullptr;
+		blases.clear();
 
 		rtBindGroupLayout = nullptr;
 		uniformBuffer[0] = nullptr;
@@ -711,10 +671,8 @@ private:
 	std::unique_ptr<RHI::BindGroup> rtBindGroup[2];
 
 	std::unique_ptr<RHI::BindGroupLayout> bindGroupLayout_RT = nullptr;
-	std::unique_ptr<RHI::BindGroup> bindGroup_RT[2];
 	
 	Core::GUID cornellBox;
-	Core::GUID floor, grid1, grid2, grid3;
 	Core::GUID ASGroup;
 
 	std::unique_ptr<RHI::Buffer> uniformBuffer[2];
@@ -727,10 +685,7 @@ private:
 	std::unique_ptr<RHI::RenderPassEncoder> passEncoder[2] = {};
 	std::unique_ptr<RHI::ComputePassEncoder> compEncoder[2] = {};
 	std::unique_ptr<RHI::BLAS> blas = nullptr;
-	std::unique_ptr<RHI::BLAS> blas_floor = nullptr;
-	std::unique_ptr<RHI::BLAS> blas_grid1 = nullptr;
-	std::unique_ptr<RHI::BLAS> blas_grid2 = nullptr;
-	std::unique_ptr<RHI::BLAS> blas_grid3 = nullptr;
+	std::vector<std::unique_ptr<RHI::BLAS>> blases;
 
 	std::unique_ptr<Sandbox::DirectTracer> directTracer = nullptr;
 	std::unique_ptr<Sandbox::AAFPipeline> aafPipeline = nullptr;

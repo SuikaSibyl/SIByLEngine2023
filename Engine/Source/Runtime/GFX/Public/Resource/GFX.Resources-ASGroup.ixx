@@ -5,6 +5,7 @@ module;
 export module GFX.Resource:ASGroup;
 import :Mesh;
 import Core.Resource;
+import Math.Matrix;
 import RHI;
 
 namespace SIByL::GFX
@@ -20,11 +21,14 @@ namespace SIByL::GFX
 		std::unique_ptr<RHI::Buffer> GeometryInfoBuffer;
 		std::unique_ptr<RHI::Buffer> vertexBufferArray;
 		std::unique_ptr<RHI::Buffer> indexBufferArray;
-		std::unique_ptr<RHI::TLAS> tlas = nullptr;
+		std::unique_ptr<RHI::TLAS>	 tlas = nullptr;
 		/** the geometry info */
 		struct GeometryInfo {
 			uint32_t vertexOffset;
 			uint32_t indexOffset;
+			uint32_t materialID;
+			uint32_t padding = 0;
+			Math::mat4 geometryTransform;
 		};
 		std::vector<GeometryInfo> geometryInfo;
 	};

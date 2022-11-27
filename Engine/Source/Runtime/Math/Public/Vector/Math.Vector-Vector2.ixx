@@ -50,6 +50,7 @@ namespace SIByL::Math
 	export using vec2 = Vector2<float>;
 	export using ivec2 = Vector2<int32_t>;
 	export using uvec2 = Vector2<uint32_t>;
+	export using dvec2 = Vector2<double>;
 
 	template <class T>
 	template <class U>

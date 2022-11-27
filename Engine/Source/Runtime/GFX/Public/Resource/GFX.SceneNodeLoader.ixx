@@ -94,6 +94,7 @@ namespace SIByL::GFX
                     std::vector<uint16_t> indexArray_uint16 = {};
                     std::vector<float> vertexBuffer_positionOnly = {};
                     std::vector<float> vertexBuffer_normalOnly = {};
+                    std::vector<float> vertexBuffer_uvOnly = {};
 
                     auto const& indicesAccessor = model.accessors[meshPrimitive.indices];
                     auto const& bufferView = model.bufferViews[indicesAccessor.bufferView];
@@ -283,6 +284,66 @@ namespace SIByL::GFX
                                 }
                                 }
                             }
+                            if (attribute.first == "TEXCOORD_0") {
+                                switch (attribAccessor.type) {
+                                case TINYGLTF_TYPE_VEC2: {
+                                    switch (attribAccessor.componentType) {
+                                    case TINYGLTF_COMPONENT_TYPE_FLOAT: {
+                                        ArrayAdapter<Math::vec2> uvs(dataPtr, count, byte_stride);
+                                        for (size_t i{ 0 }; i < indexArray_uint16.size() / 3; ++i) {
+                                            // get the i'th triange's indexes
+                                            auto f0 = indexArray_uint16[3 * i + 0];
+                                            auto f1 = indexArray_uint16[3 * i + 1];
+                                            auto f2 = indexArray_uint16[3 * i + 2];
+                                            // get the texture coordinates for each triangle's
+                                            // vertices
+                                            Math::vec2 uv0, uv1, uv2;
+                                            uv0 = uvs[f0];
+                                            uv1 = uvs[f1];
+                                            uv2 = uvs[f2];
+                                            // push them in order into the mesh data
+                                            vertexBuffer_uvOnly.push_back(uv0.x);
+                                            vertexBuffer_uvOnly.push_back(uv0.y);
+
+                                            vertexBuffer_uvOnly.push_back(uv1.x);
+                                            vertexBuffer_uvOnly.push_back(uv1.y);
+
+                                            vertexBuffer_uvOnly.push_back(uv2.x);
+                                            vertexBuffer_uvOnly.push_back(uv2.y);
+                                        }
+
+                                    } break;
+                                    case TINYGLTF_COMPONENT_TYPE_DOUBLE: {
+                                        ArrayAdapter<Math::dvec2> uvs(dataPtr, count, byte_stride);
+                                        for (size_t i{ 0 }; i < indexArray_uint16.size() / 3; ++i) {
+                                            // get the i'th triange's indexes
+                                            auto f0 = indexArray_uint16[3 * i + 0];
+                                            auto f1 = indexArray_uint16[3 * i + 1];
+                                            auto f2 = indexArray_uint16[3 * i + 2];
+
+                                            Math::dvec2 uv0, uv1, uv2;
+                                            uv0 = uvs[f0];
+                                            uv1 = uvs[f1];
+                                            uv2 = uvs[f2];
+
+                                            vertexBuffer_uvOnly.push_back(uv0.x);
+                                            vertexBuffer_uvOnly.push_back(uv0.y);
+
+                                            vertexBuffer_uvOnly.push_back(uv1.x);
+                                            vertexBuffer_uvOnly.push_back(uv1.y);
+
+                                            vertexBuffer_uvOnly.push_back(uv2.x);
+                                            vertexBuffer_uvOnly.push_back(uv2.y);
+                                        }
+                                    } break;
+                                    default:
+                                        Core::LogManager::Error("GFX :: tinygltf :: unrecognized vector type for UV");
+                                    }
+                                } break;
+                                default:
+                                    Core::LogManager::Error("GFX :: tinygltf :: unreconized componant type for UV");
+                                }
+                            }
                         }
                         break;
                     }
@@ -299,6 +360,13 @@ namespace SIByL::GFX
                         vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 0]);
                         vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 1]);
                         vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 2]);
+                        
+                        vertexBuffer.push_back(vertexBuffer_uvOnly[i * 2 + 0]);
+                        vertexBuffer.push_back(vertexBuffer_uvOnly[i * 2 + 1]);
+
+                        PositionBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 0]);
+                        PositionBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 1]);
+                        PositionBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 2]);
 
                         indexBuffer_uint16.push_back(i);
                     }
@@ -310,6 +378,9 @@ namespace SIByL::GFX
                     (uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::STORAGE);
                 mesh.indexBuffer = device->createDeviceLocalBuffer((void*)indexBuffer_uint16.data(), indexBuffer_uint16.size() * sizeof(uint16_t),
                     (uint32_t)RHI::BufferUsage::INDEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
+                    (uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
+                mesh.vertexBufferPosOnly = device->createDeviceLocalBuffer((void*)PositionBuffer.data(), PositionBuffer.size() * sizeof(float),
+                    (uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
                     (uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
                 Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Mesh>();
                 meshGUIDs.push_back(guid);

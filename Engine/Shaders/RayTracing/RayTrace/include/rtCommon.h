@@ -11,6 +11,7 @@ struct HitInfo {
     vec3 worldPosition;   // The intersection position in world-space.
     vec3 worldNormal;     // The double-sided triangle normal in world-space.
     vec3 color;
+    vec2 uv;
 };
 
 struct PassableInfo {

@@ -96,6 +96,16 @@ namespace SIByL::GFX
 			out << YAML::Key << "VertexBufferSize" << YAML::Value << vertexBuffer->size();
 			out << YAML::Key << "IndexBufferSize" << YAML::Value << indexBuffer->size();
 			out << YAML::Key << "PosOnlyBufferSize" << YAML::Value << (vertexBufferPosOnly ? vertexBufferPosOnly->size() : 0);
+			// output submeshes
+			out << YAML::Key << "Submeshes" << YAML::Value << YAML::BeginSeq;
+			for (int i = 0; i < submeshes.size(); i++) {
+				out << YAML::BeginMap;
+				out << YAML::Key << "BaseVertex" << YAML::Value << submeshes[i].baseVertex;
+				out << YAML::Key << "Offset" << YAML::Value << submeshes[i].offset;
+				out << YAML::Key << "Size" << YAML::Value << submeshes[i].size;
+				out << YAML::EndMap;
+			}
+			out << YAML::EndSeq;
 			// output tail
 			out << YAML::Key << "End" << YAML::Value << "TRUE";
 			out << YAML::EndMap;
@@ -155,7 +165,15 @@ namespace SIByL::GFX
 		vb_size = data["VertexBufferSize"].as<size_t>();
 		ib_size = data["IndexBufferSize"].as<size_t>();
 		pb_size = data["PosOnlyBufferSize"].as<size_t>();
-
+		// load submeshes
+		auto submeshes_node = data["Submeshes"];
+		for (auto node : submeshes_node) {
+			Submesh submesh;
+			submesh.baseVertex = node["BaseVertex"].as<uint32_t>();
+			submesh.offset = node["Offset"].as<uint32_t>();
+			submesh.size = node["Size"].as<uint32_t>();
+			submeshes.push_back(submesh);
+		}
 		Core::Buffer bindata;
 		Core::syncReadFile(bindata_path, bindata);
 

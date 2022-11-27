@@ -15,11 +15,24 @@ hitAttributeEXT vec2 attributes;
 // These shaders can access the vertex and index buffers:
 // The scalar layout qualifier here means to align types according to the alignment
 // of their scalar components, instead of e.g. padding them to std140 rules.
+struct VertexLayout {
+  vec3 position;
+  vec3 normals;
+  vec2 uv;
+};
 layout(binding = 2, set = 0, scalar) buffer Vertices {
-  vec3 vertices[];
+  VertexLayout vertices[];
 };
 layout(binding = 3, set = 0, scalar) buffer Indices { uint16_t indices[]; };
-layout(binding = 4, set = 0, scalar) buffer Geometry { uvec2 geometryInfo[]; };
+
+struct GeometryInfo {
+  uint vertexOffset;
+  uint indexOffset;
+  uint materialID;
+  uint padding;
+  mat4 transform;
+};
+layout(binding = 4, set = 0, scalar) buffer Geometry { GeometryInfo geometryInfos[]; };
 
 // // The payload:
 // layout(location = 0) rayPayloadInEXT PassableInfo pld;
@@ -31,17 +44,23 @@ HitInfo getObjectHitInfo() {
   // Get the ID of the triangle
   const int primitiveID = gl_PrimitiveID;
   const int instanceID = gl_InstanceID;
-  const uvec2 geometryInfoID = geometryInfo[instanceID];
+  const int geometryID = gl_InstanceCustomIndexEXT + gl_GeometryIndexEXT;
+  const GeometryInfo geometryInfo = geometryInfos[geometryID];
 
   // Get the indices of the vertices of the triangle
-  const uint i0 = indices[3 * primitiveID + 0 + geometryInfoID.y];
-  const uint i1 = indices[3 * primitiveID + 1 + geometryInfoID.y];
-  const uint i2 = indices[3 * primitiveID + 2 + geometryInfoID.y];
+  const uint i0 = indices[3 * primitiveID + 0 + geometryInfo.indexOffset];
+  const uint i1 = indices[3 * primitiveID + 1 + geometryInfo.indexOffset];
+  const uint i2 = indices[3 * primitiveID + 2 + geometryInfo.indexOffset];
 
   // Get the vertices of the triangle
-  const vec3 v0 = vertices[i0 + geometryInfoID.x/3];
-  const vec3 v1 = vertices[i1 + geometryInfoID.x/3];
-  const vec3 v2 = vertices[i2 + geometryInfoID.x/3];
+  const mat4 geometry_transform = geometryInfo.transform;
+  const vec3 v0 = (geometry_transform * vec4(vertices[i0 + geometryInfo.vertexOffset].position, 1.0)).xyz;
+  const vec3 v1 = (geometry_transform * vec4(vertices[i1 + geometryInfo.vertexOffset].position, 1.0)).xyz;
+  const vec3 v2 = (geometry_transform * vec4(vertices[i2 + geometryInfo.vertexOffset].position, 1.0)).xyz;
+
+  const vec2 uv0 = vertices[i0 + geometryInfo.vertexOffset].uv;
+  const vec2 uv1 = vertices[i1 + geometryInfo.vertexOffset].uv;
+  const vec2 uv2 = vertices[i2 + geometryInfo.vertexOffset].uv;
 
   // Get the barycentric coordinates of the intersection
   vec3 barycentrics = vec3(0.0, attributes.x, attributes.y);
@@ -49,6 +68,7 @@ HitInfo getObjectHitInfo() {
 
   // Compute the coordinates of the intersection
   result.objectPosition = v0 * barycentrics.x + v1 * barycentrics.y + v2 * barycentrics.z;
+  result.uv = uv0 * barycentrics.x + uv1 * barycentrics.y + uv2 * barycentrics.z;
   // Transform from object space to world space:
   result.worldPosition = gl_ObjectToWorldEXT * vec4(result.objectPosition, 1.0f);
 
@@ -69,7 +89,6 @@ HitInfo getObjectHitInfo() {
   // Flip the normal so it points against the ray direction:
   const vec3 rayDirection = gl_WorldRayDirectionEXT;
   result.worldNormal      = faceforward(result.worldNormal, rayDirection, result.worldNormal);
-
   return result;
 }
 
