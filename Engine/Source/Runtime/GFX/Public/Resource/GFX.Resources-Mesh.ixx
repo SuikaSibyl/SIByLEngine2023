@@ -40,6 +40,7 @@ namespace SIByL::GFX
 			uint32_t offset;
 			uint32_t size;
 			uint32_t baseVertex;
+			uint32_t matID;
 		};
 		std::vector<Submesh> submeshes;
 		/** resource name */
@@ -103,6 +104,7 @@ namespace SIByL::GFX
 				out << YAML::Key << "BaseVertex" << YAML::Value << submeshes[i].baseVertex;
 				out << YAML::Key << "Offset" << YAML::Value << submeshes[i].offset;
 				out << YAML::Key << "Size" << YAML::Value << submeshes[i].size;
+				out << YAML::Key << "MatID" << YAML::Value << submeshes[i].matID;
 				out << YAML::EndMap;
 			}
 			out << YAML::EndSeq;
@@ -172,6 +174,7 @@ namespace SIByL::GFX
 			submesh.baseVertex = node["BaseVertex"].as<uint32_t>();
 			submesh.offset = node["Offset"].as<uint32_t>();
 			submesh.size = node["Size"].as<uint32_t>();
+			submesh.matID = node["MatID"].as<uint32_t>();
 			submeshes.push_back(submesh);
 		}
 		Core::Buffer bindata;

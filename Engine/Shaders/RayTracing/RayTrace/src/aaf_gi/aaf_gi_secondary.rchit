@@ -23,7 +23,7 @@ void main() {
     secondaryPayLoad.distanceToReflector = tHit;
     secondaryPayLoad.worldPosition = shadowRayOrigin;
     secondaryPayLoad.worldNormal = hitInfo.worldNormal;
-    secondaryPayLoad.albedo = Kd * getAlbedo(hitInfo.worldNormal);
+    secondaryPayLoad.albedo = hitInfo.color;
     // measrue Lo term
     shadowRayPayLoad.hit = false;
     const vec3 lightDir = lightPos - shadowRayOrigin;

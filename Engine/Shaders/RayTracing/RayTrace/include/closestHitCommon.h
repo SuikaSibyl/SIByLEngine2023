@@ -5,6 +5,7 @@
 #extension GL_EXT_scalar_block_layout : require
 #extension GL_EXT_shader_16bit_storage : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_nonuniform_qualifier : require
 
 #include "rtCommon.h"
 
@@ -34,6 +35,7 @@ struct GeometryInfo {
   mat4 transform;
 };
 layout(binding = 4, set = 0, scalar) buffer Geometry { GeometryInfo geometryInfos[]; };
+layout(binding = 1, set = 1) uniform sampler2D textures[];
 
 // // The payload:
 // layout(location = 0) rayPayloadInEXT PassableInfo pld;
@@ -70,6 +72,7 @@ HitInfo getObjectHitInfo() {
   // Compute the coordinates of the intersection
   result.objectPosition = v0 * barycentrics.x + v1 * barycentrics.y + v2 * barycentrics.z;
   result.uv = uv0 * barycentrics.x + uv1 * barycentrics.y + uv2 * barycentrics.z;
+  result.color = texture(textures[geometryInfo.materialID], result.uv).rgb;
   // Transform from object space to world space:
   result.worldPosition = gl_ObjectToWorldEXT * vec4(result.objectPosition, 1.0f);
 

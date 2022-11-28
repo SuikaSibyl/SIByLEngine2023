@@ -44,6 +44,7 @@ struct GlobalUniforms {
   mat4 projInverse;  // Camera inverse projection matrix
 };
 layout(binding = 0, set = 1) uniform _GlobalUniforms { GlobalUniforms uni; };
+layout(binding = 1, set = 1) uniform sampler2D textures[];
 
 // Primary ray payload.
 layout(location = 0) rayPayloadEXT PrimarySamplePayload pld;
@@ -115,6 +116,6 @@ void main()
   world_normal[gid] = normalize(pld.hitNormal);
 
   // vec3 pixelColor = normalToColor(normalize(pld.hitNormal));
-  vec3 pixelColor = vec3(pld.hitNormal);
+  vec3 pixelColor = pld.indirect;
   imageStore(storageImage, ivec2(pixel), vec4(pixelColor, 1.0));
 }

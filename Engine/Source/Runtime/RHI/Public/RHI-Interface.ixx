@@ -1962,6 +1962,7 @@ namespace SIByL::RHI
 		uint32_t				primitiveOffset = 0;
 		AffineTransformMatrix	transform;
 		BLASGeometryFlags		geometryFlags = 0;
+		uint32_t				materialID = 0;
 	};
 
 	export struct BLASDescriptor {

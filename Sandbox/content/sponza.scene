@@ -19,13 +19,13 @@ SceneNodes:
         eulerAngles: [0, 0, 0]
         scale: [1, 1, 1]
       MeshReference:
-        ORID: 1634143580959390556
+        ORID: 1634167164272491356
   - uid: 2
     parent: 18446744073709551615
     components:
       TagComponent: New GameObject
       Transform:
-        translation: [-2.83298159, 1.26748693, -0.266673237]
-        eulerAngles: [0.043898616, -6.22338486, 0]
+        translation: [-1.08440018, 2.9971416, 0.246778578]
+        eulerAngles: [-0.524105906, 0.00867906772, 0]
         scale: [1, 1, 1]
 SceneEnd: TRUE

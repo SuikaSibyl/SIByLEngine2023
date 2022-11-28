@@ -19,6 +19,9 @@ import Math.Vector;
 import Math.Matrix;
 import Math.Geometry;
 import Math.Transform;
+import Image.Color;
+import Image.Image;
+import Image.FileFormat;
 import RHI;
 import GFX.Resource;
 import GFX.GFXManager;
@@ -81,6 +84,7 @@ namespace SIByL::GFX
             // Load meshes into Runtime resource managers.
             RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
             std::vector<Core::GUID> meshGUIDs = {};
+            std::vector<Core::GUID> matGUIDs = {};
             std::unordered_map<tinygltf::Mesh const*, Core::GUID> meshMap = {};
             for (auto const& gltfMesh : model.meshes) {
                 std::vector<INDEX_TYPE> indexBuffer_uint = {};
@@ -370,7 +374,9 @@ namespace SIByL::GFX
 
                         indexBuffer_uint.push_back(i);
                     }
-                    mesh.submeshes.push_back(GFX::Mesh::Submesh{ submesh_index_offset, uint32_t(indexArray_uint.size()), submesh_vertex_offset});
+                    mesh.submeshes.push_back(GFX::Mesh::Submesh{
+                        submesh_index_offset, uint32_t(indexArray_uint.size()),
+                        submesh_vertex_offset, uint32_t(meshPrimitive.material) });
                     submesh_index_offset = indexBuffer_uint.size();
                     submesh_vertex_offset = vertexBuffer.size() / 8;
                 }

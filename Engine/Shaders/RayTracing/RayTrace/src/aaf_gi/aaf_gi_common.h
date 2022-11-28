@@ -6,7 +6,7 @@
 /** output image resolution */
 const uvec2 resolution = uvec2(800, 600);
 /* light position */
-const vec3 lightPos = vec3(-0.24 + 0.47/2, 1.979, -0.22 + 0.38/2);
+const vec3 lightPos = vec3(-0.24 + 0.47/2, 3.979, -0.22 + 0.38/2);
 /* half the fov */
 const float half_fov = 30.0;
 /** pixel radius */

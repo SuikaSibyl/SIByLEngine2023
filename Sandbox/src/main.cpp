@@ -10,6 +10,7 @@
 #include <glad/glad.h>
 #include <imgui.h>
 #include <stack>
+#include <tinygltf/tiny_gltf.h>
 import Core.Log;
 import Core.Memory;
 import Core.IO;
@@ -123,6 +124,47 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		//scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/cornellBoxSphere.scene");
 		scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/sponza.scene");
 
+		std::vector<RHI::TextureView*> textureViews;
+		{
+			// use tinygltf to load file
+			std::filesystem::path path = "D:/Downloads/glTF-Sample-Models-master/glTF-Sample-Models-master/2.0/Sponza/glTF/Sponza.gltf";
+			tinygltf::Model model;
+			tinygltf::TinyGLTF loader;
+			std::string err;
+			std::string warn;
+			bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, path.string());
+			if (!warn.empty()) Core::LogManager::Warning(std::format("GFX :: tinygltf :: {0}", warn.c_str()));
+			if (!err.empty()) Core::LogManager::Error(std::format("GFX :: tinygltf :: {0}", err.c_str()));
+			if (!ret) {
+				Core::LogManager::Error("GFX :: tinygltf :: Failed to parse glTF");
+				return;
+			}
+			// Iterate through all the meshes in the glTF file
+			// Load meshes into Runtime resource managers.
+			RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
+			std::vector<Core::GUID> meshGUIDs = {};
+			std::unordered_map<tinygltf::Mesh const*, Core::GUID> meshMap = {};
+			for (auto const& gltfMat : model.materials) {
+				auto const& glTFimage_base_color = model.images[model.textures[gltfMat.pbrMetallicRoughness.baseColorTexture.index].source];
+				std::filesystem::path base_color_path = path.parent_path() / glTFimage_base_color.uri;
+				Core::GUID guid;
+				if (base_color_path.extension() == ".jpg") {
+					std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> img = Image::JPEG::fromJPEG(base_color_path);
+					guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
+					GFX::GFXManager::get()->registerTextureResource(guid, img.get());
+				}
+				else if (base_color_path.extension() == ".png") {
+					std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> img = Image::PNG::fromPNG(base_color_path);
+					guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
+					GFX::GFXManager::get()->registerTextureResource(guid, img.get());
+				}
+				else {
+					Core::LogManager::Error("GFX :: glTF load error, not supported image extension!");
+				}
+				textureViews.push_back(Core::ResourceManager::get()->getResource<GFX::Texture>(guid)->originalView.get());
+			}
+		}
+
 		camera_go = scene.createGameObject();
 		cameraController.init(mainWindow.get()->getInput(), &timer);
 		cameraController.bindTransform(scene.getGameObject(camera_go)->getEntity().getComponent<GFX::TransformComponent>());
@@ -153,7 +195,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 						submehs.size / 3,
 						uint32_t(submehs.offset * sizeof(uint32_t)),
 						RHI::AffineTransformMatrix(objectMat),
-						(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION
+						(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION,
+						submehs.matID
 						}
 					);
 				}
@@ -185,7 +228,11 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		GFX::Texture* texture = Core::ResourceManager::get()->getResource<GFX::Texture>(guid);
 
 		GFX::GFXManager::get()->commonSampler.defaultSampler = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Sampler>();
-		GFX::GFXManager::get()->registerSamplerResource(GFX::GFXManager::get()->commonSampler.defaultSampler, RHI::SamplerDescriptor{});
+		GFX::GFXManager::get()->registerSamplerResource(GFX::GFXManager::get()->commonSampler.defaultSampler, RHI::SamplerDescriptor{
+				RHI::AddressMode::REPEAT,
+				RHI::AddressMode::REPEAT,
+				RHI::AddressMode::REPEAT,
+			});
 		Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler->setName("DefaultSampler");
 		//framebufferColorAttaches
 		framebufferColorAttach = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
@@ -263,15 +310,15 @@ struct SandBoxApplication :public Application::ApplicationBase {
 					rtBindGroupLayout.get(),
 					std::vector<RHI::BindGroupEntry>{
 						{0,RHI::BindingResource{RHI::BufferBinding{uniformBuffer[i].get(), 0, uniformBuffer[i]->size()}}},
-						{1,RHI::BindingResource{std::vector<RHI::TextureView*>{texture->originalView.get()},
+						{1,RHI::BindingResource{textureViews,
 							Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler.get()}},
 				} });
 			}
 		}
 
 		for (int i = 0; i < 2; ++i) {
-			pipelineLayout[i] = device->createPipelineLayout(RHI::PipelineLayoutDescriptor{ 
-				{ {(uint32_t)RHI::ShaderStages::VERTEX, 0, sizeof(Math::mat4)}},
+			pipelineLayout[i] = device->createPipelineLayout(RHI::PipelineLayoutDescriptor{
+				{ {(uint32_t)RHI::ShaderStages::VERTEX, 0, sizeof(Math::mat4) + sizeof(uint32_t)}},
 				{ rtBindGroupLayout.get() }
 				});
 
@@ -442,6 +489,11 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		passEncoder[index]->setViewport(0, 0, width, height, 0, 1);
 		passEncoder[index]->setScissorRect(0, 0, width, height);
 
+
+		struct PushConstant {
+			Math::mat4 objectMat;
+			uint32_t matID;
+		};
 		for (auto handle : scene.gameObjects) {
 			auto* go = scene.getGameObject(handle.first);
 			Math::mat4 objectMat;
@@ -460,10 +512,12 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				passEncoder[index]->setBindGroup(0, rtBindGroup[index].get(), 0, 0);
 				passEncoder[index]->setIndexBuffer(meshref->mesh->indexBuffer.get(),
 					RHI::IndexFormat::UINT32_T, 0, meshref->mesh->indexBuffer->size());
-				passEncoder[index]->pushConstants(&objectMat.data[0][0],
-					(uint32_t)RHI::ShaderStages::VERTEX,
-					0, sizeof(Math::mat4));
 				for (auto& submehs : meshref->mesh->submeshes) {
+					PushConstant constant{ objectMat, submehs.matID };
+					passEncoder[index]->pushConstants(&constant,
+						(uint32_t)RHI::ShaderStages::VERTEX,
+						0, sizeof(PushConstant));
+
 					passEncoder[index]->drawIndexed(submehs.size, 1, submehs.offset, submehs.baseVertex, 0);
 				}
 			}

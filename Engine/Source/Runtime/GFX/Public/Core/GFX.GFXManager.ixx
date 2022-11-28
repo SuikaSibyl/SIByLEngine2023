@@ -278,6 +278,7 @@ namespace SIByL::GFX
 					IndexBufferEntry& indexEntry = findIndexBuffer->second;
 					geometryInfo.indexOffset = indexEntry.indexOffset + triangleGeometry.primitiveOffset / sizeof(uint32_t);
 					geometryInfo.geometryTransform = Math::transpose(Math::mat4(triangleGeometry.transform));
+					geometryInfo.materialID = triangleGeometry.materialID;
 					asGroup.geometryInfo.push_back(geometryInfo);
 					++geometryEnd;
 				}

@@ -2147,7 +2147,7 @@ namespace SIByL::RHI
 		for (int i = 0; i < desc.entries.size(); i++) {
 			bindings[i].binding = desc.entries[i].binding;
 			bindings[i].descriptorType = getVkDecriptorType(desc.entries[i]);
-			bindings[i].descriptorCount = 1;
+			bindings[i].descriptorCount = bindings[i].descriptorType == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER ? 25 : 1;
 			bindings[i].stageFlags = getVkShaderStageFlags(desc.entries[i].visibility);
 			bindings[i].pImmutableSamplers = nullptr;
 		}
@@ -4837,6 +4837,22 @@ namespace SIByL::RHI
 		allocInfo.descriptorPool = device->getBindGroupPool()->descriptorPool;
 		allocInfo.descriptorSetCount = 1;
 		allocInfo.pSetLayouts = &static_cast<BindGroupLayout_VK*>(desc.layout)->layout;
+
+		bool hasBindless = false;
+		for (auto& entry : desc.entries) {
+			if (entry.resource.bindlessTextures.size() > 0)
+				hasBindless = true;
+		}
+		if (hasBindless) {
+			VkDescriptorSetVariableDescriptorCountAllocateInfoEXT count_info{
+				VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT
+			};
+			uint32_t max_binding = 25 - 1;
+			count_info.descriptorSetCount = 1;
+			count_info.pDescriptorCounts = &max_binding;
+			allocInfo.pNext = &count_info;
+		}
+
 		if (vkAllocateDescriptorSets(device->getVkDevice(), &allocInfo, &set) != VK_SUCCESS) {
 			Core::LogManager::Error("VULKAN :: failed to allocate descriptor sets!");
 		}
@@ -4855,7 +4871,7 @@ namespace SIByL::RHI
 		std::vector<VkWriteDescriptorSet>	descriptorWrites = {};
 		std::vector<VkDescriptorBufferInfo> bufferInfos(bufferCounts);
 		std::vector<VkDescriptorImageInfo>	imageInfos(imageCounts);
-		std::vector<VkDescriptorImageInfo>	bindlessImageInfos = {};
+		std::vector<std::vector<VkDescriptorImageInfo>>	bindlessImageInfos = {};
 		std::vector<VkWriteDescriptorSetAccelerationStructureKHR> accelerationStructureInfos(accStructCounts);
 		int layoutEntryIdex = 0;
 		uint32_t bufferIndex = 0;
@@ -4915,11 +4931,11 @@ namespace SIByL::RHI
 				descriptorWrite.pNext = &descASInfo;
 			}
 			else if (entry.resource.bindlessTextures.size() != 0) {
+				bindlessImageInfos.push_back(std::vector<VkDescriptorImageInfo>(entry.resource.bindlessTextures.size()));
+				std::vector<VkDescriptorImageInfo>& bindelessImageInfo = bindlessImageInfos.back();
 				for (int i = 0; i < entry.resource.bindlessTextures.size(); ++i) {
 					auto bindlessTexture = entry.resource.bindlessTextures[i];
-
-					bindlessImageInfos.push_back(VkDescriptorImageInfo{});
-					VkDescriptorImageInfo& imageInfo = bindlessImageInfos.back();
+					VkDescriptorImageInfo& imageInfo = bindelessImageInfo[i];
 					imageInfo.sampler = static_cast<Sampler_VK*>(entry.resource.sampler)->textureSampler;
 					imageInfo.imageView = static_cast<TextureView_VK*>(bindlessTexture)->imageView;
 					imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -4930,12 +4946,13 @@ namespace SIByL::RHI
 					descriptorWrite.dstSet = set;
 					descriptorWrite.dstBinding = entry.binding;
 					descriptorWrite.dstArrayElement = i;
-					descriptorWrite.descriptorType = getVkDecriptorType(desc.layout->getBindGroupLayoutDescriptor().entries[layoutEntryIdex++]);
+					descriptorWrite.descriptorType = getVkDecriptorType(desc.layout->getBindGroupLayoutDescriptor().entries[layoutEntryIdex]);
 					descriptorWrite.descriptorCount = 1;
 					descriptorWrite.pBufferInfo = nullptr;
 					descriptorWrite.pImageInfo = &imageInfo;
 					descriptorWrite.pTexelBufferView = nullptr;
 				}
+				layoutEntryIdex++;
 			}
 		}
 		vkUpdateDescriptorSets(device->getVkDevice(), descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);

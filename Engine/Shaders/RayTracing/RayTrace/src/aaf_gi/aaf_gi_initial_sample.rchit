@@ -20,7 +20,7 @@ void main() {
     // get primary hit info
     HitInfo hitInfo = getObjectHitInfo();
     // set albedo of hit point
-    primaryPayLoad.albedo = Kd * getAlbedo(hitInfo.worldNormal);
+    primaryPayLoad.albedo = hitInfo.color;
     // prepare for secondary ray
     const vec3 secondaryRayOrigin = offsetPositionAlongNormal(hitInfo.worldPosition, hitInfo.worldNormal);
     const vec3 toLight = lightPos - secondaryRayOrigin;
@@ -105,5 +105,5 @@ void main() {
     // write to primary ray payload
     primaryPayLoad.rayHitSky = false;
     primaryPayLoad.hitPoint = hitInfo.worldPosition;
-    primaryPayLoad.hitNormal = vec3(hitInfo.uv, 0);
+    primaryPayLoad.hitNormal = hitInfo.worldNormal;
 }
