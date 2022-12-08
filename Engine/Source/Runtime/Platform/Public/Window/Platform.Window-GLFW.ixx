@@ -30,8 +30,7 @@ namespace SIByL::Platform
 		Window* attached_window;
 	};
 
-	export struct Window_GLFW :public Window
-	{
+	export struct Window_GLFW :public Window {
 		Window_GLFW(WindowOptions const& option);
 
 		// ---------------------------------

@@ -8,6 +8,7 @@ module;
 module Platform.Window:WindowGLFW;
 import Platform.Window;
 import :Window;
+import SE.Utility;
 import Core.Log;
 import Core.Event;
 import Core.String;
@@ -35,13 +36,13 @@ namespace SIByL::Platform
 		gGLFWWindowCount++;
 
 		// Context hint selection
-		if (properties & WindowProperties::OPENGL_CONTEX) {
+		if (hasBit(properties, WindowProperties::OPENGL_CONTEX)) {
 			glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 			glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 			glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 			glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 		}
-		else if (properties & WindowProperties::VULKAN_CONTEX) {
+		else if (hasBit(properties, WindowProperties::VULKAN_CONTEX)) {
 			glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 		}
 
@@ -49,7 +50,7 @@ namespace SIByL::Platform
 		glfwSetWindowUserPointer(wndHandle, this);
 
 		// create context if need
-		if (properties & WindowProperties::OPENGL_CONTEX)
+		if (hasBit(properties, WindowProperties::OPENGL_CONTEX))
 			glfwMakeContextCurrent(wndHandle);
 
 		// Set GLFW Callbacks
@@ -72,7 +73,7 @@ namespace SIByL::Platform
 	}
 	
 	auto Window_GLFW::endFrame() noexcept -> void {
-		if (properties & WindowProperties::OPENGL_CONTEX)
+		if (hasBit(properties, WindowProperties::OPENGL_CONTEX))
 			glfwSwapBuffers(wndHandle);
 	}
 

@@ -12,19 +12,17 @@ namespace SIByL::Platform
 		WIN_64,
 	};
 
-	namespace FlagEnum {
-		export enum WindowProperties {
-			OPENGL_CONTEX = 1 << 0,
-			VULKAN_CONTEX = 1 << 1,
-		};
-	}
-	export using WindowProperties = FlagEnum::WindowProperties;
+	export enum struct WindowProperties {
+		NONE			= 0 << 0,
+		OPENGL_CONTEX	= 1 << 0,
+		VULKAN_CONTEX	= 1 << 1,
+	};
 
 	export struct WindowOptions {
-		WindowVendor vendor;
-		std::wstring title;
-		uint32_t width, height;
-		WindowProperties properties = static_cast<WindowProperties>(0);
+		WindowVendor vendor = WindowVendor::GLFW;
+		std::wstring title = L"SIByL Application";
+		uint32_t width = 720, height = 480;
+		WindowProperties properties = WindowProperties::NONE;
 	};
 	
 	export struct CodeEnum {
@@ -45,8 +43,7 @@ namespace SIByL::Platform
 		virtual auto decodeCodeEnum(CodeEnum const& code) noexcept -> int = 0;
 	};
 
-	export struct Window
-	{
+	export struct Window {
 		/** create a window with options */
 		static auto create(WindowOptions const& options) noexcept -> Scope<Window>;
 
@@ -99,10 +96,10 @@ namespace SIByL::Platform
 		virtual auto saveFile(const char* filter, std::string const& name = {}) noexcept -> std::string = 0;
 	};
 
-	/* The unknown key */
+#pragma region KEY_ENUM_DEFINE
+	// Unknown Keys Code Enums
 	export inline CodeEnum SIByL_KEY_UNKNOWN = (CodeEnum(-1, -1));
-
-	/* Printable keys */
+	// Printable Keys Code Enums
 	export inline CodeEnum SIByL_KEY_SPACE = (CodeEnum(32, VK_SPACE));
 	export inline CodeEnum SIByL_KEY_APOSTROPHE = (CodeEnum(39, VK_OEM_7));	/* ' */
 	export inline CodeEnum SIByL_KEY_COMMA = (CodeEnum(44, VK_OEM_COMMA));	/* , */
@@ -147,14 +144,13 @@ namespace SIByL::Platform
 	export inline CodeEnum SIByL_KEY_X = (CodeEnum(88, 0x58));
 	export inline CodeEnum SIByL_KEY_Y = (CodeEnum(89, 0x59));
 	export inline CodeEnum SIByL_KEY_Z = (CodeEnum(90, 0x5A));
-	export inline CodeEnum SIByL_KEY_LEFT_BRACKET = (CodeEnum(91, VK_OEM_4));	 /* [ */
-	export inline CodeEnum SIByL_KEY_BACKSLASH = (CodeEnum(92, VK_OEM_5));	 /* \ */
-	export inline CodeEnum SIByL_KEY_RIGHT_BRACKET = (CodeEnum(93, VK_OEM_6));	 /* ] */
-	export inline CodeEnum SIByL_KEY_GRAVE_ACCENT = (CodeEnum(96, VK_OEM_3));	 /* ` */
-	export inline CodeEnum SIByL_KEY_WORLD_1 = (CodeEnum(161, VK_SPACE));	 /* non-US #1 */
-	export inline CodeEnum SIByL_KEY_WORLD_2 = (CodeEnum(162, VK_SPACE));	 /* non-US #2 */
-
-	/* Function keys */
+	export inline CodeEnum SIByL_KEY_LEFT_BRACKET = (CodeEnum(91, VK_OEM_4));	/* [ */
+	export inline CodeEnum SIByL_KEY_BACKSLASH = (CodeEnum(92, VK_OEM_5));		/* \ */
+	export inline CodeEnum SIByL_KEY_RIGHT_BRACKET = (CodeEnum(93, VK_OEM_6));	/* ] */
+	export inline CodeEnum SIByL_KEY_GRAVE_ACCENT = (CodeEnum(96, VK_OEM_3));	/* ` */
+	export inline CodeEnum SIByL_KEY_WORLD_1 = (CodeEnum(161, VK_SPACE));		/* non-US #1 */
+	export inline CodeEnum SIByL_KEY_WORLD_2 = (CodeEnum(162, VK_SPACE));		/* non-US #2 */
+	// Function Keys Code Enums
 	export inline CodeEnum SIByL_KEY_ESCAPE = (CodeEnum(256, VK_SPACE));
 	export inline CodeEnum SIByL_KEY_ENTER = (CodeEnum(257, VK_RETURN));
 	export inline CodeEnum SIByL_KEY_TAB = (CodeEnum(258, VK_TAB));
@@ -225,9 +221,8 @@ namespace SIByL::Platform
 	export inline CodeEnum SIByL_KEY_RIGHT_ALT = (CodeEnum(346, VK_RMENU));
 	export inline CodeEnum SIByL_KEY_RIGHT_SUPER = (CodeEnum(347, VK_SPACE));
 	export inline CodeEnum SIByL_KEY_MENU = (CodeEnum(348, VK_MENU));
-
 	export inline CodeEnum SIByL_KEY_LAST = SIByL_KEY_MENU;
-
+	// Mouse Code Enums
 	export inline CodeEnum SIByL_MOUSE_BUTTON_1 = (CodeEnum(0, VK_LBUTTON));
 	export inline CodeEnum SIByL_MOUSE_BUTTON_2 = (CodeEnum(1, VK_RBUTTON));
 	export inline CodeEnum SIByL_MOUSE_BUTTON_3 = (CodeEnum(2, VK_MBUTTON));
@@ -240,4 +235,5 @@ namespace SIByL::Platform
 	export inline CodeEnum SIByL_MOUSE_BUTTON_LEFT = SIByL_MOUSE_BUTTON_1;
 	export inline CodeEnum SIByL_MOUSE_BUTTON_RIGHT = SIByL_MOUSE_BUTTON_2;
 	export inline CodeEnum SIByL_MOUSE_BUTTON_MIDDLE = SIByL_MOUSE_BUTTON_3;
+#pragma endregion
 }

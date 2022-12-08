@@ -1,8 +1,11 @@
 module;
 #include <string>
+#ifdef _WIN32
 #include <Windows.h>
+#endif
 export module Platform.System:Win64;
 
+#ifdef _WIN32
 namespace SIByL::Platform
 {
 	export inline auto getNumSystemCores() noexcept -> int {
@@ -11,3 +14,4 @@ namespace SIByL::Platform
 		return sysInfo.dwNumberOfProcessors;
 	}
 }
+#endif

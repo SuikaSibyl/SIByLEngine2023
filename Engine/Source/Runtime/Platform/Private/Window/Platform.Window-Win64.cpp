@@ -5,6 +5,7 @@ module;
 #include <WinUser.h>
 module Platform.Window:WindowWin64;
 import Platform.Window;
+import SE.Utility;
 import Core.Log;
 
 namespace SIByL::Platform
@@ -116,7 +117,7 @@ namespace SIByL::Platform
 		ShowWindow(wndHandle, SW_SHOW);
 		UpdateWindow(wndHandle);
 
-		if (properties & WindowProperties::OPENGL_CONTEX) {
+		if (hasBit(properties, WindowProperties::OPENGL_CONTEX)) {
 			HDC hdc = GetDC(wndHandle);
 			HGLRC hglrc = bindOpenGLContext(hdc);
 		}
@@ -144,7 +145,7 @@ namespace SIByL::Platform
 	}
 	
 	auto Window_Win64::endFrame() noexcept -> void {
-		if (properties & WindowProperties::OPENGL_CONTEX)
+		if (hasBit(properties, WindowProperties::OPENGL_CONTEX))
 			SwapBuffers(GetDC(wndHandle));
 		else {
 
