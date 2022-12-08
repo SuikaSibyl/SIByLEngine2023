@@ -2230,7 +2230,7 @@ namespace SIByL::RHI
 		/** initialzie */
 		BindGroup_VK(Device_VK* device, BindGroupDescriptor const& desc);
 		/** vulkan Descriptor Set */
-		VkDescriptorSet set;
+		VkDescriptorSet set = {};
 		/** the bind group set this bind group is created on */
 		BindGroupPool_VK* descriptorPool;
 		/** the device this bind group is created on */
@@ -4843,11 +4843,11 @@ namespace SIByL::RHI
 			if (entry.resource.bindlessTextures.size() > 0)
 				hasBindless = true;
 		}
+		VkDescriptorSetVariableDescriptorCountAllocateInfoEXT count_info{
+			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT
+		};
+		uint32_t max_binding = 25 - 1;
 		if (hasBindless) {
-			VkDescriptorSetVariableDescriptorCountAllocateInfoEXT count_info{
-				VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT
-			};
-			uint32_t max_binding = 25 - 1;
 			count_info.descriptorSetCount = 1;
 			count_info.pDescriptorCounts = &max_binding;
 			allocInfo.pNext = &count_info;
