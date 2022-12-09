@@ -3,9 +3,8 @@ module;
 #include <memory>
 module Tracer.Sampling:Distribution2D;
 import Tracer.Sampling;
-import Math.Common;
-import Math.Vector;
-import Math.Geometry;
+import SE.Math.Misc;
+import SE.Math.Geometric;
 
 namespace SIByL::Tracer
 {

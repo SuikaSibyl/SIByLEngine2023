@@ -139,12 +139,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Private\Camera\Tracer.Camera-OrthographicCamera.cpp" />
+    <ClCompile Include="Private\Camera\Tracer.Camera-PerspectiveCamera.cpp" />
+    <ClCompile Include="Private\Camera\Tracer.Camera-ProjectiveCamera.cpp" />
     <ClCompile Include="Private\Core\Tracer.Interactable.cpp" />
     <ClCompile Include="Private\Core\Tracer.Base.cpp" />
     <ClCompile Include="Private\Primitives\Tracer.Primitives-GeometricPrimitive.cpp" />
     <ClCompile Include="Private\Primitives\Tracer.Primitives-TransformedPrimitive.cpp" />
-    <ClCompile Include="Private\Camera\Tracer.Camera-OrthographicCamera.cpp" />
-    <ClCompile Include="Private\Camera\Tracer.Camera-ProjectiveCamera.cpp" />
     <ClCompile Include="Private\Film\Tracer.Film.cpp" />
     <ClCompile Include="Private\Integrator\Tracer.Integrator-SamplerIntegrator.cpp" />
     <ClCompile Include="Private\Integrator\Tracer.Integrator-WhittedIntegrator.cpp" />
@@ -161,10 +162,15 @@
     <ClCompile Include="Private\Spectrum\Tracer.Spectrum-SampledSpectrum.cpp" />
     <ClCompile Include="Public\Camera\Tracer.Camera-EnvironmentCamera.ixx" />
     <ClCompile Include="Public\Camera\Tracer.Camera-OrthographicCamera.ixx" />
+    <ClCompile Include="Public\Camera\Tracer.Camera-PerspectiveCamera.ixx" />
+    <ClCompile Include="Public\Camera\Tracer.Camera-ProjectiveCamera.ixx" />
+    <ClCompile Include="Public\Camera\Tracer.Camera-RealisticCamera.ixx" />
+    <ClCompile Include="Public\Camera\Tracer.Camera.ixx" />
     <ClCompile Include="Public\Core\Tracer.Base.ixx" />
+    <ClCompile Include="Public\Core\Tracer.Interactable.ixx" />
+    <ClCompile Include="Public\Core\Tracer.Ray.ixx" />
     <ClCompile Include="Public\Integrator\Tracer.Integrator-DirectLightingIntegrator.ixx" />
     <ClCompile Include="Public\Integrator\Tracer.Integrator-Utility.ixx" />
-    <ClCompile Include="Public\Core\Tracer.Interactable.ixx" />
     <ClCompile Include="Public\Light\Tracer.Light-DiffuseAreaLight.ixx" />
     <ClCompile Include="Public\Light\Tracer.Light-GonioPhotometricLight.ixx" />
     <ClCompile Include="Public\Light\Tracer.Light-InfiniteAreaLight.ixx" />
@@ -177,10 +183,6 @@
     <ClCompile Include="Public\Primitives\Tracer.Primitives-KdTreeAccel.ixx" />
     <ClCompile Include="Public\Primitives\Tracer.Primitives-TransformedPrimitive.ixx" />
     <ClCompile Include="Public\Primitives\Tracer.Primitives.ixx" />
-    <ClCompile Include="Public\Camera\Tracer.Camera-PerspectiveCamera.ixx" />
-    <ClCompile Include="Public\Camera\Tracer.Camera-ProjectiveCamera.ixx" />
-    <ClCompile Include="Public\Camera\Tracer.Camera-RealisticCamera.ixx" />
-    <ClCompile Include="Public\Camera\Tracer.Camera.ixx" />
     <ClCompile Include="Public\Film\Tracer.Film.ixx" />
     <ClCompile Include="Public\Filter\Tracer.Filter-BoxFilter.ixx" />
     <ClCompile Include="Public\Filter\Tracer.Filter-Filter.ixx" />
@@ -219,7 +221,6 @@
     <ClCompile Include="Public\Material\Tracer.Material-SubsurfaceMaterial.ixx" />
     <ClCompile Include="Public\Material\Tracer.Material.ixx" />
     <ClCompile Include="Public\Medium\Tracer.Medium.ixx" />
-    <ClCompile Include="Public\Core\Tracer.Ray.ixx" />
     <ClCompile Include="Public\Sampler\Tracer.Sampler-GlobalSampler.ixx" />
     <ClCompile Include="Public\Sampler\Tracer.Sampler-HaltonSampler.ixx" />
     <ClCompile Include="Public\Sampler\Tracer.Sampler-MaxMinDistSampler.ixx" />
@@ -232,6 +233,12 @@
     <ClCompile Include="Public\Sampling\Tracer.Sampling-Distribution2D.ixx" />
     <ClCompile Include="Public\Sampling\Tracer.Sampling-Sampling.ixx" />
     <ClCompile Include="Public\Sampling\Tracer.Sampling.ixx" />
+    <ClCompile Include="Public\Shape\Tracer.Shape-Cone.ixx" />
+    <ClCompile Include="Public\Shape\Tracer.Shape-Curve.ixx" />
+    <ClCompile Include="Public\Shape\Tracer.Shape-Cylinder.ixx" />
+    <ClCompile Include="Public\Shape\Tracer.Shape-Disk.ixx" />
+    <ClCompile Include="Public\Shape\Tracer.Shape-Hyperboloid.ixx" />
+    <ClCompile Include="Public\Shape\Tracer.Shape-Paraboloid.ixx" />
     <ClCompile Include="Public\Shape\Tracer.Shape-Sphere.ixx" />
     <ClCompile Include="Public\Shape\Tracer.Shape-Triangle.ixx" />
     <ClCompile Include="Public\Shape\Tracer.Shape.ixx" />

@@ -4,7 +4,7 @@ module;
 #include <numeric>
 #include <algorithm>
 module Tracer.Spectrum:Common;
-import Math.Common;
+import SE.Math.Misc;
 
 namespace SIByL::Tracer
 {

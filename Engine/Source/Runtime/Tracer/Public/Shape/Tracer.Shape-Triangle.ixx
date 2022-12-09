@@ -2,10 +2,8 @@ module;
 #include <vector>
 #include <memory>
 export module Tracer.Shape:Triangle;
-import Math.Transform;
-import Math.Vector;
-import Math.Geometry;
-import Math.Common;
+import SE.Math.Misc;
+import SE.Math.Geometric;
 import Tracer.Interactable;
 
 namespace SIByL::Tracer

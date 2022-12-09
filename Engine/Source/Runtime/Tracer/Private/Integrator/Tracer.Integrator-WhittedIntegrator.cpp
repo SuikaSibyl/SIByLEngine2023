@@ -2,10 +2,9 @@ module;
 #include <cmath>
 module Tracer.Integrator:WhittedIntegrator;
 import Tracer.Integrator;
-import Core.Memory;
-import Math.Vector;
-import Math.Geometry;
-import Parallelism.Parallel;
+import SE.Core.Memory;
+import SE.Math.Geometric;
+import SE.Parallelism;
 import Tracer.Ray;
 import Tracer.Camera;
 import Tracer.Sampler;

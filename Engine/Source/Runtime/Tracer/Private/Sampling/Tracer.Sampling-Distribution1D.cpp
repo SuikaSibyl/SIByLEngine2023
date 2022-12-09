@@ -2,7 +2,7 @@ module;
 #include <vector>
 module Tracer.Sampling:Distribution1D;
 import Tracer.Sampling;
-import Math.Common;
+import SE.Math.Misc;
 
 namespace SIByL::Tracer
 {

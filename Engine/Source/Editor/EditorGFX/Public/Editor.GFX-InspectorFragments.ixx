@@ -6,14 +6,13 @@ module;
 #include <typeinfo>
 #include <imgui.h>
 #include <imgui_internal.h>
-export module Editor.GFX:InspectorFragments;
+export module SE.Editor.GFX:InspectorFragments;
+import :Utils;
 import :SceneWidget;
-import Math.Vector;
-import RHI;
-import GFX.Resource;
-import GFX.Components;
-import Editor.Framework;
-import Editor.Utils;
+import SE.Math.Geometric;
+import SE.RHI;
+import SE.GFX.Core;
+import SE.Editor.Core;
 
 namespace SIByL::Editor
 {

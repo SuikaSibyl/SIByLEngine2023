@@ -3,8 +3,7 @@ export module Tracer.Camera:ProjectiveCamera;
 import Tracer.Medium;
 import Tracer.Film;
 import Tracer.Ray;
-import Math.Geometry;
-import Math.Transform;
+import SE.Math.Geometric;
 
 namespace SIByL::Tracer
 {

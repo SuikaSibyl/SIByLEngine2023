@@ -1,6 +1,5 @@
 export module Tracer.Filter:Filter;
-import Math.Vector;
-import Math.Geometry;
+import SE.Math.Geometric;
 
 namespace SIByL::Tracer
 {

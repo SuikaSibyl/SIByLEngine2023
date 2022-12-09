@@ -3,12 +3,9 @@ module;
 #include <cstdint>
 #include <algorithm>
 module Tracer.Interactable;
-import Core.Memory;
-import Math.Vector;
-import Math.Limits;
-import Math.Geometry;
-import Math.Transform;
-import Math.EquationSolving;
+import SE.Core.Memory;
+import SE.Math.Misc;
+import SE.Math.Geometric;
 import Tracer.Ray;
 import Tracer.BxDF;
 import Tracer.Medium;

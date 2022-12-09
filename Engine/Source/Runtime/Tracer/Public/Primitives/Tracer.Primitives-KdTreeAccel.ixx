@@ -1,6 +1,6 @@
 export module Tracer.Primitives:KdTreeAccel;
 import :Aggregate;
-import Math.Geometry;
+import SE.Math.Geometric;
 import Tracer.Ray;
 import Tracer.Interactable;
 

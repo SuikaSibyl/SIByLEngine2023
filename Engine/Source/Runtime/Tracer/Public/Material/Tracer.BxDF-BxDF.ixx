@@ -2,9 +2,8 @@ module;
 #include <cstdint>
 #include <cmath>
 export module Tracer.BxDF:BxDF;
-import Math.Vector;
-import Math.Common;
-import Math.Geometry;
+import SE.Math.Misc;
+import SE.Math.Geometric;
 import Tracer.Spectrum;
 import Tracer.Sampling;
 

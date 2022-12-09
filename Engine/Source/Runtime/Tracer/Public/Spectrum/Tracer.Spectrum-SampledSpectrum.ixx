@@ -4,8 +4,7 @@ module;
 #include <numeric>
 #include <algorithm>
 export module Tracer.Spectrum:SampledSpectrum;
-import Math.Limits;
-import Math.Common;
+import SE.Math.Misc;
 import :CoefficientSpectrum;
 import :Common;
 

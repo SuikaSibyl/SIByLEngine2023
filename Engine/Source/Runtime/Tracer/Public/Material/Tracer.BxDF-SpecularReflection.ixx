@@ -2,8 +2,7 @@ module;
 export module Tracer.BxDF:SpecularReflection;
 import :BxDF;
 import :Fresnel;
-import Math.Vector;
-import Math.Geometry;
+import SE.Math.Geometric;
 import Tracer.Spectrum;
 
 namespace SIByL::Tracer

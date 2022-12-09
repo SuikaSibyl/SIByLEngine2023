@@ -2,9 +2,8 @@ module;
 export module Tracer.BxDF:Lambertian;
 import :BxDF;
 import :Fresnel;
-import Math.Vector;
-import Math.Geometry;
-import Math.Trigonometric;
+import SE.Math.Misc;
+import SE.Math.Geometric;
 import Tracer.Spectrum;
 
 namespace SIByL::Tracer

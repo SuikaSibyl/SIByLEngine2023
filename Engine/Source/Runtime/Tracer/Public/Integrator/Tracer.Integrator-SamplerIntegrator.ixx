@@ -2,12 +2,11 @@ module;
 #include <cstdint>
 export module Tracer.Integrator:SamplerIntegrator;
 import :Integrator;
-import Core.Memory;
-import Math.Limits;
-import Math.Vector;
-import Math.Geometry;
-import Parallelism.Parallel;
-import Image.Image;
+import SE.Core.Memory;
+import SE.Math.Misc;
+import SE.Math.Geometric;
+import SE.Parallelism;
+import SE.Image;
 import Tracer.Ray;
 import Tracer.Base;
 import Tracer.Film;

@@ -1,8 +1,8 @@
 module;
 #include <cmath>
 export module Tracer.Medium;
-import Math.Vector;
-import Math.Trigonometric;
+import SE.Math.Misc;
+import SE.Math.Geometric;
 import Tracer.Ray;
 
 namespace SIByL::Tracer

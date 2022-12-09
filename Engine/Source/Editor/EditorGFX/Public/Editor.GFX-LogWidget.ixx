@@ -8,11 +8,11 @@ module;
 #include <functional>
 #include <imgui.h>
 #include <imgui_internal.h>
-export module Editor.GFX:LogWidget;
-import Editor.Framework;
-import Core.ECS;
-import Core.Log;
-import GFX.Resource;
+export module SE.Editor.GFX:LogWidget;
+import SE.Editor.Core;
+import SE.Core.ECS;
+import SE.Core.Log;
+import SE.GFX.Core;
 
 namespace SIByL::Editor
 {

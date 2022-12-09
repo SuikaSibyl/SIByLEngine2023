@@ -1,9 +1,9 @@
 module;
 #include <filesystem>
 export module Tracer.Material:FourierMaterial;
-import Core.Memory;
-import Core.IO;
-import Math.Common;
+import SE.Core.Memory;
+import SE.Core.IO;
+import SE.Math.Misc;
 import Tracer.Interactable;
 import Tracer.Texture;
 import Tracer.Spectrum;

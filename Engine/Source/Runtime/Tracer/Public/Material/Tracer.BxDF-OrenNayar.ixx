@@ -3,9 +3,8 @@ module;
 #include <functional>
 export module Tracer.BxDF:OrenNayar;
 import :BxDF;
-import Math.Vector;
-import Math.Geometry;
-import Math.Trigonometric;
+import SE.Math.Misc;
+import SE.Math.Geometric;
 import Tracer.Spectrum;
 
 namespace SIByL::Tracer

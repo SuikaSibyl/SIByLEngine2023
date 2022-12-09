@@ -1,8 +1,6 @@
 export module Tracer.Sampling:Sampling;
-import Math.Random;
-import Math.Vector;
-import Math.Geometry;
-import Math.Trigonometric;
+import SE.Math.Misc;
+import SE.Math.Geometric;
 
 namespace SIByL::Tracer
 {

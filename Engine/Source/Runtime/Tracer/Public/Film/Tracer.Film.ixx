@@ -5,14 +5,12 @@ module;
 #include <memory>
 #include <mutex>
 export module Tracer.Film;
-import Core.Memory;
-import Math.Vector;
-import Math.Geometry;
+import SE.Core.Memory;
+import SE.Math.Geometric;
 import Tracer.Filter;
 import Tracer.Spectrum;
-import Parallelism.Atomic;
-import Image.Image;
-import Image.Color;
+import SE.Parallelism;
+import SE.Image;
 
 namespace SIByL::Tracer
 {

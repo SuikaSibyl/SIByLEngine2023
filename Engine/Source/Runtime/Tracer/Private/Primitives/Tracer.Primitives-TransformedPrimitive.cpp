@@ -1,8 +1,7 @@
 module Tracer.Primitives:GeometricPrimitive;
 import Tracer.Primitives;
 import Tracer.Interactable;
-import Math.Transform;
-import Math.Geometry;
+import SE.Math.Geometric;
 import Tracer.Ray;
 
 namespace SIByL::Tracer

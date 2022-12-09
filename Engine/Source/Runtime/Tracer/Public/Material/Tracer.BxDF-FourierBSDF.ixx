@@ -4,12 +4,10 @@ module;
 #include <Core.h>
 export module Tracer.BxDF:FourierBSDF;
 import :BxDF;
-import Core.IO;
-import Core.Memory;
-import Math.Vector;
-import Math.Geometry;
-import Math.Limits;
-import Math.Common;
+import SE.Core.IO;
+import SE.Core.Memory;
+import SE.Math.Misc;
+import SE.Math.Geometric;
 import Tracer.Spectrum;
 
 namespace SIByL::Tracer

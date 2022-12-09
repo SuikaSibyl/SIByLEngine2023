@@ -11,20 +11,22 @@
 #include <imgui.h>
 #include <stack>
 #include <tinygltf/tiny_gltf.h>
-import Core.Log;
-import Core.Memory;
-import Core.IO;
-import Core.Event;
-import Core.Timer;
-import Core.ECS;
-import Core.Resource;
+import SE.Core.Log;
+import SE.Core.Memory;
+import SE.Core.IO;
+import SE.Core.Event;
+import SE.Core.Misc;
+import SE.Core.ECS;
+import SE.Core.Resource;
 
-import Math.Vector;
-import Math.Geometry;
-import Math.Matrix;
-import Math.Limits;
-import Math.Transform;
-import Math.Trigonometric;
+import SE.Math.Misc;
+import SE.Math.Geometric;
+
+import SE.Platform.Window;
+import SE.Platform.Misc;
+import SE.Image;
+import SE.RHI;
+import SE.Parallelism;
 
 import Tracer.Ray;
 import Tracer.Camera;
@@ -39,37 +41,18 @@ import Tracer.Sampler;
 import Tracer.Texture;
 import Tracer.Light;
 
-import Image.Color;
-import Image.Image;
-import Image.FileFormat;
+import SE.GFX.Core;
+import SE.Application;
 
-import Platform.Window;
-import Platform.System;
-import Parallelism.Parallel;
-
-import RHI;
-import RHI.RHILayer;
-
-import GFX.Resource;
-import GFX.GFXManager;
-import GFX.MeshLoader;
-import GFX.Components;
-import GFX.SceneNodeLoader;
-import Application.Root;
-import Application.Base;
-
-import Editor.Core;
-import Editor.Framework;
-import Editor.GFX;
-import Editor.Config;
-import Editor.GFX.CameraController;
+import SE.Editor.Core;
+import SE.Editor.GFX;
+import SE.Editor.Config;
 
 import Sandbox.Tracer;
 import Sandbox.AAF_GI;
 import Sandbox.Benchmark;
 import Sandbox.MAAF;
 
-import Image.FileFormat;
 
 using namespace SIByL;
 using namespace SIByL::Core;

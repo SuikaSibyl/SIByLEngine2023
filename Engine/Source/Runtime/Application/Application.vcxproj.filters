@@ -15,16 +15,14 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Public\Application.Base.ixx">
+    <ClCompile Include="Public\SE.Application.Base.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Application.Root.ixx">
+    <ClCompile Include="Public\SE.Application.Root.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="Public\Application.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
+    <ClCompile Include="Public\SE.Application.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

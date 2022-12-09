@@ -19,19 +19,14 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Private\FileFormat\Image.FileFormat-JPEG.cpp" />
-    <ClCompile Include="Private\FileFormat\Image.FileFormat-PFM.cpp" />
-    <ClCompile Include="Private\FileFormat\Image.FileFormat-PNG.cpp" />
-    <ClCompile Include="Private\FileFormat\Image.FileFormat-PPM.cpp" />
-    <ClCompile Include="Private\Image\Image.Image.cpp" />
-    <ClCompile Include="Public\Color\Image.Color.ixx" />
-    <ClCompile Include="Public\FileFormat\Image.FileFormat-HDR.ixx" />
-    <ClCompile Include="Public\FileFormat\Image.FileFormat-JPEG.ixx" />
-    <ClCompile Include="Public\FileFormat\Image.FileFormat-PFM.ixx" />
-    <ClCompile Include="Public\FileFormat\Image.FileFormat-PNG.ixx" />
-    <ClCompile Include="Public\FileFormat\Image.FileFormat-PPM.ixx" />
-    <ClCompile Include="Public\FileFormat\Image.FileFormat.ixx" />
-    <ClCompile Include="Public\Image\Image.Image.ixx" />
+    <ClCompile Include="Public\Color\SE.Image-Color.ixx" />
+    <ClCompile Include="Public\FileFormat\SE.Image-FileFormat.HDR.ixx" />
+    <ClCompile Include="Public\FileFormat\SE.Image-FileFormat.JPEG.ixx" />
+    <ClCompile Include="Public\FileFormat\SE.Image-FileFormat.PFM.ixx" />
+    <ClCompile Include="Public\FileFormat\SE.Image-FileFormat.PNG.ixx" />
+    <ClCompile Include="Public\FileFormat\SE.Image-FileFormat.PPM.ixx" />
+    <ClCompile Include="Public\Image\SE.Image-Image.ixx" />
+    <ClCompile Include="Public\SE.Image.ixx" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Core\Core.vcxproj">

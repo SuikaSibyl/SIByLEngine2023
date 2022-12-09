@@ -3,7 +3,7 @@ module;
 #include <memory>
 export module Tracer.Sampling:Distribution2D;
 import :Distribution1D;
-import Math.Geometry;
+import SE.Math.Geometric;
 
 namespace SIByL::Tracer
 {

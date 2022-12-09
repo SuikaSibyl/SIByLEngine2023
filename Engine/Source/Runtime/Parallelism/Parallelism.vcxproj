@@ -137,12 +137,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Private\Atomic\Parallelism.Atomic-AtomicFloat.cpp" />
-    <ClCompile Include="Private\Parallel\Parallelism.Parallel-ParallelFor.cpp" />
-    <ClCompile Include="Public\Atomic\Parallelism.Atomic-AtomicFloat.ixx" />
-    <ClCompile Include="Public\Atomic\Parallelism.Atomic.ixx" />
-    <ClCompile Include="Public\Parallel\Parallelism.Parallel-ParallelFor.ixx" />
-    <ClCompile Include="Public\Parallel\Parallelism.Parallel.ixx" />
+    <ClCompile Include="Private\Atomic\SE.Parallelism.Atomic-AtomicFloat.cpp" />
+    <ClCompile Include="Private\Parallel\SE.Parallelism.Parallel-ParallelFor.cpp" />
+    <ClCompile Include="Public\Atomic\SE.Parallelism.Atomic-AtomicFloat.ixx" />
+    <ClCompile Include="Public\Parallel\SE.Parallelism.Parallel-ParallelFor.ixx" />
+    <ClCompile Include="Public\SE.Parallelism.ixx" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Core\Core.vcxproj">

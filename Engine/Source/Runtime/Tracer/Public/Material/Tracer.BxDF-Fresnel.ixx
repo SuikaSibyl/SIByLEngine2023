@@ -2,9 +2,8 @@ module;
 #include <algorithm>
 #include <cmath>
 export module Tracer.BxDF:Fresnel;
-import Math.Vector;
-import Math.Geometry;
-import Math.Common;
+import SE.Math.Geometric;
+import SE.Math.Misc;
 import Tracer.Spectrum;
 
 namespace SIByL::Tracer

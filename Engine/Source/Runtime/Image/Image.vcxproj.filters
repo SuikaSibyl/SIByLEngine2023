@@ -15,43 +15,28 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Public\Color\Image.Color.ixx">
+    <ClCompile Include="Public\Color\SE.Image-Color.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Image\Image.Image.ixx">
+    <ClCompile Include="Public\Image\SE.Image-Image.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\FileFormat\Image.FileFormat.ixx">
+    <ClCompile Include="Public\FileFormat\SE.Image-FileFormat.PFM.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\FileFormat\Image.FileFormat-PFM.ixx">
+    <ClCompile Include="Public\FileFormat\SE.Image-FileFormat.PPM.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Private\FileFormat\Image.FileFormat-PFM.cpp">
+    <ClCompile Include="Public\FileFormat\SE.Image-FileFormat.JPEG.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Private\Image\Image.Image.cpp">
+    <ClCompile Include="Public\FileFormat\SE.Image-FileFormat.PNG.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\FileFormat\Image.FileFormat-PPM.ixx">
+    <ClCompile Include="Public\FileFormat\SE.Image-FileFormat.HDR.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Private\FileFormat\Image.FileFormat-PPM.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\FileFormat\Image.FileFormat-JPEG.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Private\FileFormat\Image.FileFormat-JPEG.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\FileFormat\Image.FileFormat-PNG.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Private\FileFormat\Image.FileFormat-PNG.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\FileFormat\Image.FileFormat-HDR.ixx">
+    <ClCompile Include="Public\SE.Image.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

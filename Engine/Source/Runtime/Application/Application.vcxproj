@@ -137,8 +137,9 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Public\Application.Base.ixx" />
-    <ClCompile Include="Public\Application.Root.ixx" />
+    <ClCompile Include="Public\SE.Application.Base.ixx" />
+    <ClCompile Include="Public\SE.Application.ixx" />
+    <ClCompile Include="Public\SE.Application.Root.ixx" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Core\Core.vcxproj">
@@ -150,9 +151,6 @@
     <ProjectReference Include="..\Platform\Platform.vcxproj">
       <Project>{05b6310e-59bc-496a-ad4f-ccdd23c7f04d}</Project>
     </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="Public\Application.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -15,31 +15,31 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Public\Window\Platform.Window.ixx">
+    <ClCompile Include="Public\Window\SE.Platform.Window.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Private\Window\Platform.Window-Win64.cpp">
+    <ClCompile Include="Private\Window\SE.Platform.Window-Win64.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Window\Platform.Window-Win64.ixx">
+    <ClCompile Include="Public\Window\SE.Platform.Window-Win64.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Window\Platform.Window-Window.ixx">
+    <ClCompile Include="Public\Window\SE.Platform.Window-Window.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Window\Platform.Window-GLFW.ixx">
+    <ClCompile Include="Public\Window\SE.Platform.Window-GLFW.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Private\Window\Platform.Window-GLFW.cpp">
+    <ClCompile Include="Private\Window\SE.Platform.Window-GLFW.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\System\Platform.System.ixx">
+    <ClCompile Include="Public\Misc\SE.Platform.Misc-Func.Win64.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\System\Platform.System-Win64.ixx">
+    <ClCompile Include="Private\Window\SE.Platform.Window-Window.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Private\Window\Platform.Window-Window.cpp">
+    <ClCompile Include="Public\Misc\SE.Platform.Misc.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

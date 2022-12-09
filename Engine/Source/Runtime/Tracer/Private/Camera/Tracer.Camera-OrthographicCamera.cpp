@@ -5,9 +5,8 @@ import :ProjectiveCamera;
 import Tracer.Medium;
 import Tracer.Film;
 import Tracer.Ray;
-import Math.Common;
-import Math.Geometry;
-import Math.Transform;
+import SE.Math.Geometric;
+import SE.Math.Misc;
 
 namespace SIByL::Tracer
 {

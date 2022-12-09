@@ -139,11 +139,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Public\Editor.Core-ImGuiBackend.ixx" />
-    <ClCompile Include="Public\Editor.Core-ImGuiBackend.VK.ixx" />
-    <ClCompile Include="Public\Editor.Core-ImGuiLayer.ixx" />
-    <ClCompile Include="Public\Editor.Core.ixx" />
-    <ClCompile Include="Public\Editor.Framework.ixx" />
+    <ClCompile Include="Public\SE.Editor.Core-ImGuiBackend.ixx" />
+    <ClCompile Include="Public\SE.Editor.Core-ImGuiBackend.VK.ixx" />
+    <ClCompile Include="Public\SE.Editor.Core-ImGuiLayer.ixx" />
+    <ClCompile Include="Public\SE.Editor.Core.ixx" />
+    <ClCompile Include="Public\SE.Editor.Core-Framework.ixx" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Runtime\Core\Core.vcxproj">

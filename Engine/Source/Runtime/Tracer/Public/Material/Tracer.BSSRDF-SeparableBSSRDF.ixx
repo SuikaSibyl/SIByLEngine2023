@@ -1,7 +1,6 @@
 export module Tracer.BSSRDF:SeparableBSSRDF;
-import Math.Vector;
-import Math.Geometry;
-import Math.Trigonometric;
+import SE.Math.Misc;
+import SE.Math.Geometric;
 import Tracer.Interactable;
 import Tracer.Spectrum;
 import Tracer.BxDF;

@@ -4,8 +4,7 @@ import :BxDF;
 import :SpecularReflection;
 import :Fresnel;
 import :MicrofacetDistribution;
-import Math.Vector;
-import Math.Geometry;
+import SE.Math.Geometric;
 import Tracer.Spectrum;
 
 namespace SIByL::Tracer

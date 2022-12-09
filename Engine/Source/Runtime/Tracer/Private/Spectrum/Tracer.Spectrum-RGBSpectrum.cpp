@@ -8,8 +8,7 @@ import Tracer.Spectrum;
 import :SampledSpectrum;
 import :CoefficientSpectrum;
 import :Common;
-import Math.Limits;
-import Math.Common;
+import SE.Math.Misc;
 
 namespace SIByL::Tracer
 {

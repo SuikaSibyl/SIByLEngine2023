@@ -4,9 +4,9 @@ module;
 #include <cstdint>
 #include <algorithm>
 export module Tracer.Base;
-import Core.Memory;
-import Math.Geometry;
-import Math.Random;
+import SE.Core.Memory;
+import SE.Math.Geometric;
+import SE.Math.Misc;
 
 namespace SIByL::Tracer
 {

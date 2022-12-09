@@ -4,10 +4,8 @@ module;
 #include <memory>
 module Tracer.Sampler:StratifiedSampler;
 import Tracer.Sampler;
-import Math.Limits;
-import Math.Vector;
-import Math.Geometry;
-import Math.Random;
+import SE.Math.Misc;
+import SE.Math.Geometric;
 
 namespace SIByL::Tracer
 {

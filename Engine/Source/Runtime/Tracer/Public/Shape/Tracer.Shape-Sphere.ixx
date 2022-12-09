@@ -2,14 +2,8 @@ module;
 #include <algorithm>
 #include <cmath>
 export module Tracer.Shape:Sphere;
-import Math.Common;
-import Math.Vector;
-import Math.Geometry;
-import Math.Transform;
-import Math.Transform;
-import Math.Trigonometric;
-import Math.RoundingError;
-import Math.EquationSolving;
+import SE.Math.Misc;
+import SE.Math.Geometric;
 import Tracer.Interactable;
 import Tracer.Sampling;
 

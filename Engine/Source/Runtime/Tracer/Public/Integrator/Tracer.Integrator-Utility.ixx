@@ -2,9 +2,8 @@ module;
 #include <cmath>
 #include <vector>
 export module Tracer.Integrator:Utility;
-import Core.Memory;
-import Math.Vector;
-import Math.Geometry;
+import SE.Core.Memory;
+import SE.Math.Geometric;
 import Tracer.Ray;
 import Tracer.BxDF;
 import Tracer.Spectrum;

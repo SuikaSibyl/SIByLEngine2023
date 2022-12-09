@@ -6,15 +6,13 @@ module;
 #include <typeinfo>
 #include <imgui.h>
 #include <imgui_internal.h>
-export module Editor.GFX:TextureFragment;
+export module SE.Editor.GFX:TextureFragment;
+import :Utils;
 import :SceneWidget;
-import Core.Resource;
-import RHI;
-import GFX.Resource;
-import GFX.GFXManager;
-import Editor.Core;
-import Editor.Framework;
-import Editor.Utils;
+import SE.Core.Resource;
+import SE.RHI;
+import SE.GFX.Core;
+import SE.Editor.Core;
 
 namespace SIByL::Editor
 {

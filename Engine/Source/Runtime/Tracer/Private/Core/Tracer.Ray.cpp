@@ -5,12 +5,9 @@ module;
 #include <memory>
 #include <string>
 module Tracer.Ray;
-import Core.Memory;
-import Math.Vector;
-import Math.Geometry;
-import Math.Limits;
-import Math.Transform;
-import Math.Random;
+import SE.Core.Memory;
+import SE.Math.Misc;
+import SE.Math.Geometric;
 import Tracer.Spectrum;
 import Tracer.Medium;
 

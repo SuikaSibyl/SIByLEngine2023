@@ -1,10 +1,9 @@
 module;
 #include <memory>
 export module Tracer.Medium:HomogeneousMedium;
-import Core.Memory;
-import Math.Limits;
-import Math.Common;
-import Math.Transform;
+import SE.Core.Memory;
+import SE.Math.Misc;
+import SE.Math.Geometric;
 import Tracer.Ray;
 import Tracer.Spectrum;
 

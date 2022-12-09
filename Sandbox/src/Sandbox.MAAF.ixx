@@ -4,12 +4,10 @@ module;
 #include <memory>
 #include <utility>
 export module Sandbox.MAAF;
-import Core.Resource;
-import Math.Vector;
-import RHI;
-import RHI.RHILayer;
-import GFX.Resource;
-import GFX.GFXManager;
+import SE.Core.Resource;
+import SE.Math.Geometric;
+import SE.RHI;
+import SE.GFX.Core;
 
 using namespace SIByL;
 

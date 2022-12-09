@@ -1,10 +1,8 @@
 module;
 #include <string>
 export module Tracer.Light:ProjectionLight;
-import Math.Vector;
-import Math.Geometry;
-import Math.Transform;
-import Math.Trigonometric;
+import SE.Math.Misc;
+import SE.Math.Geometric;
 import Tracer.Interactable;
 import Tracer.Medium;
 import Tracer.Spectrum;

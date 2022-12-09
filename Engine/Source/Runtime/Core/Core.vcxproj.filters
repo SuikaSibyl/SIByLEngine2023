@@ -15,115 +15,118 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Public\Memory\Core.Memory.ixx">
+    <ClCompile Include="Public\Memory\SE.Core.Memory.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Memory\Core.Memory-Allocator.ixx">
+    <ClCompile Include="Public\Memory\SE.Core.Memory-Allocator.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Private\Memory\Core.Memory-Allocator.cpp">
+    <ClCompile Include="Private\Memory\SE.Core.Memory-Allocator.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Memory\Core.Memory-MemoryManager.ixx">
+    <ClCompile Include="Public\Memory\SE.Core.Memory-MemoryManager.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Private\Memory\Core.Memory-MemoryManager.cpp">
+    <ClCompile Include="Private\Memory\SE.Core.Memory-MemoryManager.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Memory\Core.Memory-SmartPtr.ixx">
+    <ClCompile Include="Public\Memory\SE.Core.Memory-SmartPtr.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Print\Core.Log.ixx">
+    <ClCompile Include="Public\Print\SE.Core.Log.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Print\Core.Log-LogStream.ixx">
+    <ClCompile Include="Public\Print\SE.Core.Log-LogStream.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\System\Core.System.ixx">
+    <ClCompile Include="Public\System\SE.Core.System.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\System\Core.System-Manager.ixx">
+    <ClCompile Include="Public\System\SE.Core.System-Manager.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Memory\Core.Memory-StackAllocator.ixx">
+    <ClCompile Include="Public\Memory\SE.Core.Memory-StackAllocator.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Memory\Core.Memory-DoubleEndedStackAllocator.ixx">
+    <ClCompile Include="Public\Memory\SE.Core.Memory-DoubleEndedStackAllocator.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Print\Core.Log-LogManager.ixx">
+    <ClCompile Include="Public\Print\SE.Core.Log-LogManager.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Print\Core.Log-Logger.ixx">
+    <ClCompile Include="Public\Print\SE.Core.Log-Logger.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\IO\Core.IO.ixx">
+    <ClCompile Include="Public\IO\SE.Core.IO.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\IO\Core.IO-SyncRW.ixx">
+    <ClCompile Include="Public\IO\SE.Core.IO-SyncRW.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\IO\Core.IO-File.ixx">
+    <ClCompile Include="Public\IO\SE.Core.IO-File.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Memory\Core.Memory-Buffer.ixx">
+    <ClCompile Include="Public\Memory\SE.Core.Memory-Buffer.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Private\Memory\Core.Memory-Buffer.cpp">
+    <ClCompile Include="Private\Memory\SE.Core.Memory-Buffer.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Event\Core.Event.ixx">
+    <ClCompile Include="Public\Event\SE.Core.Event.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Event\Core.Event-Event.ixx">
+    <ClCompile Include="Public\Event\SE.Core.Event-Event.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Event\Core.Event-Signal.ixx">
+    <ClCompile Include="Public\Event\SE.Core.Event-Signal.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Memory\Core.Memory-MemoryArena.ixx">
+    <ClCompile Include="Public\Memory\SE.Core.Memory-MemoryArena.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Memory\Core.Memory-Memory.ixx">
+    <ClCompile Include="Public\Memory\SE.Core.Memory-Memory.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Private\Memory\Core.Memory-MemoryArena.cpp">
+    <ClCompile Include="Private\Memory\SE.Core.Memory-MemoryArena.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Memory\Core.Memory-BlockedArray.ixx">
+    <ClCompile Include="Public\Memory\SE.Core.Memory-BlockedArray.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Private\Memory\Core.Memory-StackAllocator.cpp">
+    <ClCompile Include="Private\Memory\SE.Core.Memory-StackAllocator.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Misc\Core.String.ixx">
+    <ClCompile Include="Public\Misc\SE.Core.Misc-Timer.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Misc\Core.Timer.ixx">
+    <ClCompile Include="Public\ECS\SE.Core.ECS-ECS.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\ECS\Core.ECS.ixx">
+    <ClCompile Include="Public\ECS\SE.Core.ECS-SparseSet.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\ECS\Core.SparseSet.ixx">
+    <ClCompile Include="Public\System\SE.Core.System-Layer.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\System\Core.System-Layer.ixx">
+    <ClCompile Include="Public\Resource\SE.Core.Resource.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Resource\Core.Resource.ixx">
+    <ClCompile Include="Public\Resource\SE.Core.Resource-GUID.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Resource\Core.Resource-GUID.ixx">
+    <ClCompile Include="Private\Resource\SE.Core.Resource-GUID.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Private\Resource\Core.Resource-GUID.cpp">
+    <ClCompile Include="Public\Resource\SE.Core.Resource-ResourceManager.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Resource\Core.Resource-ResourceManager.ixx">
+    <ClCompile Include="Public\Resource\SE.Core.Resource-OfflineManage.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Resource\Core.Resource-OfflineManage.ixx">
+    <ClCompile Include="Public\ECS\SE.Core.ECS.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Misc\SE.Core.Misc.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
@@ -131,7 +134,7 @@
     <ClInclude Include="Public\Core.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="Public\Memory\Core.Memory.hpp">
+    <ClInclude Include="Public\Memory\SE.Core.Memory.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

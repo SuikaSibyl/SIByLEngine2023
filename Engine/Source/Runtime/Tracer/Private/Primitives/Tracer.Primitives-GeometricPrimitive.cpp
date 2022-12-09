@@ -1,7 +1,7 @@
 module Tracer.Primitives:GeometricPrimitive;
 import Tracer.Primitives;
 import Tracer.Interactable;
-import Math.Geometry;
+import SE.Math.Geometric;
 import Tracer.Ray;
 import Tracer.Shape;
 import Tracer.Medium;

@@ -1,8 +1,8 @@
 module;
 #include <new>
 export module Tracer.Material:MatteMaterial;
-import Core.Memory;
-import Math.Common;
+import SE.Core.Memory;
+import SE.Math.Misc;
 import Tracer.Interactable;
 import Tracer.Texture;
 import Tracer.Spectrum;

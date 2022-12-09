@@ -8,10 +8,10 @@ module;
 #include <functional>
 #include <imgui.h>
 #include <imgui_internal.h>
-export module Editor.GFX:InspectorWidget;
-import Editor.Framework;
-import Core.ECS;
-import GFX.Resource;
+export module SE.Editor.GFX:InspectorWidget;
+import SE.Editor.Core;
+import SE.Core.ECS;
+import SE.GFX.Core;
 
 namespace SIByL::Editor
 {

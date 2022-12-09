@@ -1,7 +1,7 @@
 module;
 #include <new>
 export module Tracer.Material:MixMaterial;
-import Core.Memory;
+import SE.Core.Memory;
 import Tracer.Interactable;
 import Tracer.Texture;
 import Tracer.Spectrum;

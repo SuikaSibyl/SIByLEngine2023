@@ -9,17 +9,13 @@ module;
 #include <compare>
 #include <filesystem>
 #include <imgui_internal.h>
-export module Editor.GFX:ContentWidget;
+export module SE.Editor.GFX:ContentWidget;
 import :InspectorWidget;
 import :TextureFragment;
-import Core.Resource;
-import Image.Color;
-import Image.Image;
-import Image.FileFormat;
-import GFX.Resource;
-import GFX.GFXManager;
-import Editor.Core;
-import Editor.Framework;
+import SE.Core.Resource;
+import SE.Image;
+import SE.GFX.Core;
+import SE.Editor.Core;
 
 namespace SIByL::Editor
 {

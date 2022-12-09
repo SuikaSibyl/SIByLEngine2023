@@ -140,12 +140,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\ThirdParty\glad\src\glad.c" />
-    <ClCompile Include="Public\RHI-GL.ixx" />
-    <ClCompile Include="Public\RHI-VK.ixx" />
-    <ClCompile Include="Public\RHI-Interface.ixx" />
-    <ClCompile Include="Public\RHI.ixx" />
-    <ClCompile Include="Public\RHI.RHILayer.ixx" />
-    <ClCompile Include="Public\RHI.Utility.ixx" />
+    <ClCompile Include="Public\SE.RHI-GL.ixx" />
+    <ClCompile Include="Public\SE.RHI-VK.ixx" />
+    <ClCompile Include="Public\SE.RHI-Interface.ixx" />
+    <ClCompile Include="Public\SE.RHI.ixx" />
+    <ClCompile Include="Public\SE.RHI.RHILayer.ixx" />
+    <ClCompile Include="Public\SE.RHI.Utility.ixx" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Core\Core.vcxproj">

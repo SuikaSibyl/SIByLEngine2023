@@ -18,22 +18,22 @@
     <ClCompile Include="..\..\ThirdParty\glad\src\glad.c">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\RHI.ixx">
+    <ClCompile Include="Public\SE.RHI.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\RHI-Interface.ixx">
+    <ClCompile Include="Public\SE.RHI-Interface.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\RHI-VK.ixx">
+    <ClCompile Include="Public\SE.RHI-VK.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\RHI-GL.ixx">
+    <ClCompile Include="Public\SE.RHI-GL.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\RHI.RHILayer.ixx">
+    <ClCompile Include="Public\SE.RHI.RHILayer.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\RHI.Utility.ixx">
+    <ClCompile Include="Public\SE.RHI.Utility.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

@@ -159,24 +159,23 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Public\Component\GFX.Components-Camera.ixx" />
-    <ClCompile Include="Public\Component\GFX.Components-MeshReference.ixx" />
-    <ClCompile Include="Public\Component\GFX.Components-MeshRenderer.ixx" />
-    <ClCompile Include="Public\Component\GFX.Components.ixx" />
-    <ClCompile Include="Public\RDG\GFX.RDG.ixx" />
-    <ClCompile Include="Public\Resource\GFX.MeshLoader.ixx" />
-    <ClCompile Include="Public\Core\GFX.GFXManager.ixx" />
-    <ClCompile Include="Public\Resource\GFX.Resources-ASGroup.ixx" />
-    <ClCompile Include="Public\Resource\GFX.Resources-Buffer.ixx" />
-    <ClCompile Include="Public\Resource\GFX.Resources-Sampler.ixx" />
-    <ClCompile Include="Public\Resource\GFX.Resources-Scene.ixx" />
-    <ClCompile Include="Public\Resource\GFX.Resources-Material.ixx" />
-    <ClCompile Include="Public\Resource\GFX.Resources-Mesh.ixx" />
-    <ClCompile Include="Public\Resource\GFX.Resources-ShaderModule.ixx" />
-    <ClCompile Include="Public\Resource\GFX.Resources-Texture.ixx" />
-    <ClCompile Include="Public\Resource\GFX.Resources.ixx" />
-    <ClCompile Include="Public\Resource\GFX.SceneNodeLoader.ixx" />
-    <ClCompile Include="Public\Resource\GFX.SerializeUtils.ixx" />
+    <ClCompile Include="Public\Core\Component\SE.GFX.Core-Components.Camera.ixx" />
+    <ClCompile Include="Public\Core\Component\SE.GFX.Core-Components.MeshReference.ixx" />
+    <ClCompile Include="Public\Core\Component\SE.GFX.Core-Components.MeshRenderer.ixx" />
+    <ClCompile Include="Public\RDG\SE.GFX.RDG.ixx" />
+    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-MeshLoader.ixx" />
+    <ClCompile Include="Public\Core\Manager\SE.GFX.Core-GFXManager.ixx" />
+    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-Resources.ASGroup.ixx" />
+    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-Resources.Buffer.ixx" />
+    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-Resources.Sampler.ixx" />
+    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-Resources.Scene.ixx" />
+    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-Resources.Material.ixx" />
+    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-Resources.Mesh.ixx" />
+    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-Resources.ShaderModule.ixx" />
+    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-Resources.Texture.ixx" />
+    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-SceneNodeLoader.ixx" />
+    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-SerializeUtils.ixx" />
+    <ClCompile Include="Public\Core\SE.GFX.Core.ixx" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -139,7 +139,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Public\Editor.GFX.CameraController.ixx" />
+    <ClCompile Include="Public\Editor.GFX-CameraController.ixx" />
     <ClCompile Include="Public\Editor.GFX-ContentWidget.ixx" />
     <ClCompile Include="Public\Editor.GFX-InspectorFragments.ixx" />
     <ClCompile Include="Public\Editor.GFX-InspectorWidget.ixx" />
@@ -147,7 +147,7 @@
     <ClCompile Include="Public\Editor.GFX-SceneWidget.ixx" />
     <ClCompile Include="Public\Editor.GFX-TextureFragment.ixx" />
     <ClCompile Include="Public\Editor.GFX.ixx" />
-    <ClCompile Include="Public\Editor.Utils.ixx" />
+    <ClCompile Include="Public\Editor.GFX-Editor.Utils.ixx" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Runtime\Core\Core.vcxproj">

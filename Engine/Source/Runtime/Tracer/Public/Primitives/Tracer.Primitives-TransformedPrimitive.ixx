@@ -1,6 +1,5 @@
 export module Tracer.Primitives:TransformedPrimitive;
-import Math.Transform;
-import Math.Geometry;
+import SE.Math.Geometric;
 import Tracer.Ray;
 import Tracer.Interactable;
 

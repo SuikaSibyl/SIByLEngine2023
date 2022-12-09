@@ -6,11 +6,10 @@ module;
 #include <typeinfo>
 #include <imgui.h>
 #include <imgui_internal.h>
-export module Editor.GFX:SceneWidget;
+export module SE.Editor.GFX:SceneWidget;
 import :InspectorWidget;
-import Editor.Core;
-import Editor.Framework;
-import GFX.Resource;
+import SE.Editor.Core;
+import SE.GFX.Core;
 
 namespace SIByL::Editor
 {

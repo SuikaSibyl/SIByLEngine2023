@@ -1,8 +1,7 @@
 module;
 export module Tracer.BxDF:ScaledBxDF;
 import :BxDF;
-import Math.Vector;
-import Math.Geometry;
+import SE.Math.Geometric;
 import Tracer.Spectrum;
 
 namespace SIByL::Tracer

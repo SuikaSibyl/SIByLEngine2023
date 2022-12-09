@@ -2,8 +2,7 @@ module;
 #include <cmath>
 #include <limits>
 export module Tracer.Spectrum:CoefficientSpectrum;
-import Math.Common;
-import Math.Limits;
+import SE.Math.Misc;
 
 namespace SIByL::Tracer
 {

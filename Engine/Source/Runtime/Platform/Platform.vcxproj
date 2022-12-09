@@ -139,15 +139,15 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Private\Window\Platform.Window-GLFW.cpp" />
-    <ClCompile Include="Private\Window\Platform.Window-Win64.cpp" />
-    <ClCompile Include="Private\Window\Platform.Window-Window.cpp" />
-    <ClCompile Include="Public\System\Platform.System-Win64.ixx" />
-    <ClCompile Include="Public\System\Platform.System.ixx" />
-    <ClCompile Include="Public\Window\Platform.Window-GLFW.ixx" />
-    <ClCompile Include="Public\Window\Platform.Window-Win64.ixx" />
-    <ClCompile Include="Public\Window\Platform.Window-Window.ixx" />
-    <ClCompile Include="Public\Window\Platform.Window.ixx" />
+    <ClCompile Include="Private\Window\SE.Platform.Window-GLFW.cpp" />
+    <ClCompile Include="Private\Window\SE.Platform.Window-Win64.cpp" />
+    <ClCompile Include="Private\Window\SE.Platform.Window-Window.cpp" />
+    <ClCompile Include="Public\Misc\SE.Platform.Misc.ixx" />
+    <ClCompile Include="Public\Misc\SE.Platform.Misc-Func.Win64.ixx" />
+    <ClCompile Include="Public\Window\SE.Platform.Window-GLFW.ixx" />
+    <ClCompile Include="Public\Window\SE.Platform.Window-Win64.ixx" />
+    <ClCompile Include="Public\Window\SE.Platform.Window-Window.ixx" />
+    <ClCompile Include="Public\Window\SE.Platform.Window.ixx" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Core\Core.vcxproj">

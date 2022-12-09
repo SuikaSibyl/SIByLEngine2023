@@ -2,8 +2,8 @@ module;
 #include <cstdint>
 #include <vector>
 export module Tracer.Sampler:PixelSampler;
-import Math.Geometry;
-import Math.Random;
+import SE.Math.Misc;
+import SE.Math.Geometric;
 import Tracer.Base;
 
 namespace SIByL::Tracer

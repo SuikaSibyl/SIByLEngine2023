@@ -1,6 +1,5 @@
 export module Tracer.Texture:TextureMapping;
-import Math.Vector;
-import Math.Geometry;
+import SE.Math.Geometric;
 import Tracer.Interactable;
 
 namespace SIByL::Tracer

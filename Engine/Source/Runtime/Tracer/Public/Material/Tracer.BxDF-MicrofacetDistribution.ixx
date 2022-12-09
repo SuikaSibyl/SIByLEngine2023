@@ -2,10 +2,8 @@ module;
 #include <cmath>
 export module Tracer.BxDF:MicrofacetDistribution;
 import :BxDF;
-import Math.Vector;
-import Math.Common;
-import Math.Trigonometric;
-import Math.Geometry;
+import SE.Math.Misc;
+import SE.Math.Geometric;
 import Tracer.Spectrum;
 
 namespace SIByL::Tracer

@@ -5,12 +5,9 @@ module;
 #include <memory>
 #include <string>
 export module Tracer.Ray;
-import Core.Memory;
-import Math.Vector;
-import Math.Geometry;
-import Math.Limits;
-import Math.Transform;
-import Math.Random;
+import SE.Core.Memory;
+import SE.Math.Geometric;
+import SE.Math.Misc;
 import Tracer.Spectrum;
 import Tracer.Film;
 import Tracer.Base;

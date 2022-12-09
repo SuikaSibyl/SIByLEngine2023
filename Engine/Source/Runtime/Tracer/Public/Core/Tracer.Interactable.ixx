@@ -2,10 +2,8 @@ module;
 #include <cstdint>
 #include <vector>
 export module Tracer.Interactable;
-import Core.Memory;
-import Math.Vector;
-import Math.Geometry;
-import Math.Transform;
+import SE.Core.Memory;
+import SE.Math.Geometric;
 import Tracer.Ray;
 import Tracer.BxDF;
 import Tracer.Base;

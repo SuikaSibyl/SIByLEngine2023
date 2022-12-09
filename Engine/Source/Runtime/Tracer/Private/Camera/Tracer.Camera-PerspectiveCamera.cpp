@@ -4,9 +4,8 @@ import :ProjectiveCamera;
 import Tracer.Medium;
 import Tracer.Film;
 import Tracer.Ray;
-import Math.Common;
-import Math.Geometry;
-import Math.Transform;
+import SE.Math.Geometric;
+import SE.Math.Misc;
 
 namespace SIByL::Tracer
 {
@@ -41,9 +40,9 @@ namespace SIByL::Tracer
 		return 1;
 	}
 
-	auto PerspectiveCamera::generateRayDifferential(CameraSample const& sample, RayDifferential* rd) noexcept -> float {
-		
-		
-		return 1.0f;
-	}
+	//auto PerspectiveCamera::generateRayDifferential(CameraSample const& sample, RayDifferential* rd) noexcept -> float {
+	//	
+	//	
+	//	return 1.0f;
+	//}
 }

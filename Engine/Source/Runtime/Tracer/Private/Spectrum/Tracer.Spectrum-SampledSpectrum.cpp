@@ -3,8 +3,7 @@ module;
 #include <vector>
 module Tracer.Spectrum:SampledSpectrum;
 import Tracer.Spectrum;
-import Math.Limits;
-import Math.Common;
+import SE.Math.Misc;
 import :CoefficientSpectrum;
 import :RGBSpectrum;
 import :Common;

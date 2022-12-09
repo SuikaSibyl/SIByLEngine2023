@@ -3,11 +3,10 @@ module;
 #include <memory>
 #include <vector>
 export module Tracer.Texture:MIPMap;
-import Core.Memory;
-import Math.Common;
-import Math.Vector;
-import Math.Geometry;
-import Parallelism.Parallel;
+import SE.Core.Memory;
+import SE.Math.Misc;
+import SE.Math.Geometric;
+import SE.Parallelism;
 
 namespace SIByL::Tracer
 {

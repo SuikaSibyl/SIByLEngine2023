@@ -3,8 +3,8 @@ module;
 #include <vector>
 module Tracer.Sampler:PixelSampler;
 import Tracer.Sampler;
-import Math.Geometry;
-import Math.Random;
+import SE.Math.Misc;
+import SE.Math.Geometric;
 
 namespace SIByL::Tracer
 {

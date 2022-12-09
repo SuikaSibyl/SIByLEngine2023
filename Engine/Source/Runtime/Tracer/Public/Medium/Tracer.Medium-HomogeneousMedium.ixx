@@ -1,7 +1,7 @@
 module;
 #include <cmath>
 export module Tracer.Medium:HomogeneousMedium;
-import Math.Limits;
+import SE.Math.Misc;
 import Tracer.Ray;
 import Tracer.Spectrum;
 
