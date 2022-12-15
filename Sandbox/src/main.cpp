@@ -11,6 +11,9 @@
 #include <imgui.h>
 #include <stack>
 #include <tinygltf/tiny_gltf.h>
+#include <crtdbg.h>
+
+import SE.Utility;
 import SE.Core.Log;
 import SE.Core.Memory;
 import SE.Core.IO;
@@ -42,16 +45,18 @@ import Tracer.Texture;
 import Tracer.Light;
 
 import SE.GFX.Core;
+import SE.GFX.RDG;
+
 import SE.Application;
 
 import SE.Editor.Core;
 import SE.Editor.GFX;
 import SE.Editor.Config;
-
-import Sandbox.Tracer;
-import Sandbox.AAF_GI;
-import Sandbox.Benchmark;
-import Sandbox.MAAF;
+//
+//import Sandbox.Tracer;
+//import Sandbox.AAF_GI;
+//import Sandbox.Benchmark;
+//import Sandbox.MAAF;
 
 
 using namespace SIByL;
@@ -81,13 +86,15 @@ struct PushConstantRay {
 
 struct SandBoxApplication :public Application::ApplicationBase {
 	GFX::GameObjectHandle camera_go;
+
 	/** Initialize the application */
 	virtual auto Init() noexcept -> void override {
 		// create optional layers: rhi, imgui, editor
 		rhiLayer = std::make_unique<RHI::RHILayer>(RHI::RHILayerDescriptor{
 				RHI::RHIBackend::Vulkan,
-				(uint32_t)RHI::ContextExtension::RAY_TRACING
-				| (uint32_t)RHI::ContextExtension::BINDLESS_INDEXING,
+				RHI::ContextExtensionsFlags(
+					RHI::ContextExtension::RAY_TRACING
+					| RHI::ContextExtension::BINDLESS_INDEXING),
 				mainWindow.get(),
 				true
 			});
@@ -95,8 +102,18 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		imguiLayer = std::make_unique<Editor::ImGuiLayer>(rhiLayer.get());
 		editorLayer = std::make_unique<Editor::EditorLayer>();
 		Editor::Config::buildEditorLayer(editorLayer.get());
+
 		// bind editor layer
 		editorLayer->getWidget<Editor::SceneWidget>()->bindScene(&scene);
+
+		//GFX::RDGraph rdgraph;
+		//GFX::RDGTexture* texRes_rasterizer_target = rdgraph.createTexture("RasterizerTarget");
+		//GFX::RDGPassNode* pass = rdgraph.addPass("DrawAlbedoPass", GFX::RDGPassFlag::RASTER, [&]()->GFX::RDGraph::CustomPassExecuteFn {
+		//	return [=](GFX::RDGRegistry const& registry, RHI::CommandEncoder* cmdEncoder)->void {
+		//		
+		//	};
+		//	});
+		//rdgraph.compile();
 
 		RHI::Device* device = rhiLayer->getDevice();
 		RHI::SwapChain* swapchain = rhiLayer->getSwapChain();
@@ -338,20 +355,20 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			computePipeline[i]->setName("ComputeShader_RayTracer");
 		}
 
-		directTracer = std::make_unique<Sandbox::DirectTracer>(rhiLayer.get(), std::array<RHI::PipelineLayout*, 2>{ pipelineLayout_RT[0].get() ,pipelineLayout_RT[1].get() });
+		//directTracer = std::make_unique<Sandbox::DirectTracer>(rhiLayer.get(), std::array<RHI::PipelineLayout*, 2>{ pipelineLayout_RT[0].get() ,pipelineLayout_RT[1].get() });
 
-		aafPipeline = std::make_unique<Sandbox::AAFPipeline>(rhiLayer.get(),
-			Core::ResourceManager::get()->getResource<GFX::ASGroup>(ASGroup), rtTarget,
-			rtBindGroupLayout.get(), std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()});
-		aafGIPipeline = std::make_unique<Sandbox::AAF_GI_Pipeline>(rhiLayer.get(),
-			Core::ResourceManager::get()->getResource<GFX::ASGroup>(ASGroup), rtTarget, 
-			rtBindGroupLayout.get(), std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()});
-		benchmarkPipeline = std::make_unique<Sandbox::Benchmark_Pipeline>(rhiLayer.get(), 
-			Core::ResourceManager::get()->getResource<GFX::ASGroup>(ASGroup), rtTarget, 
-			rtBindGroupLayout.get(), std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()});
-		maafPipeline = std::make_unique<Sandbox::MAAF_Pipeline>(rhiLayer.get(),
-			Core::ResourceManager::get()->getResource<GFX::ASGroup>(ASGroup), rtTarget, 
-			rtBindGroupLayout.get(), std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()});
+		//aafPipeline = std::make_unique<Sandbox::AAFPipeline>(rhiLayer.get(),
+		//	Core::ResourceManager::get()->getResource<GFX::ASGroup>(ASGroup), rtTarget,
+		//	rtBindGroupLayout.get(), std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()});
+		//aafGIPipeline = std::make_unique<Sandbox::AAF_GI_Pipeline>(rhiLayer.get(),
+		//	Core::ResourceManager::get()->getResource<GFX::ASGroup>(ASGroup), rtTarget, 
+		//	rtBindGroupLayout.get(), std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()});
+		//benchmarkPipeline = std::make_unique<Sandbox::Benchmark_Pipeline>(rhiLayer.get(), 
+		//	Core::ResourceManager::get()->getResource<GFX::ASGroup>(ASGroup), rtTarget, 
+		//	rtBindGroupLayout.get(), std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()});
+		//maafPipeline = std::make_unique<Sandbox::MAAF_Pipeline>(rhiLayer.get(),
+		//	Core::ResourceManager::get()->getResource<GFX::ASGroup>(ASGroup), rtTarget, 
+		//	rtBindGroupLayout.get(), std::array<RHI::BindGroup*, 2>{rtBindGroup[0].get(), rtBindGroup[1].get()});
 	};
 
 	/** Update the application every loop */
@@ -462,7 +479,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			});
 
 		//aafPipeline->composeCommands(commandEncoder.get(), index);
-		aafGIPipeline->composeCommands(commandEncoder.get(), index);
+		//aafGIPipeline->composeCommands(commandEncoder.get(), index);
 		//benchmarkPipeline->composeCommands(commandEncoder.get(), index);
 		//maafPipeline->composeCommands(commandEncoder.get(), index);
 
@@ -630,11 +647,11 @@ struct SandBoxApplication :public Application::ApplicationBase {
 	virtual auto Exit() noexcept -> void override {
 		rhiLayer->getDevice()->waitIdle();
 
-		aafPipeline = nullptr;
-		aafGIPipeline = nullptr;
-		maafPipeline = nullptr;
-		benchmarkPipeline = nullptr;
-		directTracer = nullptr;
+		//aafPipeline = nullptr;
+		//aafGIPipeline = nullptr;
+		//maafPipeline = nullptr;
+		//benchmarkPipeline = nullptr;
+		//directTracer = nullptr;
 		renderPipeline[0] = nullptr;
 		renderPipeline[1] = nullptr;
 		computePipeline[0] = nullptr;
@@ -703,11 +720,11 @@ private:
 	std::unique_ptr<RHI::BLAS> blas = nullptr;
 	std::vector<std::unique_ptr<RHI::BLAS>> blases;
 
-	std::unique_ptr<Sandbox::DirectTracer> directTracer = nullptr;
-	std::unique_ptr<Sandbox::AAFPipeline> aafPipeline = nullptr;
-	std::unique_ptr<Sandbox::AAF_GI_Pipeline> aafGIPipeline = nullptr;
-	std::unique_ptr<Sandbox::Benchmark_Pipeline> benchmarkPipeline = nullptr;
-	std::unique_ptr<Sandbox::MAAF_Pipeline> maafPipeline = nullptr;
+	//std::unique_ptr<Sandbox::DirectTracer> directTracer = nullptr;
+	//std::unique_ptr<Sandbox::AAFPipeline> aafPipeline = nullptr;
+	//std::unique_ptr<Sandbox::AAF_GI_Pipeline> aafGIPipeline = nullptr;
+	//std::unique_ptr<Sandbox::Benchmark_Pipeline> benchmarkPipeline = nullptr;
+	//std::unique_ptr<Sandbox::MAAF_Pipeline> maafPipeline = nullptr;
 
 	std::unique_ptr<RHI::ComputePipeline> computePipeline[2];
 	std::unique_ptr<RHI::RenderPipeline> renderPipeline[2];
@@ -720,100 +737,18 @@ private:
 
 int main()
 {
-	// application root, control all managers
-	Application::Root root;
-	// run app
-	SandBoxApplication app;
-	app.createMainWindow({
-			Platform::WindowVendor::GLFW,
-			L"SIByL Engine 2022.0",
-			1280, 720,
-			Platform::WindowProperties::VULKAN_CONTEX
-		});
-	app.run();
-
-	//Scope<Platform::Window> window = Platform::Window::create({
-	//		Platform::WindowVendor::WIN_64,
-	//		L"Ray Trace Viewer",
-	//		720, 480,
-	//		Platform::WindowProperties::OPENGL_CONTEX
-	//	});
-
-	//int ncores = Platform::getNumSystemCores();
-	//Image::Image<Image::COLOR_R8G8B8_UINT> image(720, 480);
-	//std::fill((Image::COLOR_R8G8B8_UINT*) & ((reinterpret_cast<char*>(image.data.data))[0]), 
-	//	(Image::COLOR_R8G8B8_UINT*)&((reinterpret_cast<char*>(image.data.data))[image.data.size]), 
-	//	Image::COLOR_R8G8B8_UINT{ {255,255,0} });
-
-	//window->bindPaintingBitmapRGB8(size_t(720), size_t(480), (char*)image.data.data);
-	//window->resize(720.f, 480);
-
-	//Math::Transform defaultTransform(mat4{});
-	//Math::AnimatedTransform animatedDefaultTransform(&defaultTransform, 0, &defaultTransform, 0);
-	//Tracer::Film film(Math::ipoint2{ 720, 480 }, Math::bounds2{ {0,0}, {1,1} }, 
-	//	std::make_unique<Tracer::BoxFilter>(Math::vec2{1.f,1.f}), 1, "what.c", 1);
-	//Tracer::OrthographicCamera camera(animatedDefaultTransform, 
-	//	Math::bounds2{ {-1.f * 720.f / 480.f,-1.f}, {1.f * 720.f / 480.f, 1.f} } , 
-	//	0, 0, 0, 0, &film, nullptr);
-
-	//float const radius = 0.5f;
-	//float const radius_2 = 3.f;
-	//Math::Transform objectToWorld = Math::translate({ 0,0,radius_2 });
-	//Math::Transform worldToObject = Math::translate({ 0,0,-radius_2 });
-	//Tracer::Sphere sphere(&objectToWorld, &worldToObject, false, radius, -radius, radius, 360);
-	//Tracer::MatteMaterial material(nullptr, nullptr, nullptr);
-	//Tracer::GeometricPrimitive primitve;
-	//primitve.shape = &sphere;
-	//primitve.material = &material;
-
-	//Math::Transform objectToWorld_2 = Math::translate({ 0,radius_2+ radius,radius_2 });
-	//Math::Transform worldToObject_2 = Math::translate({ 0,-radius_2- radius,-radius_2 });
-
-	//Tracer::Sphere sphere_2(&objectToWorld_2, &worldToObject_2, false, radius_2, -radius_2, radius_2, 360);
-	//Tracer::GeometricPrimitive ground;
-	//ground.shape = &sphere_2;
-	//ground.material = &material;
-	//Tracer::DummyAggregate aggregate{ std::vector<Tracer::Primitive*>{&primitve,& ground} };
-	//Tracer::InfiniteAreaLight areaLight(Math::Transform{}, Tracer::Spectrum{ 1.f }, 1, "");
-	//Tracer::Scene scene(&aggregate, { &areaLight });
-	//Tracer::StratifiedSampler sampler(10, 10, true, 50);
-	//Tracer::WhittedIntegrator integrator(5, &camera, &sampler);
-
-	//std::thread render(std::bind(&Tracer::WhittedIntegrator::render, &integrator, scene));
-
-	//int i = 0;
-	//while (window->isRunning()) {
-	//	auto startPoint = std::chrono::high_resolution_clock::now();
-	//	camera.film->writeImage(image, 1.f);
-	//	//// Clear background to black
-	//	//std::fill((Image::COLOR_R8G8B8_UINT*)&((reinterpret_cast<char*>(image.data.data))[0]),
-	//	//	(Image::COLOR_R8G8B8_UINT*)&((reinterpret_cast<char*>(image.data.data))[image.data.size]),
-	//	//	Image::COLOR_R8G8B8_UINT{ 0 ,0 ,0 });
-
-	//	//float tHit;
-	//	//Math::ivec2 sampleExtent{ 720,480 };
-	//	//int const tileSize = 16;
-	//	//Math::ipoint2 nTiles((sampleExtent.x + tileSize - 1) / tileSize,
-	//	//	(sampleExtent.y + tileSize - 1) / tileSize);
-
-	//	//Parallelism::ParallelFor2D([&](Math::ipoint2 tile)->void {
-	//	//	Tracer::Ray ray;
-	//	//	for (int i = 0; i < tileSize; ++i)
-	//	//		for (int j = 0; j < tileSize; ++j) {
-	//	//			image[tile.y * tileSize + j][tile.x * tileSize + i] = Image::COLOR_R8G8B8_UINT{  0,0 ,255 };
-	//	//		}
-	//	//}, nTiles);
-
-	//	window->fetchEvents();
-	//	window->invalid();
-
-	//	auto endPoint = std::chrono::high_resolution_clock::now();
-	//	long long start = std::chrono::time_point_cast<std::chrono::microseconds>(startPoint).time_since_epoch().count();
-	//	long long end = std::chrono::time_point_cast<std::chrono::microseconds>(endPoint).time_since_epoch().count();
-	//	long long time = end - start;
-	//	std::cout << "Time each frame: " << (time * 1. / 1000000) << std::endl;
-	//}
-	//render.join();
-	//window->destroy();
-	//Parallelism::clearThreadPool();
+	{
+		// application root, control all managers
+		Application::Root root;
+		// run app
+		SandBoxApplication app;
+		app.createMainWindow({
+				Platform::WindowVendor::GLFW,
+				L"SIByL Engine 2022.0",
+				1280, 720,
+				Platform::WindowProperties::VULKAN_CONTEX
+			});
+		app.run();
+	}
+	float a = 1.0f;
 }

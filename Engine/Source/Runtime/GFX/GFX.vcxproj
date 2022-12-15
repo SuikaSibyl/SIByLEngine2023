@@ -162,6 +162,7 @@
     <ClCompile Include="Public\Core\Component\SE.GFX.Core-Components.Camera.ixx" />
     <ClCompile Include="Public\Core\Component\SE.GFX.Core-Components.MeshReference.ixx" />
     <ClCompile Include="Public\Core\Component\SE.GFX.Core-Components.MeshRenderer.ixx" />
+    <ClCompile Include="Public\RDG\SE.GFX.RDG.cpp" />
     <ClCompile Include="Public\RDG\SE.GFX.RDG.ixx" />
     <ClCompile Include="Public\Core\Resource\SE.GFX.Core-MeshLoader.ixx" />
     <ClCompile Include="Public\Core\Manager\SE.GFX.Core-GFXManager.ixx" />

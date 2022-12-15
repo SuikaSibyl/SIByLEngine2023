@@ -27,11 +27,17 @@ namespace SIByL::Core
 	export struct Resource {
 		/** virtual destructor */
 		virtual ~Resource() = default;
+		/** get name */
+		virtual auto getName() const noexcept -> char const* = 0;
 	};
 
 	export struct IResourcePool {
 		/** virtual destructor */
 		virtual ~IResourcePool() = default;
+		/** get all resources */
+		virtual auto getAllGUID() const noexcept -> std::vector<GUID> const& = 0;
+		/** get resource name */
+		virtual auto getResourceName(GUID guid) const noexcept -> char const* = 0;
 	};
 
 	export template<class T> struct ResourcePool :public IResourcePool {
@@ -41,17 +47,45 @@ namespace SIByL::Core
 			if (iter == resourcePool.end()) return nullptr;
 			return &(iter->second);
 		}
+		/** get the resource */
+		auto getResource(GUID guid) const noexcept -> T const* {
+			auto iter = resourcePool.find(guid);
+			if (iter == resourcePool.end()) return nullptr;
+			return &(iter->second);
+		}
 		/** insert the resource */
 		auto insertResource(GUID guid, T && resource) noexcept -> void {
 			resourcePool.insert({ guid, std::move(resource) });
+			GUIDs.push_back(guid);
 		}
 		/** remove the resource */
 		auto removeData(GUID guid) noexcept -> void {
 			resourcePool.erase(guid);
+			for (auto iter = GUIDs.begin(); iter != GUIDs.end(); iter++) {
+				if (*iter == guid){
+					GUIDs.erase(iter);
+					break;
+				}
+			}
+		}
+		/** getPool */
+		auto getPool() const noexcept -> std::unordered_map<GUID, T> const& {
+			return resourcePool;
+		}
+		/** get all resources */
+		virtual auto getAllGUID() const noexcept -> std::vector<GUID> const& override {
+			return GUIDs;
+		}
+		/** get resource name */
+		virtual auto getResourceName(GUID guid) const noexcept -> char const* override {
+			T const* resource = getResource(guid);
+			if (resource == nullptr) return nullptr;
+			else return resource->getName();
 		}
 	private:
 		/** resource memory pool */
 		std::unordered_map<GUID, T> resourcePool = {};
+		std::vector<GUID> GUIDs;
 	};
 
 	/** Manager to allocate and free resources */
@@ -101,6 +135,18 @@ namespace SIByL::Core
 			std::string str = std::string(typeName) + std::to_string(runtimeResourceCounters[typeName]);
 			++runtimeResourceCounters[typeName];
 			return hashGUID(str);
+		}
+		/** get resource pools */
+		auto getResourcePool() const noexcept -> std::unordered_map<char const*, std::unique_ptr<IResourcePool>> const& {
+			return resourcePools;
+		}
+		/** get resource name */
+		auto getResourceName(char const* typeName, GUID guid) noexcept -> char const* {
+			auto iter = resourcePools.find(typeName);
+			if (iter != resourcePools.end()) {
+				return iter->second->getResourceName(guid);
+			}
+			return nullptr;
 		}
 		/** resources registery */
 		std::unordered_map<GUID, std::unique_ptr<Resource>> registry = {};

@@ -1219,6 +1219,8 @@ namespace SIByL::RHI
 		virtual auto destroy() const noexcept -> void override;
 		/** set debug name */
 		virtual auto setName(std::string const& name) -> void override;
+		/** set debug name */
+		virtual auto getName() const noexcept -> std::string const& override;
 	public:
 		/** initialize the buffer */
 		auto init(Device_VK* device, size_t size, BufferDescriptor const& desc) noexcept -> void;
@@ -1241,8 +1243,10 @@ namespace SIByL::RHI
 		void* mappedData = nullptr;
 		/** size of the buffer */
 		size_t _size = 0;
-		/* the device this buffer is created on */
+		/** the device this buffer is created on */
 		Device_VK* device = nullptr;
+		/** debug name */
+		std::string name;
 	};
 
 #pragma region VK_BUFFER_IMPL
@@ -1372,6 +1376,11 @@ namespace SIByL::RHI
 		objectNameInfo.objectHandle = uint64_t(buffer);
 		objectNameInfo.pObjectName = name.c_str();
 		device->getAdapterVk()->getContext()->vkSetDebugUtilsObjectNameEXT(device->getVkDevice(), &objectNameInfo);
+		this->name = name;
+	}
+	
+	auto Buffer_VK::getName() const noexcept -> std::string const& {
+		return name;
 	}
 
 	inline auto findMemoryType(Device_VK* device, uint32_t typeFilter, VkMemoryPropertyFlags properties) noexcept -> uint32_t {
@@ -1448,6 +1457,8 @@ namespace SIByL::RHI
 		virtual auto destroy() noexcept -> void override;
 		/** set debug name */
 		virtual auto setName(std::string const& name) -> void override;
+		/** get name */
+		virtual auto getName() -> std::string const& override;
 		// Readonly Attributes
 		// ---------------------------
 		/** readonly width of the texture */
@@ -1492,6 +1503,8 @@ namespace SIByL::RHI
 		void* mappedData = nullptr;
 		/** the device this texture is created on */
 		Device_VK* device = nullptr;
+		/** name */
+		std::string name = "Unnamed Texture";
 	};
 
 	export struct TextureView_VK :public TextureView {
@@ -1702,6 +1715,11 @@ namespace SIByL::RHI
 		objectNameInfo.objectHandle = uint64_t(image);
 		objectNameInfo.pObjectName = name.c_str();
 		device->getAdapterVk()->getContext()->vkSetDebugUtilsObjectNameEXT(device->getVkDevice(), &objectNameInfo);
+		this->name = name;
+	}
+	
+	auto Texture_VK::getName() -> std::string const& {
+		return name;
 	}
 
 	auto TextureView_VK::setName(std::string const& name) -> void {
@@ -1862,10 +1880,14 @@ namespace SIByL::RHI
 		virtual ~Sampler_VK();
 		/** set debug name */
 		virtual auto setName(std::string const& name) -> void override;
+		/** get debug name */
+		virtual auto getName() const noexcept-> std::string const& override;
 		/** vulkan Texture Sampler */
 		VkSampler textureSampler;
 		/** the device this sampler is created on */
 		Device_VK* device = nullptr;
+		/** debug name */
+		std::string name;
 	};
 
 #pragma region VK_SAMPLER_IMPL
@@ -1921,6 +1943,11 @@ namespace SIByL::RHI
 		objectNameInfo.objectHandle = uint64_t(textureSampler);
 		objectNameInfo.pObjectName = name.c_str();
 		device->getAdapterVk()->getContext()->vkSetDebugUtilsObjectNameEXT(device->getVkDevice(), &objectNameInfo);
+		this->name = name;
+	}
+	
+	auto Sampler_VK::getName() const noexcept-> std::string const& {
+		return name;
 	}
 
 	auto Device_VK::createSampler(SamplerDescriptor const& desc) noexcept -> std::unique_ptr<Sampler> {
@@ -2330,6 +2357,8 @@ namespace SIByL::RHI
 		auto operator=(ShaderModule_VK&& shader) -> ShaderModule_VK&;
 		/** set debug name */
 		virtual auto setName(std::string const& name) -> void override;
+		/** get debug name */
+		virtual auto getName() -> std::string const& override;
 		/** the shader stages included in this module */
 		ShaderStagesFlags stages;
 		/** vulkan shader module */
@@ -2340,6 +2369,8 @@ namespace SIByL::RHI
 		VkPipelineShaderStageCreateInfo shaderStageInfo{};
 		/** the device this shader module is created on */
 		Device_VK* device = nullptr;
+	private:
+		std::string name;
 	};
 
 #pragma region VK_SHADERMODULE_IMPL
@@ -2401,6 +2432,11 @@ namespace SIByL::RHI
 		objectNameInfo.objectHandle = uint64_t(shaderModule);
 		objectNameInfo.pObjectName = name.c_str();
 		device->getAdapterVk()->getContext()->vkSetDebugUtilsObjectNameEXT(device->getVkDevice(), &objectNameInfo);
+		this->name = name;
+	}
+	
+	auto ShaderModule_VK::getName() -> std::string const& {
+		return name;
 	}
 
 	auto Device_VK::createShaderModule(ShaderModuleDescriptor const& desc) noexcept -> std::unique_ptr<ShaderModule> {

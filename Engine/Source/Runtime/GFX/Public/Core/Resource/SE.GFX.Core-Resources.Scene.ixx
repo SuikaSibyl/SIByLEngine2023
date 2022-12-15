@@ -13,6 +13,7 @@ import SE.Core.ECS;
 import SE.Core.Memory;
 import SE.Core.IO;
 import SE.Core.Log;
+import SE.Core.Resource;
 import SE.Math.Misc;
 import SE.Math.Geometric;
 import SE.RHI;
@@ -135,7 +136,7 @@ namespace SIByL::GFX
 		std::vector<GameObjectHandle> children = {};
 	};
 
-	export struct Scene {
+	export struct Scene :public Core::Resource {
 		/** add a new entity */
 		auto createGameObject(GameObjectHandle parent = NULL_GO) noexcept -> GameObjectHandle;
 		/** remove an entity */
@@ -154,6 +155,10 @@ namespace SIByL::GFX
 		std::unordered_map<GameObjectHandle, GameObject> gameObjects;
 		/** show wether the scene is modified */
 		bool isDirty = false;
+		/** get name */
+		virtual auto getName() const noexcept -> char const* override {
+			return name.c_str();
+		}
 	};
 
 #pragma region SCENE_IMPL

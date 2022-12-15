@@ -32,7 +32,6 @@ namespace SIByL::Platform
 
 	export struct Window_GLFW :public Window {
 		Window_GLFW(WindowOptions const& option);
-
 		// ---------------------------------
 		// Life Cycle
 		// ---------------------------------

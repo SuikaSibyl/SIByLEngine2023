@@ -19,5 +19,9 @@ namespace SIByL::GFX
 		std::unique_ptr<RHI::Texture> texture = nullptr;
 		/** texture display view*/
 		std::unique_ptr<RHI::TextureView> originalView = nullptr;
+		/** get name */
+		virtual auto getName() const noexcept -> char const* {
+			return texture->getName().c_str();
+		}
 	};
 }

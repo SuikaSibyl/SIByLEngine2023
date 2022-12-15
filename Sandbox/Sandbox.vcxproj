@@ -181,13 +181,12 @@
     <ProjectReference Include="..\Engine\Source\Runtime\Tracer\Tracer.vcxproj">
       <Project>{2b8cdd09-aa57-4f5f-ab1b-6595ba7d1528}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\Engine\Source\Runtime\Utility\Utility.vcxproj">
+      <Project>{ca7677d2-d5fa-40c5-8d64-3c2b3c5c96bb}</Project>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />
-    <ClCompile Include="src\Sandbox.AAF_GI.ixx" />
-    <ClCompile Include="src\Sandbox.Benchmark.ixx" />
-    <ClCompile Include="src\Sandbox.MAAF.ixx" />
-    <ClCompile Include="src\Sandbox.Tracer.ixx" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

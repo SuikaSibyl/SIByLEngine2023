@@ -18,17 +18,5 @@
     <ClCompile Include="src\main.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="src\Sandbox.Tracer.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="src\Sandbox.AAF_GI.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="src\Sandbox.Benchmark.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="src\Sandbox.MAAF.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
   </ItemGroup>
 </Project>

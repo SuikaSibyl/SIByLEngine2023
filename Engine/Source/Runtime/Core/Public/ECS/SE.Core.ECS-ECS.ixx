@@ -44,6 +44,8 @@ namespace SIByL::Core
 	export struct EntityManager :public Manager {
 		/** start up entity manager singleton */
 		virtual auto startUp() noexcept -> void override;
+		/** shut down the GFX manager */
+		virtual auto shutDown() noexcept -> void override;
 		/** get the singleton */
 		static auto get() noexcept -> EntityManager*;
 		/** create an entity */
@@ -64,6 +66,8 @@ namespace SIByL::Core
 	};
 
 	export struct IComponentPool {
+		/* virtual desctructor */
+		virtual ~IComponentPool() = default;
 		/** destroy an entity */
 		virtual auto destroyEntity(EntityHandle entity) noexcept -> void = 0;
 	};
@@ -110,14 +114,21 @@ namespace SIByL::Core
 		using DeserializeFn = std::function<void(void*, EntityHandle const&)>;
 		/** start up component manager singleton */
 		virtual auto startUp() noexcept -> void override;
+		/** shut down the GFX manager */
+		virtual auto shutDown() noexcept -> void override {
+			componentTypes.clear();
+			componentPools.clear();
+			serializeFuncs.clear();
+			deserializeFuncs.clear();
+		}
 		/** get the singleton */
 		static auto get() noexcept -> ComponentManager*;
 		/** register component */
 		template <class T>
 		auto registerComponent() noexcept -> void {
 			char const* typeName = typeid(T).name();
-			componentTypes.insert({ typeName, nextComponentType });
-			componentPools.insert({ typeName, std::make_unique<ComponentPool<T>>() });
+			componentTypes[typeName] = nextComponentType;
+			componentPools[typeName] = std::make_unique<ComponentPool<T>>();
 			++nextComponentType;
 			SerializeFn serializeFunc = [](void* emitter, EntityHandle const& handle)->void {
 				auto func = std::bind(&(T::serialize), emitter, handle);
@@ -232,6 +243,11 @@ namespace SIByL::Core
 			availableEntities.emplace(entity);
 		singleton = this;
 	}
+
+	auto EntityManager::shutDown() noexcept -> void {
+		availableEntities = {};
+	}
+
 	auto ComponentManager::startUp() noexcept -> void {
 		singleton = this;
 	}

@@ -144,6 +144,7 @@
     <ClCompile Include="Public\Editor.GFX-InspectorFragments.ixx" />
     <ClCompile Include="Public\Editor.GFX-InspectorWidget.ixx" />
     <ClCompile Include="Public\Editor.GFX-LogWidget.ixx" />
+    <ClCompile Include="Public\Editor.GFX-ResourceViewer.ixx" />
     <ClCompile Include="Public\Editor.GFX-SceneWidget.ixx" />
     <ClCompile Include="Public\Editor.GFX-TextureFragment.ixx" />
     <ClCompile Include="Public\Editor.GFX.ixx" />

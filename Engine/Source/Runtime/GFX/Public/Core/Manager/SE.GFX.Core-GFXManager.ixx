@@ -146,6 +146,7 @@ namespace SIByL::GFX
 		rhiLayer->getDevice()->getGraphicsQueue()->waitIdle();
 		textureResource.originalView = textureResource.texture->createView(RHI::TextureViewDescriptor{
 			RHI::TextureFormat::RGBA8_UNORM });
+		textureResource.guid = guid;
 		Core::ResourceManager::get()->addResource(guid, std::move(textureResource));
 	}
 
@@ -206,6 +207,7 @@ namespace SIByL::GFX
 		viewDesc.aspect = RHI::getTextureAspect(desc.format);
 		if (!desc.hostVisible) // if host visible we do not create view
 			textureResource.originalView = textureResource.texture->createView(viewDesc);
+		textureResource.guid = guid;
 		Core::ResourceManager::get()->addResource(guid, std::move(textureResource));
 	}
 

@@ -10,7 +10,6 @@ namespace SIByL::Platform
 	export struct Window_Win64 :public Window {
 		/** constructor */
 		Window_Win64(WindowOptions const& option);
-
 		// ---------------------------------
 		// Life Cycle
 		// ---------------------------------

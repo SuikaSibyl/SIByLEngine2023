@@ -16,7 +16,7 @@ import SE.RHI;
 
 namespace SIByL::GFX
 {
-	export struct Mesh {
+	export struct Mesh :public Core::Resource {
 		/** ctors & rval copies */
 		Mesh() = default;
 		Mesh(Mesh&& mesh) = default;
@@ -49,6 +49,10 @@ namespace SIByL::GFX
 		inline auto serialize() noexcept -> void;
 		/** deserialize */
 		inline auto deserialize(RHI::Device* device, Core::ORID orid) noexcept -> void;
+		/** get name */
+		virtual auto getName() const noexcept -> char const* {
+			return name.c_str();
+		}
 	};
 
 	inline auto Mesh::serialize() noexcept -> void {

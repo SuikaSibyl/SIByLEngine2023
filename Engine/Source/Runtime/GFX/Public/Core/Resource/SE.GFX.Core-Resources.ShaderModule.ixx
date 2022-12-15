@@ -12,5 +12,9 @@ namespace SIByL::GFX
 	export struct ShaderModule :public Core::Resource {
 		/** rhi shader module */
 		std::unique_ptr<RHI::ShaderModule> shaderModule = nullptr;
+		/** get name */
+		virtual auto getName() const noexcept -> char const* {
+			return shaderModule->getName().c_str();
+		}
 	};
 }

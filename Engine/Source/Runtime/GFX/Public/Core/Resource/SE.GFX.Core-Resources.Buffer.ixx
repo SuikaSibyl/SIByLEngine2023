@@ -2,11 +2,12 @@ module;
 #include <memory>
 #include <utility>
 export module SE.GFX.Core:Buffer;
+import SE.Core.Resource;
 import SE.RHI;
 
 namespace SIByL::GFX
 {
-	export struct Buffer {
+	export struct Buffer :public Core::Resource {
 		/** ctors & rval copies */
 		Buffer() = default;
 		Buffer(Buffer&& buffer) = default;
@@ -15,5 +16,9 @@ namespace SIByL::GFX
 		auto operator=(Buffer const& buffer)->Buffer & = delete;
 		/** the gpu vertex buffer */
 		std::unique_ptr<RHI::Buffer> buffer = nullptr;
+		/** get name */
+		virtual auto getName() const noexcept -> char const* override {
+			return buffer->getName().c_str();
+		}
 	};
 }

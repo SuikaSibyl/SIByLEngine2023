@@ -9,6 +9,7 @@ export import :Utils;
 export import :InspectorWidget;
 export import :SceneWidget;
 export import :InspectorFragments;
+export import :ResourceViewer;
 export import :ContentWidget;
 export import :TextureFragment;
 export import :LogWidget;

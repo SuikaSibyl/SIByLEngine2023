@@ -46,7 +46,6 @@ namespace SIByL::Platform
 	export struct Window {
 		/** create a window with options */
 		static auto create(WindowOptions const& options) noexcept -> Scope<Window>;
-
 		// ---------------------------------
 		// Life Cycle
 		// ---------------------------------

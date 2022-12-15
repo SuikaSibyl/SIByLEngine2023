@@ -9,6 +9,7 @@ module;
 #include <imgui.h>
 #include <imgui_internal.h>
 export module SE.Editor.GFX:InspectorWidget;
+import :ResourceViewer;
 import SE.Editor.Core;
 import SE.Core.ECS;
 import SE.GFX.Core;
@@ -24,6 +25,8 @@ namespace SIByL::Editor
 		auto setEmpty() noexcept -> void;
 		/** custom draw on inspector widget */
 		std::function<void()> customDraw;
+		/** resource viewer */
+		ResourceViewer resourceViewer;
 	};
 
 	export struct CustomInspector {

@@ -8,7 +8,6 @@ module;
 #include <imgui_internal.h>
 export module SE.Editor.GFX:TextureFragment;
 import :Utils;
-import :SceneWidget;
 import SE.Core.Resource;
 import SE.RHI;
 import SE.GFX.Core;

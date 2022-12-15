@@ -66,5 +66,8 @@
     <ClCompile Include="Public\Core\SE.GFX.Core.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\RDG\SE.GFX.RDG.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

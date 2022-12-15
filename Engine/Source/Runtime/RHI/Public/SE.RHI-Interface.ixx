@@ -353,6 +353,8 @@ namespace SIByL::RHI
 		virtual auto destroy() const noexcept -> void = 0;
 		/** set debug name */
 		virtual auto setName(std::string const& name) -> void = 0;
+		/** get debug name */
+		virtual auto getName() const noexcept -> std::string const& = 0;
 	};
 
 	export struct BufferDescriptor {
@@ -502,6 +504,8 @@ namespace SIByL::RHI
 		virtual auto format() const noexcept -> TextureFormat = 0;
 		/** set debug name */
 		virtual auto setName(std::string const& name) -> void = 0;
+		/** get name */
+		virtual auto getName() -> std::string const& = 0;
 		// Map methods
 		// ---------------------------
 		/** Maps the given range of the GPUBuffer */
@@ -603,6 +607,8 @@ namespace SIByL::RHI
 		virtual ~Sampler() = default;
 		/** set debug name */
 		virtual auto setName(std::string const& name) -> void = 0;
+		/** get debug name */
+		virtual auto getName() const noexcept-> std::string const& = 0;
 	};
 
 	export enum struct AddressMode {
@@ -866,6 +872,8 @@ namespace SIByL::RHI
 		virtual ~ShaderModule() = default;
 		/** set debug name */
 		virtual auto setName(std::string const& name) -> void = 0;
+		/** get debug name */
+		virtual auto getName() -> std::string const& = 0;
 	};
 
 	export struct ShaderModuleDescriptor {
