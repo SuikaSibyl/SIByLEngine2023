@@ -1122,6 +1122,12 @@ namespace SIByL::RHI
 	export struct RenderPipeline {
 		/** virtual destructor */
 		virtual ~RenderPipeline() = default;
+		/** virtual constructor */
+		RenderPipeline() = default;
+		RenderPipeline(RenderPipeline &&) = default;
+		RenderPipeline(RenderPipeline const&) = delete;
+		auto operator=(RenderPipeline &&)->RenderPipeline & = default;
+		auto operator=(RenderPipeline const&)->RenderPipeline & = delete;
 		/** set debug name */
 		virtual auto setName(std::string const& name) -> void = 0;
 	};
@@ -1461,7 +1467,7 @@ namespace SIByL::RHI
 	export struct RenderPassDescriptor {
 		std::vector<RenderPassColorAttachment> colorAttachments;
 		RenderPassDepthStencilAttachment depthStencilAttachment;
-		std::unique_ptr<QuerySet> occlusionQuerySet = nullptr;
+		//std::unique_ptr<QuerySet> occlusionQuerySet = nullptr;
 		RenderPassTimestampWrites timestampWrites = {};
 		uint64_t maxDrawCount = 50000000;
 	};

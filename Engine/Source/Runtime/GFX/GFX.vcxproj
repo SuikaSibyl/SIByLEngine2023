@@ -157,12 +157,14 @@
     <ProjectReference Include="..\Tracer\Tracer.vcxproj">
       <Project>{2b8cdd09-aa57-4f5f-ab1b-6595ba7d1528}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\Utility\Utility.vcxproj">
+      <Project>{ca7677d2-d5fa-40c5-8d64-3c2b3c5c96bb}</Project>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Public\Core\Component\SE.GFX.Core-Components.Camera.ixx" />
     <ClCompile Include="Public\Core\Component\SE.GFX.Core-Components.MeshReference.ixx" />
     <ClCompile Include="Public\Core\Component\SE.GFX.Core-Components.MeshRenderer.ixx" />
-    <ClCompile Include="Public\RDG\SE.GFX.RDG.cpp" />
     <ClCompile Include="Public\RDG\SE.GFX.RDG.ixx" />
     <ClCompile Include="Public\Core\Resource\SE.GFX.Core-MeshLoader.ixx" />
     <ClCompile Include="Public\Core\Manager\SE.GFX.Core-GFXManager.ixx" />

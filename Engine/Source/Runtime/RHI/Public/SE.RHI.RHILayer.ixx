@@ -1,5 +1,6 @@
 module;
 #include <Memory>
+#include "../../Application/Public/SE.Application.Config.h"
 export module SE.RHI:RHILayer;
 import :Interface;
 import :VK;
@@ -65,7 +66,7 @@ namespace SIByL::RHI
 			context->init(desc.windowBinded, desc.extensions);
 			adapter = context->requestAdapter({});
 			device = adapter->requestDevice();
-			multiFrameFlights = device->createMultiFrameFlights({ 2, swapChain.get() });
+			multiFrameFlights = device->createMultiFrameFlights({ MULTIFRAME_FLIGHTS_COUNT, swapChain.get() });
 			if (!desc.useImGui) {
 				swapChain = device->createSwapChain({});
 				desc.windowBinded->connectResizeEvent([&](size_t w, size_t h)->void {swapChain->recreate(); });

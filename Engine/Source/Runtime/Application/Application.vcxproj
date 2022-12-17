@@ -152,6 +152,9 @@
       <Project>{05b6310e-59bc-496a-ad4f-ccdd23c7f04d}</Project>
     </ProjectReference>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Public\SE.Application.Config.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
