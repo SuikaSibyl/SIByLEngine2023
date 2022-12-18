@@ -15,6 +15,9 @@ module;
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <glfw3native.h>
 #include <vulkan/vulkan_win32.h>
+#define USE_VMA
+#define VMA_IMPLEMENTATION
+#include <vk_mem_alloc.h>
 export module SE.RHI:VK;
 import :Interface;
 import SE.Core.Log;
@@ -455,6 +458,8 @@ namespace SIByL::RHI
 		auto getAdapterVk() noexcept -> Adapter_VK*& { return adapter; }
 		/** get bind group pool */
 		auto getBindGroupPool() noexcept -> BindGroupPool_VK* { return bindGroupPool.get(); }
+		/** get bind group pool */
+		auto getVMAAllocator() noexcept -> VmaAllocator& { return allocator; }
 		/** create command pools */
 		auto createCommandPools() noexcept -> void;
 		/** create bind group pool */
@@ -470,6 +475,8 @@ namespace SIByL::RHI
 		std::unique_ptr<CommandPool_VK> graphicPool = nullptr, computePool = nullptr, presentPool = nullptr;
 		/** the adapter from which this device was created */
 		Adapter_VK* adapter = nullptr;
+		/** VMA allocator */
+		VmaAllocator allocator = nullptr;
 		/** bind group pool */
 		std::unique_ptr<BindGroupPool_VK> bindGroupPool = nullptr;
 		/** multiframe flights */
@@ -1117,6 +1124,9 @@ namespace SIByL::RHI
 	auto Device_VK::destroy() noexcept -> void {
 		graphicPool = nullptr, computePool = nullptr, presentPool = nullptr;
 		bindGroupPool = nullptr;
+#ifdef USE_VMA
+		vmaDestroyAllocator(allocator);
+#endif
 		if (device) vkDestroyDevice(device, nullptr);
 	}
 
@@ -1163,6 +1173,15 @@ namespace SIByL::RHI
 	}
 
 	auto Device_VK::init() noexcept -> void {
+		// initialize allocator
+		VmaAllocatorCreateInfo allocatorInfo = {};
+		allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_2;
+		allocatorInfo.physicalDevice = adapter->getVkPhysicalDevice();
+		allocatorInfo.device = device;
+		allocatorInfo.instance = adapter->getContext()->getVkInstance();
+		allocatorInfo.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+		vmaCreateAllocator(&allocatorInfo, &allocator);
+		// initialize extensions
 		initRayTracingExt();
 	}
 
@@ -1216,7 +1235,7 @@ namespace SIByL::RHI
 		// Lifecycle methods
 		// ---------------------------
 		/** destroy the buffer */
-		virtual auto destroy() const noexcept -> void override;
+		virtual auto destroy() noexcept -> void override;
 		/** set debug name */
 		virtual auto setName(std::string const& name) -> void override;
 		/** set debug name */
@@ -1228,6 +1247,8 @@ namespace SIByL::RHI
 		auto getVkBuffer() noexcept -> VkBuffer& { return buffer; }
 		/** get vulkan buffer device memory */
 		auto getVkDeviceMemory() noexcept -> VkDeviceMemory& { return bufferMemory; }
+		/** get vulkan buffer device memory */
+		auto getVMAAllocation() noexcept -> VmaAllocation& { return allocation; }
 		/** set buffer state */
 		auto setBufferMapState(BufferMapState const& state) noexcept -> void { mapState = state; }
 	protected:
@@ -1245,40 +1266,13 @@ namespace SIByL::RHI
 		size_t _size = 0;
 		/** the device this buffer is created on */
 		Device_VK* device = nullptr;
+		/** VMA allocation */
+		VmaAllocation allocation;
 		/** debug name */
 		std::string name;
 	};
 
 #pragma region VK_BUFFER_IMPL
-
-	void createBuffer(
-		VkDeviceSize size,
-		VkBufferUsageFlags usage,
-		VkSharingMode shareMode,
-		VkMemoryPropertyFlags properties,
-		VkBuffer& buffer,
-		VkDeviceMemory& bufferMemory,
-		Device_VK* device)
-	{
-		// create buffer
-		VkBufferCreateInfo bufferInfo{};
-		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-		bufferInfo.size = size;
-		bufferInfo.usage = usage;
-		bufferInfo.sharingMode = shareMode;
-		if (vkCreateBuffer(device->getVkDevice(), &bufferInfo, nullptr, &buffer) != VK_SUCCESS)
-			Core::LogManager::Log("VULKAN :: failed to create buffer!");
-		// alloc memory
-		VkMemoryRequirements memRequirements;
-		vkGetBufferMemoryRequirements(device->getVkDevice(), buffer, &memRequirements);
-		VkMemoryAllocateInfo allocInfo{};
-		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		allocInfo.allocationSize = memRequirements.size;
-		allocInfo.memoryTypeIndex = device->getAdapterVk()->findMemoryType(memRequirements.memoryTypeBits, properties);
-		if (vkAllocateMemory(device->getVkDevice(), &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS)
-			Core::LogManager::Log("VULKAN :: failed to allocate buffer memory!");
-		vkBindBufferMemory(device->getVkDevice(), buffer, bufferMemory, 0);
-	}
 
 #define MACRO_BUFFER_USAGE_BITMAP(USAGE) \
 		if ((uint32_t)usage & (uint32_t)SIByL::RHI::BufferUsageFlagBits::USAGE)\
@@ -1344,7 +1338,11 @@ namespace SIByL::RHI
 	}
 	
 	inline auto mapMemory(Device_VK* device, Buffer_VK* buffer, size_t offset, size_t size, void*& mappedData) noexcept-> bool {
+#ifdef USE_VMA
+		VkResult result = vmaMapMemory(device->getVMAAllocator(), buffer->getVMAAllocation(), &mappedData);
+#else
 		VkResult result = vkMapMemory(device->getVkDevice(), buffer->getVkDeviceMemory(), offset, size, 0, &mappedData);
+#endif
 		if (result) buffer->setBufferMapState(BufferMapState::MAPPED);
 		return result == VkResult::VK_SUCCESS ? true : false;
 	}
@@ -1359,14 +1357,22 @@ namespace SIByL::RHI
 	}
 
 	auto Buffer_VK::unmap() noexcept -> void {
+#ifdef USE_VMA
+		vmaUnmapMemory(device->getVMAAllocator(), getVMAAllocation());
+#else
 		vkUnmapMemory(device->getVkDevice(), bufferMemory);
+#endif
 		mappedData = nullptr;
 		BufferMapState mapState = BufferMapState::UNMAPPED;
 	}
 
-	auto Buffer_VK::destroy() const noexcept -> void {
+	auto Buffer_VK::destroy() noexcept -> void {
+#ifdef USE_VMA
+		if (buffer)	vmaDestroyBuffer(device->getVMAAllocator(), buffer, getVMAAllocation());
+#else
 		if (buffer)		  vkDestroyBuffer(device->getVkDevice(), buffer, nullptr);
 		if (bufferMemory) vkFreeMemory(device->getVkDevice(), bufferMemory, nullptr);
+#endif
 	}
 
 	auto Buffer_VK::setName(std::string const& name) -> void {
@@ -1414,6 +1420,17 @@ namespace SIByL::RHI
 			VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT;
 		std::unique_ptr<Buffer_VK> buffer = std::make_unique<Buffer_VK>(this);
 		buffer->init(this, desc.size, desc);
+#ifdef USE_VMA
+		VmaAllocationCreateInfo allocInfo = {};
+		allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+		if (desc.memoryProperties & (uint32_t)MemoryProperty::HOST_VISIBLE_BIT ||
+			desc.memoryProperties & (uint32_t)MemoryProperty::HOST_COHERENT_BIT) {
+			allocInfo.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+		}
+		if (vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &buffer->getVkBuffer(), &buffer->getVMAAllocation(), nullptr) != VK_SUCCESS) {
+			Core::LogManager::Log("VULKAN :: failed to create vertex buffer!");
+		}
+#else
 		if (vkCreateBuffer(device, &bufferInfo, nullptr, &buffer->getVkBuffer()) != VK_SUCCESS) {
 			Core::LogManager::Log("VULKAN :: failed to create vertex buffer!");
 		}
@@ -1434,6 +1451,7 @@ namespace SIByL::RHI
 			Core::LogManager::Log("VULKAN :: failed to allocate vertex buffer memory!");
 		}
 		vkBindBufferMemory(device, buffer->getVkBuffer(), buffer->getVkDeviceMemory(), 0);
+#endif
 		return buffer;
 	}
 
@@ -1497,6 +1515,8 @@ namespace SIByL::RHI
 		VkDeviceMemory deviceMemory = nullptr;
 		/** Texture Descriptor */
 		TextureDescriptor descriptor;
+		/** VMA allocation */
+		VmaAllocation allocation;
 		/** buffer map state */
 		BufferMapState mapState = BufferMapState::UNMAPPED;
 		/** mapped address of the buffer */
@@ -1623,6 +1643,17 @@ namespace SIByL::RHI
 		imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 		imageInfo.flags = 0; // Optional
+
+#ifdef USE_VMA
+		VmaAllocationCreateInfo allocInfo = {};
+		allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+		if (desc.hostVisible) {
+			allocInfo.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+		}
+		if (vmaCreateImage(device->getVMAAllocator(), &imageInfo, &allocInfo, &image, &allocation, nullptr) != VK_SUCCESS) {
+			Core::LogManager::Log("VULKAN :: failed to create vertex buffer!");
+		}
+#else
 		if (vkCreateImage(device->getVkDevice(), &imageInfo, nullptr, &image) != VK_SUCCESS) {
 			Core::LogManager::Log("Vulkan :: failed to create image!");
 		}
@@ -1633,13 +1664,14 @@ namespace SIByL::RHI
 		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		allocInfo.allocationSize = memRequirements.size;
 		VkMemoryPropertyFlags memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-		if (desc.hostVisible) 
+		if (desc.hostVisible)
 			memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
 		allocInfo.memoryTypeIndex = findMemoryType(device, memRequirements.memoryTypeBits, memoryProperties);
 		if (vkAllocateMemory(device->getVkDevice(), &allocInfo, nullptr, &deviceMemory) != VK_SUCCESS) {
 			throw std::runtime_error("failed to allocate image memory!");
 		}
 		vkBindImageMemory(device->getVkDevice(), image, deviceMemory, 0);
+#endif
 	}
 
 	Texture_VK::Texture_VK(Device_VK* device, VkImage image, TextureDescriptor const& desc)
@@ -1655,8 +1687,12 @@ namespace SIByL::RHI
 	}
 
 	auto Texture_VK::destroy() noexcept -> void {
+#ifdef USE_VMA
+		if (image) vmaDestroyImage(device->getVMAAllocator(), image, allocation);
+#else
 		if (image && deviceMemory) vkDestroyImage(device->getVkDevice(), image, nullptr);
 		if (deviceMemory) vkFreeMemory(device->getVkDevice(), deviceMemory, nullptr);
+#endif
 	}
 
 	auto Texture_VK::width() const noexcept -> uint32_t {

@@ -350,7 +350,7 @@ namespace SIByL::RHI
 		// Lifecycle methods
 		// ---------------------------
 		/** destroy the buffer */
-		virtual auto destroy() const noexcept -> void = 0;
+		virtual auto destroy() noexcept -> void = 0;
 		/** set debug name */
 		virtual auto setName(std::string const& name) -> void = 0;
 		/** get debug name */

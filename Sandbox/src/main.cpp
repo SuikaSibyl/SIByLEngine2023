@@ -71,19 +71,6 @@ struct UniformBufferObject {
 	Math::mat4 projInverse;  // Camera inverse projection matrix
 };
 
-struct GlobalUniforms {
-	Math::mat4 viewProj;     // Camera view * projection
-	Math::mat4 viewInverse;  // Camera inverse view matrix
-	Math::mat4 projInverse;  // Camera inverse projection matrix
-};
-
-struct PushConstantRay {
-	Math::vec4 clearColor;
-	Math::vec3 lightPosition;
-	float lightIntensity;
-	int   lightType;
-};
-
 struct SandBoxApplication :public Application::ApplicationBase {
 	GFX::GameObjectHandle camera_go;
 
@@ -286,7 +273,6 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				};
 
 				// execute callback
-			//pipeline_0 = std::move(renderPipeline[0])
 				GFX::CustomPassExecuteFn fn = [
 					multiFrameFlights, scene=&scene, renderPassDescriptor, pipelineLayout = std::move(pipelineLayout),
 					pipelines = std::array<std::shared_ptr<RHI::RenderPipeline>, 2>{ std::move(renderPipeline[0]), std::move(renderPipeline[1]) },
@@ -342,7 +328,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		cameraController.init(mainWindow.get()->getInput(), &timer);
 		cameraController.bindTransform(scene.getGameObject(camera_go)->getEntity().getComponent<GFX::TransformComponent>());
 
-		int i = 0;
+	/*	int i = 0;
 		GFX::MeshReference* meshref = nullptr;
 		for (auto handle : scene.gameObjects) {
 			auto* go = scene.getGameObject(handle.first);
@@ -377,7 +363,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			}
 		}
 
-		ASGroup = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ASGroup>();
+		Core::GUID ASGroup = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ASGroup>();
 		RHI::TLASDescriptor tlasDesc;
 		uint32_t blasIdx = 0;
 		for (auto& blas : blases) {
@@ -387,7 +373,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				blasIdx }
 			);
 		}
-		GFX::GFXManager::get()->registerAsGroupResource(ASGroup, tlasDesc, 8);
+		GFX::GFXManager::get()->registerAsGroupResource(ASGroup, tlasDesc, 8);*/
 
 		//directTracer = std::make_unique<Sandbox::DirectTracer>(rhiLayer.get(), std::array<RHI::PipelineLayout*, 2>{ pipelineLayout_RT.get() ,pipelineLayout_RT.get() });
 
@@ -420,11 +406,6 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		std::unique_ptr<RHI::CommandEncoder> commandEncoder = device->createCommandEncoder({ multiFrameFlights->getCommandBuffer() });
 
-		auto* input = mainWindow.get()->getInput();
-		if (input->isKeyPressed(Platform::SIByL_KEY_ENTER)) {
-			Core::LogManager::Debug("Key pressed!");
-		}
-
 		RHI::RayTracingPassDescriptor rayTracingDescriptor = {};
 
 		uint32_t index = multiFrameFlights->getFlightIndex();
@@ -435,27 +416,10 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		height = 600;
 
 		UniformBufferObject ubo;
-		//Math::vec4 campos = 
-		//	Math::mul(Math::rotateY(std::sin(timer.totalTime()) * 20).m, Math::vec4(-0.001, 1.0, 6.0, 1));
-		Math::vec4 campos = Math::mul(Math::rotateY(0 * 20).m, Math::vec4(-0.001, 1.0, 6.0, 1));
-
 		GFX::TransformComponent* transform = scene.getGameObject(camera_go)->getEntity().getComponent<GFX::TransformComponent>();
-		//ubo.model = Math::transpose(Math::rotate(timer.totalTime() * 80, Math::vec3(0, 1, 0)).m);
-		
-		//ubo.view = Math::transpose(Math::lookAt(Math::vec3(campos.x, campos.y, campos.z) , Math::vec3(0, 1, 0), Math::vec3(0, 1, 0)).m);
-
 		ubo.view = Math::transpose(Math::lookAt(transform->translation, transform->translation + transform->getRotatedForward(), Math::vec3(0, 1, 0)).m);
 		ubo.proj = Math::transpose(Math::perspective(22.f, 1.f * 800 / 600, 0.1f, 1000.f).m);
-		//Math::vec4 campos = Math::vec4(-4.5f, 2.5f, 5.5f, 1);
-		//{
-		//	//campos.x = (float)(campos.x * sin(timer.totalTime() * 1));
-		//	//campos.y = (float)(campos.y + cos(timer.totalTime() * 1 * 1.5));
-		//	//campos.z = (float)(campos.z * cos(timer.totalTime() * 1));
-		//}
-		//ubo.view = Math::transpose(Math::lookAt(Math::vec3(campos.x, campos.y, campos.z), Math::vec3(-1, 0.5f, 0), Math::vec3(0, 1, 0)).m);
-		//ubo.proj = Math::transpose(Math::perspective(60.f, 1.f * 800 / 600, 0.1f, 10.f).m);
 		ubo.viewInverse = Math::inverse(ubo.view);
-		//ubo.proj.data[1][1] *= -1;
 		ubo.projInverse = Math::inverse(ubo.proj);
 		Math::vec4 originPos = Math::vec4(0.f, 0.f, 0.f, 1.f);
 		Math::mat4 invView = Math::transpose(ubo.viewInverse);
@@ -495,17 +459,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			}}
 			});
 
-		//aafPipeline->composeCommands(commandEncoder.get(), index);
-		//aafGIPipeline->composeCommands(commandEncoder.get(), index);
-		//benchmarkPipeline->composeCommands(commandEncoder.get(), index);
-		//maafPipeline->composeCommands(commandEncoder.get(), index);
-
-		//objectMat = Math::transpose(Math::mul(Math::translate(Math::vec3(0, 1, 0)).m, objectMat));
 		rdg->execute(commandEncoder.get());
-		//passEncoder[index] = commandEncoder->beginRenderPass(renderPassDescriptor);
-		//passEncoder[index]->setPipeline(renderPipeline[index].get());
-		//passEncoder[index]->setViewport(0, 0, width, height, 0, 1);
-		//passEncoder[index]->setScissorRect(0, 0, width, height);
 
 
 		device->getGraphicsQueue()->submit({ commandEncoder->finish({}) }, 
@@ -629,21 +583,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 	virtual auto Exit() noexcept -> void override {
 		rhiLayer->getDevice()->waitIdle();
 		rdg = nullptr;
-		//aafPipeline = nullptr;
-		//aafGIPipeline = nullptr;
-		//maafPipeline = nullptr;
-		//benchmarkPipeline = nullptr;
-		//directTracer = nullptr;
-		passEncoder[0] = nullptr;
-		passEncoder[1] = nullptr;
-		compEncoder[1] = nullptr;
-		compEncoder[1] = nullptr;
 
-		blas = nullptr;
 		blases.clear();
-
-		rtBindGroup[0] = nullptr;
-		rtBindGroup[1] = nullptr;
 
 		editorLayer = nullptr;
 		imguiLayer = nullptr;
@@ -656,23 +597,14 @@ struct SandBoxApplication :public Application::ApplicationBase {
 private:
 	Core::GUID rtTarget;
 
-	PushConstantRay pcRay = {};
 	uint32_t indexCount = 0;
 
 	std::unique_ptr<RHI::RHILayer> rhiLayer = nullptr;
 	std::unique_ptr<Editor::ImGuiLayer> imguiLayer = nullptr;
 	std::unique_ptr<Editor::EditorLayer> editorLayer = nullptr;
-
-	std::unique_ptr<RHI::BindGroup> rtBindGroup[2];
 	
-	Core::GUID cornellBox;
-	Core::GUID ASGroup;
-
 	std::unique_ptr<GFX::RDGraph> rdg = nullptr;
 
-	std::unique_ptr<RHI::RenderPassEncoder> passEncoder[2] = {};
-	std::unique_ptr<RHI::ComputePassEncoder> compEncoder[2] = {};
-	std::unique_ptr<RHI::BLAS> blas = nullptr;
 	std::vector<std::unique_ptr<RHI::BLAS>> blases;
 
 	//std::unique_ptr<Sandbox::DirectTracer> directTracer = nullptr;
@@ -690,18 +622,15 @@ private:
 
 int main()
 {
-	{
-		// application root, control all managers
-		Application::Root root;
-		// run app
-		SandBoxApplication app;
-		app.createMainWindow({
-				Platform::WindowVendor::GLFW,
-				L"SIByL Engine 2022.0",
-				1280, 720,
-				Platform::WindowProperties::VULKAN_CONTEX
-			});
-		app.run();
-	}
-	float a = 1.0f;
+	// application root, control all managers
+	Application::Root root;
+	// run app
+	SandBoxApplication app;
+	app.createMainWindow({
+			Platform::WindowVendor::GLFW,
+			L"SIByL Engine 2022.1",
+			1280, 720,
+			Platform::WindowProperties::VULKAN_CONTEX
+		});
+	app.run();
 }

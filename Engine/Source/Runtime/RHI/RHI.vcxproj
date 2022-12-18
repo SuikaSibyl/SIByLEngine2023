@@ -73,12 +73,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\glad\include;$(SolutionDir)Engine\Source\ThirdParty\glfw\include;$(SolutionDir)Engine\Source\ThirdParty\vulkan\Include;$(SolutionDir)Engine\Source\Runtime\Core\Public;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\vma\include;$(SolutionDir)Engine\Source\ThirdParty\vma\include;$(SolutionDir)Engine\Source\ThirdParty\glad\include;$(SolutionDir)Engine\Source\ThirdParty\glfw\include;$(SolutionDir)Engine\Source\ThirdParty\vulkan\Include;$(SolutionDir)Engine\Source\Runtime\Core\Public;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\glad\include;$(SolutionDir)Engine\Source\ThirdParty\glfw\include;$(SolutionDir)Engine\Source\ThirdParty\vulkan\Include;$(SolutionDir)Engine\Source\Runtime\Core\Public;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\vma\include;$(SolutionDir)Engine\Source\ThirdParty\glad\include;$(SolutionDir)Engine\Source\ThirdParty\glfw\include;$(SolutionDir)Engine\Source\ThirdParty\vulkan\Include;$(SolutionDir)Engine\Source\Runtime\Core\Public;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>

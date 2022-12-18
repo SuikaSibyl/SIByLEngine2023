@@ -40,3 +40,4 @@ By default, Nvidia GPU with Turing or higher architecture is required to correct
 - `tinyobjloader`: [Tiny but powerful single file wavefront obj loader](https://github.com/tinyobjloader/tinyobjloader)
 - `tinygltf`: [Header only C++11 tiny glTF 2.0 library](https://github.com/syoyo/tinygltf)
 - `vulkan`: [A low-overhead, cross-platform API, open standard for 3D graphics and computing](https://www.vulkan.org/)
+- `vma`: [Easy to integrate Vulkan memory allocation library](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator)
