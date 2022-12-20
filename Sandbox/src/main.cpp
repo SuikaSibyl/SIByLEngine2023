@@ -31,19 +31,6 @@ import SE.Image;
 import SE.RHI;
 import SE.Parallelism;
 
-import Tracer.Ray;
-import Tracer.Camera;
-import Tracer.Film;
-import Tracer.Shape;
-import Tracer.Filter;
-import Tracer.Primitives;
-import Tracer.Interactable;
-import Tracer.Material;
-import Tracer.Integrator;
-import Tracer.Sampler;
-import Tracer.Texture;
-import Tracer.Light;
-
 import SE.GFX.Core;
 import SE.GFX.RDG;
 
@@ -52,7 +39,8 @@ import SE.Application;
 import SE.Editor.Core;
 import SE.Editor.GFX;
 import SE.Editor.Config;
-//
+
+import SE.SRenderer;
 //import Sandbox.Tracer;
 //import Sandbox.AAF_GI;
 //import Sandbox.Benchmark;
@@ -102,12 +90,13 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			Math::vec2 uv;
 		};
 
+		GFX::SceneNodeLoader_obj::loadSceneNode("P:/GitProjects/SIByLEngine2022/Sandbox/content/viking_room.obj", scene, SRenderer::meshLoadConfig);
 
 		//GFX::SceneNodeLoader_glTF::loadSceneNode("D:/Downloads/glTF-Sample-Models-master/glTF-Sample-Models-master/2.0/Sponza/glTF/Sponza.gltf", scene);
 		//GFX::SceneNodeLoader_glTF::loadSceneNode("P:/GitProjects/SIByLEngine2022/Sandbox/content/scenes/cornellBox.gltf", scene);
 		//scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/cornellBox.scene");
 		//scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/cornellBoxSphere.scene");
-		scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/sponza.scene");
+		//scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/sponza.scene");
 
 		std::vector<RHI::TextureView*> textureViews;
 		{
@@ -159,170 +148,176 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler->setName("DefaultSampler");
 
 		rdg = std::make_unique<GFX::RDGraph>();
-		GFX::RDGTexture* texRes_rasterizer_target_color = rdg->createTexture(
-			"RasterizerTarget_Color", 
-			GFX::RDGTexture::Desc{
-				{800,600,1},
-				1, 1, RHI::TextureDimension::TEX2D,
-				RHI::TextureFormat::RGBA8_UNORM }
-		);
-		GFX::RDGTexture* texRes_rasterizer_target_depth = rdg->createTexture(
-			"RasterizerTarget_Depth", 
-			GFX::RDGTexture::Desc{
-				{800,600,1},
-				1, 1, RHI::TextureDimension::TEX2D,
-				RHI::TextureFormat::DEPTH32_FLOAT }
-		);
-		GFX::RDGStructuredUniformBuffer<UniformBufferObject>* cameraUniformBuffer = rdg->createStructuredUniformBuffer<UniformBufferObject>("camera_uniform_buffer");
+		srenderer = std::make_unique<SRenderer>();
+		srenderer->init(rdg.get());
+		SRendererRegister::registerSRenderer(srenderer.get());
+		rdg->sub_compile_devirtualize();
+		srenderer->packScene(scene);
+		rdg->sub_compile_pass_setup();
 
-		GFX::RDGPassNode* pass = rdg->addPass("DrawAlbedoPass", GFX::RDGPassFlag::RASTER,
-			[&]()->void {
-				// consume
-				rdg->getTexture("RasterizerTarget_Color")->consume(GFX::ConsumeType::RENDER_TARGET, RHI::TextureLayout::COLOR_ATTACHMENT_OPTIMAL, RHI::TextureUsage::COLOR_ATTACHMENT);
-				rdg->getTexture("RasterizerTarget_Depth")->consume(GFX::ConsumeType::RENDER_TARGET, RHI::TextureLayout::DEPTH_ATTACHMENT_OPTIMAL, RHI::TextureUsage::DEPTH_ATTACHMENT);
-			},
-			[&]()->GFX::CustomPassExecuteFn {
-				// construction
-				// shader
-				Core::GUID vert, frag;
-				vert = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-				frag = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-				GFX::GFXManager::get()->registerShaderModuleResource(vert, "../Engine/Binaries/Runtime/spirv/Common/test_shader_vert_vert.spv", { nullptr, RHI::ShaderStages::VERTEX });
-				GFX::GFXManager::get()->registerShaderModuleResource(frag, "../Engine/Binaries/Runtime/spirv/Common/test_shader_frag_frag.spv", { nullptr, RHI::ShaderStages::FRAGMENT });
-				// bindgroup layout
-				std::shared_ptr<RHI::BindGroupLayout> rtBindGroupLayout = device->createBindGroupLayout(
-					RHI::BindGroupLayoutDescriptor{ {
-						RHI::BindGroupLayoutEntry{ 0,
-							(uint32_t)RHI::ShaderStages::VERTEX
-							| (uint32_t)RHI::ShaderStages::RAYGEN
-							| (uint32_t)RHI::ShaderStages::COMPUTE
-							| (uint32_t)RHI::ShaderStages::CLOSEST_HIT
-							| (uint32_t)RHI::ShaderStages::ANY_HIT,
-							RHI::BufferBindingLayout{RHI::BufferBindingType::UNIFORM}},
-						RHI::BindGroupLayoutEntry{ 1,
-								(uint32_t)RHI::ShaderStages::FRAGMENT
-								| (uint32_t)RHI::ShaderStages::RAYGEN
-								| (uint32_t)RHI::ShaderStages::COMPUTE
-								| (uint32_t)RHI::ShaderStages::CLOSEST_HIT
-								| (uint32_t)RHI::ShaderStages::ANY_HIT,
-								RHI::BindlessTexturesBindingLayout{}},
-						} }
-				);
-				std::shared_ptr<RHI::BindGroup> rtBindGroup[2];
-				for (int i = 0; i < 2; ++i) {
-					rtBindGroup[i] = device->createBindGroup(RHI::BindGroupDescriptor{
-						rtBindGroupLayout.get(),
-						std::vector<RHI::BindGroupEntry>{
-							{0,RHI::BindingResource{rdg->getStructuredUniformBuffer<UniformBufferObject>("camera_uniform_buffer")->getBufferBinding(i)}},
-							{1,RHI::BindingResource{textureViews,
-								Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler.get()}},
-					} });
-				}
-				//std::shared_ptr<RHI::BindGroupLayout> bindGroupLayout_RT = device->createBindGroupLayout(
-				//	RHI::BindGroupLayoutDescriptor{ {
-				//		RHI::BindGroupLayoutEntry{0, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT | (uint32_t)RHI::ShaderStages::ANY_HIT, RHI::AccelerationStructureBindingLayout{}},
-				//		RHI::BindGroupLayoutEntry{1, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT | (uint32_t)RHI::ShaderStages::ANY_HIT, RHI::StorageTextureBindingLayout{}},
-				//		RHI::BindGroupLayoutEntry{2, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT | (uint32_t)RHI::ShaderStages::ANY_HIT, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
-				//		RHI::BindGroupLayoutEntry{3, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT | (uint32_t)RHI::ShaderStages::ANY_HIT, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
-				//		} }
-				//);
+		//GFX::RDGTexture* texRes_rasterizer_target_color = rdg->createTexture(
+		//	"RasterizerTarget_Color", 
+		//	GFX::RDGTexture::Desc{
+		//		{800,600,1},
+		//		1, 1, RHI::TextureDimension::TEX2D,
+		//		RHI::TextureFormat::RGBA8_UNORM }
+		//);
+		//GFX::RDGTexture* texRes_rasterizer_target_depth = rdg->createTexture(
+		//	"RasterizerTarget_Depth", 
+		//	GFX::RDGTexture::Desc{
+		//		{800,600,1},
+		//		1, 1, RHI::TextureDimension::TEX2D,
+		//		RHI::TextureFormat::DEPTH32_FLOAT }
+		//);
+		//GFX::RDGStructuredUniformBuffer<UniformBufferObject>* cameraUniformBuffer = rdg->createStructuredUniformBuffer<UniformBufferObject>("camera_uniform_buffer");
 
-				std::shared_ptr<RHI::PipelineLayout> pipelineLayout = device->createPipelineLayout(RHI::PipelineLayoutDescriptor{
-					{ {(uint32_t)RHI::ShaderStages::VERTEX, 0, sizeof(Math::mat4) + sizeof(uint32_t)}},
-					{ rtBindGroupLayout.get() }
-					});
+		//GFX::RDGPassNode* pass = rdg->addPass("DrawAlbedoPass", GFX::RDGPassFlag::RASTER,
+		//	[&]()->void {
+		//		// consume
+		//		rdg->getTexture("RasterizerTarget_Color")->consume(GFX::ConsumeType::RENDER_TARGET, RHI::TextureLayout::COLOR_ATTACHMENT_OPTIMAL, RHI::TextureUsage::COLOR_ATTACHMENT);
+		//		rdg->getTexture("RasterizerTarget_Depth")->consume(GFX::ConsumeType::RENDER_TARGET, RHI::TextureLayout::DEPTH_ATTACHMENT_OPTIMAL, RHI::TextureUsage::DEPTH_ATTACHMENT);
+		//	},
+		//	[&]()->GFX::CustomPassExecuteFn {
+		//		// construction
+		//		// shader
+		//		Core::GUID vert, frag;
+		//		vert = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+		//		frag = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+		//		GFX::GFXManager::get()->registerShaderModuleResource(vert, "../Engine/Binaries/Runtime/spirv/Common/test_shader_vert_vert.spv", { nullptr, RHI::ShaderStages::VERTEX });
+		//		GFX::GFXManager::get()->registerShaderModuleResource(frag, "../Engine/Binaries/Runtime/spirv/Common/test_shader_frag_frag.spv", { nullptr, RHI::ShaderStages::FRAGMENT });
+		//		// bindgroup layout
+		//		std::shared_ptr<RHI::BindGroupLayout> rtBindGroupLayout = device->createBindGroupLayout(
+		//			RHI::BindGroupLayoutDescriptor{ {
+		//				RHI::BindGroupLayoutEntry{ 0,
+		//					(uint32_t)RHI::ShaderStages::VERTEX
+		//					| (uint32_t)RHI::ShaderStages::RAYGEN
+		//					| (uint32_t)RHI::ShaderStages::COMPUTE
+		//					| (uint32_t)RHI::ShaderStages::CLOSEST_HIT
+		//					| (uint32_t)RHI::ShaderStages::ANY_HIT,
+		//					RHI::BufferBindingLayout{RHI::BufferBindingType::UNIFORM}},
+		//				RHI::BindGroupLayoutEntry{ 1,
+		//						(uint32_t)RHI::ShaderStages::FRAGMENT
+		//						| (uint32_t)RHI::ShaderStages::RAYGEN
+		//						| (uint32_t)RHI::ShaderStages::COMPUTE
+		//						| (uint32_t)RHI::ShaderStages::CLOSEST_HIT
+		//						| (uint32_t)RHI::ShaderStages::ANY_HIT,
+		//						RHI::BindlessTexturesBindingLayout{}},
+		//				} }
+		//		);
+		//		std::shared_ptr<RHI::BindGroup> rtBindGroup[2];
+		//		for (int i = 0; i < 2; ++i) {
+		//			rtBindGroup[i] = device->createBindGroup(RHI::BindGroupDescriptor{
+		//				rtBindGroupLayout.get(),
+		//				std::vector<RHI::BindGroupEntry>{
+		//					{0,RHI::BindingResource{rdg->getStructuredUniformBuffer<UniformBufferObject>("camera_uniform_buffer")->getBufferBinding(i)}},
+		//					{1,RHI::BindingResource{textureViews,
+		//						Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler.get()}},
+		//			} });
+		//		}
+		//		//std::shared_ptr<RHI::BindGroupLayout> bindGroupLayout_RT = device->createBindGroupLayout(
+		//		//	RHI::BindGroupLayoutDescriptor{ {
+		//		//		RHI::BindGroupLayoutEntry{0, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT | (uint32_t)RHI::ShaderStages::ANY_HIT, RHI::AccelerationStructureBindingLayout{}},
+		//		//		RHI::BindGroupLayoutEntry{1, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT | (uint32_t)RHI::ShaderStages::ANY_HIT, RHI::StorageTextureBindingLayout{}},
+		//		//		RHI::BindGroupLayoutEntry{2, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT | (uint32_t)RHI::ShaderStages::ANY_HIT, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
+		//		//		RHI::BindGroupLayoutEntry{3, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::CLOSEST_HIT | (uint32_t)RHI::ShaderStages::ANY_HIT, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
+		//		//		} }
+		//		//);
 
-				//std::unique_ptr<RHI::PipelineLayout> pipelineLayout_RT = device->createPipelineLayout(RHI::PipelineLayoutDescriptor{
-				//	{ {(uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::CLOSEST_HIT | (uint32_t)RHI::ShaderStages::MISS | (uint32_t)RHI::ShaderStages::COMPUTE, 0, sizeof(PushConstantRay)}},
-				//	{ bindGroupLayout_RT.get(), rtBindGroupLayout.get() }
-				//	});
+		//		std::shared_ptr<RHI::PipelineLayout> pipelineLayout = device->createPipelineLayout(RHI::PipelineLayoutDescriptor{
+		//			{ {(uint32_t)RHI::ShaderStages::VERTEX, 0, sizeof(Math::mat4) + sizeof(uint32_t)}},
+		//			{ rtBindGroupLayout.get() }
+		//			});
 
-				std::shared_ptr<RHI::RenderPipeline> renderPipeline[2];
-				for (int i = 0; i < 2; ++i) {					
-					renderPipeline[i] = device->createRenderPipeline(RHI::RenderPipelineDescriptor{
-						pipelineLayout.get(),
-						RHI::VertexState{
-							// vertex shader
-							Core::ResourceManager::get()->getResource<GFX::ShaderModule>(vert)->shaderModule.get(), "main",
-							// vertex attribute layout
-							{ RHI::VertexBufferLayout{sizeof(Vertex), RHI::VertexStepMode::VERTEX, {
-								{ RHI::VertexFormat::FLOAT32X3, 0, 0},
-								{ RHI::VertexFormat::FLOAT32X3, offsetof(Vertex,color), 1},
-								{ RHI::VertexFormat::FLOAT32X2, offsetof(Vertex,uv), 2},}}}},
-						RHI::PrimitiveState{ RHI::PrimitiveTopology::TRIANGLE_LIST, RHI::IndexFormat::UINT16_t },
-						RHI::DepthStencilState{ RHI::TextureFormat::DEPTH32_FLOAT, true, RHI::CompareFunction::LESS },
-						RHI::MultisampleState{},
-						RHI::FragmentState{
-							// fragment shader
-							Core::ResourceManager::get()->getResource<GFX::ShaderModule>(frag)->shaderModule.get(), "main",
-							{{RHI::TextureFormat::RGBA8_UNORM}}}
-						});
-				}
-				std::shared_ptr<RHI::RenderPassEncoder> passEncoder[2] = {};
-				RHI::MultiFrameFlights* multiFrameFlights = rhiLayer->getMultiFrameFlights();
+		//		//std::unique_ptr<RHI::PipelineLayout> pipelineLayout_RT = device->createPipelineLayout(RHI::PipelineLayoutDescriptor{
+		//		//	{ {(uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::CLOSEST_HIT | (uint32_t)RHI::ShaderStages::MISS | (uint32_t)RHI::ShaderStages::COMPUTE, 0, sizeof(PushConstantRay)}},
+		//		//	{ bindGroupLayout_RT.get(), rtBindGroupLayout.get() }
+		//		//	});
 
-				RHI::RenderPassDescriptor renderPassDescriptor = {
-					{ RHI::RenderPassColorAttachment{
-						rdg->getTexture("RasterizerTarget_Color")->texture->originalView.get(),
-					nullptr, {0,0,0,1}, RHI::LoadOp::CLEAR, RHI::StoreOp::STORE }},
-					RHI::RenderPassDepthStencilAttachment{
-						rdg->getTexture("RasterizerTarget_Depth")->texture->originalView.get(),
-						1, RHI::LoadOp::CLEAR, RHI::StoreOp::DONT_CARE, false,
-						0, RHI::LoadOp::CLEAR, RHI::StoreOp::DONT_CARE, false
-				},
-				};
+		//		std::shared_ptr<RHI::RenderPipeline> renderPipeline[2];
+		//		for (int i = 0; i < 2; ++i) {					
+		//			renderPipeline[i] = device->createRenderPipeline(RHI::RenderPipelineDescriptor{
+		//				pipelineLayout.get(),
+		//				RHI::VertexState{
+		//					// vertex shader
+		//					Core::ResourceManager::get()->getResource<GFX::ShaderModule>(vert)->shaderModule.get(), "main",
+		//					// vertex attribute layout
+		//					{ RHI::VertexBufferLayout{sizeof(Vertex), RHI::VertexStepMode::VERTEX, {
+		//						{ RHI::VertexFormat::FLOAT32X3, 0, 0},
+		//						{ RHI::VertexFormat::FLOAT32X3, offsetof(Vertex,color), 1},
+		//						{ RHI::VertexFormat::FLOAT32X2, offsetof(Vertex,uv), 2},}}}},
+		//				RHI::PrimitiveState{ RHI::PrimitiveTopology::TRIANGLE_LIST, RHI::IndexFormat::UINT16_t },
+		//				RHI::DepthStencilState{ RHI::TextureFormat::DEPTH32_FLOAT, true, RHI::CompareFunction::LESS },
+		//				RHI::MultisampleState{},
+		//				RHI::FragmentState{
+		//					// fragment shader
+		//					Core::ResourceManager::get()->getResource<GFX::ShaderModule>(frag)->shaderModule.get(), "main",
+		//					{{RHI::TextureFormat::RGBA8_UNORM}}}
+		//				});
+		//		}
+		//		std::shared_ptr<RHI::RenderPassEncoder> passEncoder[2] = {};
+		//		RHI::MultiFrameFlights* multiFrameFlights = rhiLayer->getMultiFrameFlights();
 
-				// execute callback
-				GFX::CustomPassExecuteFn fn = [
-					multiFrameFlights, scene=&scene, renderPassDescriptor, pipelineLayout = std::move(pipelineLayout),
-					pipelines = std::array<std::shared_ptr<RHI::RenderPipeline>, 2>{ std::move(renderPipeline[0]), std::move(renderPipeline[1]) },
-					rtBindGroup = std::array<std::shared_ptr<RHI::BindGroup>, 2>{ std::move(rtBindGroup[0]), std::move(rtBindGroup[1]) },
-					passEncoders = std::array<std::shared_ptr<RHI::RenderPassEncoder>, 2>{ std::move(passEncoder[0]), std::move(passEncoder[1]) }
-				](GFX::RDGRegistry const& registry, RHI::CommandEncoder* cmdEncoder) mutable ->void {
-					uint32_t index = multiFrameFlights->getFlightIndex();
-					passEncoders[index] = cmdEncoder->beginRenderPass(renderPassDescriptor);
-					passEncoders[index]->setPipeline(pipelines[index].get());
-					int width = 800, height = 600;
-					passEncoders[index]->setViewport(0, 0, width, height, 0, 1);
-					passEncoders[index]->setScissorRect(0, 0, width, height);
+		//		RHI::RenderPassDescriptor renderPassDescriptor = {
+		//			{ RHI::RenderPassColorAttachment{
+		//				rdg->getTexture("RasterizerTarget_Color")->texture->originalView.get(),
+		//			nullptr, {0,0,0,1}, RHI::LoadOp::CLEAR, RHI::StoreOp::STORE }},
+		//			RHI::RenderPassDepthStencilAttachment{
+		//				rdg->getTexture("RasterizerTarget_Depth")->texture->originalView.get(),
+		//				1, RHI::LoadOp::CLEAR, RHI::StoreOp::DONT_CARE, false,
+		//				0, RHI::LoadOp::CLEAR, RHI::StoreOp::DONT_CARE, false
+		//		},
+		//		};
 
-					struct PushConstant {
-						Math::mat4 objectMat;
-						uint32_t matID;
-					};
-					for (auto handle : scene->gameObjects) {
-						GFX::GameObject* go = scene->getGameObject(handle.first);
-						Math::mat4 objectMat;
-						GFX::MeshReference* meshref = go->getEntity().getComponent<GFX::MeshReference>();
-						if (meshref) {
-							GFX::TransformComponent* transform = go->getEntity().getComponent<GFX::TransformComponent>();
-							objectMat = transform->getTransform() * objectMat;
-							while (go->parent != Core::NULL_ENTITY) {
-								go = scene->getGameObject(go->parent);
-								GFX::TransformComponent* transform = go->getEntity().getComponent<GFX::TransformComponent>();
-								objectMat = transform->getTransform() * objectMat;
-							}
-							objectMat = Math::transpose(objectMat);
-							passEncoders[index]->setVertexBuffer(0, meshref->mesh->vertexBuffer.get(),
-								0, meshref->mesh->vertexBuffer->size());
-							passEncoders[index]->setBindGroup(0, rtBindGroup[index].get(), 0, 0);
-							passEncoders[index]->setIndexBuffer(meshref->mesh->indexBuffer.get(),
-								RHI::IndexFormat::UINT32_T, 0, meshref->mesh->indexBuffer->size());
-							for (auto& submehs : meshref->mesh->submeshes) {
-								PushConstant constant{ objectMat, submehs.matID };
-								passEncoders[index]->pushConstants(&constant,
-									(uint32_t)RHI::ShaderStages::VERTEX,
-									0, sizeof(PushConstant));
+		//		// execute callback
+		//		GFX::CustomPassExecuteFn fn = [
+		//			multiFrameFlights, scene=&scene, renderPassDescriptor, pipelineLayout = std::move(pipelineLayout),
+		//			pipelines = std::array<std::shared_ptr<RHI::RenderPipeline>, 2>{ std::move(renderPipeline[0]), std::move(renderPipeline[1]) },
+		//			rtBindGroup = std::array<std::shared_ptr<RHI::BindGroup>, 2>{ std::move(rtBindGroup[0]), std::move(rtBindGroup[1]) },
+		//			passEncoders = std::array<std::shared_ptr<RHI::RenderPassEncoder>, 2>{ std::move(passEncoder[0]), std::move(passEncoder[1]) }
+		//		](GFX::RDGRegistry const& registry, RHI::CommandEncoder* cmdEncoder) mutable ->void {
+		//			uint32_t index = multiFrameFlights->getFlightIndex();
+		//			passEncoders[index] = cmdEncoder->beginRenderPass(renderPassDescriptor);
+		//			passEncoders[index]->setPipeline(pipelines[index].get());
+		//			int width = 800, height = 600;
+		//			passEncoders[index]->setViewport(0, 0, width, height, 0, 1);
+		//			passEncoders[index]->setScissorRect(0, 0, width, height);
 
-								passEncoders[index]->drawIndexed(submehs.size, 1, submehs.offset, submehs.baseVertex, 0);
-							}
-						}
-					}
-					passEncoders[index]->end();
-				};
-				return fn;
-			});
-		rdg->compile();
+		//			struct PushConstant {
+		//				Math::mat4 objectMat;
+		//				uint32_t matID;
+		//			};
+		//			for (auto handle : scene->gameObjects) {
+		//				GFX::GameObject* go = scene->getGameObject(handle.first);
+		//				Math::mat4 objectMat;
+		//				GFX::MeshReference* meshref = go->getEntity().getComponent<GFX::MeshReference>();
+		//				if (meshref) {
+		//					GFX::TransformComponent* transform = go->getEntity().getComponent<GFX::TransformComponent>();
+		//					objectMat = transform->getTransform() * objectMat;
+		//					while (go->parent != Core::NULL_ENTITY) {
+		//						go = scene->getGameObject(go->parent);
+		//						GFX::TransformComponent* transform = go->getEntity().getComponent<GFX::TransformComponent>();
+		//						objectMat = transform->getTransform() * objectMat;
+		//					}
+		//					objectMat = Math::transpose(objectMat);
+		//					passEncoders[index]->setVertexBuffer(0, meshref->mesh->vertexBuffer_device.get(),
+		//						0, meshref->mesh->vertexBuffer_device->size());
+		//					passEncoders[index]->setBindGroup(0, rtBindGroup[index].get(), 0, 0);
+		//					passEncoders[index]->setIndexBuffer(meshref->mesh->indexBuffer_device.get(),
+		//						RHI::IndexFormat::UINT32_T, 0, meshref->mesh->indexBuffer_device->size());
+		//					for (auto& submehs : meshref->mesh->submeshes) {
+		//						PushConstant constant{ objectMat, submehs.matID };
+		//						passEncoders[index]->pushConstants(&constant,
+		//							(uint32_t)RHI::ShaderStages::VERTEX,
+		//							0, sizeof(PushConstant));
+
+		//						passEncoders[index]->drawIndexed(submehs.size, 1, submehs.offset, submehs.baseVertex, 0);
+		//					}
+		//				}
+		//			}
+		//			passEncoders[index]->end();
+		//		};
+		//		return fn;
+		//	});
 
 		camera_go = scene.createGameObject();
 		cameraController.init(mainWindow.get()->getInput(), &timer);
@@ -345,7 +340,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				RHI::BLASDescriptor blasDesc;
 				for (auto& submehs : meshref->mesh->submeshes) {
 					blasDesc.triangleGeometries.push_back(RHI::BLASTriangleGeometry{
-						meshref->mesh->vertexBufferPosOnly.get(),
+						meshref->mesh->positionBuffer.get(),
 						meshref->mesh->indexBuffer.get(),
 						meshref->mesh->vertexBuffer.get(),
 						RHI::IndexFormat::UINT32_T,
@@ -415,19 +410,21 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		width = 800;
 		height = 600;
 
-		UniformBufferObject ubo;
-		GFX::TransformComponent* transform = scene.getGameObject(camera_go)->getEntity().getComponent<GFX::TransformComponent>();
-		ubo.view = Math::transpose(Math::lookAt(transform->translation, transform->translation + transform->getRotatedForward(), Math::vec3(0, 1, 0)).m);
-		ubo.proj = Math::transpose(Math::perspective(22.f, 1.f * 800 / 600, 0.1f, 1000.f).m);
-		ubo.viewInverse = Math::inverse(ubo.view);
-		ubo.projInverse = Math::inverse(ubo.proj);
-		Math::vec4 originPos = Math::vec4(0.f, 0.f, 0.f, 1.f);
-		Math::mat4 invView = Math::transpose(ubo.viewInverse);
-		auto originPost = Math::mul(invView, Math::vec4(0.f, 0.f, 0.f, 1.f));
+		//UniformBufferObject ubo;
+		//GFX::TransformComponent* transform = scene.getGameObject(camera_go)->getEntity().getComponent<GFX::TransformComponent>();
+		//ubo.view = Math::transpose(Math::lookAt(transform->translation, transform->translation + transform->getRotatedForward(), Math::vec3(0, 1, 0)).m);
+		//ubo.proj = Math::transpose(Math::perspective(22.f, 1.f * 800 / 600, 0.1f, 1000.f).m);
+		//ubo.viewInverse = Math::inverse(ubo.view);
+		//ubo.projInverse = Math::inverse(ubo.proj);
+		//Math::vec4 originPos = Math::vec4(0.f, 0.f, 0.f, 1.f);
+		//Math::mat4 invView = Math::transpose(ubo.viewInverse);
+		//auto originPost = Math::mul(invView, Math::vec4(0.f, 0.f, 0.f, 1.f));
 
-		std::cout << 1.f / timer.deltaTime() << std::endl;
+		//std::cout << 1.f / timer.deltaTime() << std::endl;
 		//Math::rotate( )
-		rdg->getStructuredUniformBuffer<UniformBufferObject>("camera_uniform_buffer")->setStructure(ubo, index);
+		srenderer->updateCamera(*(scene.getGameObject(camera_go)->getEntity().getComponent<GFX::TransformComponent>()), GFX::CameraComponent{});
+
+		//rdg->getStructuredUniformBuffer<UniformBufferObject>("camera_uniform_buffer")->setStructure(ubo, index);
 
 		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
 			(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
@@ -582,6 +579,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 	virtual auto Exit() noexcept -> void override {
 		rhiLayer->getDevice()->waitIdle();
+		srenderer = nullptr;
 		rdg = nullptr;
 
 		blases.clear();
@@ -602,6 +600,7 @@ private:
 	std::unique_ptr<RHI::RHILayer> rhiLayer = nullptr;
 	std::unique_ptr<Editor::ImGuiLayer> imguiLayer = nullptr;
 	std::unique_ptr<Editor::EditorLayer> editorLayer = nullptr;
+	std::unique_ptr<SRenderer> srenderer = nullptr;
 	
 	std::unique_ptr<GFX::RDGraph> rdg = nullptr;
 

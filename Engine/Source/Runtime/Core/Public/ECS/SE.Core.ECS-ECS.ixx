@@ -80,9 +80,9 @@ namespace SIByL::Core
 			return &componentPool[denseId];
 		}
 		/** insert the component of an entity */
-		auto insertData(EntityHandle entity, T const& component) noexcept -> void {
+		auto insertData(EntityHandle entity, T && component) noexcept -> void {
 			componentSparseSet.insert(entity);
-			componentPool.push_back(component);
+			componentPool.push_back(std::move(component));
 		}
 		/** remove the component of an entity */
 		auto removeData(EntityHandle entity) noexcept -> void {
@@ -91,7 +91,7 @@ namespace SIByL::Core
 				// remove the element
 				int tmp = componentSparseSet.dense[componentSparseSet.livingElementCount - 1];
 				componentSparseSet.dense[componentSparseSet.sparse[entity]] = tmp;
-				componentPool[componentSparseSet.sparse[entity]] = componentPool[componentSparseSet.livingElementCount - 1];
+				componentPool[componentSparseSet.sparse[entity]] = std::move(componentPool[componentSparseSet.livingElementCount - 1]);
 				componentSparseSet.sparse[tmp] = componentSparseSet.sparse[entity];
 				--componentSparseSet.livingElementCount;
 				componentPool.pop_back();
@@ -161,8 +161,8 @@ namespace SIByL::Core
 		}
 		/** add component */
 		template <class T>
-		auto addComponent(EntityHandle entt, T const& component) noexcept -> void {
-			this->getComponentPool<T>()->insertData(entt, component);
+		auto addComponent(EntityHandle entt, T&& component) noexcept -> void {
+			this->getComponentPool<T>()->insertData(entt, std::move(component));
 			EntityManager::get()->getSignature(entt).set(ComponentManager::get()->getComponentType<T>());
 		}
 		/** remove component */
@@ -206,9 +206,9 @@ namespace SIByL::Core
 		Entity(EntityHandle const& handle) :handle(handle) {}
 		/** add component to entity */
 		template<typename T, typename ... Args>
-		auto addComponent(Args&&... args) noexcept -> T& {
-			ComponentManager::get()->addComponent<T>(handle, T(std::forward<Args>(args)...));
-			return *ComponentManager::get()->getComponent<T>(handle);
+		auto addComponent(Args&&... args) noexcept -> T* {
+			Core::ComponentManager::get()->addComponent<T>(handle, T(std::forward<Args>(args)...));
+			return Core::ComponentManager::get()->getComponent<T>(handle);
 		}
 		/** get component from entity */
 		template<typename T>

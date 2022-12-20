@@ -42,10 +42,10 @@
     <ClCompile Include="Public\Core\Resource\SE.GFX.Core-Resources.ShaderModule.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-MeshLoader.ixx">
+    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-Loader.MeshLoader.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-SceneNodeLoader.ixx">
+    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-Loader.SceneNodeLoader.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\RDG\SE.GFX.RDG.ixx">

@@ -10,7 +10,13 @@ module;
 #define TINYGLTF_NOEXCEPTION
 #define JSON_NOEXCEPTION
 #include <tinygltf/tiny_gltf.h>
+#include <tiny_obj_loader.h>
 export module SE.GFX.Core:SceneNodeLoader;
+import :Mesh;
+import :Scene;
+import :MeshLoader;
+import :MeshReference;
+import :GFXManager;
 import SE.Core.Log;
 import SE.Core.ECS;
 import SE.Core.Memory;
@@ -18,7 +24,6 @@ import SE.Core.Resource;
 import SE.Math.Geometric;
 import SE.Image;
 import SE.RHI;
-import :GFXManager;
 
 namespace SIByL::GFX
 {
@@ -56,6 +61,220 @@ namespace SIByL::GFX
 
 	inline auto bindMesh(GFX::Scene& scene, GameObjectHandle parent, tinygltf::Model const& model, tinygltf::Node const& node, tinygltf::Mesh const& mesh,
         std::unordered_map<tinygltf::Mesh const*, Core::GUID>& meshMap) noexcept -> void;
+
+    export struct SceneNodeLoader_obj {
+        /** Load obj file */
+        static inline auto loadSceneNode(std::filesystem::path const& path, GFX::Scene& gfxscene, MeshLoaderConfig meshConfig = {}) noexcept -> void {
+            // load obj file
+            std::string inputfile = path.string();
+            tinyobj::ObjReaderConfig reader_config;
+            reader_config.mtl_search_path = path.parent_path().string(); // Path to material files
+            tinyobj::ObjReader reader;
+            if (!reader.ParseFromFile(inputfile, reader_config)) {
+                if (!reader.Error().empty()) {
+                    Core::LogManager::Error("TinyObjReader: " + reader.Error());
+                }
+                return;
+            }
+            if (!reader.Warning().empty()) {
+                Core::LogManager::Warning("TinyObjReader: " + reader.Warning());
+            }
+            auto& attrib = reader.GetAttrib();
+            auto& shapes = reader.GetShapes();
+            auto& materials = reader.GetMaterials();
+
+            std::vector<float>      vertexBufferV = {};
+            std::vector<float>      positionBufferV = {};
+            std::vector<uint16_t>   indexBufferV = {};
+            std::vector<uint32_t>   indexBufferWV = {};
+
+            // check whether tangent is need in mesh attributes
+            bool needTangent = false;
+            for (auto const& entry : meshConfig.layout.layout)
+                if (entry.info == MeshDataLayout::VertexInfo::TANGENT)
+                    needTangent = true;
+
+            // Loop over shapes
+            GFX::Mesh mesh;
+            uint64_t global_index_offset = 0;
+            uint32_t submesh_vertex_offset = 0, submesh_index_offset = 0;
+            for (size_t s = 0; s < shapes.size(); s++) {
+                // Loop over faces(polygon)
+                size_t index_offset = 0;
+                for (size_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++) {
+                    size_t fv = size_t(shapes[s].mesh.num_face_vertices[f]);
+                    // require tangent
+                    if (fv != 3) {
+                        Core::LogManager::Error("GFX :: SceneNodeLoader_obj :: non-triangle geometry not supported when required TANGENT attribute now.");
+                        return;
+                    }
+                    Math::vec3 tangent;
+                    Math::vec3 bitangent;
+                    if (needTangent) {
+                        Math::vec3 positions[3];
+                        Math::vec3 normals[3];
+                        Math::vec2 uvs[3];
+                        for (size_t v = 0; v < fv; v++) {
+                            // index finding
+                            tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v];
+                            positions[v] = {
+                                attrib.vertices[3 * size_t(idx.vertex_index) + 0],
+                                attrib.vertices[3 * size_t(idx.vertex_index) + 1],
+                                attrib.vertices[3 * size_t(idx.vertex_index) + 2] };
+                            normals[v] = {
+                                attrib.normals[3 * size_t(idx.normal_index) + 0],
+                                attrib.normals[3 * size_t(idx.normal_index) + 1],
+                                attrib.normals[3 * size_t(idx.normal_index) + 2] };
+                            uvs[v] = {
+                                attrib.texcoords[2 * size_t(idx.texcoord_index) + 0],
+                                attrib.texcoords[2 * size_t(idx.texcoord_index) + 1] };
+                        }
+                        Math::vec3 edge1 = positions[1] - positions[0];
+                        Math::vec3 edge2 = positions[2] - positions[0];
+                        Math::vec2 deltaUV1 = uvs[1] - uvs[0];
+                        Math::vec2 deltaUV2 = uvs[2] - uvs[0];
+
+                        float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+
+                        tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+                        tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+                        tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+                        tangent = Math::normalize(tangent);
+
+                        bitangent.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
+                        bitangent.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
+                        bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
+                        bitangent = Math::normalize(bitangent);
+                    }
+                    // Loop over vertices in the face.
+                    for (size_t v = 0; v < fv; v++) {
+                        // index finding
+                        tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v];
+                        // index filling
+                        if (meshConfig.layout.format == RHI::IndexFormat::UINT16_t)
+                            indexBufferV.push_back(index_offset + v);
+                        else if (meshConfig.layout.format == RHI::IndexFormat::UINT32_T)
+                            indexBufferWV.push_back(index_offset + v);
+                        // atrributes filling
+                        for (auto const& entry : meshConfig.layout.layout) {
+                            // vertex position
+                            if (entry.info == MeshDataLayout::VertexInfo::POSITION) {
+                                if (entry.format == RHI::VertexFormat::FLOAT32X3) {
+                                    tinyobj::real_t vx = attrib.vertices[3 * size_t(idx.vertex_index) + 0];
+                                    tinyobj::real_t vy = attrib.vertices[3 * size_t(idx.vertex_index) + 1];
+                                    tinyobj::real_t vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
+                                    vertexBufferV.push_back(vx);
+                                    vertexBufferV.push_back(vy);
+                                    vertexBufferV.push_back(vz);
+                                    if (meshConfig.usePositionBuffer) {
+                                        positionBufferV.push_back(vx);
+                                        positionBufferV.push_back(vy);
+                                        positionBufferV.push_back(vz);
+                                    }
+                                }
+                                else {
+                                    Core::LogManager::Error("GFX :: SceneNodeLoader_obj :: unwanted vertex format for POSITION attributes.");
+                                    return;
+                                }
+                            }
+                            else if (entry.info == MeshDataLayout::VertexInfo::NORMAL) {
+                                // Check if `normal_index` is zero or positive. negative = no normal data
+                                if (idx.normal_index >= 0) {
+                                    tinyobj::real_t nx = attrib.normals[3 * size_t(idx.normal_index) + 0];
+                                    tinyobj::real_t ny = attrib.normals[3 * size_t(idx.normal_index) + 1];
+                                    tinyobj::real_t nz = attrib.normals[3 * size_t(idx.normal_index) + 2];
+                                    vertexBufferV.push_back(nx);
+                                    vertexBufferV.push_back(ny);
+                                    vertexBufferV.push_back(nz);
+                                }
+                                else {
+                                    vertexBufferV.push_back(0);
+                                    vertexBufferV.push_back(0);
+                                    vertexBufferV.push_back(0);
+                                }
+                            }
+                            else if (entry.info == MeshDataLayout::VertexInfo::UV) {
+                                if (idx.texcoord_index >= 0) {
+                                    tinyobj::real_t tx = attrib.texcoords[2 * size_t(idx.texcoord_index) + 0];
+                                    tinyobj::real_t ty = attrib.texcoords[2 * size_t(idx.texcoord_index) + 1];
+                                    vertexBufferV.push_back(tx);
+                                    vertexBufferV.push_back(ty);
+                                }
+                                else {
+                                    vertexBufferV.push_back(0);
+                                    vertexBufferV.push_back(0);
+                                }
+                            }
+                            else if (entry.info == MeshDataLayout::VertexInfo::TANGENT) {
+                                vertexBufferV.push_back(tangent.x);
+                                vertexBufferV.push_back(tangent.y);
+                                vertexBufferV.push_back(tangent.z);
+                            }
+                            else if (entry.info == MeshDataLayout::VertexInfo::COLOR) {
+                                // Optional: vertex colors
+                                tinyobj::real_t red = attrib.colors[3 * size_t(idx.vertex_index) + 0];
+                                tinyobj::real_t green = attrib.colors[3 * size_t(idx.vertex_index) + 1];
+                                tinyobj::real_t blue = attrib.colors[3 * size_t(idx.vertex_index) + 2];
+                                vertexBufferV.push_back(red);
+                                vertexBufferV.push_back(green);
+                                vertexBufferV.push_back(blue);
+                            }
+                            else if (entry.info == MeshDataLayout::VertexInfo::CUSTOM) {
+
+                            }
+                        }
+                    }
+                    index_offset += fv;
+                    // per-face material
+                    shapes[s].mesh.material_ids[f];
+                }
+                global_index_offset += index_offset;
+
+                mesh.submeshes.push_back(GFX::Mesh::Submesh{
+                    submesh_index_offset, uint32_t(index_offset),
+                    submesh_vertex_offset, uint32_t(0) });
+                submesh_index_offset = global_index_offset;
+                submesh_vertex_offset = submesh_index_offset;
+            }
+            // create mesh resource
+            {   // register mesh
+                mesh.vertexBufferLayout = getVertexBufferLayout(meshConfig.layout);
+                if(meshConfig.residentOnHost){
+                    mesh.vertexBuffer_host = Core::Buffer(sizeof(float) * vertexBufferV.size());
+                    memcpy(mesh.vertexBuffer_host.data, vertexBufferV.data(), mesh.vertexBuffer_host.size);
+                    mesh.vertexBufferInfo.onHost = true;
+                    mesh.vertexBufferInfo.size = mesh.vertexBuffer_host.size;
+                    if (meshConfig.layout.format == RHI::IndexFormat::UINT16_t) {
+                        mesh.indexBuffer_host = Core::Buffer(sizeof(uint16_t) * indexBufferV.size());
+                        memcpy(mesh.indexBuffer_host.data, indexBufferV.data(), mesh.indexBuffer_host.size);
+                        mesh.indexBufferInfo.size = mesh.indexBuffer_host.size;
+                        mesh.indexBufferInfo.onHost = true;
+                    }
+                    else if (meshConfig.layout.format == RHI::IndexFormat::UINT32_T) {
+                        mesh.indexBuffer_host = Core::Buffer(sizeof(uint32_t) * indexBufferWV.size());
+                        memcpy(mesh.indexBuffer_host.data, indexBufferWV.data(), mesh.indexBuffer_host.size);
+                        mesh.indexBufferInfo.size = mesh.indexBuffer_host.size;
+                        mesh.indexBufferInfo.onHost = true;
+                    }
+                    if (meshConfig.usePositionBuffer) {
+                        mesh.positionBuffer_host = Core::Buffer(sizeof(float) * positionBufferV.size());
+                        memcpy(mesh.positionBuffer_host.data, positionBufferV.data(), mesh.positionBuffer_host.size);
+                        mesh.positionBufferInfo.onHost = true;
+                        mesh.positionBufferInfo.size = mesh.positionBuffer_host.size;
+                    }
+                }
+            }
+            Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Mesh>();
+            Core::ResourceManager::get()->addResource<GFX::Mesh>(guid, std::move(mesh));
+            GFX::Mesh* meshResourceRef = Core::ResourceManager::get()->getResource<GFX::Mesh>(guid);
+            meshResourceRef->serialize();
+
+            // bind scene
+            GameObjectHandle rootNode = gfxscene.createGameObject(GFX::NULL_GO);
+            gfxscene.getGameObject(rootNode)->getEntity().getComponent<TagComponent>()->name = path.filename().string();
+            gfxscene.getGameObject(rootNode)->getEntity().addComponent<MeshReference>()->mesh = meshResourceRef;
+        }
+    };
 
 	export struct SceneNodeLoader_glTF {
 		/** Load glTF file */
@@ -373,12 +592,12 @@ namespace SIByL::GFX
                     submesh_index_offset = indexBuffer_uint.size();
                     submesh_vertex_offset = vertexBuffer.size() / 8;
                 }
-                mesh.vertexBuffer = device->createDeviceLocalBuffer((void*)vertexBuffer.data(), vertexBuffer.size() * sizeof(float), 
+                mesh.vertexBuffer_device = device->createDeviceLocalBuffer((void*)vertexBuffer.data(), vertexBuffer.size() * sizeof(float),
                     (uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::STORAGE);
-                mesh.indexBuffer = device->createDeviceLocalBuffer((void*)indexBuffer_uint.data(), indexBuffer_uint.size() * sizeof(INDEX_TYPE),
+                mesh.indexBuffer_device = device->createDeviceLocalBuffer((void*)indexBuffer_uint.data(), indexBuffer_uint.size() * sizeof(INDEX_TYPE),
                     (uint32_t)RHI::BufferUsage::INDEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
                     (uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
-                mesh.vertexBufferPosOnly = device->createDeviceLocalBuffer((void*)PositionBuffer.data(), PositionBuffer.size() * sizeof(float),
+                mesh.positionBuffer_device = device->createDeviceLocalBuffer((void*)PositionBuffer.data(), PositionBuffer.size() * sizeof(float),
                     (uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
                     (uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
                 mesh.primitiveState.stripIndexFormat = RHI::IndexFormat::UINT32_T;

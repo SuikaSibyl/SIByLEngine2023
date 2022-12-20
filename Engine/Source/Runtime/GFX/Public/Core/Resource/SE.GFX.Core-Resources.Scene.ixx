@@ -73,7 +73,7 @@ namespace SIByL::GFX
 		/** get transform */
 		auto getTransform() noexcept -> Math::mat4;
 		/** get rotated forward */
-		auto getRotatedForward() noexcept -> Math::vec3 {
+		auto getRotatedForward() const noexcept -> Math::vec3 {
 			Math::vec3 front;
 			front.x = std::cos((eulerAngles.y)) * std::cos((eulerAngles.x));
 			front.y = std::sin((eulerAngles.x));

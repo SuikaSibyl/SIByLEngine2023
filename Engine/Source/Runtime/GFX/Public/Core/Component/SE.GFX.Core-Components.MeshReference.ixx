@@ -40,13 +40,13 @@ namespace SIByL::GFX
 		Core::Entity entity(handle);
 		auto meshRefComponentAoS = components["MeshReference"];
 		if (meshRefComponentAoS) {
-			MeshReference& meshRef = entity.addComponent<MeshReference>();
+			MeshReference* meshRef = entity.addComponent<MeshReference>();
 			Core::ORID orid = meshRefComponentAoS["ORID"].as<uint64_t>();
 			Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Mesh>();
 			GFX::Mesh mesh;
 			Core::ResourceManager::get()->addResource(guid, std::move(mesh));
 			Core::ResourceManager::get()->getResource<GFX::Mesh>(guid)->deserialize(RHI::RHILayer::get()->getDevice(), orid);
-			meshRef.mesh = Core::ResourceManager::get()->getResource<GFX::Mesh>(guid);
+			meshRef->mesh = Core::ResourceManager::get()->getResource<GFX::Mesh>(guid);
 		}
 	}
 

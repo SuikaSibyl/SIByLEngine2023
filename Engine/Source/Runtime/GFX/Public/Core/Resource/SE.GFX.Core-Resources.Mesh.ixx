@@ -27,12 +27,23 @@ namespace SIByL::GFX
 		RHI::VertexBufferLayout vertexBufferLayout = {};
 		/** primitive state */
 		RHI::PrimitiveState primitiveState = {};
-		/** the gpu vertex buffer */
-		std::unique_ptr<RHI::Buffer> vertexBuffer = nullptr;
-		/** the gpu index buffer */
-		std::unique_ptr<RHI::Buffer> indexBuffer = nullptr;
-		/** the gpu vertex buffer with only position for ray tracing */
-		std::unique_ptr<RHI::Buffer> vertexBufferPosOnly = nullptr;
+		/** the gpu|device vertex buffer */
+		std::unique_ptr<RHI::Buffer> vertexBuffer_device = nullptr;
+		std::unique_ptr<RHI::Buffer> positionBuffer_device = nullptr;
+		std::unique_ptr<RHI::Buffer> indexBuffer_device = nullptr;
+		/** the cpu|host vertex/index/position buffers */
+		Core::Buffer	vertexBuffer_host = {};
+		Core::Buffer	positionBuffer_host = {};
+		Core::Buffer	indexBuffer_host = {};
+		/** host-device copy */
+		struct DeviceHostBufferInfo {
+			uint32_t size = 0;
+			bool onHost = false;
+			bool onDevice = false;
+		};
+		DeviceHostBufferInfo vertexBufferInfo;
+		DeviceHostBufferInfo positionBufferInfo;
+		DeviceHostBufferInfo indexBufferInfo;
 		/** binded ORID */
 		Core::ORID ORID = Core::ORID_NONE;
 		/** submeshes */
@@ -53,6 +64,28 @@ namespace SIByL::GFX
 		virtual auto getName() const noexcept -> char const* {
 			return name.c_str();
 		}
+	};
+
+	/** Mesh data layout */
+	export struct MeshDataLayout {
+		/** info types in vertex */
+		enum struct VertexInfo {
+			POSITION,
+			NORMAL,
+			TANGENT,
+			UV,
+			COLOR,
+			CUSTOM,
+		};
+		/** an entry of the layout */
+		struct Entry {
+			RHI::VertexFormat  format;
+			VertexInfo         info;
+		};
+		/* the list of vertex layout */
+		std::vector<Entry> layout;
+		/* index format */
+		RHI::IndexFormat format;
 	};
 
 	inline auto Mesh::serialize() noexcept -> void {
@@ -98,9 +131,9 @@ namespace SIByL::GFX
 			}
 			out << YAML::EndMap;
 
-			out << YAML::Key << "VertexBufferSize" << YAML::Value << vertexBuffer->size();
-			out << YAML::Key << "IndexBufferSize" << YAML::Value << indexBuffer->size();
-			out << YAML::Key << "PosOnlyBufferSize" << YAML::Value << (vertexBufferPosOnly ? vertexBufferPosOnly->size() : 0);
+			out << YAML::Key << "VertexBufferSize" << YAML::Value << vertexBufferInfo.size;
+			out << YAML::Key << "IndexBufferSize" << YAML::Value << indexBufferInfo.size;
+			out << YAML::Key << "PosOnlyBufferSize" << YAML::Value << positionBufferInfo.size;
 			// output submeshes
 			out << YAML::Key << "Submeshes" << YAML::Value << YAML::BeginSeq;
 			for (int i = 0; i < submeshes.size(); i++) {
@@ -122,15 +155,32 @@ namespace SIByL::GFX
 			scene_proxy.data = nullptr;
 		}
 		// handle binary data
-		int vbsize = vertexBuffer->size();
-		int ibsize = indexBuffer->size();
-		int pbsize = (vertexBufferPosOnly ? vertexBufferPosOnly->size() : 0);
+		int vbsize = vertexBufferInfo.size;
+		int ibsize = indexBufferInfo.size;
+		int pbsize = positionBufferInfo.size;
 		Core::Buffer mergedBuffer(vbsize + ibsize + pbsize);
-		vertexBuffer->getDevice()->waitIdle();
-		vertexBuffer->getDevice()->readbackDeviceLocalBuffer(vertexBuffer.get(), mergedBuffer.data, vbsize);
-		indexBuffer->getDevice()->readbackDeviceLocalBuffer(indexBuffer.get(), &(((char*)(mergedBuffer.data))[vbsize]), ibsize);
-		if (vertexBufferPosOnly)
-			vertexBufferPosOnly->getDevice()->readbackDeviceLocalBuffer(vertexBufferPosOnly.get(), &(((char*)(mergedBuffer.data))[vbsize + ibsize]), pbsize);
+		if (vertexBufferInfo.onHost) {
+			memcpy(mergedBuffer.data, vertexBuffer_host.data, vbsize);
+		}
+		else if (vertexBufferInfo.onDevice) {
+			vertexBuffer_device->getDevice()->waitIdle();
+			vertexBuffer_device->getDevice()->readbackDeviceLocalBuffer(vertexBuffer_device.get(), mergedBuffer.data, vbsize);
+		}
+		if (indexBufferInfo.onHost) {
+			memcpy(&(((char*)(mergedBuffer.data))[vbsize]), indexBuffer_host.data, ibsize);
+		}
+		else if (indexBufferInfo.onDevice) {
+			indexBuffer_device->getDevice()->waitIdle();
+			indexBuffer_device->getDevice()->readbackDeviceLocalBuffer(indexBuffer_device.get(), &(((char*)(mergedBuffer.data))[vbsize]), ibsize);
+		}
+		if (positionBufferInfo.onHost) {
+			memcpy(&(((char*)(mergedBuffer.data))[vbsize + ibsize]), positionBuffer_host.data, pbsize);
+		}
+		else if (positionBufferInfo.onDevice) {
+			positionBuffer_device->getDevice()->waitIdle();
+			positionBuffer_device->getDevice()->readbackDeviceLocalBuffer(positionBuffer_device.get(), &(((char*)(mergedBuffer.data))[vbsize + ibsize]), pbsize);
+		}
+
 		Core::syncWriteFile(bindata_path, mergedBuffer);
 	}
 
@@ -184,13 +234,13 @@ namespace SIByL::GFX
 		Core::Buffer bindata;
 		Core::syncReadFile(bindata_path, bindata);
 
-		vertexBuffer = device->createDeviceLocalBuffer((void*)bindata.data, vb_size,
+		vertexBuffer_device = device->createDeviceLocalBuffer((void*)bindata.data, vb_size,
 			(uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::STORAGE);
-		indexBuffer = device->createDeviceLocalBuffer((void*)&(((uint16_t*)(&(((char*)(bindata.data))[vb_size])))[0]), ib_size,
+		indexBuffer_device = device->createDeviceLocalBuffer((void*)&(((uint16_t*)(&(((char*)(bindata.data))[vb_size])))[0]), ib_size,
 			(uint32_t)RHI::BufferUsage::INDEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
 			(uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
 		if (pb_size != 0) {
-			vertexBufferPosOnly = device->createDeviceLocalBuffer((void*)&(((uint16_t*)(&(((char*)(bindata.data))[vb_size + ib_size])))[0]), pb_size,
+			positionBuffer_device = device->createDeviceLocalBuffer((void*)&(((uint16_t*)(&(((char*)(bindata.data))[vb_size + ib_size])))[0]), pb_size,
 				(uint32_t)RHI::BufferUsage::INDEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
 				(uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
 		}

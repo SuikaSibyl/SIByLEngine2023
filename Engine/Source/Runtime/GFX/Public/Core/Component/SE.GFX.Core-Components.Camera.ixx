@@ -74,12 +74,12 @@ namespace SIByL::GFX
 		Core::Entity entity(handle);
 		auto cameraComponentAoS = components["CameraComponent"];
 		if (cameraComponentAoS) {
-			CameraComponent& camRef = entity.addComponent<CameraComponent>();
-			camRef.fovy = cameraComponentAoS["fovy"].as<float>();
-			camRef.aspect = cameraComponentAoS["aspect"].as<float>();
-			camRef.near = cameraComponentAoS["near"].as<float>();
-			camRef.far = cameraComponentAoS["far"].as<float>();
-			camRef.projectType = (ProjectType)cameraComponentAoS["ProjectType"].as<uint32_t>();
+			CameraComponent* camRef = entity.addComponent<CameraComponent>();
+			camRef->fovy = cameraComponentAoS["fovy"].as<float>();
+			camRef->aspect = cameraComponentAoS["aspect"].as<float>();
+			camRef->near = cameraComponentAoS["near"].as<float>();
+			camRef->far = cameraComponentAoS["far"].as<float>();
+			camRef->projectType = (ProjectType)cameraComponentAoS["ProjectType"].as<uint32_t>();
 		}
 	}
 }

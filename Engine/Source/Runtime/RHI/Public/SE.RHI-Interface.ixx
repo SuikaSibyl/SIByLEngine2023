@@ -1065,6 +1065,41 @@ namespace SIByL::RHI
 		SINT32X4
 	};
 
+	export inline auto getVertexFormatSize(VertexFormat format) noexcept -> size_t {
+		switch (format) {
+		case SIByL::RHI::VertexFormat::UINT8X2:		return sizeof(uint8_t) * 2;
+		case SIByL::RHI::VertexFormat::UINT8X4:		return sizeof(uint8_t) * 4;
+		case SIByL::RHI::VertexFormat::SINT8X2:		return sizeof(uint8_t) * 2;
+		case SIByL::RHI::VertexFormat::SINT8X4:		return sizeof(uint8_t) * 4;
+		case SIByL::RHI::VertexFormat::UNORM8X2:	return sizeof(uint8_t) * 2;
+		case SIByL::RHI::VertexFormat::UNORM8X4:	return sizeof(uint8_t) * 4;
+		case SIByL::RHI::VertexFormat::SNORM8X2:	return sizeof(uint8_t) * 2;
+		case SIByL::RHI::VertexFormat::SNORM8X4:	return sizeof(uint8_t) * 4;
+		case SIByL::RHI::VertexFormat::UINT16X2:	return sizeof(uint16_t) * 2;
+		case SIByL::RHI::VertexFormat::UINT16X4:	return sizeof(uint16_t) * 4;
+		case SIByL::RHI::VertexFormat::SINT16X2:	return sizeof(uint16_t) * 2;
+		case SIByL::RHI::VertexFormat::SINT16X4:	return sizeof(uint16_t) * 4;
+		case SIByL::RHI::VertexFormat::UNORM16X2:	return sizeof(uint16_t) * 2;
+		case SIByL::RHI::VertexFormat::UNORM16X4:	return sizeof(uint16_t) * 4;
+		case SIByL::RHI::VertexFormat::SNORM16X2:	return sizeof(uint16_t) * 2;
+		case SIByL::RHI::VertexFormat::SNORM16X4:	return sizeof(uint16_t) * 4;
+		case SIByL::RHI::VertexFormat::FLOAT16X2:	return sizeof(uint16_t) * 2;
+		case SIByL::RHI::VertexFormat::FLOAT16X4:	return sizeof(uint16_t) * 4;
+		case SIByL::RHI::VertexFormat::FLOAT32:		return sizeof(float) * 1;
+		case SIByL::RHI::VertexFormat::FLOAT32X2:	return sizeof(float) * 2;
+		case SIByL::RHI::VertexFormat::FLOAT32X3:	return sizeof(float) * 3;
+		case SIByL::RHI::VertexFormat::FLOAT32X4:	return sizeof(float) * 4;
+		case SIByL::RHI::VertexFormat::UINT32:		return sizeof(uint32_t) * 1;
+		case SIByL::RHI::VertexFormat::UINT32X2:	return sizeof(uint32_t) * 2;
+		case SIByL::RHI::VertexFormat::UINT32X3:	return sizeof(uint32_t) * 3;
+		case SIByL::RHI::VertexFormat::UINT32X4:	return sizeof(uint32_t) * 4;
+		case SIByL::RHI::VertexFormat::SINT32:		return sizeof(int32_t) * 1;
+		case SIByL::RHI::VertexFormat::SINT32X2:	return sizeof(int32_t) * 2;
+		case SIByL::RHI::VertexFormat::SINT32X3:	return sizeof(int32_t) * 3;
+		case SIByL::RHI::VertexFormat::SINT32X4:	return sizeof(int32_t) * 4;
+		default: return 0; }
+	}
+
 	export enum struct VertexStepMode {
 		VERTEX,
 		INSTANCE,

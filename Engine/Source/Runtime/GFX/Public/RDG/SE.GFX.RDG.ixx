@@ -134,6 +134,8 @@ namespace SIByL::GFX
 		// -------------------------------
 		/** compile */
 		auto compile() noexcept -> void;
+		auto sub_compile_devirtualize() noexcept -> void;
+		auto sub_compile_pass_setup() noexcept -> void;
 		////////////////////////////////////
 		//  Excute Phase
 		// -------------------------------
@@ -245,6 +247,11 @@ namespace SIByL::GFX
 	}
 
 	auto RDGraph::compile() noexcept -> void {
+		sub_compile_devirtualize();
+		sub_compile_pass_setup();
+	}
+
+	auto RDGraph::sub_compile_devirtualize() noexcept -> void {
 		// passes setup
 		for (auto& iter : passes)
 			iter.second->customPassCosume();
@@ -253,6 +260,9 @@ namespace SIByL::GFX
 			iter.second->devirtualize();
 		for (auto& iter : uniformBuffers)
 			iter.second->devirtualize();
+	}
+
+	auto RDGraph::sub_compile_pass_setup() noexcept -> void {
 		// initialize pass
 		for (auto& iter : passes)
 			iter.second->customPassExec = iter.second->customPassSetup();

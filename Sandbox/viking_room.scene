@@ -1,0 +1,21 @@
+SceneName: new scene
+SceneNodes:
+  - uid: 0
+    parent: 18446744073709551615
+    components:
+      TagComponent: viking_room.obj
+      Transform:
+        translation: [0, 0, 0]
+        eulerAngles: [0, 0, 0]
+        scale: [1, 1, 1]
+      MeshReference:
+        ORID: 1637580753394056028
+  - uid: 1
+    parent: 18446744073709551615
+    components:
+      TagComponent: New GameObject
+      Transform:
+        translation: [0, 0, 0]
+        eulerAngles: [0, 0, 0]
+        scale: [1, 1, 1]
+SceneEnd: TRUE

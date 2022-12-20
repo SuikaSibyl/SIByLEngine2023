@@ -159,10 +159,10 @@ namespace SIByL::Editor
 			if (meshReference) {
 				drawComponent<GFX::MeshReference>(go, "MeshReference", [](GFX::MeshReference* component) {
 					const int index_size = component->mesh->primitiveState.stripIndexFormat == RHI::IndexFormat::UINT16_t ? sizeof(uint16_t) : sizeof(uint32_t);
-					const int index_count = component->mesh->indexBuffer->size() / index_size;
+					const int index_count = component->mesh->indexBufferInfo.size / index_size;
 					const int primitive_count = index_count / 3;
 					if (ImGui::TreeNode("Vertex Buffer")) {
-						ImGui::BulletText((std::string("Size (bytes): ") + std::to_string(component->mesh->vertexBuffer->size())).c_str());
+						ImGui::BulletText((std::string("Size (bytes): ") + std::to_string(component->mesh->vertexBufferInfo.size)).c_str());
 						if (ImGui::TreeNode("Buffer Layout")) {
 							ImGui::BulletText((std::string("Array Stride: ") + std::to_string(component->mesh->vertexBufferLayout.arrayStride)).c_str());
 							ImGui::BulletText((std::string("Step Mode: ") + to_string(component->mesh->vertexBufferLayout.stepMode)).c_str());
@@ -179,7 +179,7 @@ namespace SIByL::Editor
 						ImGui::TreePop();
 					}
 					if (ImGui::TreeNode("Index Buffer")) {
-						ImGui::BulletText((std::string("Size (bytes): ") + std::to_string(component->mesh->indexBuffer->size())).c_str());
+						ImGui::BulletText((std::string("Size (bytes): ") + std::to_string(component->mesh->indexBufferInfo.size)).c_str());
 						ImGui::BulletText((std::string("Index Count: ") + std::to_string(index_count)).c_str());
 						ImGui::TreePop();
 					}

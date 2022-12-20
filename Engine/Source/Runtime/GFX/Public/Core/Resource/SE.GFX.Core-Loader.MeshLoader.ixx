@@ -14,26 +14,28 @@ import :Mesh;
 
 namespace SIByL::GFX
 {
-    /** Mesh data layout */
-    export struct MeshDataLayout {
-        /** info types in vertex */
-        enum struct VertexInfo {
-            POSITION,
-            NORMAL,
-            UV,
-            COLOR,
-            CUSTOM,
-        };
-        /** an entry of the layout */
-        struct Entry {
-            RHI::VertexFormat  format;
-            VertexInfo         info;
-        };
-        /* the list of vertex layout */
-        std::vector<Entry> layout;
-        /* index format */
-        RHI::IndexFormat format;
+    export struct MeshLoaderConfig {
+        MeshDataLayout layout = {};
+        bool usePositionBuffer  = true;
+        bool residentOnHost     = true;
+        bool residentOnDevice   = false;
     };
+    
+    export inline auto getVertexBufferLayout(MeshDataLayout const& mdl) noexcept -> RHI::VertexBufferLayout {
+        RHI::VertexBufferLayout vbl;
+        uint32_t offset = 0;
+        for (size_t i = 0; i < mdl.layout.size(); ++i) {
+            GFX::MeshDataLayout::Entry const& entry = mdl.layout[i];
+            RHI::VertexAttribute attr;
+            attr.format = entry.format;
+            attr.offset = offset;
+            attr.shaderLocation = i;
+            vbl.attributes.push_back(attr);
+            offset += getVertexFormatSize(entry.format);
+        }
+        vbl.arrayStride = offset;
+        return vbl;
+    }
 
 	export struct MeshLoader_OBJ {
         static auto loadOBJ(std::filesystem::path const& path, 
@@ -174,14 +176,14 @@ namespace SIByL::GFX
             Core::Buffer vertexPosOnly;
             GFX::MeshLoader_OBJ::loadOBJ(path, layout, &vertex, &index, &vertexPosOnly);
             GFX::Mesh mesh;
-            mesh.vertexBuffer = GFX::GFXManager::get()->rhiLayer->getDevice()->createDeviceLocalBuffer(
+            mesh.vertexBuffer_device = GFX::GFXManager::get()->rhiLayer->getDevice()->createDeviceLocalBuffer(
                 (void*)vertex.data, vertex.size,
                 (uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::STORAGE);
-            mesh.indexBuffer = GFX::GFXManager::get()->rhiLayer->getDevice()->createDeviceLocalBuffer(
+            mesh.indexBuffer_device = GFX::GFXManager::get()->rhiLayer->getDevice()->createDeviceLocalBuffer(
                 (void*)index.data, index.size,
                 (uint32_t)RHI::BufferUsage::INDEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
                 (uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
-            mesh.vertexBufferPosOnly = GFX::GFXManager::get()->rhiLayer->getDevice()->createDeviceLocalBuffer(
+            mesh.positionBuffer_device = GFX::GFXManager::get()->rhiLayer->getDevice()->createDeviceLocalBuffer(
                 (void*)vertexPosOnly.data, vertexPosOnly.size,
                 (uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
                 (uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);

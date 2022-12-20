@@ -2,6 +2,7 @@ module;
 #include <unordered_map>
 #include <filesystem>
 #include <random>
+#include <functional>
 export module SE.Core.Resource:OfflineManage;
 import :GUID;
 
@@ -11,6 +12,11 @@ namespace SIByL::Core
 	export using ORID = GUID;
 
 	export constexpr inline ORID ORID_NONE = uint64_t(-1);
+
+	//export inline auto hashORID(std::filesystem::path const& path) noexcept -> ORID {
+	//	std::hash<std::string> hasher;
+	//	return hasher(path.string());
+	//}
 
 	export inline auto requestORID() noexcept -> ORID {
 		static std::default_random_engine e;
