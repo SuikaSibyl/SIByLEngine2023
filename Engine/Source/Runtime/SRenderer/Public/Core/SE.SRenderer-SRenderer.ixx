@@ -151,7 +151,7 @@ namespace SIByL
 	};
 
 	GFX::MeshLoaderConfig SRenderer::meshLoadConfig = {
-		meshDataLayout, true, true, false
+		meshDataLayout, true, true, false, true
 	};
 
 	RHI::VertexBufferLayout SRenderer::vertexBufferLayout = GFX::getVertexBufferLayout(meshDataLayout);

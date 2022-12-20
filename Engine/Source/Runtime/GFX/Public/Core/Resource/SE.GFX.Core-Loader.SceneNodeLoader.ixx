@@ -83,6 +83,9 @@ namespace SIByL::GFX
             auto& shapes = reader.GetShapes();
             auto& materials = reader.GetMaterials();
 
+            uint32_t vertex_offset = 0;
+            std::unordered_map<uint64_t, uint32_t> uniqueVertices{};
+
             std::vector<float>      vertexBufferV = {};
             std::vector<float>      positionBufferV = {};
             std::vector<uint16_t>   indexBufferV = {};
@@ -150,12 +153,8 @@ namespace SIByL::GFX
                     for (size_t v = 0; v < fv; v++) {
                         // index finding
                         tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v];
-                        // index filling
-                        if (meshConfig.layout.format == RHI::IndexFormat::UINT16_t)
-                            indexBufferV.push_back(index_offset + v);
-                        else if (meshConfig.layout.format == RHI::IndexFormat::UINT32_T)
-                            indexBufferWV.push_back(index_offset + v);
                         // atrributes filling
+                        std::vector<float> vertex = {};
                         for (auto const& entry : meshConfig.layout.layout) {
                             // vertex position
                             if (entry.info == MeshDataLayout::VertexInfo::POSITION) {
@@ -163,9 +162,9 @@ namespace SIByL::GFX
                                     tinyobj::real_t vx = attrib.vertices[3 * size_t(idx.vertex_index) + 0];
                                     tinyobj::real_t vy = attrib.vertices[3 * size_t(idx.vertex_index) + 1];
                                     tinyobj::real_t vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
-                                    vertexBufferV.push_back(vx);
-                                    vertexBufferV.push_back(vy);
-                                    vertexBufferV.push_back(vz);
+                                    vertex.push_back(vx);
+                                    vertex.push_back(vy);
+                                    vertex.push_back(vz);
                                     if (meshConfig.usePositionBuffer) {
                                         positionBufferV.push_back(vx);
                                         positionBufferV.push_back(vy);
@@ -183,45 +182,69 @@ namespace SIByL::GFX
                                     tinyobj::real_t nx = attrib.normals[3 * size_t(idx.normal_index) + 0];
                                     tinyobj::real_t ny = attrib.normals[3 * size_t(idx.normal_index) + 1];
                                     tinyobj::real_t nz = attrib.normals[3 * size_t(idx.normal_index) + 2];
-                                    vertexBufferV.push_back(nx);
-                                    vertexBufferV.push_back(ny);
-                                    vertexBufferV.push_back(nz);
+                                    vertex.push_back(nx);
+                                    vertex.push_back(ny);
+                                    vertex.push_back(nz);
                                 }
                                 else {
-                                    vertexBufferV.push_back(0);
-                                    vertexBufferV.push_back(0);
-                                    vertexBufferV.push_back(0);
+                                    vertex.push_back(0);
+                                    vertex.push_back(0);
+                                    vertex.push_back(0);
                                 }
                             }
                             else if (entry.info == MeshDataLayout::VertexInfo::UV) {
                                 if (idx.texcoord_index >= 0) {
                                     tinyobj::real_t tx = attrib.texcoords[2 * size_t(idx.texcoord_index) + 0];
                                     tinyobj::real_t ty = attrib.texcoords[2 * size_t(idx.texcoord_index) + 1];
-                                    vertexBufferV.push_back(tx);
-                                    vertexBufferV.push_back(ty);
+                                    vertex.push_back(tx);
+                                    vertex.push_back(ty);
                                 }
                                 else {
-                                    vertexBufferV.push_back(0);
-                                    vertexBufferV.push_back(0);
+                                    vertex.push_back(0);
+                                    vertex.push_back(0);
                                 }
                             }
                             else if (entry.info == MeshDataLayout::VertexInfo::TANGENT) {
-                                vertexBufferV.push_back(tangent.x);
-                                vertexBufferV.push_back(tangent.y);
-                                vertexBufferV.push_back(tangent.z);
+                                vertex.push_back(tangent.x);
+                                vertex.push_back(tangent.y);
+                                vertex.push_back(tangent.z);
                             }
                             else if (entry.info == MeshDataLayout::VertexInfo::COLOR) {
                                 // Optional: vertex colors
                                 tinyobj::real_t red = attrib.colors[3 * size_t(idx.vertex_index) + 0];
                                 tinyobj::real_t green = attrib.colors[3 * size_t(idx.vertex_index) + 1];
                                 tinyobj::real_t blue = attrib.colors[3 * size_t(idx.vertex_index) + 2];
-                                vertexBufferV.push_back(red);
-                                vertexBufferV.push_back(green);
-                                vertexBufferV.push_back(blue);
+                                vertex.push_back(red);
+                                vertex.push_back(green);
+                                vertex.push_back(blue);
                             }
                             else if (entry.info == MeshDataLayout::VertexInfo::CUSTOM) {
 
                             }
+                        }
+
+                        if (meshConfig.deduplication) {
+                            uint64_t hashed_vertex = hash_vertex(vertex);
+                            if (uniqueVertices.count(hashed_vertex) == 0) {
+                                uniqueVertices[hashed_vertex] = static_cast<uint32_t>(vertex_offset);
+                                vertexBufferV.insert(vertexBufferV.end(), vertex.begin(), vertex.end());
+                                ++vertex_offset;
+                            }
+
+                            // index filling
+                            if (meshConfig.layout.format == RHI::IndexFormat::UINT16_t)
+                                indexBufferV.push_back(uniqueVertices[hashed_vertex]);
+                            else if (meshConfig.layout.format == RHI::IndexFormat::UINT32_T)
+                                indexBufferWV.push_back(uniqueVertices[hashed_vertex]);
+                        }
+                        else {
+                            vertexBufferV.insert(vertexBufferV.end(), vertex.begin(), vertex.end());
+                            ++vertex_offset;
+                            // index filling
+                            if (meshConfig.layout.format == RHI::IndexFormat::UINT16_t)
+                                indexBufferV.push_back(vertex_offset);
+                            else if (meshConfig.layout.format == RHI::IndexFormat::UINT32_T)
+                                indexBufferWV.push_back(vertex_offset);
                         }
                     }
                     index_offset += fv;
