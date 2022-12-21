@@ -58,6 +58,8 @@ namespace SIByL::GFX
 		virtual ~RDGResourceNode() = default;
 		/** devirtualize resource */
 		virtual auto devirtualize() noexcept -> void = 0;
+		/** release resource */
+		virtual auto release() noexcept -> void = 0;
 		/** resource name */
 		std::string name;
 	};
@@ -81,11 +83,13 @@ namespace SIByL::GFX
 		bool isExternal = false;
 		/** devirtualize resource */
 		virtual auto devirtualize() noexcept -> void override;
+		/** release resource */
+		virtual auto release() noexcept -> void override;
 		/** consume resource */
 		auto consume(ConsumeType type, RHI::TextureLayout layout, RHI::TextureUsage usage) noexcept -> void;
 	};
 
-	export struct RDGUniformBuffer :public RDGResourceNode {
+	export struct RDGBuffer :public RDGResourceNode {
 		/* buffer descriptor */
 		RHI::BufferDescriptor descriptor = {};
 		/** guid */
@@ -94,16 +98,47 @@ namespace SIByL::GFX
 		GFX::Buffer* buffer = nullptr;
 		/** is external */
 		bool isExternal = false;
+		/** devirtualize resource */
+		virtual auto devirtualize() noexcept -> void override;
+		/** release resource */
+		virtual auto release() noexcept -> void override;
+	};
+
+	export struct RDGUniformBuffer :public RDGBuffer {
 	};
 
 	export template <class T>
 	struct RDGStructuredUniformBuffer :public RDGUniformBuffer {
 		/** update use structure */
 		auto setStructure(T const& x, uint32_t idx) noexcept -> void;
-		/** devirtualize resource */
-		virtual auto devirtualize() noexcept -> void override;
 		/** get buffer binding */
 		auto getBufferBinding(uint32_t idx) noexcept -> RHI::BufferBinding;
+	};
+
+	export template <class T>
+	struct RDGStructuredArrayUniformBuffer :public RDGUniformBuffer {
+		/** update use structure */
+		auto setStructure(T* x, uint32_t idx) noexcept -> void;
+		/** get buffer binding */
+		auto getBufferBinding(uint32_t idx) noexcept -> RHI::BufferBinding;
+		/** array size */
+		uint32_t size;
+	};
+
+	export struct RDGStorageBuffer :public RDGBuffer {
+	};
+
+	export struct RDGMultiStorageBuffer :public RDGStorageBuffer {
+	};
+
+	export template <class T>
+	struct RDGStructuredArrayMultiStorageBuffer :public RDGMultiStorageBuffer {
+		/** update use structure */
+		auto setStructure(T* x, uint32_t idx) noexcept -> void;
+		/** get buffer binding */
+		auto getBufferBinding(uint32_t idx) noexcept -> RHI::BufferBinding;
+		/** array size */
+		uint32_t size;
 	};
 
 	export struct RDGraph {
@@ -117,11 +152,20 @@ namespace SIByL::GFX
 		/** create resource - structured uniform buffer */
 		template <class T>
 		auto createStructuredUniformBuffer(char const* name) noexcept -> RDGStructuredUniformBuffer<T>*;
+		/** create resource - structured array uniform buffer */
+		template <class T>
+		auto createStructuredArrayUniformBuffer(char const* name, uint32_t size) noexcept -> RDGStructuredArrayUniformBuffer<T>*;
+		/** create resource - structured array multi storage buffer */
+		template <class T>
+		auto createStructuredArrayMultiStorageBuffer(char const* name, uint32_t size) noexcept -> RDGStructuredArrayMultiStorageBuffer<T>*;
 		/** get resource - texture */
 		auto getTexture(char const* name) noexcept -> RDGTexture*;
 		/** get resource - structured uniform buffer */
 		template <class T>
 		auto getStructuredUniformBuffer(char const* name) noexcept -> RDGStructuredUniformBuffer<T>*;
+		/** get resource - structured array multi storage buffer */
+		template <class T>
+		auto getStructuredArrayMultiStorageBuffer(char const* name) noexcept -> RDGStructuredArrayMultiStorageBuffer<T>*;
 
 		/** add a pass to the RDG */
 		auto addPass(
@@ -129,6 +173,13 @@ namespace SIByL::GFX
 			RDGPassFlag flag, 
 			CustomPassConsumeFn const& custom_consume, 
 			CustomPassSetupFn const& custom_setup) noexcept -> RDGPassNode*;
+
+		/** behavior to RDG compiling */
+		using Behavior = std::function<void()>;
+		enum struct BehaviorPhase {
+			AfterDevirtualize_BeforePassSetup,
+		};
+		auto addBehavior(Behavior const& behavior, BehaviorPhase phase) noexcept -> void;
 		////////////////////////////////////
 		//  Compile Phase
 		// -------------------------------
@@ -153,6 +204,10 @@ namespace SIByL::GFX
 		std::unordered_map<std::string, std::unique_ptr<RDGTexture>> textures;
 		/** uniform buffer map */
 		std::unordered_map<std::string, std::unique_ptr<RDGUniformBuffer>> uniformBuffers;
+		/** storage buffer map */
+		std::unordered_map<std::string, std::unique_ptr<RDGStorageBuffer>> storageBuffers;
+		/** behaviors */
+		std::unordered_map<BehaviorPhase, std::vector<Behavior>> behaviors;
 	};
 
 #pragma region RDGRAPH_IMPL
@@ -166,8 +221,24 @@ namespace SIByL::GFX
 		}
 	}
 
+	auto RDGTexture::release() noexcept -> void {
+		if (!isExternal) {
+			Core::ResourceManager::get()->removeResource<GFX::Texture>(guid);
+			texture = nullptr;
+			guid = 0;
+		}
+	}
+
 	auto RDGTexture::consume(ConsumeType type, RHI::TextureLayout layout, RHI::TextureUsage usage) noexcept -> void {
 		descriptor.usage |= uint32_t(usage);
+	}
+	
+	auto RDGBuffer::release() noexcept -> void {
+		if (!isExternal) {
+			Core::ResourceManager::get()->removeResource<GFX::Buffer>(guid);
+			buffer = nullptr;
+			guid = 0;
+		}
 	}
 
 	template <class T>
@@ -180,8 +251,7 @@ namespace SIByL::GFX
 		}
 	}
 
-	template <class T>
-	auto RDGStructuredUniformBuffer<T>::devirtualize() noexcept -> void {
+	auto RDGBuffer::devirtualize() noexcept -> void {
 		if (!isExternal) {
 			guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
 			GFX::GFXManager::get()->registerBufferResource(guid, descriptor);
@@ -193,6 +263,36 @@ namespace SIByL::GFX
 	template <class T>
 	auto RDGStructuredUniformBuffer<T>::getBufferBinding(uint32_t idx) noexcept -> RHI::BufferBinding {
 		return RHI::BufferBinding{ buffer->buffer.get(), idx * sizeof(T), sizeof(T) };
+	}
+
+	template <class T>
+	auto RDGStructuredArrayUniformBuffer<T>::setStructure(T* x, uint32_t idx) noexcept -> void {
+		std::future<bool> mapped = buffer->buffer->mapAsync(0, 0, sizeof(T) * MULTIFRAME_FLIGHTS_COUNT * size);
+		if (mapped.get()) {
+			void* data = buffer->buffer->getMappedRange(sizeof(T) * idx * size, sizeof(T) * MULTIFRAME_FLIGHTS_COUNT * size);
+			memcpy(data, x, sizeof(T) * size);
+			buffer->buffer->unmap();
+		}
+	}
+
+	template <class T>
+	auto RDGStructuredArrayUniformBuffer<T>::getBufferBinding(uint32_t idx) noexcept -> RHI::BufferBinding {
+		return RHI::BufferBinding{ buffer->buffer.get(), idx * sizeof(T) * size, sizeof(T) * size };
+	}
+
+	template <class T>
+	auto RDGStructuredArrayMultiStorageBuffer<T>::setStructure(T* x, uint32_t idx) noexcept -> void {
+		std::future<bool> mapped = buffer->buffer->mapAsync(0, 0, sizeof(T) * MULTIFRAME_FLIGHTS_COUNT * size);
+		if (mapped.get()) {
+			void* data = buffer->buffer->getMappedRange(sizeof(T) * idx * size, sizeof(T) * MULTIFRAME_FLIGHTS_COUNT * size);
+			memcpy(data, x, sizeof(T) * size);
+			buffer->buffer->unmap();
+		}
+	}
+
+	template <class T>
+	auto RDGStructuredArrayMultiStorageBuffer<T>::getBufferBinding(uint32_t idx) noexcept -> RHI::BufferBinding {
+		return RHI::BufferBinding{ buffer->buffer.get(), idx * sizeof(T) * size, sizeof(T) * size };
 	}
 
 	auto RDGraph::createTexture(char const* name, RDGTexture::Desc const& desc) noexcept -> RDGTexture* {
@@ -215,6 +315,30 @@ namespace SIByL::GFX
 		uniform_buffer->descriptor.usage = (uint32_t)RHI::BufferUsage::UNIFORM;
 		uniform_buffer->descriptor.memoryProperties = uint32_t(RHI::MemoryProperty::HOST_VISIBLE_BIT | RHI::MemoryProperty::HOST_COHERENT_BIT);
 		uniform_buffer->name = std::string(name);
+		return uniform_buffer;
+	}
+
+	template <class T>
+	auto RDGraph::createStructuredArrayUniformBuffer(char const* name, uint32_t size) noexcept -> RDGStructuredArrayUniformBuffer<T>* {
+		uniformBuffers[std::string(name)] = std::make_unique<RDGStructuredArrayUniformBuffer<T>>();
+		RDGStructuredArrayUniformBuffer<T>* uniform_buffer = static_cast<RDGStructuredArrayUniformBuffer<T>*>(uniformBuffers[std::string(name)].get());
+		uniform_buffer->descriptor.size = sizeof(T) * MULTIFRAME_FLIGHTS_COUNT * size;
+		uniform_buffer->descriptor.usage = (uint32_t)RHI::BufferUsage::UNIFORM;
+		uniform_buffer->descriptor.memoryProperties = uint32_t(RHI::MemoryProperty::HOST_VISIBLE_BIT | RHI::MemoryProperty::HOST_COHERENT_BIT);
+		uniform_buffer->name = std::string(name);
+		uniform_buffer->size = size;
+		return uniform_buffer;
+	}
+	
+	template <class T>
+	auto RDGraph::createStructuredArrayMultiStorageBuffer(char const* name, uint32_t size) noexcept -> RDGStructuredArrayMultiStorageBuffer<T>* {
+		storageBuffers[std::string(name)] = std::make_unique<RDGStructuredArrayMultiStorageBuffer<T>>();
+		RDGStructuredArrayMultiStorageBuffer<T>* uniform_buffer = static_cast<RDGStructuredArrayMultiStorageBuffer<T>*>(storageBuffers[std::string(name)].get());
+		uniform_buffer->descriptor.size = sizeof(T) * MULTIFRAME_FLIGHTS_COUNT * size;
+		uniform_buffer->descriptor.usage = (uint32_t)RHI::BufferUsage::STORAGE;
+		uniform_buffer->descriptor.memoryProperties = uint32_t(RHI::MemoryProperty::HOST_VISIBLE_BIT | RHI::MemoryProperty::HOST_COHERENT_BIT);
+		uniform_buffer->name = std::string(name);
+		uniform_buffer->size = size;
 		return uniform_buffer;
 	}
 
@@ -246,8 +370,24 @@ namespace SIByL::GFX
 		else return nullptr;
 	}
 
+	template <class T>
+	auto RDGraph::getStructuredArrayMultiStorageBuffer(char const* name) noexcept -> RDGStructuredArrayMultiStorageBuffer<T>* {
+		auto iter = storageBuffers.find(std::string(name));
+		if (iter != storageBuffers.end())
+			return static_cast<RDGStructuredArrayMultiStorageBuffer<T>*>(iter->second.get());
+		else return nullptr;
+	}
+
+	auto RDGraph::addBehavior(Behavior const& behavior, BehaviorPhase phase) noexcept -> void {
+		behaviors[phase].push_back(behavior);
+	}
+
 	auto RDGraph::compile() noexcept -> void {
 		sub_compile_devirtualize();
+
+		for (auto& behavior : behaviors[BehaviorPhase::AfterDevirtualize_BeforePassSetup])
+			behavior();
+
 		sub_compile_pass_setup();
 	}
 
@@ -259,6 +399,8 @@ namespace SIByL::GFX
 		for (auto& iter : textures)
 			iter.second->devirtualize();
 		for (auto& iter : uniformBuffers)
+			iter.second->devirtualize();
+		for (auto& iter : storageBuffers)
 			iter.second->devirtualize();
 	}
 
@@ -291,6 +433,13 @@ namespace SIByL::GFX
 	auto RDGraph::execute(RHI::CommandEncoder* cmdEncoder) noexcept -> void {
 		for (auto& iter : passes)
 			iter.second->customPassExec({}, cmdEncoder);
+	}
+
+	auto RDGraph::clear() noexcept -> void {
+		// clear passes
+		passes.clear();
+		// clear textures
+		textures.clear();
 	}
 
 #pragma endregion

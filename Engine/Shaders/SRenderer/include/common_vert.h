@@ -4,7 +4,7 @@
 #include "common_descriptor_sets.h"
 
 InterleavedVertex fetchVertex() {
-    return vertices[gl_BaseVertex + gl_VertexIndex];
+    return vertices[gl_VertexIndex];
 }
 
 #endif

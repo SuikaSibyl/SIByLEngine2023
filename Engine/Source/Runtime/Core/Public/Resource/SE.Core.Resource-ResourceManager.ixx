@@ -59,7 +59,7 @@ namespace SIByL::Core
 			GUIDs.push_back(guid);
 		}
 		/** remove the resource */
-		auto removeData(GUID guid) noexcept -> void {
+		auto removeResource(GUID guid) noexcept -> void {
 			resourcePool.erase(guid);
 			for (auto iter = GUIDs.begin(); iter != GUIDs.end(); iter++) {
 				if (*iter == guid){

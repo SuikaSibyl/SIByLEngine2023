@@ -91,6 +91,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		};
 
 		GFX::SceneNodeLoader_obj::loadSceneNode("P:/GitProjects/SIByLEngine2022/Sandbox/content/viking_room.obj", scene, SRenderer::meshLoadConfig);
+		GFX::SceneNodeLoader_obj::loadSceneNode("P:/GitProjects/SIByLEngine2022/Sandbox/content/scenes/wuson.obj", scene, SRenderer::meshLoadConfig);
 
 		//GFX::SceneNodeLoader_glTF::loadSceneNode("D:/Downloads/glTF-Sample-Models-master/glTF-Sample-Models-master/2.0/Sponza/glTF/Sponza.gltf", scene);
 		//GFX::SceneNodeLoader_glTF::loadSceneNode("P:/GitProjects/SIByLEngine2022/Sandbox/content/scenes/cornellBox.gltf", scene);
@@ -149,11 +150,13 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		rdg = std::make_unique<GFX::RDGraph>();
 		srenderer = std::make_unique<SRenderer>();
-		srenderer->init(rdg.get());
 		SRendererRegister::registerSRenderer(srenderer.get());
-		rdg->sub_compile_devirtualize();
-		srenderer->packScene(scene);
-		rdg->sub_compile_pass_setup();
+		srenderer->init(rdg.get(), scene);
+		rdg->compile();
+
+		//rdg->sub_compile_devirtualize();
+		//srenderer->packScene(scene);
+		//rdg->sub_compile_pass_setup();
 
 		//GFX::RDGTexture* texRes_rasterizer_target_color = rdg->createTexture(
 		//	"RasterizerTarget_Color", 
@@ -423,6 +426,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		//std::cout << 1.f / timer.deltaTime() << std::endl;
 		//Math::rotate( )
 		srenderer->updateCamera(*(scene.getGameObject(camera_go)->getEntity().getComponent<GFX::TransformComponent>()), GFX::CameraComponent{});
+		srenderer->invalidScene(scene);
 
 		//rdg->getStructuredUniformBuffer<UniformBufferObject>("camera_uniform_buffer")->setStructure(ubo, index);
 
