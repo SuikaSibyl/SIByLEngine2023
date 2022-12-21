@@ -2291,10 +2291,14 @@ namespace SIByL::RHI
 	export struct BindGroup_VK :public BindGroup {
 		/** initialzie */
 		BindGroup_VK(Device_VK* device, BindGroupDescriptor const& desc);
+		/** update binding */
+		virtual auto updateBinding(std::vector<BindGroupEntry> const& entries) noexcept -> void override;
 		/** vulkan Descriptor Set */
 		VkDescriptorSet set = {};
 		/** the bind group set this bind group is created on */
 		BindGroupPool_VK* descriptorPool;
+		/** layout */
+		BindGroupLayout* layout;
 		/** the device this bind group is created on */
 		Device_VK* device = nullptr;
 	};
@@ -4508,6 +4512,9 @@ namespace SIByL::RHI
 		buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
 		buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
 		buildInfo.srcAccelerationStructure = VK_NULL_HANDLE;
+		if (descriptor.allowRefitting) {
+			buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
+		}
 		// Query the worst-case AS size and scratch space size based on
 		// the number of instances (in this case, 1).
 		VkAccelerationStructureBuildSizesInfoKHR sizeInfo = {};
@@ -4927,11 +4934,18 @@ namespace SIByL::RHI
 		if (vkAllocateDescriptorSets(device->getVkDevice(), &allocInfo, &set) != VK_SUCCESS) {
 			Core::LogManager::Error("VULKAN :: failed to allocate descriptor sets!");
 		}
+
+		layout = desc.layout;
+		this->device = device;
+		updateBinding(desc.entries);
+	}
+
+	auto BindGroup_VK::updateBinding(std::vector<BindGroupEntry> const& entries) noexcept -> void {
 		// configure the descriptors
 		uint32_t bufferCounts = 0;
 		uint32_t imageCounts = 0;
 		uint32_t accStructCounts = 0;
-		for (auto& entry : desc.entries) {
+		for (auto& entry : entries) {
 			if (entry.resource.bufferBinding.has_value())
 				++bufferCounts;
 			else if (entry.resource.textureView)
@@ -4944,11 +4958,10 @@ namespace SIByL::RHI
 		std::vector<VkDescriptorImageInfo>	imageInfos(imageCounts);
 		std::vector<std::vector<VkDescriptorImageInfo>>	bindlessImageInfos = {};
 		std::vector<VkWriteDescriptorSetAccelerationStructureKHR> accelerationStructureInfos(accStructCounts);
-		int layoutEntryIdex = 0;
 		uint32_t bufferIndex = 0;
 		uint32_t imageIndex = 0;
 		uint32_t accStructIndex = 0;
-		for (auto& entry : desc.entries) {
+		for (auto& entry : entries) {
 			if (entry.resource.bufferBinding.has_value()) {
 				VkDescriptorBufferInfo& bufferInfo = bufferInfos[bufferIndex++];
 				bufferInfo.buffer = static_cast<Buffer_VK*>(entry.resource.bufferBinding.value().buffer)->getVkBuffer();
@@ -4960,7 +4973,7 @@ namespace SIByL::RHI
 				descriptorWrite.dstSet = set;
 				descriptorWrite.dstBinding = entry.binding;
 				descriptorWrite.dstArrayElement = 0;
-				descriptorWrite.descriptorType = getVkDecriptorType(desc.layout->getBindGroupLayoutDescriptor().entries[layoutEntryIdex++]);
+				descriptorWrite.descriptorType = getVkDecriptorType(layout->getBindGroupLayoutDescriptor().entries[entry.binding]);
 				descriptorWrite.descriptorCount = 1;
 				descriptorWrite.pBufferInfo = &bufferInfo;
 				descriptorWrite.pImageInfo = nullptr;
@@ -4977,7 +4990,7 @@ namespace SIByL::RHI
 				descriptorWrite.dstSet = set;
 				descriptorWrite.dstBinding = entry.binding;
 				descriptorWrite.dstArrayElement = 0;
-				descriptorWrite.descriptorType = getVkDecriptorType(desc.layout->getBindGroupLayoutDescriptor().entries[layoutEntryIdex++]);
+				descriptorWrite.descriptorType = getVkDecriptorType(layout->getBindGroupLayoutDescriptor().entries[entry.binding]);
 				descriptorWrite.descriptorCount = 1;
 				descriptorWrite.pBufferInfo = nullptr;
 				descriptorWrite.pImageInfo = &imageInfo;
@@ -4994,7 +5007,7 @@ namespace SIByL::RHI
 				descriptorWrite.dstSet = set;
 				descriptorWrite.dstBinding = entry.binding;
 				descriptorWrite.dstArrayElement = 0;
-				descriptorWrite.descriptorType = getVkDecriptorType(desc.layout->getBindGroupLayoutDescriptor().entries[layoutEntryIdex++]);
+				descriptorWrite.descriptorType = getVkDecriptorType(layout->getBindGroupLayoutDescriptor().entries[entry.binding]);
 				descriptorWrite.descriptorCount = 1;
 				descriptorWrite.pBufferInfo = nullptr;
 				descriptorWrite.pImageInfo = nullptr;
@@ -5017,18 +5030,16 @@ namespace SIByL::RHI
 					descriptorWrite.dstSet = set;
 					descriptorWrite.dstBinding = entry.binding;
 					descriptorWrite.dstArrayElement = i;
-					descriptorWrite.descriptorType = getVkDecriptorType(desc.layout->getBindGroupLayoutDescriptor().entries[layoutEntryIdex]);
+					descriptorWrite.descriptorType = getVkDecriptorType(layout->getBindGroupLayoutDescriptor().entries[entry.binding]);
 					descriptorWrite.descriptorCount = 1;
 					descriptorWrite.pBufferInfo = nullptr;
 					descriptorWrite.pImageInfo = &imageInfo;
 					descriptorWrite.pTexelBufferView = nullptr;
 				}
-				layoutEntryIdex++;
 			}
 		}
 		vkUpdateDescriptorSets(device->getVkDevice(), descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
 	}
-
 #pragma endregion
 
 }

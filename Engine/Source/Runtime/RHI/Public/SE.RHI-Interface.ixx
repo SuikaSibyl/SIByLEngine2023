@@ -807,7 +807,12 @@ namespace SIByL::RHI
 	* Defines a set of resources to be bound together in a group 
 	* and how the resources are used in shader stages.
 	*/
-	export struct BindGroup {};
+	struct BindGroupEntry;
+	export struct BindGroup {
+		virtual ~BindGroup() = default;
+		/** update binding */
+		virtual auto updateBinding(std::vector<BindGroupEntry> const& entries) noexcept -> void = 0;
+	};
 	
 	export struct BufferBinding {
 		Buffer* buffer;
@@ -2035,6 +2040,8 @@ namespace SIByL::RHI
 
 	export struct TLASDescriptor {
 		std::vector<BLASInstance> instances;
+		bool allowRefitting = false;
+		bool allowCompaction = false;
 	};
 
 	export struct RayTracingPipeline {

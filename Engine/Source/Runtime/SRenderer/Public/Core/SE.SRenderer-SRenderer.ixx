@@ -93,18 +93,25 @@ namespace SIByL
 			std::vector<float>				vertex_buffer_cpu	= {};	// vertex buffer cpu
 			std::vector<uint32_t>			index_buffer_cpu	= {};	// index buffer cpu
 			std::vector<GeometryDrawData>	geometry_buffer_cpu	= {};	// geometries data
-			std::unique_ptr<RHI::TLAS>		tlas = {};
+			RHI::TLASDescriptor				tlas_desc = {};
+			std::shared_ptr<RHI::TLAS>		tlas = {};
+			std::shared_ptr<RHI::TLAS>		back_tlas = {};
 
-			struct MeshReferenceRecord {
-				uint32_t submesh_geometry_start;
-				uint32_t submesh_geometry_end;
+			struct MeshRecord {
+				std::vector<GeometryDrawData> submesh_geometry;
 				RHI::BLASDescriptor blas_desc;
 				std::unique_ptr<RHI::BLAS> blases = nullptr;
 			};
 
+			struct MeshReferenceRecord {
+				GFX::Mesh* mesh;
+				RHI::BLASInstance blasInstance;
+				std::vector<uint32_t> geometry_indices;
+			};
+
 			bool geometryDirty = false;
+			std::unordered_map<GFX::Mesh*, MeshRecord> mesh_record = {};
 			std::unordered_map<GFX::MeshReference*, MeshReferenceRecord> mesh_ref_record = {};
-			std::unordered_map<GFX::GameObjectHandle, std::vector<uint32_t>> geometry_indices = {};
 		} sceneDataPack;
 		/** init non-scene resources */
 		inline auto init(GFX::RDGraph* rdg, GFX::Scene& scene) noexcept -> void;
@@ -219,6 +226,9 @@ namespace SIByL
 
 	inline auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
 		// 
+		RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
+		sceneDataPack.tlas_desc.instances.clear();
+		// for all mesh refs
 		for (auto go_handle : scene.gameObjects) {
 			auto* go = scene.getGameObject(go_handle.first);
 			GFX::MeshReference* meshref = go->getEntity().getComponent<GFX::MeshReference>();
@@ -238,14 +248,25 @@ namespace SIByL
 			if (meshRecordRef == sceneDataPack.mesh_ref_record.end()) {
 			}
 			else {
-				for (auto idx : sceneDataPack.geometry_indices[go_handle.first]) {
+				for (auto idx : meshRecordRef->second.geometry_indices) {
 					sceneDataPack.geometry_buffer_cpu[idx].geometryTransform = objectMat;
 				}
+				meshRecordRef->second.blasInstance.transform = objectMat;
+				sceneDataPack.tlas_desc.instances.push_back(meshRecordRef->second.blasInstance);
 			}
 		}
+		sceneDataPack.back_tlas = sceneDataPack.tlas;
+		sceneDataPack.tlas = device->createTLAS(sceneDataPack.tlas_desc);
+
 		RHI::MultiFrameFlights* multiFrameFlights = GFX::GFXManager::get()->rhiLayer->getMultiFrameFlights();
+		uint32_t fid = multiFrameFlights->getFlightIndex();
+		
+		commonDescData.set1_flights_rt[fid]->updateBinding(std::vector<RHI::BindGroupEntry>{
+			{0, RHI::BindingResource{ sceneDataPack.tlas.get() }},
+		});
+		
 		auto geometry_buffer = rdgraph->getStructuredArrayMultiStorageBuffer<GeometryDrawData>("geometry_buffer");
-		geometry_buffer->setStructure(sceneDataPack.geometry_buffer_cpu.data(), multiFrameFlights->getFlightIndex());
+		geometry_buffer->setStructure(sceneDataPack.geometry_buffer_cpu.data(), fid);
 	}
 
 	inline auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
@@ -254,6 +275,57 @@ namespace SIByL
 			auto* go = scene.getGameObject(go_handle.first);
 			GFX::MeshReference* meshref = go->getEntity().getComponent<GFX::MeshReference>();
 			if (!meshref) continue;
+			GFX::Mesh* mesh = meshref->mesh;
+			if (!mesh) continue;
+			// if do not have according mesh record, add the record
+			auto meshRecord = sceneDataPack.mesh_record.find(mesh);
+			if (meshRecord == sceneDataPack.mesh_record.end()) {
+				sceneDataPack.geometryDirty = true;
+				sceneDataPack.mesh_record[mesh] = {};
+				meshRecord = sceneDataPack.mesh_record.find(mesh);
+				{	// create mesh record, add all data buffers
+					uint32_t vertex_offset = sceneDataPack.vertex_buffer_cpu.size();
+					uint32_t position_offset = sceneDataPack.position_buffer_cpu.size();
+					sceneDataPack.vertex_buffer_cpu.resize(vertex_offset + mesh->vertexBuffer_host.size / sizeof(float));
+					memcpy(&(sceneDataPack.vertex_buffer_cpu[vertex_offset]), mesh->vertexBuffer_host.data, mesh->vertexBuffer_host.size);
+					if (config.enableRayTracing) {
+						sceneDataPack.position_buffer_cpu.resize(position_offset + mesh->positionBuffer_host.size / sizeof(float));
+						memcpy(&(sceneDataPack.position_buffer_cpu[position_offset]), mesh->positionBuffer_host.data, mesh->positionBuffer_host.size);
+					}
+					uint32_t index_offset = sceneDataPack.index_buffer_cpu.size();
+					sceneDataPack.index_buffer_cpu.resize(index_offset + mesh->indexBuffer_host.size / sizeof(uint32_t));
+					memcpy(&(sceneDataPack.index_buffer_cpu[index_offset]), mesh->indexBuffer_host.data, mesh->indexBuffer_host.size);
+					// add all submeshes
+					for (auto& submesh : mesh->submeshes) {
+						GeometryDrawData geometry;
+						geometry.vertexOffset = submesh.baseVertex + vertex_offset * sizeof(float) / SRenderer::vertexBufferLayout.arrayStride;
+						geometry.indexOffset = submesh.offset + index_offset;
+						geometry.materialID = 0;
+						geometry.indexSize = submesh.size;
+						geometry.geometryTransform = {};
+						meshRecord->second.submesh_geometry.push_back(geometry);
+
+						if (config.enableRayTracing) {
+							RHI::BLASDescriptor& blasDesc = meshRecord->second.blas_desc;
+							blasDesc.triangleGeometries.push_back(RHI::BLASTriangleGeometry{
+								nullptr,
+								nullptr,
+								nullptr,
+								RHI::IndexFormat::UINT32_T,
+								uint32_t(mesh->positionBuffer_host.size / (sizeof(float) * 3)),
+								geometry.vertexOffset,
+								geometry.indexSize / 3,
+								uint32_t(geometry.indexOffset * sizeof(uint32_t)),
+								RHI::AffineTransformMatrix{},
+								(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION,
+								geometry.materialID
+								}
+							);
+						}
+					}
+				}
+			}
+			// get transform
 			Math::mat4 objectMat;
 			{	// get mesh transform matrix
 				GFX::TransformComponent* transform = go->getEntity().getComponent<GFX::TransformComponent>();
@@ -264,106 +336,22 @@ namespace SIByL
 					objectMat = transform->getTransform() * objectMat;
 				}
 			}
-			// if do not have according record, add the record
-			auto meshRecordRef = sceneDataPack.mesh_ref_record.find(meshref);
-			if (meshRecordRef == sceneDataPack.mesh_ref_record.end()) {
+			// if do not have according mesh ref record, add the record
+			auto meshRefRecord = sceneDataPack.mesh_ref_record.find(meshref);
+			if (meshRefRecord == sceneDataPack.mesh_ref_record.end()) {
 				sceneDataPack.geometryDirty = true;
 				sceneDataPack.mesh_ref_record[meshref] = {};
-				meshRecordRef = sceneDataPack.mesh_ref_record.find(meshref);
+				meshRefRecord = sceneDataPack.mesh_ref_record.find(meshref);
 				{	// create mesh record
-					uint32_t geometry_beg = sceneDataPack.geometry_buffer_cpu.size();
-					uint32_t geometry_end = geometry_beg + meshref->mesh->submeshes.size();
-					uint32_t vertex_offset = sceneDataPack.vertex_buffer_cpu.size();
-					uint32_t position_offset = sceneDataPack.position_buffer_cpu.size();
-					sceneDataPack.vertex_buffer_cpu.resize(vertex_offset + meshref->mesh->vertexBuffer_host.size / sizeof(float));
-					memcpy(&(sceneDataPack.vertex_buffer_cpu[vertex_offset]), meshref->mesh->vertexBuffer_host.data, meshref->mesh->vertexBuffer_host.size);
-					if (config.enableRayTracing) {
-						sceneDataPack.position_buffer_cpu.resize(position_offset + meshref->mesh->positionBuffer_host.size / sizeof(float));
-						memcpy(&(sceneDataPack.position_buffer_cpu[position_offset]), meshref->mesh->positionBuffer_host.data, meshref->mesh->positionBuffer_host.size);
+					meshRefRecord->second.mesh = mesh;
+					uint32_t geometry_start = sceneDataPack.geometry_buffer_cpu.size();
+					for (auto& iter : meshRecord->second.submesh_geometry) {
+						meshRefRecord->second.geometry_indices.push_back(sceneDataPack.geometry_buffer_cpu.size());
+						GeometryDrawData geometrydata = iter;
+						geometrydata.geometryTransform = objectMat;
+						sceneDataPack.geometry_buffer_cpu.emplace_back(geometrydata);
 					}
-					uint32_t index_offset = sceneDataPack.index_buffer_cpu.size();
-					sceneDataPack.index_buffer_cpu.resize(index_offset + meshref->mesh->indexBuffer_host.size / sizeof(uint32_t));
-					memcpy(&(sceneDataPack.index_buffer_cpu[index_offset]), meshref->mesh->indexBuffer_host.data, meshref->mesh->indexBuffer_host.size);
-					// 
-					for (auto& submesh : meshref->mesh->submeshes) {
-						GeometryDrawData geometry;
-						geometry.vertexOffset = submesh.baseVertex + vertex_offset * sizeof(float) / SRenderer::vertexBufferLayout.arrayStride;
-						geometry.indexOffset = submesh.offset + index_offset;
-						geometry.materialID = 0;
-						geometry.indexSize = submesh.size;
-						geometry.geometryTransform = objectMat;
-						sceneDataPack.geometry_indices[go_handle.first].push_back(sceneDataPack.geometry_buffer_cpu.size());
-						sceneDataPack.geometry_buffer_cpu.emplace_back(geometry);
-
-						if (config.enableRayTracing) {
-							RHI::BLASDescriptor& blasDesc = meshRecordRef->second.blas_desc;
-							blasDesc.triangleGeometries.push_back(RHI::BLASTriangleGeometry{
-								nullptr,
-								nullptr,
-								nullptr,
-								RHI::IndexFormat::UINT32_T,
-								uint32_t(meshref->mesh->positionBuffer_host.size / (sizeof(float) * 3)),
-								geometry.vertexOffset,
-								geometry.indexSize / 3,
-								uint32_t(geometry.indexOffset * sizeof(uint32_t)),
-								RHI::AffineTransformMatrix(objectMat),
-								(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION,
-								geometry.materialID
-								}
-							);
-						}
-						//blasDesc.triangleGeometries.push_back(RHI::BLASTriangleGeometry{
-						//	meshref->mesh->positionBuffer.get(),
-						//	meshref->mesh->indexBuffer.get(),
-						//	meshref->mesh->vertexBuffer.get(),
-						//	RHI::IndexFormat::UINT32_T,
-						//	submehs.size,
-						//	submehs.baseVertex,
-						//	submehs.size / 3,
-						//	uint32_t(submehs.offset * sizeof(uint32_t)),
-						//	RHI::AffineTransformMatrix(objectMat),
-						//	(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION,
-						//	submehs.matID
-						//	}
-						//);
-					//for (auto& triangleGeometry : blasDesc.triangleGeometries) {
-					//	ASGroup::GeometryInfo geometryInfo;
-					//	// vertex buffer
-					//	auto findVertexBuffer = vertexBufferMaps.find(triangleGeometry.vertexBuffer);
-					//	if (findVertexBuffer == vertexBufferMaps.end()) {
-					//		VertexBufferEntry vbt{ vertexOffset, triangleGeometry.vertexBuffer };
-					//		vertexBufferMaps[triangleGeometry.vertexBuffer] = vbt;
-					//		vertexBuffers.push_back(vbt);
-					//		vertexOffset += triangleGeometry.vertexBuffer->size() / (sizeof(float) * vertexStride);
-					//		findVertexBuffer = vertexBufferMaps.find(triangleGeometry.vertexBuffer);
-					//	}
-					//}
-
-					}
-					// geometry
-					meshRecordRef->second.submesh_geometry_start = geometry_beg;
 				}
-
-				//// create BLAS
-				//if (config.enableRayTracing) {
-				//	RHI::BLASDescriptor blasDesc;
-				//	for (auto& submehs : meshref->mesh->submeshes) {
-				//		blasDesc.triangleGeometries.push_back(RHI::BLASTriangleGeometry{
-				//			meshref->mesh->positionBuffer_device.get(),
-				//			meshref->mesh->indexBuffer_device.get(),
-				//			meshref->mesh->vertexBuffer_device.get(),
-				//			RHI::IndexFormat::UINT32_T,
-				//			submehs.size,
-				//			submehs.baseVertex,
-				//			submehs.size / 3,
-				//			uint32_t(submehs.offset * sizeof(uint32_t)),
-				//			RHI::AffineTransformMatrix(objectMat),
-				//			(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION,
-				//			submehs.matID
-				//			}
-				//		);
-				//	}
-				//}
 			}
 		}
 
@@ -414,9 +402,7 @@ namespace SIByL
 		}
 
 		// create BLAS / TLAS
-		RHI::TLASDescriptor tlas_desc = {};
-		for (auto& iter : sceneDataPack.mesh_ref_record) {
-			// if BLAS is not created
+		for (auto& iter : sceneDataPack.mesh_record) {
 			if (iter.second.blases == nullptr) {
 				iter.second.blas_desc.allowRefitting = true;
 				iter.second.blas_desc.allowCompaction = true;
@@ -426,13 +412,14 @@ namespace SIByL
 				}
 				iter.second.blases = device->createBLAS(iter.second.blas_desc);
 			}
-
-			tlas_desc.instances.push_back(RHI::BLASInstance{
-				iter.second.blases.get(),
-				Math::mat4{},
-				iter.second.submesh_geometry_start });
 		}
-		sceneDataPack.tlas = device->createTLAS(tlas_desc);
+		for (auto& iter : sceneDataPack.mesh_ref_record) {
+			// if BLAS is not created
+			iter.second.blasInstance.blas = sceneDataPack.mesh_record[iter.second.mesh].blases.get();
+			sceneDataPack.tlas_desc.instances.push_back(iter.second.blasInstance);
+		}
+		sceneDataPack.tlas_desc.allowRefitting = true;
+		sceneDataPack.tlas = device->createTLAS(sceneDataPack.tlas_desc);
 		rdgraph->addBehavior([&, device]()->void {
 			// rebuild all bind groups
 			for (int i = 0; i < 2; ++i) {
@@ -445,103 +432,6 @@ namespace SIByL
 				commonDescData.set1_flights_rt_array[i] = commonDescData.set1_flights_rt[i].get();
 			}
 			}, GFX::RDGraph::BehaviorPhase::AfterDevirtualize_BeforePassSetup);
-
-		//GFX::ASGroup asGroup = {};
-		//RHI::TLASDescriptor modified_desc = desc;
-		//std::unordered_map<RHI::BLAS*, std::pair<uint32_t, uint32_t>> map;
-		//uint32_t vertexOffset = 0;
-		//uint32_t indexOffset = 0;
-		//struct VertexBufferEntry {
-		//	uint32_t	 vertexOffset = 0;
-		//	RHI::Buffer* vertexBuffer = nullptr;
-		//};
-		//struct IndexBufferEntry {
-		//	uint32_t	 indexOffset = 0;
-		//	RHI::Buffer* indexBuffer = nullptr;
-		//};
-		//std::unordered_map<RHI::Buffer*, VertexBufferEntry> vertexBufferMaps;
-		//std::unordered_map<RHI::Buffer*, IndexBufferEntry> indexBufferMaps;
-		//std::vector<VertexBufferEntry> vertexBuffers;
-		//std::vector<IndexBufferEntry> indexBuffers;
-
-		//for (int i = 0; i < desc.instances.size(); ++i) {
-		//	// if BLAS has pushed
-		//	if (map.find(desc.instances[i].blas) != map.end()) {
-		//		std::pair<uint32_t, uint32_t> geometryRange = map[desc.instances[i].blas];
-		//		modified_desc.instances[i].instanceCustomIndex = geometryRange.first;
-		//	}
-		//	/// else if BLAS has not pushed
-		//	else {
-		//		RHI::BLAS* blas = desc.instances[i].blas;
-		//		RHI::BLASDescriptor blasDesc = blas->getDescriptor();
-		//		uint32_t geometryBegin = asGroup.geometryInfo.size();
-		//		uint32_t geometryEnd = geometryBegin;
-		//		for (auto& triangleGeometry : blasDesc.triangleGeometries) {
-		//			ASGroup::GeometryInfo geometryInfo;
-		//			// vertex buffer
-		//			auto findVertexBuffer = vertexBufferMaps.find(triangleGeometry.vertexBuffer);
-		//			if (findVertexBuffer == vertexBufferMaps.end()) {
-		//				VertexBufferEntry vbt{ vertexOffset, triangleGeometry.vertexBuffer };
-		//				vertexBufferMaps[triangleGeometry.vertexBuffer] = vbt;
-		//				vertexBuffers.push_back(vbt);
-		//				vertexOffset += triangleGeometry.vertexBuffer->size() / (sizeof(float) * vertexStride);
-		//				findVertexBuffer = vertexBufferMaps.find(triangleGeometry.vertexBuffer);
-		//			}
-		//			VertexBufferEntry& vertexEntry = findVertexBuffer->second;
-		//			geometryInfo.vertexOffset = vertexEntry.vertexOffset + triangleGeometry.firstVertex;
-		//			// index buffer
-		//			auto findIndexBuffer = indexBufferMaps.find(triangleGeometry.indexBuffer);
-		//			if (findIndexBuffer == indexBufferMaps.end()) {
-		//				IndexBufferEntry ibe{ indexOffset, triangleGeometry.indexBuffer };
-		//				indexBufferMaps[triangleGeometry.indexBuffer] = ibe;
-		//				indexBuffers.push_back(ibe);
-		//				indexOffset += triangleGeometry.indexBuffer->size() / sizeof(uint32_t);
-		//				findIndexBuffer = indexBufferMaps.find(triangleGeometry.indexBuffer);
-		//			}
-		//			IndexBufferEntry& indexEntry = findIndexBuffer->second;
-		//			geometryInfo.indexOffset = indexEntry.indexOffset + triangleGeometry.primitiveOffset / sizeof(uint32_t);
-		//			geometryInfo.geometryTransform = Math::transpose(Math::mat4(triangleGeometry.transform));
-		//			geometryInfo.materialID = triangleGeometry.materialID;
-		//			asGroup.geometryInfo.push_back(geometryInfo);
-		//			++geometryEnd;
-		//		}
-		//		modified_desc.instances[i].instanceCustomIndex = geometryBegin;
-		//		map[desc.instances[i].blas] = std::pair<uint32_t, uint32_t>{ geometryBegin, geometryEnd };
-		//	}
-		//}
-		//// create TLAS
-		//asGroup.tlas = rhiLayer->getDevice()->createTLAS(modified_desc);
-		//// create Buffers
-		//std::vector<float> vertexBuffer(vertexOffset * vertexStride);
-		//std::vector<uint32_t> indexBuffer(indexOffset);
-		//vertexOffset = 0;
-		//indexOffset = 0;
-		//for (auto iter : vertexBuffers) {
-		//	rhiLayer->getDevice()->readbackDeviceLocalBuffer(
-		//		iter.vertexBuffer,
-		//		(void*)&(vertexBuffer[vertexOffset / sizeof(float)]),
-		//		iter.vertexBuffer->size());
-		//	vertexOffset += iter.vertexBuffer->size();
-		//}
-		//for (auto iter : indexBuffers) {
-		//	rhiLayer->getDevice()->readbackDeviceLocalBuffer(
-		//		iter.indexBuffer,
-		//		(void*)&(indexBuffer[indexOffset / sizeof(uint32_t)]),
-		//		iter.indexBuffer->size());
-		//	indexOffset += iter.indexBuffer->size();
-		//}
-		//asGroup.vertexBufferArray = GFX::GFXManager::get()->rhiLayer->getDevice()->createDeviceLocalBuffer(
-		//	(void*)vertexBuffer.data(), vertexBuffer.size() * sizeof(float),
-		//	(uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
-		//	(uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
-		//asGroup.indexBufferArray = GFX::GFXManager::get()->rhiLayer->getDevice()->createDeviceLocalBuffer(
-		//	(void*)indexBuffer.data(), indexBuffer.size() * sizeof(uint32_t),
-		//	(uint32_t)RHI::BufferUsage::INDEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
-		//	(uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
-		//asGroup.GeometryInfoBuffer = GFX::GFXManager::get()->rhiLayer->getDevice()->createDeviceLocalBuffer(
-		//	(void*)asGroup.geometryInfo.data(), asGroup.geometryInfo.size() * sizeof(GFX::ASGroup::GeometryInfo),
-		//	(uint32_t)RHI::BufferUsage::STORAGE);
-		//Core::ResourceManager::get()->addResource(guid, std::move(asGroup));
 	}
 
 	inline auto SRenderer::updateCamera(GFX::TransformComponent const& transform, GFX::CameraComponent const& camera) noexcept -> void {
