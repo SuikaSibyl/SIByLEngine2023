@@ -83,6 +83,7 @@ namespace SIByL
 		struct SceneDataPack {
 			// integrated geometry data
 			std::unique_ptr<RHI::Buffer> vertex_buffer			= nullptr;
+			std::unique_ptr<RHI::Buffer> position_buffer		= nullptr;
 			std::unique_ptr<RHI::Buffer> index_buffer			= nullptr;
 			std::unique_ptr<RHI::Buffer> material_buffer		= nullptr;
 			// unbinded textures array to contain all textures
@@ -92,11 +93,13 @@ namespace SIByL
 			std::vector<float>				vertex_buffer_cpu	= {};	// vertex buffer cpu
 			std::vector<uint32_t>			index_buffer_cpu	= {};	// index buffer cpu
 			std::vector<GeometryDrawData>	geometry_buffer_cpu	= {};	// geometries data
+			std::unique_ptr<RHI::TLAS>		tlas = {};
 
 			struct MeshReferenceRecord {
 				uint32_t submesh_geometry_start;
 				uint32_t submesh_geometry_end;
-				std::unique_ptr<RHI::BLAS> blases;
+				RHI::BLASDescriptor blas_desc;
+				std::unique_ptr<RHI::BLAS> blases = nullptr;
 			};
 
 			bool geometryDirty = false;
@@ -112,6 +115,9 @@ namespace SIByL
 		/** update main camera for the scene */
 		inline auto updateCamera(GFX::TransformComponent const& transform, GFX::CameraComponent const& camera) noexcept -> void;
 
+		struct {
+			uint32_t batchIdx = 0;
+		} state;
 		/**
 		* SRenderer info
 		*/
@@ -144,6 +150,11 @@ namespace SIByL
 			std::unique_ptr<RHI::BindGroupLayout> set0_layout = 0;
 			std::array<std::unique_ptr<RHI::BindGroup>, MULTIFRAME_FLIGHTS_COUNT> set0_flights = {};
 			std::array<RHI::BindGroup*, MULTIFRAME_FLIGHTS_COUNT> set0_flights_array = {};
+			// set 1 for ray tracing
+			std::unique_ptr<RHI::BindGroupLayout> set1_layout_rt = 0;
+			std::array<std::unique_ptr<RHI::BindGroup>, MULTIFRAME_FLIGHTS_COUNT> set1_flights_rt = {};
+			std::array<RHI::BindGroup*, MULTIFRAME_FLIGHTS_COUNT> set1_flights_rt_array = {};
+
 		} commonDescData;
 	};
 
@@ -185,6 +196,12 @@ namespace SIByL
 				RHI::BindGroupLayoutEntry{ 2, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
 				RHI::BindGroupLayoutEntry{ 3, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
 				RHI::BindGroupLayoutEntry{ 4, stages, RHI::BindlessTexturesBindingLayout{}},
+				} }
+		);
+		commonDescData.set1_layout_rt = device->createBindGroupLayout(
+			RHI::BindGroupLayoutDescriptor{ {
+				RHI::BindGroupLayoutEntry{ 0, stages, RHI::AccelerationStructureBindingLayout{}},
+				RHI::BindGroupLayoutEntry{ 1, stages, RHI::StorageTextureBindingLayout{}},
 				} }
 		);
 		// pack scene
@@ -257,8 +274,13 @@ namespace SIByL
 					uint32_t geometry_beg = sceneDataPack.geometry_buffer_cpu.size();
 					uint32_t geometry_end = geometry_beg + meshref->mesh->submeshes.size();
 					uint32_t vertex_offset = sceneDataPack.vertex_buffer_cpu.size();
+					uint32_t position_offset = sceneDataPack.position_buffer_cpu.size();
 					sceneDataPack.vertex_buffer_cpu.resize(vertex_offset + meshref->mesh->vertexBuffer_host.size / sizeof(float));
 					memcpy(&(sceneDataPack.vertex_buffer_cpu[vertex_offset]), meshref->mesh->vertexBuffer_host.data, meshref->mesh->vertexBuffer_host.size);
+					if (config.enableRayTracing) {
+						sceneDataPack.position_buffer_cpu.resize(position_offset + meshref->mesh->positionBuffer_host.size / sizeof(float));
+						memcpy(&(sceneDataPack.position_buffer_cpu[position_offset]), meshref->mesh->positionBuffer_host.data, meshref->mesh->positionBuffer_host.size);
+					}
 					uint32_t index_offset = sceneDataPack.index_buffer_cpu.size();
 					sceneDataPack.index_buffer_cpu.resize(index_offset + meshref->mesh->indexBuffer_host.size / sizeof(uint32_t));
 					memcpy(&(sceneDataPack.index_buffer_cpu[index_offset]), meshref->mesh->indexBuffer_host.data, meshref->mesh->indexBuffer_host.size);
@@ -272,6 +294,24 @@ namespace SIByL
 						geometry.geometryTransform = objectMat;
 						sceneDataPack.geometry_indices[go_handle.first].push_back(sceneDataPack.geometry_buffer_cpu.size());
 						sceneDataPack.geometry_buffer_cpu.emplace_back(geometry);
+
+						if (config.enableRayTracing) {
+							RHI::BLASDescriptor& blasDesc = meshRecordRef->second.blas_desc;
+							blasDesc.triangleGeometries.push_back(RHI::BLASTriangleGeometry{
+								nullptr,
+								nullptr,
+								nullptr,
+								RHI::IndexFormat::UINT32_T,
+								uint32_t(meshref->mesh->positionBuffer_host.size / (sizeof(float) * 3)),
+								geometry.vertexOffset,
+								geometry.indexSize / 3,
+								uint32_t(geometry.indexOffset * sizeof(uint32_t)),
+								RHI::AffineTransformMatrix(objectMat),
+								(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION,
+								geometry.materialID
+								}
+							);
+						}
 						//blasDesc.triangleGeometries.push_back(RHI::BLASTriangleGeometry{
 						//	meshref->mesh->positionBuffer.get(),
 						//	meshref->mesh->indexBuffer.get(),
@@ -300,7 +340,8 @@ namespace SIByL
 					//}
 
 					}
-
+					// geometry
+					meshRecordRef->second.submesh_geometry_start = geometry_beg;
 				}
 
 				//// create BLAS
@@ -328,23 +369,28 @@ namespace SIByL
 
 		// if geometry is dirty, rebuild all the buffers
 		if (sceneDataPack.geometryDirty) {
-			RHI::ShaderStagesFlags stages =
-				(uint32_t)RHI::ShaderStages::VERTEX
-				| (uint32_t)RHI::ShaderStages::FRAGMENT
-				| (uint32_t)RHI::ShaderStages::RAYGEN
-				| (uint32_t)RHI::ShaderStages::CLOSEST_HIT
-				| (uint32_t)RHI::ShaderStages::MISS
-				| (uint32_t)RHI::ShaderStages::ANY_HIT
-				| (uint32_t)RHI::ShaderStages::COMPUTE;
 			sceneDataPack.vertex_buffer = device->createDeviceLocalBuffer(
 				sceneDataPack.vertex_buffer_cpu.data(),
-				sceneDataPack.vertex_buffer_cpu.size() * sizeof(float), stages);
+				sceneDataPack.vertex_buffer_cpu.size() * sizeof(float), 
+				(uint32_t)RHI::BufferUsage::VERTEX
+				| (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS
+				| (uint32_t)RHI::BufferUsage::STORAGE);
 			sceneDataPack.index_buffer = device->createDeviceLocalBuffer(
 				sceneDataPack.index_buffer_cpu.data(),
-				sceneDataPack.index_buffer_cpu.size() * sizeof(uint32_t), stages);
-			//sceneDataPack.geometry_buffer = device->createDeviceLocalBuffer(
-			//	sceneDataPack.geometry_buffer_cpu.data(),
-			//	sceneDataPack.geometry_buffer_cpu.size() * sizeof(GeometryDrawData), stages);
+				sceneDataPack.index_buffer_cpu.size() * sizeof(uint32_t), 
+				(uint32_t)RHI::BufferUsage::INDEX
+				| (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS
+				| (uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY
+				| (uint32_t)RHI::BufferUsage::STORAGE);
+			if (config.enableRayTracing) {
+				sceneDataPack.position_buffer = device->createDeviceLocalBuffer(
+					sceneDataPack.position_buffer_cpu .data(),
+					sceneDataPack.position_buffer_cpu.size() * sizeof(float), 
+					(uint32_t)RHI::BufferUsage::VERTEX
+					| (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS
+					| (uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY
+					| (uint32_t)RHI::BufferUsage::STORAGE);
+			}
 			auto geometry_buffer = rdgraph->createStructuredArrayMultiStorageBuffer<GeometryDrawData>("geometry_buffer", sceneDataPack.geometry_buffer_cpu.size());
 
 			rdgraph->addBehavior([&, device]()->void {
@@ -366,6 +412,39 @@ namespace SIByL
 			// set scene data pack not dirty
 			sceneDataPack.geometryDirty = false;
 		}
+
+		// create BLAS / TLAS
+		RHI::TLASDescriptor tlas_desc = {};
+		for (auto& iter : sceneDataPack.mesh_ref_record) {
+			// if BLAS is not created
+			if (iter.second.blases == nullptr) {
+				iter.second.blas_desc.allowRefitting = true;
+				iter.second.blas_desc.allowCompaction = true;
+				for (auto& mesh : iter.second.blas_desc.triangleGeometries) {
+					mesh.positionBuffer = sceneDataPack.position_buffer.get();
+					mesh.indexBuffer = sceneDataPack.index_buffer.get();
+				}
+				iter.second.blases = device->createBLAS(iter.second.blas_desc);
+			}
+
+			tlas_desc.instances.push_back(RHI::BLASInstance{
+				iter.second.blases.get(),
+				Math::mat4{},
+				iter.second.submesh_geometry_start });
+		}
+		sceneDataPack.tlas = device->createTLAS(tlas_desc);
+		rdgraph->addBehavior([&, device]()->void {
+			// rebuild all bind groups
+			for (int i = 0; i < 2; ++i) {
+				commonDescData.set1_flights_rt[i] = device->createBindGroup(RHI::BindGroupDescriptor{
+					commonDescData.set1_layout_rt.get(),
+					std::vector<RHI::BindGroupEntry>{
+						{0,RHI::BindingResource{sceneDataPack.tlas.get()}},
+						{1,RHI::BindingResource{rdgraph->getTexture("TracerTarget_Color")->texture->originalView.get()}},
+				} });
+				commonDescData.set1_flights_rt_array[i] = commonDescData.set1_flights_rt[i].get();
+			}
+			}, GFX::RDGraph::BehaviorPhase::AfterDevirtualize_BeforePassSetup);
 
 		//GFX::ASGroup asGroup = {};
 		//RHI::TLASDescriptor modified_desc = desc;

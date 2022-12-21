@@ -1,7 +1,9 @@
 #ifndef _SRENDERER_COMMON_DESCRIPTOR_SET_HEADER_
 #define _SRENDERER_COMMON_DESCRIPTOR_SET_HEADER_
 
-#extension GL_EXT_scalar_block_layout : enable
+#extension GL_EXT_scalar_block_layout : require
+#extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 
 /**
 * Descriptor Set 0

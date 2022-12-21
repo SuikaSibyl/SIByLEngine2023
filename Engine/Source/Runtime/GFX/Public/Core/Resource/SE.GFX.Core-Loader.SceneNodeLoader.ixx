@@ -155,6 +155,7 @@ namespace SIByL::GFX
                         tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v];
                         // atrributes filling
                         std::vector<float> vertex = {};
+                        std::vector<float> position = {};
                         for (auto const& entry : meshConfig.layout.layout) {
                             // vertex position
                             if (entry.info == MeshDataLayout::VertexInfo::POSITION) {
@@ -166,9 +167,9 @@ namespace SIByL::GFX
                                     vertex.push_back(vy);
                                     vertex.push_back(vz);
                                     if (meshConfig.usePositionBuffer) {
-                                        positionBufferV.push_back(vx);
-                                        positionBufferV.push_back(vy);
-                                        positionBufferV.push_back(vz);
+                                        position.push_back(vx);
+                                        position.push_back(vy);
+                                        position.push_back(vz); 
                                     }
                                 }
                                 else {
@@ -228,6 +229,7 @@ namespace SIByL::GFX
                             if (uniqueVertices.count(hashed_vertex) == 0) {
                                 uniqueVertices[hashed_vertex] = static_cast<uint32_t>(vertex_offset);
                                 vertexBufferV.insert(vertexBufferV.end(), vertex.begin(), vertex.end());
+                                positionBufferV.insert(positionBufferV.end(), position.begin(), position.end());
                                 ++vertex_offset;
                             }
 

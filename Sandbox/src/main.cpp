@@ -460,8 +460,38 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			}}
 			});
 
+		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+			(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
+			(uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR,
+			(uint32_t)RHI::DependencyType::NONE,
+			{}, {},
+			{ RHI::TextureMemoryBarrierDescriptor{
+				rdg->getTexture("TracerTarget_Color")->texture->texture.get(),
+				RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
+				(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
+				(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT | (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
+				RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
+				RHI::TextureLayout::GENERAL
+			}}
+			});
+
 		rdg->execute(commandEncoder.get());
 
+
+		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+			(uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR,
+			(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
+			(uint32_t)RHI::DependencyType::NONE,
+			{}, {},
+			{ RHI::TextureMemoryBarrierDescriptor{
+				rdg->getTexture("TracerTarget_Color")->texture->texture.get(),
+				RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
+				(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT | (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
+				(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
+				RHI::TextureLayout::GENERAL,
+				RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL
+			}}
+			});
 
 		device->getGraphicsQueue()->submit({ commandEncoder->finish({}) }, 
 			multiFrameFlights->getImageAvailableSeamaphore(),
@@ -472,14 +502,15 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		imguiLayer->startGuiRecording();
 		bool show_demo_window = true;
 		ImGui::ShowDemoWindow(&show_demo_window);
-		//ImGui::Begin("Ray Tracer");
-		//ImGui::Image(
-		//	Editor::TextureUtils::getImGuiTexture(rtTarget)->getTextureID(),
-		//	{ (float)width,(float)height },
-		//	{ 0,0 }, { 1, 1 });
-		//if (ImGui::Button("Capture", { 200,100 })) {
-		//	captureImage(rtTarget);
-		//}
+		ImGui::Begin("Ray Tracer");
+		ImGui::Image(
+			Editor::TextureUtils::getImGuiTexture(rdg->getTexture("TracerTarget_Color")->guid)->getTextureID(),
+			{ (float)width,(float)height },
+			{ 0,0 }, { 1, 1 });
+		if (ImGui::Button("Capture", { 200,100 })) {
+			//captureImage(rtTarget);
+		}
+		ImGui::End();
 
 		//ImGui::End();
 		ImGui::Begin("Rasterizer");
