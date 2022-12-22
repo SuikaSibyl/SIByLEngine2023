@@ -1506,6 +1506,8 @@ namespace SIByL::RHI
 		auto getVkImage() noexcept -> VkImage& { return image; }
 		/** get the VkDeviceMemory */
 		auto getVkDeviceMemory() noexcept -> VkDeviceMemory& { return deviceMemory; }
+		/* get VMA Allocation */
+		auto getVMAAllocation() noexcept -> VmaAllocation& { return allocation; }
 		/** set buffer state */
 		auto setBufferMapState(BufferMapState const& state) noexcept -> void { mapState = state; }
 	private:
@@ -1724,7 +1726,11 @@ namespace SIByL::RHI
 	}
 
 	inline auto mapMemoryTexture(Device_VK* device, Texture_VK* texture, size_t offset, size_t size, void*& mappedData) noexcept-> bool {
+#ifdef USE_VMA
+		VkResult result = vmaMapMemory(device->getVMAAllocator(), texture->getVMAAllocation(), &mappedData);
+#else
 		VkResult result = vkMapMemory(device->getVkDevice(), texture->getVkDeviceMemory(), offset, size, 0, &mappedData);
+#endif
 		if (result) texture->setBufferMapState(BufferMapState::MAPPED);
 		return result == VkResult::VK_SUCCESS ? true : false;
 	}
@@ -1739,7 +1745,11 @@ namespace SIByL::RHI
 	}
 
 	auto Texture_VK::unmap() noexcept -> void {
-		vkUnmapMemory(device->getVkDevice(), getVkDeviceMemory());
+#ifdef USE_VMA
+		vmaUnmapMemory(device->getVMAAllocator(), getVMAAllocation());
+#else
+		vkUnmapMemory(device->getVkDevice(), getVkDeviceMemory()); 
+#endif
 		mappedData = nullptr;
 		BufferMapState mapState = BufferMapState::UNMAPPED;
 	}
@@ -2206,17 +2216,26 @@ namespace SIByL::RHI
 		:device(device), descriptor(desc) 
 	{
 		std::vector<VkDescriptorSetLayoutBinding> bindings(desc.entries.size());
+		std::vector<VkDescriptorBindingFlags> bindingFlags(desc.entries.size());
 		for (int i = 0; i < desc.entries.size(); i++) {
 			bindings[i].binding = desc.entries[i].binding;
 			bindings[i].descriptorType = getVkDecriptorType(desc.entries[i]);
 			bindings[i].descriptorCount = bindings[i].descriptorType == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER ? 25 : 1;
 			bindings[i].stageFlags = getVkShaderStageFlags(desc.entries[i].visibility);
 			bindings[i].pImmutableSamplers = nullptr;
+			bindingFlags[i] = 0;
+			if (desc.entries[i].bindlessTextures.has_value())
+				bindingFlags[i] |= VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
 		}
 		VkDescriptorSetLayoutCreateInfo layoutInfo{};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 		layoutInfo.bindingCount = bindings.size();
 		layoutInfo.pBindings = bindings.data();
+		VkDescriptorSetLayoutBindingFlagsCreateInfo flagsExt = {};
+		flagsExt.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+		flagsExt.bindingCount = bindingFlags.size();
+		flagsExt.pBindingFlags = bindingFlags.data();
+		layoutInfo.pNext = &flagsExt;
 		if (vkCreateDescriptorSetLayout(device->getVkDevice(), &layoutInfo, nullptr, &layout) != VK_SUCCESS) {
 			Core::LogManager::Error("VULKAN :: failed to create descriptor set layout!");
 		}

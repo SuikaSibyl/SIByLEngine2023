@@ -39,5 +39,8 @@
     <ClCompile Include="Public\SE.Image.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Image\SE.Image-Loader.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

@@ -63,7 +63,12 @@ namespace SIByL
 			uint32_t indexOffset;
 			uint32_t materialID;
 			uint32_t indexSize;
+			uint32_t padding0;
+			uint32_t padding1;
+			uint32_t padding2;
+			float oddNegativeScaling;
 			RHI::AffineTransformMatrix geometryTransform = {};
+			RHI::AffineTransformMatrix geometryTransformInverse = {};
 		};
 
 		/** global uniforms data for render descriptor set */
@@ -93,6 +98,7 @@ namespace SIByL
 			std::vector<float>				vertex_buffer_cpu	= {};	// vertex buffer cpu
 			std::vector<uint32_t>			index_buffer_cpu	= {};	// index buffer cpu
 			std::vector<GeometryDrawData>	geometry_buffer_cpu	= {};	// geometries data
+			std::vector<MaterialData>		material_buffer_cpu	= {};	// geometries data
 			RHI::TLASDescriptor				tlas_desc = {};
 			std::shared_ptr<RHI::TLAS>		tlas = {};
 			std::shared_ptr<RHI::TLAS>		back_tlas = {};
@@ -111,6 +117,8 @@ namespace SIByL
 
 			bool geometryDirty = false;
 			std::unordered_map<GFX::Mesh*, MeshRecord> mesh_record = {};
+			std::unordered_map<GFX::Material*, uint32_t> material_record = {};
+			std::unordered_map<RHI::TextureView*, uint32_t> textureview_record = {};
 			std::unordered_map<GFX::MeshReference*, MeshReferenceRecord> mesh_ref_record = {};
 		} sceneDataPack;
 		/** init non-scene resources */
@@ -202,7 +210,8 @@ namespace SIByL
 				RHI::BindGroupLayoutEntry{ 1, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
 				RHI::BindGroupLayoutEntry{ 2, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
 				RHI::BindGroupLayoutEntry{ 3, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
-				RHI::BindGroupLayoutEntry{ 4, stages, RHI::BindlessTexturesBindingLayout{}},
+				RHI::BindGroupLayoutEntry{ 4, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
+				RHI::BindGroupLayoutEntry{ 5, stages, RHI::BindlessTexturesBindingLayout{}},
 				} }
 		);
 		commonDescData.set1_layout_rt = device->createBindGroupLayout(
@@ -233,14 +242,17 @@ namespace SIByL
 			auto* go = scene.getGameObject(go_handle.first);
 			GFX::MeshReference* meshref = go->getEntity().getComponent<GFX::MeshReference>();
 			if (!meshref) continue;
+			float oddScaling = 1.f;
 			Math::mat4 objectMat;
 			{	// get mesh transform matrix
 				GFX::TransformComponent* transform = go->getEntity().getComponent<GFX::TransformComponent>();
 				objectMat = transform->getTransform() * objectMat;
+				oddScaling *= transform->scale.x * transform->scale.y * transform->scale.z;
 				while (go->parent != Core::NULL_ENTITY) {
 					go = scene.getGameObject(go->parent);
 					GFX::TransformComponent* transform = go->getEntity().getComponent<GFX::TransformComponent>();
 					objectMat = transform->getTransform() * objectMat;
+					oddScaling *= transform->scale.x * transform->scale.y * transform->scale.z;
 				}
 			}
 			// if do not have according record, add the record
@@ -250,6 +262,8 @@ namespace SIByL
 			else {
 				for (auto idx : meshRecordRef->second.geometry_indices) {
 					sceneDataPack.geometry_buffer_cpu[idx].geometryTransform = objectMat;
+					sceneDataPack.geometry_buffer_cpu[idx].geometryTransformInverse = Math::inverse(objectMat);
+					sceneDataPack.geometry_buffer_cpu[idx].oddNegativeScaling = oddScaling;
 				}
 				meshRecordRef->second.blasInstance.transform = objectMat;
 				sceneDataPack.tlas_desc.instances.push_back(meshRecordRef->second.blasInstance);
@@ -275,6 +289,8 @@ namespace SIByL
 			auto* go = scene.getGameObject(go_handle.first);
 			GFX::MeshReference* meshref = go->getEntity().getComponent<GFX::MeshReference>();
 			if (!meshref) continue;
+			GFX::MeshRenderer* meshrenderer = go->getEntity().getComponent<GFX::MeshRenderer>();
+			if (!meshrenderer) continue;
 			GFX::Mesh* mesh = meshref->mesh;
 			if (!mesh) continue;
 			// if do not have according mesh record, add the record
@@ -326,15 +342,19 @@ namespace SIByL
 				}
 			}
 			// get transform
+			float oddScaling = 1;
 			Math::mat4 objectMat;
 			{	// get mesh transform matrix
 				GFX::TransformComponent* transform = go->getEntity().getComponent<GFX::TransformComponent>();
 				objectMat = transform->getTransform() * objectMat;
+				oddScaling *= transform->scale.x * transform->scale.y * transform->scale.z;
 				while (go->parent != Core::NULL_ENTITY) {
 					go = scene.getGameObject(go->parent);
 					GFX::TransformComponent* transform = go->getEntity().getComponent<GFX::TransformComponent>();
 					objectMat = transform->getTransform() * objectMat;
+					oddScaling *= transform->scale.x * transform->scale.y * transform->scale.z;
 				}
+				if (oddScaling != 0) oddScaling / std::abs(oddScaling);
 			}
 			// if do not have according mesh ref record, add the record
 			auto meshRefRecord = sceneDataPack.mesh_ref_record.find(meshref);
@@ -345,12 +365,43 @@ namespace SIByL
 				{	// create mesh record
 					meshRefRecord->second.mesh = mesh;
 					uint32_t geometry_start = sceneDataPack.geometry_buffer_cpu.size();
+					uint32_t offset = 0;
 					for (auto& iter : meshRecord->second.submesh_geometry) {
 						meshRefRecord->second.geometry_indices.push_back(sceneDataPack.geometry_buffer_cpu.size());
+						GFX::Material* mat = meshrenderer->materials[offset++];
+						// check whether material has been registered
+						auto findMat = sceneDataPack.material_record.find(mat);
+						if (findMat == sceneDataPack.material_record.end()) {
+							uint32_t matID = sceneDataPack.material_buffer_cpu.size();
+							MaterialData matData;
+
+							Core::GUID baseTexGUID = mat->textures["base_color"];
+							Core::GUID normTexGUID = mat->textures["normal_bump"];
+
+							auto getTexID = [&](Core::GUID guid)->uint32_t {
+								RHI::TextureView* normTexView = Core::ResourceManager::get()->getResource<GFX::Texture>(guid)->originalView.get();
+								auto findTex = sceneDataPack.textureview_record.find(normTexView);
+								if (findTex == sceneDataPack.textureview_record.end()) {
+									uint32_t texID = sceneDataPack.unbinded_textures.size();
+									sceneDataPack.unbinded_textures.push_back(normTexView);
+									sceneDataPack.textureview_record[normTexView] = texID;
+									findTex = sceneDataPack.textureview_record.find(normTexView);
+								}
+								return findTex->second;
+							};
+
+							matData.basecolor_opacity_tex = getTexID(baseTexGUID);
+							matData.normal_bump_tex = getTexID(normTexGUID);
+							sceneDataPack.material_buffer_cpu.push_back(matData);
+							sceneDataPack.material_record[mat] = matID;
+						}
 						GeometryDrawData geometrydata = iter;
 						geometrydata.geometryTransform = objectMat;
+						geometrydata.geometryTransformInverse = Math::inverse(objectMat);
+						geometrydata.oddNegativeScaling = oddScaling;
 						sceneDataPack.geometry_buffer_cpu.emplace_back(geometrydata);
 					}
+					meshRefRecord->second.blasInstance.instanceCustomIndex = geometry_start;
 				}
 			}
 		}
@@ -369,6 +420,11 @@ namespace SIByL
 				(uint32_t)RHI::BufferUsage::INDEX
 				| (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS
 				| (uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY
+				| (uint32_t)RHI::BufferUsage::STORAGE);
+			sceneDataPack.material_buffer = device->createDeviceLocalBuffer(
+				sceneDataPack.material_buffer_cpu.data(),
+				sceneDataPack.material_buffer_cpu.size() * sizeof(MaterialData),
+				  (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS
 				| (uint32_t)RHI::BufferUsage::STORAGE);
 			if (config.enableRayTracing) {
 				sceneDataPack.position_buffer = device->createDeviceLocalBuffer(
@@ -391,7 +447,8 @@ namespace SIByL
 							{1,RHI::BindingResource{{sceneDataPack.vertex_buffer.get(), 0, sceneDataPack.vertex_buffer->size()}}},
 							{2,RHI::BindingResource{{sceneDataPack.index_buffer.get(), 0, sceneDataPack.index_buffer->size()}}},
 							{3,RHI::BindingResource{rdgraph->getStructuredArrayMultiStorageBuffer<GeometryDrawData>("geometry_buffer")->getBufferBinding(i)}},
-							{4,RHI::BindingResource{sceneDataPack.unbinded_textures,
+							{4,RHI::BindingResource{{sceneDataPack.material_buffer.get(), 0, sceneDataPack.material_buffer->size()}}},
+							{5,RHI::BindingResource{sceneDataPack.unbinded_textures,
 								Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler.get()}},
 					} });
 					commonDescData.set0_flights_array[i] = commonDescData.set0_flights[i].get();

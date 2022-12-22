@@ -9,10 +9,11 @@
 * Descriptor Set 0
 * --------------------------
 * binding 0: global uniforms
-* binding 1: bindless textures
-* binding 2: vertex buffer
-* binding 3: index buffer
-* binding 4: geometry buffer
+* binding 1: vertex buffer
+* binding 2: index buffer
+* binding 3: geometry buffer
+* binding 4: material buffer
+* binding 5: bindless textures
 */
 // Global uniforms carrying camera information.
 struct GlobalUniforms {
@@ -33,14 +34,45 @@ struct GeometryInfo {
   uint vertexOffset;
   uint indexOffset;
   uint materialID;
-  uint padding;
+  uint indexSize;
+  uint padding0;
+  uint padding1;
+  uint padding2;
+  float oddNegativeScaling;
   vec4 transform[3];
+  vec4 transformInverse[3];
+};
+// material info
+struct MaterialData {
+  vec4 albedo_tint;
+  vec2 uv_tiling;
+  vec2 uv_scaling;
+  uint mat_type;
+  uint basecolor_opacity_tex;
+  uint normal_bump_tex;
+  uint roughness_metalic_ao_tex;
 };
 // binding definition
 layout(binding = 0, set = 0, scalar) uniform _GlobalUniforms { GlobalUniforms globalUniform; };
 layout(binding = 1, set = 0, scalar) buffer _VerticesBuffer { InterleavedVertex vertices[]; };
 layout(binding = 2, set = 0, scalar) buffer _IndicesBuffer  { uint indices[]; };
 layout(binding = 3, set = 0, scalar) buffer _GeometryBuffer { GeometryInfo geometryInfos[]; };
-layout(binding = 4, set = 0) uniform sampler2D textures[];
+layout(binding = 4, set = 0, scalar) buffer _MaterialBuffer { MaterialData materials[]; };
+layout(binding = 5, set = 0) uniform sampler2D textures[];
+
+
+// Utilities
+
+mat4 ObjectToWorld(in GeometryInfo geometry) {
+  return transpose(mat4(geometry.transform[0], geometry.transform[1], geometry.transform[2], vec4(0,0,0,1)));
+}
+
+mat4 WorldToObject(in GeometryInfo geometry) {
+  return transpose(mat4(geometry.transformInverse[0], geometry.transformInverse[1], geometry.transformInverse[2], vec4(0,0,0,1)));
+}
+
+mat4 ObjectToWorldNormal(in GeometryInfo geometry) {
+  return mat4(geometry.transformInverse[0], geometry.transformInverse[1], geometry.transformInverse[2], vec4(0,0,0,1));
+}
 
 #endif

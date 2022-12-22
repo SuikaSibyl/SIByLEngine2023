@@ -300,7 +300,7 @@ namespace SIByL::GFX
 		RDGTexture* texture = textures[std::string(name)].get();
 		texture->descriptor = RHI::TextureDescriptor{
 			desc.size, desc.mipLevelCount, desc.sampleCount, desc.dimension, desc.format,
-			(uint32_t)RHI::TextureUsage::TEXTURE_BINDING,
+			(uint32_t)RHI::TextureUsage::TEXTURE_BINDING | (uint32_t)RHI::TextureUsage::COPY_SRC,
 			{desc.format}
 		};
 		texture->name = name;

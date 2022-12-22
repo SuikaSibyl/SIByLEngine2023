@@ -1,9 +1,12 @@
 #version 460
-#extension GL_EXT_ray_tracing : require
+#extension GL_GOOGLE_include_directive : enable
+
+#include "../../include/common_hit.h"
 
 layout(location = 0) rayPayloadInEXT vec3 hitValue;
 
 void main()
 {
-    hitValue = vec3(1.0, 1.0, 0.3);
+    HitGeometry geoInfo = getHitGeometry();
+    hitValue = vec3(geoInfo.uv, 0);
 }

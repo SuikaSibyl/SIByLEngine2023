@@ -130,7 +130,7 @@ namespace SIByL::GFX
                                 attrib.normals[3 * size_t(idx.normal_index) + 2] };
                             uvs[v] = {
                                 attrib.texcoords[2 * size_t(idx.texcoord_index) + 0],
-                                attrib.texcoords[2 * size_t(idx.texcoord_index) + 1] };
+                                -attrib.texcoords[2 * size_t(idx.texcoord_index) + 1] };
                         }
                         Math::vec3 edge1 = positions[1] - positions[0];
                         Math::vec3 edge2 = positions[2] - positions[0];
@@ -198,7 +198,7 @@ namespace SIByL::GFX
                                     tinyobj::real_t tx = attrib.texcoords[2 * size_t(idx.texcoord_index) + 0];
                                     tinyobj::real_t ty = attrib.texcoords[2 * size_t(idx.texcoord_index) + 1];
                                     vertex.push_back(tx);
-                                    vertex.push_back(ty);
+                                    vertex.push_back(1 - ty);
                                 }
                                 else {
                                     vertex.push_back(0);

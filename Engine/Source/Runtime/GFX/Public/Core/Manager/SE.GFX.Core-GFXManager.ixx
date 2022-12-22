@@ -57,6 +57,7 @@ namespace SIByL::GFX
 		auto registerMeshResource(Core::GUID guid, Core::ORID orid) noexcept -> void;
 		auto registerTextureResource(Core::GUID guid, Image::Image<Image::COLOR_R8G8B8A8_UINT>* image) noexcept -> void;
 		auto registerTextureResource(Core::GUID guid, RHI::TextureDescriptor const& desc) noexcept -> void;
+		auto registerTextureResource(Core::GUID guid, char const* filepath) noexcept -> void;
 		auto registerSamplerResource(Core::GUID guid, RHI::SamplerDescriptor const& desc) noexcept -> void;
 		auto registerShaderModuleResource(Core::GUID guid, RHI::ShaderModuleDescriptor const& desc) noexcept -> void;
 		auto registerShaderModuleResource(Core::GUID guid, char const* filepath, RHI::ShaderModuleDescriptor const& desc) noexcept -> void;
@@ -209,6 +210,10 @@ namespace SIByL::GFX
 			textureResource.originalView = textureResource.texture->createView(viewDesc);
 		textureResource.guid = guid;
 		Core::ResourceManager::get()->addResource(guid, std::move(textureResource));
+	}
+
+	auto registerTextureResource(Core::GUID guid, char const* filepath) noexcept -> void {
+
 	}
 
 	auto GFXManager::registerSamplerResource(Core::GUID guid, RHI::SamplerDescriptor const& desc) noexcept -> void {

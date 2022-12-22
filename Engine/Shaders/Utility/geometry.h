@@ -14,4 +14,14 @@ void createONB(in vec3 n, out vec3 u, out vec3 v, out vec3 w) {
     v = cross(w,u);
 }
 
+/** Compute bitangent according to tangent and normal */
+vec3 computeBitangent(in vec3 tangent, in vec3 normal) {
+    return cross(normal. tangent)
+}
+
+// /** Compute TBN matrix according to normal an tangent */
+// vec3 computeTBN(in vec3 tangent, in vec3 normal) {
+//     return cross(tangent, normal)
+// }
+
 #endif

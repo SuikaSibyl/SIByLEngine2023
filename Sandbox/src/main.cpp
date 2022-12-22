@@ -61,6 +61,8 @@ struct UniformBufferObject {
 
 struct SandBoxApplication :public Application::ApplicationBase {
 	GFX::GameObjectHandle camera_go;
+	
+	GFX::Material mat;
 
 	/** Initialize the application */
 	virtual auto Init() noexcept -> void override {
@@ -90,55 +92,75 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			Math::vec2 uv;
 		};
 
-		GFX::SceneNodeLoader_obj::loadSceneNode("P:/GitProjects/SIByLEngine2022/Sandbox/content/viking_room.obj", scene, SRenderer::meshLoadConfig);
-		GFX::SceneNodeLoader_obj::loadSceneNode("P:/GitProjects/SIByLEngine2022/Sandbox/content/scenes/wuson.obj", scene, SRenderer::meshLoadConfig);
-
+		{
+			std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> norm_img = ImageLoader::load_rgba8("P:/GitProjects/SIByLEngine2022/Sandbox/content/textures/Cerberus_A.png");
+			Core::GUID norm_img_guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
+			GFX::GFXManager::get()->registerTextureResource(norm_img_guid, norm_img.get());
+			mat.textures["normal_bump"] = norm_img_guid;
+		}
+		{
+			std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> norm_img = ImageLoader::load_rgba8("P:/GitProjects/SIByLEngine2022/Sandbox/content/textures/Cerberus_B.png");
+			Core::GUID norm_img_guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
+			GFX::GFXManager::get()->registerTextureResource(norm_img_guid, norm_img.get());
+			mat.textures["base_color"] = norm_img_guid;
+		}
+		GFX::SceneNodeLoader_obj::loadSceneNode("P:/GitProjects/SIByLEngine2022/Sandbox/content/cerberus.obj", scene, SRenderer::meshLoadConfig);
+		//GFX::SceneNodeLoader_obj::loadSceneNode("P:/GitProjects/SIByLEngine2022/Sandbox/content/scenes/wuson.obj", scene, SRenderer::meshLoadConfig);
+		for (auto handle : scene.gameObjects) {
+			GFX::GameObject* go = scene.getGameObject(handle.first);
+			Math::mat4 objectMat;
+			GFX::MeshReference* meshref = go->getEntity().getComponent<GFX::MeshReference>();
+			if (meshref) {
+				GFX::MeshRenderer* meshrenderer = go->getEntity().addComponent<GFX::MeshRenderer>();
+				meshrenderer->materials.push_back(&mat);
+			}
+		}
 		//GFX::SceneNodeLoader_glTF::loadSceneNode("D:/Downloads/glTF-Sample-Models-master/glTF-Sample-Models-master/2.0/Sponza/glTF/Sponza.gltf", scene);
 		//GFX::SceneNodeLoader_glTF::loadSceneNode("P:/GitProjects/SIByLEngine2022/Sandbox/content/scenes/cornellBox.gltf", scene);
 		//scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/cornellBox.scene");
 		//scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/cornellBoxSphere.scene");
 		//scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/sponza.scene");
 
-		std::vector<RHI::TextureView*> textureViews;
-		{
-			// use tinygltf to load file
-			std::filesystem::path path = "D:/Downloads/glTF-Sample-Models-master/glTF-Sample-Models-master/2.0/Sponza/glTF/Sponza.gltf";
-			tinygltf::Model model;
-			tinygltf::TinyGLTF loader;
-			std::string err;
-			std::string warn;
-			bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, path.string());
-			if (!warn.empty()) Core::LogManager::Warning(std::format("GFX :: tinygltf :: {0}", warn.c_str()));
-			if (!err.empty()) Core::LogManager::Error(std::format("GFX :: tinygltf :: {0}", err.c_str()));
-			if (!ret) {
-				Core::LogManager::Error("GFX :: tinygltf :: Failed to parse glTF");
-				return;
-			}
-			// Iterate through all the meshes in the glTF file
-			// Load meshes into Runtime resource managers.
-			RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
-			std::vector<Core::GUID> meshGUIDs = {};
-			std::unordered_map<tinygltf::Mesh const*, Core::GUID> meshMap = {};
-			for (auto const& gltfMat : model.materials) {
-				auto const& glTFimage_base_color = model.images[model.textures[gltfMat.pbrMetallicRoughness.baseColorTexture.index].source];
-				std::filesystem::path base_color_path = path.parent_path() / glTFimage_base_color.uri;
-				Core::GUID guid;
-				if (base_color_path.extension() == ".jpg") {
-					std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> img = Image::JPEG::fromJPEG(base_color_path);
-					guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
-					GFX::GFXManager::get()->registerTextureResource(guid, img.get());
-				}
-				else if (base_color_path.extension() == ".png") {
-					std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> img = Image::PNG::fromPNG(base_color_path);
-					guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
-					GFX::GFXManager::get()->registerTextureResource(guid, img.get());
-				}
-				else {
-					Core::LogManager::Error("GFX :: glTF load error, not supported image extension!");
-				}
-				textureViews.push_back(Core::ResourceManager::get()->getResource<GFX::Texture>(guid)->originalView.get());
-			}
-		}
+		//std::vector<RHI::TextureView*> textureViews;
+		//{
+		//	// use tinygltf to load file
+		//	std::filesystem::path path = "D:/Downloads/glTF-Sample-Models-master/glTF-Sample-Models-master/2.0/Sponza/glTF/Sponza.gltf";
+		//	tinygltf::Model model;
+		//	tinygltf::TinyGLTF loader;
+		//	std::string err;
+		//	std::string warn;
+		//	bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, path.string());
+		//	if (!warn.empty()) Core::LogManager::Warning(std::format("GFX :: tinygltf :: {0}", warn.c_str()));
+		//	if (!err.empty()) Core::LogManager::Error(std::format("GFX :: tinygltf :: {0}", err.c_str()));
+		//	if (!ret) {
+		//		Core::LogManager::Error("GFX :: tinygltf :: Failed to parse glTF");
+		//		return;
+		//	}
+		//	// Iterate through all the meshes in the glTF file
+		//	// Load meshes into Runtime resource managers.
+		//	RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
+		//	std::vector<Core::GUID> meshGUIDs = {};
+		//	std::unordered_map<tinygltf::Mesh const*, Core::GUID> meshMap = {};
+		//	for (auto const& gltfMat : model.materials) {
+		//		auto const& glTFimage_base_color = model.images[model.textures[gltfMat.pbrMetallicRoughness.baseColorTexture.index].source];
+		//		std::filesystem::path base_color_path = path.parent_path() / glTFimage_base_color.uri;
+		//		Core::GUID guid;
+		//		if (base_color_path.extension() == ".jpg") {
+		//			std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> img = Image::JPEG::fromJPEG(base_color_path);
+		//			guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
+		//			GFX::GFXManager::get()->registerTextureResource(guid, img.get());
+		//		}
+		//		else if (base_color_path.extension() == ".png") {
+		//			std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> img = Image::PNG::fromPNG(base_color_path);
+		//			guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
+		//			GFX::GFXManager::get()->registerTextureResource(guid, img.get());
+		//		}
+		//		else {
+		//			Core::LogManager::Error("GFX :: glTF load error, not supported image extension!");
+		//		}
+		//		textureViews.push_back(Core::ResourceManager::get()->getResource<GFX::Texture>(guid)->originalView.get());
+		//	}
+		//}
 
 		GFX::GFXManager::get()->commonSampler.defaultSampler = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Sampler>();
 		GFX::GFXManager::get()->registerSamplerResource(GFX::GFXManager::get()->commonSampler.defaultSampler, RHI::SamplerDescriptor{
@@ -508,7 +530,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			{ (float)width,(float)height },
 			{ 0,0 }, { 1, 1 });
 		if (ImGui::Button("Capture", { 200,100 })) {
-			//captureImage(rtTarget);
+			captureImage(rdg->getTexture("TracerTarget_Color")->guid);
 		}
 		ImGui::End();
 

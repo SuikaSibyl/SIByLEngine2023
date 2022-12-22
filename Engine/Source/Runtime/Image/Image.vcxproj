@@ -26,6 +26,7 @@
     <ClCompile Include="Public\FileFormat\SE.Image-FileFormat.PNG.ixx" />
     <ClCompile Include="Public\FileFormat\SE.Image-FileFormat.PPM.ixx" />
     <ClCompile Include="Public\Image\SE.Image-Image.ixx" />
+    <ClCompile Include="Public\Image\SE.Image-Loader.ixx" />
     <ClCompile Include="Public\SE.Image.ixx" />
   </ItemGroup>
   <ItemGroup>
