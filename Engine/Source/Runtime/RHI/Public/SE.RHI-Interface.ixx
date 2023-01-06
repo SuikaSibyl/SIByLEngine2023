@@ -5,6 +5,7 @@ module;
 #include <optional>
 #include <variant>
 export module SE.RHI:Interface;
+import SE.Core.Log;
 import SE.Core.Memory;
 import SE.Platform.Window;
 import SE.Math.Geometric;
@@ -233,6 +234,8 @@ namespace SIByL::RHI
 		auto createDeviceLocalBuffer(void* data, uint32_t size, BufferUsagesFlags usage) noexcept -> std::unique_ptr<Buffer>;
 		/** read back device local buffer */
 		auto readbackDeviceLocalBuffer(Buffer* buffer, void* data, uint32_t size) noexcept -> void;
+		/** read back device local texture */
+		auto readbackDeviceLocalTexture(Texture* texture, void* data, uint32_t size) noexcept -> void;
 	};
 
 	struct DeviceDescriptor {};
@@ -506,6 +509,8 @@ namespace SIByL::RHI
 		virtual auto setName(std::string const& name) -> void = 0;
 		/** get name */
 		virtual auto getName() -> std::string const& = 0;
+		/** get texture descriptor */
+		virtual auto getDescriptor() -> TextureDescriptor = 0;
 		// Map methods
 		// ---------------------------
 		/** Maps the given range of the GPUBuffer */
@@ -1037,7 +1042,7 @@ namespace SIByL::RHI
 		DECREMENT_WARP,
 	};
 
-	export enum struct VertexFormat {
+	export enum struct DataFormat {
 		UINT8X2,
 		UINT8X4,
 		SINT8X2,
@@ -1069,6 +1074,8 @@ namespace SIByL::RHI
 		SINT32X3,
 		SINT32X4
 	};
+
+	export using VertexFormat = DataFormat;
 
 	export inline auto getVertexFormatSize(VertexFormat format) noexcept -> size_t {
 		switch (format) {
@@ -2176,7 +2183,82 @@ namespace SIByL::RHI
 			stagingBuffer->unmap();
 		}
 	}
-	
+
+	auto Device::readbackDeviceLocalTexture(Texture* texture, void* data, uint32_t size) noexcept -> void {
+		RHI::TextureDescriptor desc = texture->getDescriptor();
+		desc.usage = (uint32_t)RHI::TextureUsage::COPY_DST;
+		desc.hostVisible = true;
+		uint32_t pixel_size = 0;
+		if (desc.format == TextureFormat::RGBA8_UNORM)
+			pixel_size = sizeof(uint8_t) * 4;
+		else if (desc.format == TextureFormat::RGBA32_FLOAT) 
+			pixel_size = sizeof(float) * 4;
+		else {
+			Core::LogManager::Error("RHI :: Format not supported to be readback for now.");
+			return;
+		}
+		std::unique_ptr<RHI::Texture> cpyDst = createTexture(desc);
+		waitIdle();
+		std::unique_ptr<RHI::CommandEncoder> commandEncoder = createCommandEncoder({});
+		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+			(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
+			(uint32_t)RHI::PipelineStages::TRANSFER_BIT,
+			(uint32_t)RHI::DependencyType::NONE,
+			{}, {},
+			{ RHI::TextureMemoryBarrierDescriptor{
+				texture,
+				RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
+				(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT | (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
+				(uint32_t)RHI::AccessFlagBits::TRANSFER_READ_BIT,
+				RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
+				RHI::TextureLayout::TRANSFER_SRC_OPTIMAL
+			}}
+			});
+		commandEncoder->copyTextureToTexture(
+			RHI::ImageCopyTexture{ texture },
+			RHI::ImageCopyTexture{ cpyDst.get() },
+			RHI::Extend3D{ desc.size.width, desc.size.height, 1 }
+		);
+		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+			(uint32_t)RHI::PipelineStages::TRANSFER_BIT,
+			(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
+			(uint32_t)RHI::DependencyType::NONE,
+			{}, {},
+			{ RHI::TextureMemoryBarrierDescriptor{
+				texture,
+				RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
+				(uint32_t)RHI::AccessFlagBits::TRANSFER_READ_BIT,
+				(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT | (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
+				RHI::TextureLayout::TRANSFER_SRC_OPTIMAL,
+				RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL
+			}}
+			});
+		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+			(uint32_t)RHI::PipelineStages::TRANSFER_BIT,
+			(uint32_t)RHI::PipelineStages::HOST_BIT,
+			(uint32_t)RHI::DependencyType::NONE,
+			{}, {},
+			{ RHI::TextureMemoryBarrierDescriptor{
+				cpyDst.get(),
+				RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
+				(uint32_t)RHI::AccessFlagBits::TRANSFER_WRITE_BIT,
+				(uint32_t)RHI::AccessFlagBits::HOST_READ_BIT,
+				RHI::TextureLayout::TRANSFER_DST_OPTIMAL,
+				RHI::TextureLayout::TRANSFER_DST_OPTIMAL
+			}}
+			});
+		getGraphicsQueue()->submit({ commandEncoder->finish({}) });
+		waitIdle();
+		uint32_t mapped_size = desc.size.width * desc.size.height * pixel_size;
+		std::future<bool> mapped = cpyDst->mapAsync(
+			(uint32_t)RHI::MapMode::READ, 0, mapped_size);
+		if (mapped.get()) {
+			void* mapped_data = cpyDst->getMappedRange(0, mapped_size);
+			memcpy(data, mapped_data, mapped_size);
+			cpyDst->unmap();
+		}
+	}
+
 #pragma endregion
 
 	export struct RayTracingExtension {

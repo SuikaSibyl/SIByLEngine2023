@@ -6,23 +6,31 @@ export module SE.Core.Misc:Timer;
 
 namespace SIByL::Core
 {
+	/** Timer for the engine.
+	* Tick every frame to get delta time. */
 	export struct Timer {
 		Timer();
 		/** update the timer */
-		auto update() noexcept -> void;
+		inline auto update() noexcept -> void;
 		/** get the delta time */
-		auto deltaTime() noexcept -> double;
+		inline auto deltaTime() noexcept -> double;
 		/** get the total time */
-		auto totalTime() noexcept -> double;
+		inline auto totalTime() noexcept -> double;
 	private:
+		/** start time point record */
 		std::chrono::steady_clock::time_point startTimePoint;
+		/** previous time point record */
 		std::chrono::steady_clock::time_point prevTimePoint;
+		/** delta time between this and prev tick */
 		double _deltaTime = 0.f;
 	};
 
+	/** A world time point record. */
 	export struct WorldTimePoint {
-		static auto get() noexcept -> WorldTimePoint;
-		auto to_string() noexcept -> std::string;
+		/** get current world time point */
+		static inline auto get() noexcept -> WorldTimePoint;
+		/** output the current time point to a string */
+		inline auto to_string() noexcept -> std::string;
 		std::chrono::years y;
 		std::chrono::days d;
 		std::chrono::hours h;
@@ -37,25 +45,27 @@ namespace SIByL::Core
 		prevTimePoint = startTimePoint;
 	}
 
-	auto Timer::update() noexcept -> void {
-		auto now = std::chrono::steady_clock::now();
-		uint64_t deltaTimeCount = uint64_t(std::chrono::duration<double, std::micro>(now - prevTimePoint).count());
+	inline auto Timer::update() noexcept -> void {
+		auto const now = std::chrono::steady_clock::now();
+		uint64_t const deltaTimeCount = uint64_t(std::chrono::duration<double, std::micro>(now - prevTimePoint).count());
 		_deltaTime = 0.000001 * deltaTimeCount;
 		prevTimePoint = now;
 	}
 
-	auto Timer::deltaTime() noexcept -> double {
+	inline auto Timer::deltaTime() noexcept -> double {
 		return _deltaTime;
 	}
 
-	auto Timer::totalTime() noexcept -> double {
-		uint64_t totalTimeCount = uint64_t(std::chrono::duration<double, std::micro>(prevTimePoint - startTimePoint).count());
+	inline auto Timer::totalTime() noexcept -> double {
+		uint64_t const totalTimeCount = uint64_t(std::chrono::duration<double, std::micro>(prevTimePoint - startTimePoint).count());
 		return 0.000001 * totalTimeCount;
 	}
 
 #pragma endregion
 
-	auto WorldTimePoint::get() noexcept -> WorldTimePoint {
+#pragma region WORLD_TIME_POINT_IMPL
+
+	inline auto WorldTimePoint::get() noexcept -> WorldTimePoint {
 		WorldTimePoint wtp;
 		using namespace std;
 		using namespace std::chrono;
@@ -75,7 +85,7 @@ namespace SIByL::Core
 		return wtp;
 	}
 
-	auto WorldTimePoint::to_string() noexcept -> std::string {
+	inline auto WorldTimePoint::to_string() noexcept -> std::string {
 		std::string str;
 		str += std::to_string(y.count());
 		str += std::to_string(d.count());
@@ -84,4 +94,6 @@ namespace SIByL::Core
 		str += std::to_string(s.count());
 		return str;
 	}
+
+#pragma endregion
 }

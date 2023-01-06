@@ -8,23 +8,16 @@ module;
 #include <algorithm>
 #include <unordered_map>
 export module SE.GFX.Core:MeshLoader;
+import :SerializeUtils;
+import :GFXConfig;
+import :Main;
 import SE.Core.Log;
 import SE.Core.Memory;
 import SE.Core.Resource;
 import SE.RHI;
-import :GFXManager;
-import :Mesh;
 
 namespace SIByL::GFX
 {
-    export struct MeshLoaderConfig {
-        MeshDataLayout layout = {};
-        bool usePositionBuffer  = true;
-        bool residentOnHost     = true;
-        bool residentOnDevice   = false;
-        bool deduplication      = true;
-    };
-
     static std::array<uint64_t, 24> primes = { 3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97 };
 
     export inline auto hash_vertex(std::vector<float> const& v) noexcept -> std::uint64_t {

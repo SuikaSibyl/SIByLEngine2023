@@ -58,10 +58,6 @@
     <ClCompile Include="Public\System\SE.Core.System-Manager.ixx" />
     <ClCompile Include="Public\System\SE.Core.System.ixx" />
   </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="Public\Core.h" />
-    <ClInclude Include="Public\Memory\SE.Core.Memory.hpp" />
-  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>

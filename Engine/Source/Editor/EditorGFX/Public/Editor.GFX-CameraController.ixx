@@ -95,9 +95,11 @@ namespace SIByL::Editor
 		}
 
 		auto bindTransform(GFX::TransformComponent* transform) noexcept -> void {
-			targetCameraState.setFromTransform(*transform);
-			interpolatingCameraState.setFromTransform(*transform);
-			this->transform = transform;
+			if (this->transform != transform) {
+				targetCameraState.setFromTransform(*transform);
+				interpolatingCameraState.setFromTransform(*transform);
+				this->transform = transform;
+			}
 		}
 
 		auto onUpdate() noexcept -> void {

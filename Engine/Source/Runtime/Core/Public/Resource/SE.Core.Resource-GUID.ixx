@@ -10,5 +10,6 @@ namespace SIByL::Core
 	export using GUID = uint64_t;
 	export inline GUID INVALID_GUID = uint64_t(-1);
 
+	/** hash a filesystem path to a GUID */
 	export inline auto hashGUID(std::filesystem::path const& path) noexcept -> GUID;
 }

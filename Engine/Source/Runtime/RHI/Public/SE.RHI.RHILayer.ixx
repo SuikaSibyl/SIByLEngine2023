@@ -4,6 +4,7 @@ module;
 export module SE.RHI:RHILayer;
 import :Interface;
 import :VK;
+import SE.Core.Log;
 import SE.Core.System;
 import SE.Platform.Window;
 
@@ -56,7 +57,9 @@ namespace SIByL::RHI
 		/** singleton */
 		static RHILayer* singleton;
 	};
-	
+
+#pragma region RHI_LAYER_IMPL
+
 	RHILayer* RHILayer::singleton = nullptr;
 
 	RHILayer::RHILayer(RHILayerDescriptor const& desc) : desc(desc) {
@@ -72,6 +75,12 @@ namespace SIByL::RHI
 				desc.windowBinded->connectResizeEvent([&](size_t w, size_t h)->void {swapChain->recreate(); });
 			}
 		}
+		else if (desc.backend == RHIBackend::OpenGL) {
+			Core::LogManager::Error("RHILayer :: OpenGL backend is not supported yet.");
+		}
+		else if (desc.backend == RHIBackend::None) {
+			Core::LogManager::Error("RHILayer :: No backend is selected for RHILayer, soft fallback is not supported yet.");
+		}
 	}
 
 	RHILayer::~RHILayer() {
@@ -79,4 +88,6 @@ namespace SIByL::RHI
 			static_cast<Context_VK*>(context.get())->getVkSurfaceKHR() = {};
 		}
 	}
+
+#pragma endregion
 }

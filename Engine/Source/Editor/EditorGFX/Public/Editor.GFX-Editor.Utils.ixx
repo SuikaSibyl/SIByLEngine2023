@@ -16,6 +16,55 @@ import SE.GFX.Core;
 
 namespace SIByL::Editor
 {
+	export inline auto drawBoolControl(std::string const& label, bool& value, float labelWidth = 50) noexcept -> void {
+		ImGuiIO& io = ImGui::GetIO();
+		auto boldFont = io.Fonts->Fonts[0];
+		ImGui::PushID(label.c_str());
+		ImGui::Columns(2);
+		// First Column
+		{	ImGui::SetColumnWidth(0, labelWidth);
+			ImGui::Text(label.c_str());
+			ImGui::NextColumn(); }
+		// Second Column
+		{	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{ 0,0 });
+			ImGui::Checkbox(label.c_str(), &value);
+			ImGui::PopStyleVar();
+		}
+		ImGui::Columns(1);
+		ImGui::PopID();
+	}
+
+	export inline auto drawFloatControl(std::string const& label, float& value, float resetValue = 0, float columeWidth = 100) noexcept -> void {
+		ImGuiIO& io = ImGui::GetIO();
+		auto boldFont = io.Fonts->Fonts[0];
+		ImGui::PushID(label.c_str());
+		ImGui::Columns(2);
+		// First Column
+		{	ImGui::SetColumnWidth(0, columeWidth);
+			ImGui::Text(label.c_str());
+			ImGui::NextColumn(); }
+		// Second Column
+		{	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{ 0,0 });
+
+			float lineHeight = GImGui->Font->FontSize + GImGui->Style.FramePadding.y * 2.0f;
+			ImVec2 buttonSize = { lineHeight + 3.0f, lineHeight };
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{ 0.8,0.1f,0.15f,1.0f });
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{ 0.9,0.2f,0.2f,1.0f });
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{ 0.8,0.1f,0.15f,1.0f });
+			ImGui::PushFont(boldFont);
+			if (ImGui::Button("X", buttonSize))
+				value = resetValue;
+			ImGui::PopFont();
+			ImGui::PopStyleColor(3);
+			ImGui::SameLine();
+			ImGui::DragFloat("##x", &value, 0.1f);
+			ImGui::SameLine();
+			ImGui::PopStyleVar();
+		}
+		ImGui::Columns(1);
+		ImGui::PopID();
+	}
+
 	export inline auto drawVec3Control(const std::string& label, Math::vec3& values, float resetValue = 0, float columeWidth = 100) noexcept -> void {
 		ImGuiIO& io = ImGui::GetIO();
 		auto boldFont = io.Fonts->Fonts[0];

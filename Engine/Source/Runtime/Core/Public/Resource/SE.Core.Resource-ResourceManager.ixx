@@ -10,6 +10,7 @@ module;
 #include <unordered_map>
 #include <memory>
 #include <utility>
+#include <concepts>
 export module SE.Core.Resource:ResourceManager;
 import :GUID;
 import :OfflineManage;
@@ -30,6 +31,9 @@ namespace SIByL::Core
 		/** get name */
 		virtual auto getName() const noexcept -> char const* = 0;
 	};
+	/** export resource type concpet */
+	export template <class T>
+	concept StructResource = std::derived_from<T, Resource>;
 
 	export struct IResourcePool {
 		/** virtual destructor */
@@ -40,7 +44,8 @@ namespace SIByL::Core
 		virtual auto getResourceName(GUID guid) const noexcept -> char const* = 0;
 	};
 
-	export template<class T> struct ResourcePool :public IResourcePool {
+	export template <StructResource T>
+	struct ResourcePool :public IResourcePool {
 		/** get the resource */
 		auto getResource(GUID guid) noexcept -> T* {
 			auto iter = resourcePool.find(guid);
@@ -97,7 +102,7 @@ namespace SIByL::Core
 		/** clear all resources */
 		auto clear() noexcept -> void;
 		/** register resource */
-		template <class T>
+		template <StructResource T>
 		auto registerResource() noexcept -> void {
 			char const* typeName = typeid(T).name();
 			resourceTypes.insert({ typeName, nextResourceType });
@@ -106,7 +111,7 @@ namespace SIByL::Core
 			++nextResourceType;
 		}
 		/** get resource type */
-		template <class T>
+		template <StructResource T>
 		auto getResourceType() noexcept -> ResourceType {
 			char const* typeName = typeid(T).name();
 			if (resourceTypes.find(typeName) == resourceTypes.end())
@@ -114,22 +119,22 @@ namespace SIByL::Core
 			return resourceTypes[typeName];
 		}
 		/** add resource */
-		template <class T>
+		template <StructResource T>
 		auto addResource(GUID guid, T && resource) noexcept -> void {
 			this->getResourcePool<T>()->insertResource(guid, std::move(resource));
 		}
 		/** remove resource */
-		template <class T>
+		template <StructResource T>
 		auto removeResource(GUID guid) noexcept -> void {
 			this->getResourcePool<T>()->removeResource(guid);
 		}
 		/** get resource */
-		template <class T>
+		template <StructResource T>
 		auto getResource(GUID guid) noexcept -> T* {
 			return this->getResourcePool<T>()->getResource(guid);
 		}
 		/** get resource */
-		template <class T>
+		template <StructResource T>
 		auto requestRuntimeGUID() noexcept -> GUID {
 			char const* typeName = typeid(T).name();
 			std::string str = std::string(typeName) + std::to_string(runtimeResourceCounters[typeName]);
@@ -164,7 +169,7 @@ namespace SIByL::Core
 		/** next resource type */
 		ResourceType nextResourceType = 0;
 		/** get resource poo; */
-		template <class T>
+		template <StructResource T>
 		auto getResourcePool() noexcept -> ResourcePool<T>* {
 			char const* typeName = typeid(T).name();
 			return static_cast<ResourcePool<T>*>(resourcePools[typeName].get());

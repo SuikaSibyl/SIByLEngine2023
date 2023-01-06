@@ -22,8 +22,11 @@ namespace SIByL::Editor
 			layer->getWidget<Editor::SceneWidget>()->gameobjectInspector.registerFragment<Editor::TagComponentFragment>();
 			layer->getWidget<Editor::SceneWidget>()->gameobjectInspector.registerFragment<Editor::TransformComponentFragment>();
 			layer->getWidget<Editor::SceneWidget>()->gameobjectInspector.registerFragment<Editor::MeshReferenceComponentFragment>();
+			layer->getWidget<Editor::SceneWidget>()->gameobjectInspector.registerFragment<Editor::MeshRendererComponentFragment>();
+			layer->getWidget<Editor::SceneWidget>()->gameobjectInspector.registerFragment<Editor::CameraComponentFragment>();
 
 			layer->getWidget<Editor::InspectorWidget>()->resourceViewer.registerElucidator<Editor::TextureElucidator>("struct SIByL::GFX::Texture");
+			layer->getWidget<Editor::InspectorWidget>()->resourceViewer.registerElucidator<Editor::MaterialElucidator>("struct SIByL::GFX::Material");
 
 			layer->getWidget<Editor::ContentWidget>()->inspectorWidget = layer->getWidget<Editor::InspectorWidget>();
 			layer->getWidget<Editor::ContentWidget>()->reigsterIconResources();

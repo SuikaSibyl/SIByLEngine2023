@@ -181,9 +181,6 @@
     <ProjectReference Include="..\Engine\Source\Runtime\SRenderer\SRenderer.vcxproj">
       <Project>{d136e01f-5c94-40fd-b7fd-0583ff49334e}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\Engine\Source\Runtime\Tracer\Tracer.vcxproj">
-      <Project>{2b8cdd09-aa57-4f5f-ab1b-6595ba7d1528}</Project>
-    </ProjectReference>
     <ProjectReference Include="..\Engine\Source\Runtime\Utility\Utility.vcxproj">
       <Project>{ca7677d2-d5fa-40c5-8d64-3c2b3c5c96bb}</Project>
     </ProjectReference>

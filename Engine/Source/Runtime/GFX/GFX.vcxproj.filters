@@ -15,55 +15,25 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Public\Core\Manager\SE.GFX.Core-GFXManager.ixx">
+    <ClCompile Include="Public\Core\SE.GFX.Core-Loader.MeshLoader.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-Resources.Mesh.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Core\Component\SE.GFX.Core-Components.MeshReference.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-Resources.Material.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-Resources.Texture.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Core\Component\SE.GFX.Core-Components.MeshRenderer.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-Resources.Scene.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-Resources.Sampler.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-Resources.ShaderModule.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-Loader.MeshLoader.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-Loader.SceneNodeLoader.ixx">
+    <ClCompile Include="Public\Core\SE.GFX.Core-Loader.SceneNodeLoader.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\RDG\SE.GFX.RDG.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-Resources.Buffer.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-Resources.ASGroup.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Core\Resource\SE.GFX.Core-SerializeUtils.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Core\Component\SE.GFX.Core-Components.Camera.ixx">
+    <ClCompile Include="Public\Core\SE.GFX.Core-SerializeUtils.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Core\SE.GFX.Core.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Core\SE.GFX.Core-GFXConfig.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Core\SE.GFX.Core-Main.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

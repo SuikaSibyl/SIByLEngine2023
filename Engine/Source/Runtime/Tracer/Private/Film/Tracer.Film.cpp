@@ -3,7 +3,6 @@ module;
 #include <cmath>
 #include <memory>
 #include <mutex>
-#include <Core.h>
 module Tracer.Film;
 import SE.Core.Memory;
 import SE.Math.Geometric;
@@ -166,12 +165,12 @@ namespace SIByL::Tracer
 		p1 = Math::min(p1, pixelBounds.pMax);
 		// loop over filter support and add sample to pixel arrays
 		//  precompute x and y filter table offsets
-		int* ifx = (int*)Alloca(int, size_t(p1.x - p0.x));
+		int* ifx = (int*)alloca(sizeof(int) * size_t(p1.x - p0.x));
 		for (int x = p0.x; x < p1.x; ++x) {
 			float fx = std::abs((x - pFilmDiscrete.x) * invFilterRadius.x * filterTableSize);
 			ifx[x - p0.x] = std::min((int)std::floor(fx), filterTableSize - 1);
 		}
-		int* ify = (int*)Alloca(int, size_t(p1.y - p0.y));
+		int* ify = (int*)alloca(sizeof(int) * size_t(p1.y - p0.y));
 		for (int y = p0.y; y < p1.y; ++y) {
 			float fy = std::abs((y - pFilmDiscrete.y) * invFilterRadius.y * filterTableSize);
 			ify[y - p0.y] = std::min((int)std::floor(fy), filterTableSize - 1);

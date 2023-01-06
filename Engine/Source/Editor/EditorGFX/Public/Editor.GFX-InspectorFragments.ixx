@@ -9,6 +9,7 @@ module;
 export module SE.Editor.GFX:InspectorFragments;
 import :Utils;
 import :SceneWidget;
+import :ResourceViewer;
 import SE.Math.Geometric;
 import SE.RHI;
 import SE.GFX.Core;
@@ -189,6 +190,80 @@ namespace SIByL::Editor
 
 						ImGui::TreePop();
 					}
+				});
+			}
+		}
+	};
+
+	export struct MeshRendererComponentFragment :public ComponentElucidator {
+		virtual auto elucidateComponent(GameObjectInspector::GameObjectData* data) noexcept -> void {
+			GFX::GameObject* go = data->scene->getGameObject(data->handle);
+			GFX::MeshRenderer* meshRenderer = go->getEntity().getComponent<GFX::MeshRenderer>();
+			if (meshRenderer) {
+				drawComponent<GFX::MeshRenderer>(go, "MeshRenderer", [](GFX::MeshRenderer* component) {
+					uint32_t idx = 0;
+					for (auto& material : component->materials) {
+						if (ImGui::TreeNode(("Material ID: " + std::to_string(idx)).c_str())) {
+							MaterialElucidator::onDrawGui_PTR(material);
+							ImGui::TreePop();
+						}
+						++idx;
+					}
+				});
+			}
+		}
+	};
+
+	export struct CameraComponentFragment :public ComponentElucidator {
+		virtual auto elucidateComponent(GameObjectInspector::GameObjectData* data) noexcept -> void {
+			GFX::GameObject* go = data->scene->getGameObject(data->handle);
+			GFX::CameraComponent* cameraComp = go->getEntity().getComponent<GFX::CameraComponent>();
+			if (cameraComp) {
+				drawComponent<GFX::CameraComponent>(go, "CameraComponent", [](GFX::CameraComponent* component) {
+					if (component->projectType == GFX::CameraComponent::ProjectType::PERSPECTIVE) {
+						ImGui::BulletText("Project Type: PERSPECTIVE");
+						bool isDirty = false;
+						float fovy = component->fovy;
+						drawFloatControl("FoV", fovy, 45);
+						if (fovy != component->fovy) {
+							component->fovy = fovy;
+							isDirty = true;
+						}
+						float near = component->near;
+						drawFloatControl("Near", near, 0.001);
+						if (near != component->near) {
+							component->near = near;
+							isDirty = true;
+						}
+						float far = component->far;
+						drawFloatControl("Far", far, 1000);
+						if (far != component->far) {
+							component->far = far;
+							isDirty = true;
+						}
+						bool isPrimary = component->isPrimaryCamera;
+						drawBoolControl("Is Primary", isPrimary, 100);
+						if (isPrimary != component->isPrimaryCamera) {
+							component->isPrimaryCamera = isPrimary;
+						}
+					}
+					else if (component->projectType == GFX::CameraComponent::ProjectType::ORTHOGONAL) {
+						ImGui::BulletText("Project Type: ORTHOGONAL");
+					}
+
+					//float left_right = 0;
+					//float bottom_top = 0;
+					//ProjectType projectType = ProjectType::PERSPECTIVE;
+					//bool isPrimaryCamera = false;
+
+					//uint32_t idx = 0;
+					//for (auto& material : component->materials) {
+					//	if (ImGui::TreeNode(("Material ID: " + std::to_string(idx)).c_str())) {
+					//		MaterialElucidator::onDrawGui_PTR(material);
+					//		ImGui::TreePop();
+					//	}
+					//	++idx;
+					//}
 				});
 			}
 		}

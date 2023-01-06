@@ -9,14 +9,8 @@ import :GUID;
 namespace SIByL::Core
 {
 	/** Offline Resource ID */
-	export using ORID = GUID;
-
+	export using ORID = uint64_t;
 	export constexpr inline ORID ORID_NONE = uint64_t(-1);
-
-	//export inline auto hashORID(std::filesystem::path const& path) noexcept -> ORID {
-	//	std::hash<std::string> hasher;
-	//	return hasher(path.string());
-	//}
 
 	export inline auto requestORID() noexcept -> ORID {
 		static std::default_random_engine e;

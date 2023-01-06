@@ -13,28 +13,38 @@ import :Logger;
 
 namespace SIByL::Core
 {
-	export struct LogManager :public Manager
-	{
+	/** Log manager is a singleton that helps with logging */
+	export struct LogManager :public Manager {
+		/** start up the manager */
 		virtual auto startUp() noexcept -> void override;
+		/** shut down the manager */
 		virtual auto shutDown() noexcept -> void override;
-
-		static auto get() noexcept -> LogManager* { return singleton; }
-		static auto getLogger() noexcept -> Logger& { return get()->logger; }
-
-		static auto Debug(std::string const& s) noexcept -> void;
-		static auto Log(std::string const& s) noexcept -> void;
-		static auto Warning(std::string const& s) noexcept -> void;
-		static auto Error(std::string const& s) noexcept -> void;
-
+		/** get the singleton */
+		static inline auto get() noexcept -> LogManager* { return singleton; }
+		/** get the global logger */
+		static inline auto getLogger() noexcept -> Logger& { return get()->logger; }
+		/** until to log a debug log */
+		static inline auto Debug(std::string const& s) noexcept -> void;
+		/** until to log a log log */
+		static inline auto Log(std::string const& s) noexcept -> void;
+		/** until to log a warning log */
+		static inline auto Warning(std::string const& s) noexcept -> void;
+		/** until to log a error log */
+		static inline auto Error(std::string const& s) noexcept -> void;
+		/** a callback func for editor to get logged info */
 		std::function<void(std::string const&)> editorCallback = nullptr;
-
 	private:
+		/** the global logger */
 		Logger logger;
+		/** the singleton of LogManager */
 		static LogManager* singleton;
 	};
 
-	auto LogManager::startUp() noexcept -> void
-	{
+#pragma region LOG_MANAGER_IMPL
+
+	LogManager* LogManager::singleton = nullptr;
+
+	auto LogManager::startUp() noexcept -> void {
 #ifdef _NEED_LOG
 		// duplicate initialize
 		if (singleton != nullptr) __debugbreak();
@@ -42,20 +52,19 @@ namespace SIByL::Core
 #endif
 	}
 
-	auto LogManager::shutDown() noexcept -> void
-	{
+	auto LogManager::shutDown() noexcept -> void {
 		singleton = nullptr;
 	}
 
-	auto LogManager::Debug(std::string const& s) noexcept -> void { 
+	inline auto LogManager::Debug(std::string const& s) noexcept -> void {
 #ifdef _NEED_LOG 
-		getLogger().debug(s); 
+		getLogger().debug(s);
 		if (singleton->editorCallback)
 			singleton->editorCallback("[D]" + s);
 #endif 
 	}
 
-	auto LogManager::Log(std::string const& s) noexcept -> void {
+	inline auto LogManager::Log(std::string const& s) noexcept -> void {
 #ifdef _NEED_LOG 
 		getLogger().log(s);
 		if (singleton->editorCallback)
@@ -63,15 +72,15 @@ namespace SIByL::Core
 #endif 
 	}
 
-	auto LogManager::Warning(std::string const& s) noexcept -> void {
+	inline auto LogManager::Warning(std::string const& s) noexcept -> void {
 #ifdef _NEED_LOG 
 		getLogger().warning(s);
 		if (singleton->editorCallback)
 			singleton->editorCallback("[W]" + s);
 #endif 
 	}
-	
-	auto LogManager::Error(std::string const& s) noexcept -> void {
+
+	inline auto LogManager::Error(std::string const& s) noexcept -> void {
 #ifdef _NEED_LOG 
 		getLogger().error(s);
 		if (singleton->editorCallback)
@@ -79,5 +88,5 @@ namespace SIByL::Core
 #endif 
 	}
 
-	LogManager* LogManager::singleton = nullptr;
+#pragma endregion
 }

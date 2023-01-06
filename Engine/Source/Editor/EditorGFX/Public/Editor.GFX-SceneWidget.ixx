@@ -57,8 +57,10 @@ namespace SIByL::Editor
 				if (scene != nullptr) {
 					std::string name = scene->name + ".scene";
 					std::string path = ImGuiLayer::get()->rhiLayer->getRHILayerDescriptor().windowBinded->saveFile(nullptr, name);
-					scene->serialize(path);
-					scene->isDirty = false;
+					if (path != "") {
+						scene->serialize(path);
+						scene->isDirty = false;
+					}
 				}
 			}
 			if (ImGui::Button("Load")) {
@@ -69,15 +71,22 @@ namespace SIByL::Editor
 					//scene->isDirty = false;
 				}
 			}
-			//// Menu - Scene
-			//if (ImGui::BeginMenu("Scene")) {
-			//	// Menu - File - Load
-			//	if (ImGui::MenuItem("New")) {
-			//		hold_scene = MemNew<GFX::Scene>();
-			//		bindScene(hold_scene.get());
-			//	}
-			//	ImGui::EndMenu();
-			//}
+			if (ImGui::BeginMenu("Import")) {
+				// Menu - File - Load
+				if (ImGui::MenuItem("glTF 2.0 (.glb/.gltf)")) {
+					std::string path = ImGuiLayer::get()->rhiLayer->getRHILayerDescriptor().windowBinded->openFile("gltf");
+					//GFX::SceneNodeLoader_obj::loadSceneNode(path, *scene, SRenderer::meshLoadConfig);
+				}
+				if (ImGui::MenuItem("Wavefront(.obj)")) {
+					std::string path = ImGuiLayer::get()->rhiLayer->getRHILayerDescriptor().windowBinded->openFile("obj");
+					//GFX::SceneNodeLoader_obj::loadSceneNode(path, *scene, SRenderer::meshLoadConfig);
+				}
+				ImGui::EndMenu();
+			}
+			if (ImGui::BeginMenu("Export")) {
+
+				ImGui::EndMenu();
+			}
 			//// Menu - File
 			//if (ImGui::BeginMenu("File")) {
 			//	// Menu - File - Load

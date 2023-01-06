@@ -1477,6 +1477,8 @@ namespace SIByL::RHI
 		virtual auto setName(std::string const& name) -> void override;
 		/** get name */
 		virtual auto getName() -> std::string const& override;
+		/** get texture descriptor */
+		virtual auto getDescriptor() -> TextureDescriptor override;
 		// Readonly Attributes
 		// ---------------------------
 		/** readonly width of the texture */
@@ -1766,6 +1768,10 @@ namespace SIByL::RHI
 	
 	auto Texture_VK::getName() -> std::string const& {
 		return name;
+	}
+	
+	auto Texture_VK::getDescriptor() -> TextureDescriptor {
+		return descriptor;
 	}
 
 	auto TextureView_VK::setName(std::string const& name) -> void {

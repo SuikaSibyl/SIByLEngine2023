@@ -1,4 +1,5 @@
 module;
+#include <set>
 #include <vector>
 #include <array>
 export module SE.Core.ECS:SparseSet;
@@ -12,6 +13,8 @@ namespace SIByL::Core
 		auto remove(int x) noexcept -> void;
 		/** search an element */
 		auto search(int x) noexcept -> int;
+		/** get the set of sparse index */
+		auto getSparseSet() noexcept -> std::set<uint64_t>;
 		/** sparse array */
 		std::array<int, MAX_CAPACITY> sparse;
 		/** dense array */
@@ -45,5 +48,10 @@ namespace SIByL::Core
 		if (sparse[x] < livingElementCount && dense[sparse[x]] == x)
 			return sparse[x];
 		return -1;
+	}
+
+	template<int MAX_CAPACITY>
+	auto SparseSet<MAX_CAPACITY>::getSparseSet() noexcept -> std::set<uint64_t> {
+		return std::set<uint64_t>(dense.begin(), dense.begin() + livingElementCount);
 	}
 }

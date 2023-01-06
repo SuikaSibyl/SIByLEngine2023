@@ -1,0 +1,28 @@
+SceneName: new scene
+SceneNodes:
+  - uid: 0
+    parent: 18446744073709551615
+    components:
+      TagComponent: cerberus.obj
+      Transform:
+        translation: [0, 0, 0]
+        eulerAngles: [0, 0, 0]
+        scale: [1, 1, 1]
+      MeshReference:
+        ORID: 1658074404427512668
+  - uid: 1
+    parent: 18446744073709551615
+    components:
+      TagComponent: Camera Object
+      Transform:
+        translation: [0, 0, 0]
+        eulerAngles: [0, 0, 0]
+        scale: [1, 1, 1]
+      CameraComponent:
+        fovy: 45
+        aspect: 1
+        near: 0.100000001
+        far: 100
+        ProjectType: 0
+        IsPrimary: true
+SceneEnd: TRUE

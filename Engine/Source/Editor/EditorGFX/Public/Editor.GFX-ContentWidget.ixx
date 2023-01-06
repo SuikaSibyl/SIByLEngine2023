@@ -30,7 +30,6 @@ namespace SIByL::Editor
             RuntimeResources,
         } source = Source::FileSystem;
 
-        bool openWidget = true;
 		/** icon resources */
 		struct IconResource {
 			Core::GUID back;
@@ -56,7 +55,7 @@ namespace SIByL::Editor
 	};
 
 	auto ContentWidget::onDrawGui() noexcept -> void {
-        if (!ImGui::Begin("Content Browser", &openWidget)) {
+        if (!ImGui::Begin("Content Browser", 0)) {
             ImGui::End();
             return;
         }
@@ -208,9 +207,6 @@ namespace SIByL::Editor
 								&(inspectorWidget->resourceViewer),
 								runtimeResourceInfo.type,
 								GUID));
-							//runtimeResourceInfo.type = pair.first;
-							//runtimeResourceInfo.GUIDs = &pair.second->getAllGUID();
-							//source = Source::RuntimeResources;
 						}
 						if (selectResource) {
 							ImGui::TreePop();

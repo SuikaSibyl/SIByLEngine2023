@@ -1,4 +1,5 @@
 module;
+#include <set>
 #include <vector>
 #include <cstdint>
 #include <bitset>
@@ -7,7 +8,9 @@ module;
 #include <typeinfo>
 #include <string>
 #include <unordered_map>
+#include <algorithm>
 #include <memory>
+#include <iterator>
 #include <utility>
 #include <functional>
 export module SE.Core.ECS:ECS;
@@ -101,11 +104,21 @@ namespace SIByL::Core
 		virtual auto destroyEntity(EntityHandle entity) noexcept -> void override {
 			removeData(entity);
 		}
+		/** get corresponding entities */
+		virtual auto getEntities() noexcept -> std::set<EntityHandle> {
+			return componentSparseSet.getSparseSet();
+		}
 	private:
 		/** components memory pool */
 		std::vector<T> componentPool = {};
 		/** component to find dense index for entities */
 		SparseSet<MAX_ENTITIES> componentSparseSet = {};
+	};
+
+	export template<class... Params> struct View {
+		std::vector<std::tuple<EntityHandle, Params&...>> internal_tuple;
+		auto begin()	{ return internal_tuple.begin(); }
+		auto end()		{ return internal_tuple.end(); }
 	};
 
 	export struct ComponentManager :public Manager {
@@ -131,13 +144,11 @@ namespace SIByL::Core
 			componentPools[typeName] = std::make_unique<ComponentPool<T>>();
 			++nextComponentType;
 			SerializeFn serializeFunc = [](void* emitter, EntityHandle const& handle)->void {
-				auto func = std::bind(&(T::serialize), emitter, handle);
-				func();
+				std::invoke(&(T::serialize), emitter, handle);
 			};
 			serializeFuncs.push_back(serializeFunc);
 			DeserializeFn deserializeFunc = [](void* emitter, EntityHandle const& handle)->void {
-				auto func = std::bind(&(T::deserialize), emitter, handle);
-				func();
+				std::invoke(&(T::deserialize), emitter, handle);
 			};
 			deserializeFuncs.push_back(deserializeFunc);
 		}
@@ -181,6 +192,15 @@ namespace SIByL::Core
 				if (EntityManager::get()->getSignature(entt).test(componentTypes[iter.first]))
 					iter.second.get()->destroyEntity(entt);
 		}
+		/** get the view of multiple components */
+		template<class... Params>
+		auto view() noexcept -> View<Params...>;
+		/** get component poo; */
+		template <class T>
+		auto getComponentPool() noexcept -> ComponentPool<T>* {
+			char const* typeName = typeid(T).name();
+			return static_cast<ComponentPool<T>*>(componentPools[typeName].get());
+		}
 	private:
 		/* singleton */
 		static ComponentManager* singleton;
@@ -190,12 +210,6 @@ namespace SIByL::Core
 		std::unordered_map<char const*, std::unique_ptr<IComponentPool>> componentPools = {};
 		/** next component type */
 		ComponentType nextComponentType = 0;
-		/** get component poo; */
-		template <class T>
-		auto getComponentPool() noexcept -> ComponentPool<T>* {
-			char const* typeName = typeid(T).name();
-			return static_cast<ComponentPool<T>*>(componentPools[typeName].get());
-		}
 		/* */
 		std::vector<SerializeFn> serializeFuncs;
 		std::vector<DeserializeFn> deserializeFuncs;
@@ -277,5 +291,66 @@ namespace SIByL::Core
 	}
 
 #pragma endregion
+
+	namespace Internal {
+		template <class T>
+		inline auto getEntitiesHaveComponent(ComponentManager* manager) noexcept -> std::set<EntityHandle> {
+			return manager->getComponentPool<T>()->getEntities();
+		}
+
+		template<class T>
+		inline auto getEntitiesHaveComponents(ComponentManager* manager) noexcept -> std::set<EntityHandle> {
+			return getEntitiesHaveComponent<T>(manager);
+		}
+
+		template<class T, class... Us>
+		requires (sizeof...(Us) != 0)
+		inline auto getEntitiesHaveComponents(ComponentManager* manager) noexcept -> std::set<EntityHandle> {
+			std::set<EntityHandle> set_x = getEntitiesHaveComponent<T>(manager);
+			std::set<EntityHandle> set_y = getEntitiesHaveComponents<Us ...>(manager);
+			std::set<EntityHandle> set_r;
+			std::set_intersection(set_x.begin(), set_x.end(), set_y.begin(), set_y.end(), std::inserter(set_r, set_r.begin()));
+			return set_r;
+		}
+	
+		template <class T>
+		inline auto getComponentFromEntities(ComponentManager* manager, std::set<EntityHandle> const& entities) noexcept -> std::vector<T*> {
+			std::vector<T*> components = {};
+			for (auto entity : entities)
+				components.emplace_back((manager->getComponent<T>(entity)));
+			return components;
+		}
+
+		template <class T>
+		inline auto getComponentsFromEntities(ComponentManager* manager, std::set<EntityHandle> const& entities) noexcept -> std::vector<std::tuple<T&>> {
+			std::vector<T*> components = getComponentFromEntities<T>(manager, entities);
+			std::vector<std::tuple<T&>> tuples = {};
+			for (auto comp : components)
+				tuples.emplace_back(std::tuple<T&>{*comp});
+			return tuples;
+		}
+
+		template <class T, class... Us>
+		requires (sizeof...(Us) != 0)
+		inline auto getComponentsFromEntities(ComponentManager* manager, std::set<EntityHandle> const& entities) noexcept -> std::vector<std::tuple<T&, Us&...>> {
+			std::vector<std::tuple<T&>> tuple_l = getComponentsFromEntities<T>(manager, entities);
+			std::vector<std::tuple<Us&...>> tuple_r = getComponentsFromEntities<Us...>(manager, entities);
+			std::vector<std::tuple<T&, Us&...>> tuples = {};
+			for (int i = 0; i < entities.size(); ++i)
+				tuples.emplace_back(std::tuple_cat(tuple_l[i], tuple_r[i]));
+			return tuples;
+		}
+	}
+
+	template<class... Params>
+	auto ComponentManager::view() noexcept -> View<Params...> {
+		std::set<EntityHandle> entities = Internal::getEntitiesHaveComponents<Params...>(this);
+		View<Params...> view = {};
+		std::vector<std::tuple<Params&...>> tuple_comp = Internal::getComponentsFromEntities<Params...>(this, entities);
+		size_t idx = 0;
+		for (auto entity : entities)
+			view.internal_tuple.emplace_back(std::tuple_cat(std::make_tuple(entity), tuple_comp[idx++]));
+		return view;
+	}
 
 }

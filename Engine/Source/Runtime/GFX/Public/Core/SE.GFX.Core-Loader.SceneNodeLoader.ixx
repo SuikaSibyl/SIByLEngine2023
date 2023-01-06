@@ -12,11 +12,10 @@ module;
 #include <tinygltf/tiny_gltf.h>
 #include <tiny_obj_loader.h>
 export module SE.GFX.Core:SceneNodeLoader;
-import :Mesh;
-import :Scene;
+import :SerializeUtils;
+import :GFXConfig;
+import :Main;
 import :MeshLoader;
-import :MeshReference;
-import :GFXManager;
 import SE.Core.Log;
 import SE.Core.ECS;
 import SE.Core.Memory;
