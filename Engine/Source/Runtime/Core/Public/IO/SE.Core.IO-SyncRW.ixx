@@ -13,9 +13,12 @@ namespace SIByL::Core
 		std::ifstream ifs(path.string().c_str(), std::ifstream::binary);
 		if (ifs.is_open()) {
 			ifs.seekg(0, std::ios::end);
-			buffer = Buffer(ifs.tellg());
+			size_t size = size_t(ifs.tellg());
+			buffer = Buffer(size + 1);
+			buffer.size = size;
 			ifs.seekg(0);
-			ifs.read(reinterpret_cast<char*>(buffer.data), buffer.size);
+			ifs.read(reinterpret_cast<char*>(buffer.data), size);
+			((char*)buffer.data)[size] = '\0';
 			ifs.close();
 		}
 		else {

@@ -9,6 +9,7 @@ module;
 #include <functional>
 #include <compare>
 #include <filesystem>
+#include <initializer_list>
 #include <imgui_internal.h>
 export module SE.Editor.GFX:ContentWidget;
 import :InspectorWidget;
@@ -29,7 +30,24 @@ namespace SIByL::Editor
             FileSystem,
             RuntimeResources,
         } source = Source::FileSystem;
-
+		/** resources registry */
+		struct ResourceRegistry {
+			std::string resourceName;
+			Core::GUID	resourceIcon;
+			std::vector<std::string> possibleExtensions;
+			using GUIDFinderFn = std::function<Core::GUID(Core::ORID)>;
+			GUIDFinderFn guidFinder = nullptr;
+			inline auto matchExtensions(std::string const& ext) const noexcept -> bool {
+				bool match = false;
+				for (auto const& e : possibleExtensions)
+					if (e == ext) match = true;
+				return match;
+			}
+		};
+		std::vector<ResourceRegistry> resourceRegistries;
+		/** register a resource type */
+		template <Core::StructResource T>
+		auto registerResource(Core::GUID icon, std::initializer_list<std::string> extensions, ResourceRegistry::GUIDFinderFn guidFinder = nullptr) noexcept -> void;
 		/** icon resources */
 		struct IconResource {
 			Core::GUID back;
@@ -53,6 +71,11 @@ namespace SIByL::Editor
 		/** inspector widget to show gameobject detail */
 		InspectorWidget* inspectorWidget = nullptr;
 	};
+
+	template <Core::StructResource T>
+	auto ContentWidget::registerResource(Core::GUID icon, std::initializer_list<std::string> extensions, ResourceRegistry::GUIDFinderFn guidFinder) noexcept -> void {
+		resourceRegistries.emplace_back(ResourceRegistry{ typeid(T).name(), icon, std::vector<std::string>(extensions), guidFinder });
+	}
 
 	auto ContentWidget::onDrawGui() noexcept -> void {
         if (!ImGui::Begin("Content Browser", 0)) {
@@ -144,22 +167,55 @@ namespace SIByL::Editor
 								}
 							}
 							// for each subdir
+							std::vector<std::filesystem::directory_entry> path_sorted = {};
+							std::vector<std::filesystem::directory_entry> folder_pathes = {};
+							std::vector<std::vector<std::filesystem::directory_entry>> other_pathes(resourceRegistries.size());
+							std::vector<std::filesystem::directory_entry> unkown_pathes = {};
 							for (auto& directoryEntry : std::filesystem::directory_iterator(currentDirectory)) {
+								const auto& path = directoryEntry.path();
+								std::string filenameExtension = path.extension().string();
+								if (directoryEntry.is_directory()) {
+									folder_pathes.push_back(directoryEntry);
+								}
+								else {
+									size_t idx = 0;
+									for (auto const& entry : resourceRegistries) {
+										if (entry.matchExtensions(filenameExtension)) {
+											other_pathes[idx].push_back(directoryEntry);
+											break;
+										}
+										++idx;
+									}
+								}
+							}
+							path_sorted.insert(path_sorted.end(), folder_pathes.begin(), folder_pathes.end());
+							for (auto& vec : other_pathes) 
+								path_sorted.insert(path_sorted.end(), vec.begin(), vec.end());
+							path_sorted.insert(path_sorted.end(), unkown_pathes.begin(), unkown_pathes.end());
+							for (auto& directoryEntry : path_sorted) {
 								ImGui::TableSetColumnIndex(iconIdx);
 								const auto& path = directoryEntry.path();
 								std::string pathString = path.string();
 								auto relativePath = std::filesystem::relative(directoryEntry.path(), root);
 								std::string relativePathString = relativePath.string();
 								std::string filenameString = relativePath.filename().string();
-
-								if (filenameString == ".adb" || filenameString == ".iadb")
-									continue;
+								std::string filenameExtension = relativePath.extension().string();
 
 								ImGui::PushID(filenameString.c_str());
 								// If is directory
 								ImGuiTexture* icon = Editor::TextureUtils::getImGuiTexture(icons.file);
+								ResourceRegistry const* entry_ptr = nullptr;
 								if (directoryEntry.is_directory()) {
 									icon = Editor::TextureUtils::getImGuiTexture(icons.folder);
+								}
+								else {
+									for (auto const& entry : resourceRegistries) {
+										if (entry.matchExtensions(filenameExtension)) {
+											icon = Editor::TextureUtils::getImGuiTexture(entry.resourceIcon);
+											entry_ptr = &entry;
+											break;
+										}
+									}
 								}
 
 								ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
@@ -176,6 +232,17 @@ namespace SIByL::Editor
 								if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
 									if (directoryEntry.is_directory()) {
 										currentDirectory /= path.filename();
+									}
+									else if (entry_ptr && entry_ptr->guidFinder) {
+										Core::ORID orid = Core::ResourceManager::get()->database.findResourcePath(path.string().c_str());
+										if (orid != Core::ORID_NONE) {
+											Core::GUID guid = entry_ptr->guidFinder(orid);
+											inspectorWidget->setCustomDraw(std::bind(
+												&(ResourceViewer::onDrawGui),
+												&(inspectorWidget->resourceViewer),
+												entry_ptr->resourceName.c_str(),
+												guid));
+										}
 									}
 								}
 								ImGui::TextWrapped(filenameString.c_str());
@@ -221,19 +288,22 @@ namespace SIByL::Editor
 	}
 
 	auto ContentWidget::reigsterIconResources() noexcept -> void {
-		std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> img = nullptr;
-		icons.back = Core::hashGUID("../Engine/Binaries/Runtime/icons/back.png");
-		icons.folder = Core::hashGUID("../Engine/Binaries/Runtime/icons/folder.png");
-		icons.file = Core::hashGUID("../Engine/Binaries/Runtime/icons/file.png");
-		img = Image::PNG::fromPNG("../Engine/Binaries/Runtime/icons/back.png");
-		GFX::GFXManager::get()->registerTextureResource(icons.back, img.get());
-		Core::ResourceManager::get()->getResource<GFX::Texture>(icons.back)->texture->setName("editor_icon_back");
-		img = Image::PNG::fromPNG("../Engine/Binaries/Runtime/icons/folder.png");
-		GFX::GFXManager::get()->registerTextureResource(icons.folder, img.get());
-		Core::ResourceManager::get()->getResource<GFX::Texture>(icons.folder)->texture->setName("editor_icon_folder");
-		img = Image::PNG::fromPNG("../Engine/Binaries/Runtime/icons/file.png");
-		GFX::GFXManager::get()->registerTextureResource(icons.file, img.get());
-		Core::ResourceManager::get()->getResource<GFX::Texture>(icons.file)->texture->setName("editor_icon_file");
+		icons.back		= GFX::GFXManager::get()->registerTextureResource("../Engine/Binaries/Runtime/icons/back.png");
+		icons.folder	= GFX::GFXManager::get()->registerTextureResource("../Engine/Binaries/Runtime/icons/folder.png");
+		icons.file		= GFX::GFXManager::get()->registerTextureResource("../Engine/Binaries/Runtime/icons/file.png");
+		icons.image		= GFX::GFXManager::get()->registerTextureResource("../Engine/Binaries/Runtime/icons/image.png");
+		icons.material	= GFX::GFXManager::get()->registerTextureResource("../Engine/Binaries/Runtime/icons/material.png");
+		icons.mesh		= GFX::GFXManager::get()->registerTextureResource("../Engine/Binaries/Runtime/icons/mesh.png");
+		icons.scene		= GFX::GFXManager::get()->registerTextureResource("../Engine/Binaries/Runtime/icons/scene.png");
+		icons.shader	= GFX::GFXManager::get()->registerTextureResource("../Engine/Binaries/Runtime/icons/shader.png");
+		Core::ResourceManager::get()->getResource<GFX::Texture>(icons.back	  )->texture->setName("editor_icon_back");
+		Core::ResourceManager::get()->getResource<GFX::Texture>(icons.folder  )->texture->setName("editor_icon_folder");
+		Core::ResourceManager::get()->getResource<GFX::Texture>(icons.file	  )->texture->setName("editor_icon_file");
+		Core::ResourceManager::get()->getResource<GFX::Texture>(icons.image	  )->texture->setName("editor_icon_image");
+		Core::ResourceManager::get()->getResource<GFX::Texture>(icons.material)->texture->setName("editor_icon_material");
+		Core::ResourceManager::get()->getResource<GFX::Texture>(icons.mesh	  )->texture->setName("editor_icon_mesh");
+		Core::ResourceManager::get()->getResource<GFX::Texture>(icons.scene	  )->texture->setName("editor_icon_scene");
+		Core::ResourceManager::get()->getResource<GFX::Texture>(icons.shader  )->texture->setName("editor_icon_shader");
 	}
 
 }

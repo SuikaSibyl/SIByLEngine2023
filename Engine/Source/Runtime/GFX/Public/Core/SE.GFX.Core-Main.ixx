@@ -1223,12 +1223,14 @@ namespace SIByL::GFX
 		std::filesystem::path relative_path = std::filesystem::relative(path, current_path);
 		std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> img = ImageLoader::load_rgba8(std::filesystem::path(filepath));
 		Core::GUID img_guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
-		Core::ORID img_orid = Core::requestORID();
+		Core::ORID img_orid = Core::ResourceManager::get()->database.mapResourcePath(filepath);
+		Core::ResourceManager::get()->database.registerResource(img_orid, img_guid);
 		GFX::GFXManager::get()->registerTextureResource(img_guid, img.get());
 		GFX::Texture* texture = Core::ResourceManager::get()->getResource<GFX::Texture>(img_guid);
 		texture->orid = img_orid;
 		texture->guid = img_guid;
 		texture->resourcePath = relative_path.string();
+		texture->serialize();
 		return img_guid;
 	}
 
@@ -1267,7 +1269,6 @@ namespace SIByL::GFX
 			GFX::Texture* texture_ptr = Core::ResourceManager::get()->getResource<GFX::Texture>(guid);
 			texture_ptr->orid = orid;
 			texture_ptr->resourcePath = texture.resourcePath.value();
-			Core::ResourceManager::get()->addResource(guid, std::move(texture));
 		}
 		return guid;
 	}

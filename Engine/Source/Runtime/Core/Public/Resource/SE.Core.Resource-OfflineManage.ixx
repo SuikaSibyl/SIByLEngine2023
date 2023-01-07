@@ -3,8 +3,13 @@ module;
 #include <filesystem>
 #include <random>
 #include <functional>
+#include <yaml-cpp/yaml.h>
+#include <yaml-cpp/node/node.h>
 export module SE.Core.Resource:OfflineManage;
 import :GUID;
+import SE.Core.IO;
+import SE.Core.Log;
+import SE.Core.Memory;
 
 namespace SIByL::Core
 {
@@ -49,6 +54,70 @@ namespace SIByL::Core
 			if (iter == mapper.end()) return Core::ORID_NONE;
 			else return iter->second;
 		}
+		/** find ORID for a path */
+		auto findResourcePath(char const* path_c) noexcept -> Core::ORID {
+			std::filesystem::path path(path_c);
+			std::filesystem::path current_path = std::filesystem::current_path();
+			std::filesystem::path relative_path = std::filesystem::relative(path, current_path);
+			auto iter = resource_mapper.find(relative_path.string());
+			if (iter == resource_mapper.end()) {
+				return Core::ORID_NONE;
+			}
+			else return iter->second;
+		}
+		/** find ORID for a path or create one */
+		auto mapResourcePath(char const* path_c) noexcept -> Core::ORID {
+			std::filesystem::path path(path_c);
+			std::filesystem::path current_path = std::filesystem::current_path();
+			std::filesystem::path relative_path = std::filesystem::relative(path, current_path);
+			auto iter = resource_mapper.find(relative_path.string());
+			if (iter == resource_mapper.end()) {
+				Core::ORID orid = requestORID();;
+				resource_mapper[relative_path.string()] = orid;
+				return orid;
+			}
+			else return iter->second;
+		}
 		std::unordered_map<Core::ORID, Core::GUID> mapper;
+		std::unordered_map<std::string, Core::ORID> resource_mapper;
+		/** serialize */
+		auto serialize() noexcept -> void {
+			std::filesystem::path path = "./bin/.adb";
+			YAML::Emitter out;
+			out << YAML::BeginMap;
+			out << YAML::Key << "Prefix" << YAML::Value << "AssetDatabase";
+			out << YAML::Key << "Entries" << YAML::Value << YAML::BeginSeq;
+			for (auto& [name, ORID] : resource_mapper) {
+				out << YAML::BeginMap;
+				out << YAML::Key << "PATH" << YAML::Value << name;
+				out << YAML::Key << "ORID" << YAML::Value << ORID;
+				out << YAML::EndMap;
+			}
+			out << YAML::EndSeq;
+			out << YAML::Key << "End" << YAML::Value << "TRUE";
+			Core::Buffer adb_proxy;
+			adb_proxy.data = (void*)out.c_str();
+			adb_proxy.size = out.size();
+			Core::syncWriteFile(path, adb_proxy);
+			adb_proxy.data = nullptr;
+		}
+		/** deserialize */
+		auto deserialize() noexcept -> void {
+			std::filesystem::path path = "./bin/.adb";
+			Core::Buffer adb_proxy;
+			Core::syncReadFile(path, adb_proxy);
+			if (adb_proxy.size != 0) {
+				YAML::NodeAoS data = YAML::Load(reinterpret_cast<char*>(adb_proxy.data));
+				// check scene name
+				if (!data["Prefix"]) {
+					Core::LogManager::Error("GFX :: Asset Database not found when deserializing {0}");
+					return;
+				}
+				auto entries = data["Entries"];
+				for (auto node : entries) {
+					resource_mapper[node["PATH"].as<std::string>()] = node["ORID"].as<Core::ORID>();
+				}
+			}
+		}
 	};
 }

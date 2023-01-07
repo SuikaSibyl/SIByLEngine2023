@@ -97,6 +97,8 @@ namespace SIByL::Core
 	export struct ResourceManager :public Manager {
 		/** start up resource manager singleton */
 		virtual auto startUp() noexcept -> void override;
+		/* shut down the manager */
+		virtual auto shutDown() noexcept -> void override;
 		/** get the singleton */
 		static auto get() noexcept -> ResourceManager*;
 		/** clear all resources */
@@ -182,6 +184,11 @@ namespace SIByL::Core
 
 	auto ResourceManager::startUp() noexcept -> void {
 		singleton = this;
+		database.deserialize();
+	}
+	
+	auto ResourceManager::shutDown() noexcept -> void {
+		database.serialize();
 	}
 
 	auto ResourceManager::get() noexcept -> ResourceManager* {

@@ -15,14 +15,14 @@ SceneNodes:
     components:
       TagComponent: Camera Object
       Transform:
-        translation: [0, 0, 0]
-        eulerAngles: [0, 0, 0]
+        translation: [-6.81902742, 1.5504328, -15.2004814]
+        eulerAngles: [-0.148881897, 1.04959345, 0]
         scale: [1, 1, 1]
       CameraComponent:
-        fovy: 45
+        fovy: 22
         aspect: 1
         near: 0.100000001
-        far: 100
+        far: 1000
         ProjectType: 0
         IsPrimary: true
 SceneEnd: TRUE

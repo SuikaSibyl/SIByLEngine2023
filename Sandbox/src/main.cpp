@@ -70,7 +70,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		RHI::Device* device = rhiLayer->getDevice();
 		RHI::SwapChain* swapchain = rhiLayer->getSwapChain();
 
-		//mat.textures["normal_bump"] = GFX::GFXManager::get()->registerTextureResource("P:/GitProjects/SIByLEngine2022/Sandbox/content/textures/Cerberus_A.png");
+		//GFX::GFXManager::get()->registerTextureResource("P:/GitProjects/SIByLEngine2022/Sandbox/content/viking_room.png");
 		//Core::ResourceManager::get()->getResource<GFX::Texture>(mat.textures["normal_bump"])->serialize();
 		
 		
@@ -146,6 +146,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		auto view = Core::ComponentManager::get()->view<GFX::CameraComponent>();
 		for (auto& [entity, camera] : view) {
 			if (camera.isPrimaryCamera) {
+				camera.aspect = 1.f * 800 / 600;
 				cameraController.bindTransform(scene.getGameObject(entity)->getEntity().getComponent<GFX::TransformComponent>());
 				srenderer->updateCamera(*(scene.getGameObject(entity)->getEntity().getComponent<GFX::TransformComponent>()), camera);
 				break;

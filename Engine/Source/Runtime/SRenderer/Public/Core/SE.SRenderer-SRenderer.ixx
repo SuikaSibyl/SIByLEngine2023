@@ -495,7 +495,7 @@ namespace SIByL
 		RHI::MultiFrameFlights* multiFrameFlights = GFX::GFXManager::get()->rhiLayer->getMultiFrameFlights();
 		GlobalUniforms globalUni;
 		globalUni.view = Math::transpose(Math::lookAt(transform.translation, transform.translation + transform.getRotatedForward(), Math::vec3(0, 1, 0)).m);
-		globalUni.proj = Math::transpose(Math::perspective(22.f, 1.f * 800 / 600, 0.1f, 1000.f).m);
+		globalUni.proj = Math::transpose(Math::perspective(camera.fovy, camera.aspect, camera.near, camera.far).m);
 		globalUni.viewInverse = Math::inverse(globalUni.view);
 		globalUni.projInverse = Math::inverse(globalUni.proj);
 		rdgraph->getStructuredUniformBuffer<GlobalUniforms>("global_uniform_buffer")->setStructure(globalUni, multiFrameFlights->getFlightIndex());

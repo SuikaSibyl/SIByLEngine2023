@@ -1,5 +1,6 @@
 module;
 #include <compare>
+#include <functional>
 #include <filesystem>
 export module SE.Editor.Config;
 import SE.Core.Resource;
@@ -30,6 +31,13 @@ namespace SIByL::Editor
 
 			layer->getWidget<Editor::ContentWidget>()->inspectorWidget = layer->getWidget<Editor::InspectorWidget>();
 			layer->getWidget<Editor::ContentWidget>()->reigsterIconResources();
+
+			Editor::ContentWidget* contentWidget = layer->getWidget<Editor::ContentWidget>();
+			contentWidget->registerResource<GFX::Scene >		(contentWidget->icons.scene, {".scene"}, nullptr);
+			contentWidget->registerResource<GFX::Mesh>			(contentWidget->icons.mesh, {".obj", ".fbx", ".gltf"}, nullptr);
+			contentWidget->registerResource<GFX::Texture>		(contentWidget->icons.image, {".jpg", ".png"},  std::bind(&GFX::GFXManager::requestOfflineTextureResource, GFX::GFXManager::get(), std::placeholders::_1));
+			contentWidget->registerResource<GFX::ShaderModule>	(contentWidget->icons.shader, {".glsl", "spv"}, nullptr);
+			contentWidget->registerResource<GFX::Material>		(contentWidget->icons.material, { ".mat" }, std::bind(&GFX::GFXManager::requestOfflineMaterialResource, GFX::GFXManager::get(), std::placeholders::_1));
 		}
 	};
 }
