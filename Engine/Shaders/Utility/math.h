@@ -5,11 +5,46 @@ const float k_inf = 1.0 / 0.0;
 
 /** float value of PI */
 const float k_pi = 3.14159265;
+const float k_pi_times_2 = k_pi * 2;
 
 const float k_pi_over_2 = k_pi / 2;
 const float k_pi_over_4 = k_pi / 4;
 
 const float k_inv_pi = 1. / k_pi;
 const float k_inv_2_pi = 1. / (2*k_pi);
+
+float atan2(in float y, in float x) {
+    return x == 0.0 ? sign(y)*k_pi/2 : atan(y, x);
+}
+
+/**
+* Numerically stable quadratic equation solver at^2 + bt + c = 0
+* @return:  false when it can't find solutions.
+* @ref:     https://people.csail.mit.edu/bkph/articles/Quadratics.pdf
+*/
+bool quadratic(
+    in float a, in float b, in float c, 
+    out float t0, out float t1)
+{
+    // Degenerated case
+    if (a == 0) {
+        if (b == 0)
+            return false;
+        t0 = t1 = -c / b;
+        return true;
+    }
+    float discriminant = b * b - 4 * a * c;
+    if (discriminant < 0)
+        return false;
+    float root_discriminant = sqrt(discriminant);
+    if (b >= 0) {
+        t0 = (- b - root_discriminant) / (2 * a);
+        t1 = 2 * c / (- b - root_discriminant);
+    } else {
+        t0 = 2 * c / (- b + root_discriminant);
+        t1 = (- b + root_discriminant) / (2 * a);
+    }
+    return true;
+}
 
 #endif

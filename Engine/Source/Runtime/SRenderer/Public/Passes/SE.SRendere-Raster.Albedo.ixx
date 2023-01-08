@@ -83,16 +83,16 @@ namespace SIByL
 						int width = 800, height = 600;
 						passEncoders[index]->setViewport(0, 0, width, height, 0, 1);
 						passEncoders[index]->setScissorRect(0, 0, width, height);
-						//passEncoders[index]->setVertexBuffer(0, renderer->sceneDataPack.vertex_buffer.get(),
-						//	0, renderer->sceneDataPack.vertex_buffer->size());
-						passEncoders[index]->setIndexBuffer(renderer->sceneDataPack.index_buffer.get(),
-							RHI::IndexFormat::UINT32_T, 0, renderer->sceneDataPack.index_buffer->size());
-						passEncoders[index]->setBindGroup(0, rtBindGroup[index], 0, 0);
-						uint32_t geometry_idx = 0;
-						for (auto& geometry : geometries) {
-							passEncoders[index]->pushConstants(&geometry_idx, (uint32_t)RHI::ShaderStages::VERTEX, 0, sizeof(uint32_t));
-							passEncoders[index]->drawIndexed(geometry.indexSize, 1, geometry.indexOffset, geometry.vertexOffset, 0);
-							geometry_idx++;
+						if (renderer->sceneDataPack.geometry_buffer_cpu.size() > 0) {
+							passEncoders[index]->setIndexBuffer(renderer->sceneDataPack.index_buffer.get(),
+								RHI::IndexFormat::UINT32_T, 0, renderer->sceneDataPack.index_buffer->size());
+							passEncoders[index]->setBindGroup(0, rtBindGroup[index], 0, 0);
+							uint32_t geometry_idx = 0;
+							for (auto& geometry : geometries) {
+								passEncoders[index]->pushConstants(&geometry_idx, (uint32_t)RHI::ShaderStages::VERTEX, 0, sizeof(uint32_t));
+								passEncoders[index]->drawIndexed(geometry.indexSize, 1, geometry.indexOffset, geometry.vertexOffset, 0);
+								geometry_idx++;
+							}
 						}
 						passEncoders[index]->end();
 					};

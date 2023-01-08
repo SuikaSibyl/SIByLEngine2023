@@ -10,17 +10,21 @@ SceneNodes:
         scale: [1, 1, 1]
       MeshReference:
         ORID: 1658074404427512668
+        CPF: 0
   - uid: 1
     parent: 18446744073709551615
     components:
       TagComponent: Camera Object
       Transform:
-        translation: [-6.81902742, 1.5504328, -15.2004814]
-        eulerAngles: [-0.148881897, 1.04959345, 0]
+        translation: [-5.34489346, 1.86274827, 11.9357319]
+        eulerAngles: [-0.179982707, 5.05570364, 0]
         scale: [1, 1, 1]
+      MeshReference:
+        ORID: 18446744073709551615
+        CPF: 1
       CameraComponent:
         fovy: 22
-        aspect: 1
+        aspect: 1.33333337
         near: 0.100000001
         far: 1000
         ProjectType: 0

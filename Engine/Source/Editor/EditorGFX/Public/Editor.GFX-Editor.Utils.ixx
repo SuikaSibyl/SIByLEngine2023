@@ -12,6 +12,7 @@ export module SE.Editor.GFX:Utils;
 import SE.Editor.Core;
 import SE.Core.ECS;
 import SE.Math.Geometric;
+import SE.RHI;
 import SE.GFX.Core;
 
 namespace SIByL::Editor
@@ -124,5 +125,60 @@ namespace SIByL::Editor
 		}
 		ImGui::Columns(1);
 		ImGui::PopID();
+	}
+
+	export inline auto to_string(RHI::VertexFormat vertexFormat) noexcept -> std::string {
+		switch (vertexFormat) {
+		case SIByL::RHI::VertexFormat::UINT8X2:		return"UINT8X2";
+		case SIByL::RHI::VertexFormat::UINT8X4:		return"UINT8X4";
+		case SIByL::RHI::VertexFormat::SINT8X2:		return"SINT8X2";
+		case SIByL::RHI::VertexFormat::SINT8X4:		return"SINT8X4";
+		case SIByL::RHI::VertexFormat::UNORM8X2:	return"UNORM8X2";
+		case SIByL::RHI::VertexFormat::UNORM8X4:	return"UNORM8X4";
+		case SIByL::RHI::VertexFormat::SNORM8X2:	return"SNORM8X2";
+		case SIByL::RHI::VertexFormat::SNORM8X4:	return"SNORM8X4";
+		case SIByL::RHI::VertexFormat::UINT16X2:	return"UINT16X2";
+		case SIByL::RHI::VertexFormat::UINT16X4:	return"UINT16X4";
+		case SIByL::RHI::VertexFormat::SINT16X2:	return"SINT16X2";
+		case SIByL::RHI::VertexFormat::SINT16X4:	return"SINT16X4";
+		case SIByL::RHI::VertexFormat::UNORM16X2:	return"UNORM16X2";
+		case SIByL::RHI::VertexFormat::UNORM16X4:	return"UNORM16X4";
+		case SIByL::RHI::VertexFormat::SNORM16X2:	return"SNORM16X2";
+		case SIByL::RHI::VertexFormat::SNORM16X4:	return"SNORM16X4";
+		case SIByL::RHI::VertexFormat::FLOAT16X2:	return"FLOAT16X2";
+		case SIByL::RHI::VertexFormat::FLOAT16X4:	return"FLOAT16X4";
+		case SIByL::RHI::VertexFormat::FLOAT32:		return"FLOAT32";
+		case SIByL::RHI::VertexFormat::FLOAT32X2:	return"FLOAT32X2";
+		case SIByL::RHI::VertexFormat::FLOAT32X3:	return"FLOAT32X3";
+		case SIByL::RHI::VertexFormat::FLOAT32X4:	return"FLOAT32X4";
+		case SIByL::RHI::VertexFormat::UINT32:		return"UINT32";
+		case SIByL::RHI::VertexFormat::UINT32X2:	return"UINT32X2";
+		case SIByL::RHI::VertexFormat::UINT32X3:	return"UINT32X3";
+		case SIByL::RHI::VertexFormat::UINT32X4:	return"UINT32X4";
+		case SIByL::RHI::VertexFormat::SINT32:		return"SINT32";
+		case SIByL::RHI::VertexFormat::SINT32X2:	return"SINT32X2";
+		case SIByL::RHI::VertexFormat::SINT32X3:	return"SINT32X3";
+		case SIByL::RHI::VertexFormat::SINT32X4:	return"SINT32X4";
+		default: return "UNKNOWN";
+		}
+	}
+
+	export inline auto to_string(RHI::PrimitiveTopology topology) noexcept -> std::string {
+		switch (topology) {
+		case SIByL::RHI::PrimitiveTopology::TRIANGLE_STRIP:	return "TRIANGLE_STRIP";
+		case SIByL::RHI::PrimitiveTopology::TRIANGLE_LIST:return "TRIANGLE_LIST";
+		case SIByL::RHI::PrimitiveTopology::LINE_STRIP:return "LINE_STRIP";
+		case SIByL::RHI::PrimitiveTopology::LINE_LIST:return "LINE_LIST";
+		case SIByL::RHI::PrimitiveTopology::POINT_LIST:return "POINT_LIST";
+		default: return "UNKNOWN";
+		}
+	}
+
+	export inline auto to_string(RHI::VertexStepMode stepMode) noexcept -> std::string {
+		switch (stepMode) {
+		case SIByL::RHI::VertexStepMode::VERTEX:	return "VERTEX";
+		case SIByL::RHI::VertexStepMode::INSTANCE:	return "INSTANCE";
+		default: return "UNKNOWN";
+		}
 	}
 }

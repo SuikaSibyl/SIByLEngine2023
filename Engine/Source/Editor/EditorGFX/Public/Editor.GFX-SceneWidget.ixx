@@ -5,9 +5,14 @@ module;
 #include <cstdint>
 #include <typeinfo>
 #include <imgui.h>
+#include <memory>
+#include <utility>
+#include <tuple>
+#include <functional>
 #include <imgui_internal.h>
 export module SE.Editor.GFX:SceneWidget;
 import :InspectorWidget;
+import SE.Core.ECS;
 import SE.Editor.Core;
 import SE.GFX.Core;
 
@@ -19,10 +24,50 @@ namespace SIByL::Editor
 			GFX::GameObjectHandle handle;
 			GFX::Scene* scene;
 		} data;
+
+		struct IComponentOperator {
+			virtual auto addComponent(Core::Entity&) -> void = 0;
+			virtual auto getComponent(Core::Entity&) -> void* = 0;
+		};
+		template <class T>
+		struct ComponentOperator :IComponentOperator {
+			virtual auto addComponent(Core::Entity& entity) -> void override {
+				entity.addComponent<T>();
+			}
+			virtual auto getComponent(Core::Entity& entity) -> void* override {
+				return (void*)entity.getComponent<T>();
+			}
+		};
+		std::vector<std::pair<std::string, std::unique_ptr<IComponentOperator>>> componentsRegister = {};
+		template <class T>
+		inline auto registerComponent(std::string const& name) -> void {
+			componentsRegister.emplace_back(std::pair<std::string, std::unique_ptr<IComponentOperator>>(name, std::make_unique<ComponentOperator<T>>()));
+		}
+
 		/** draw each fragments */
 		virtual auto onDrawGui() noexcept -> void {
 			for (auto& frag : fragmentSequence) {
 				frag->onDrawGui(0, &data);
+			}
+			{	// add component
+				ImGui::Separator();
+				ImVec2 contentRegionAvailable = ImGui::GetContentRegionAvail();
+				ImVec2 buttonSize(200, 30);
+				ImGui::SetCursorPosX(contentRegionAvailable.x / 2 - 100 + 20);
+				if (ImGui::Button(" Add Component", buttonSize))
+					ImGui::OpenPopup("AddComponent");
+				if (ImGui::BeginPopup("AddComponent")) {
+					Core::Entity entity = data.scene->getGameObject(data.handle)->getEntity();
+					for (auto& pair : componentsRegister) {
+						if (pair.second.get()->getComponent(entity) == nullptr) {
+							if (ImGui::MenuItem(pair.first.c_str())) {
+								pair.second.get()->addComponent(entity);
+								ImGui::CloseCurrentPopup();
+							}
+						}
+					}
+					ImGui::EndPopup();
+				}
 			}
 		}
 	};
@@ -74,12 +119,12 @@ namespace SIByL::Editor
 			if (ImGui::BeginMenu("Import")) {
 				// Menu - File - Load
 				if (ImGui::MenuItem("glTF 2.0 (.glb/.gltf)")) {
-					std::string path = ImGuiLayer::get()->rhiLayer->getRHILayerDescriptor().windowBinded->openFile("gltf");
+					std::string path = ImGuiLayer::get()->rhiLayer->getRHILayerDescriptor().windowBinded->openFile(".gltf");
 					//GFX::SceneNodeLoader_obj::loadSceneNode(path, *scene, SRenderer::meshLoadConfig);
 				}
 				if (ImGui::MenuItem("Wavefront(.obj)")) {
-					std::string path = ImGuiLayer::get()->rhiLayer->getRHILayerDescriptor().windowBinded->openFile("obj");
-					//GFX::SceneNodeLoader_obj::loadSceneNode(path, *scene, SRenderer::meshLoadConfig);
+					std::string path = ImGuiLayer::get()->rhiLayer->getRHILayerDescriptor().windowBinded->openFile(".obj");
+					GFX::SceneNodeLoader_obj::loadSceneNode(path, *scene, GFX::GFXManager::get()->config.meshLoaderConfig);
 				}
 				ImGui::EndMenu();
 			}

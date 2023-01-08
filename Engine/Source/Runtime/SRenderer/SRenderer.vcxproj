@@ -142,6 +142,7 @@
     <ClCompile Include="Public\Passes\SE.SRendere-Raster.Albedo.ixx" />
     <ClCompile Include="Public\Passes\SE.SRendere-Tracer.STracer.ixx" />
     <ClCompile Include="Public\SE.SRenderer.ixx" />
+    <ClCompile Include="Public\Utils\SE.SRendere-Tracer.CustomPrimitive.Sphere.ixx" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Core\Core.vcxproj">

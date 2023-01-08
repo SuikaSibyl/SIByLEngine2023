@@ -19,16 +19,29 @@ namespace SIByL
 
 		virtual auto loadShaders() noexcept -> void override {
 			rgen = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-			rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 			rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			rchit_trimesh = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			rchit_sphere = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			rint_sphere = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+
 			GFX::GFXManager::get()->registerShaderModuleResource(rgen, "../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/stracer_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
-			GFX::GFXManager::get()->registerShaderModuleResource(rchit, "../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/stracer_rchit.spv", { nullptr, RHI::ShaderStages::CLOSEST_HIT });
 			GFX::GFXManager::get()->registerShaderModuleResource(rmiss, "../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/stracer_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
+			GFX::GFXManager::get()->registerShaderModuleResource(rchit_trimesh, 
+				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/stracer_rchit_variant_primitive_trimesh_rchit.spv", 
+				{ nullptr, RHI::ShaderStages::CLOSEST_HIT });
+			GFX::GFXManager::get()->registerShaderModuleResource(rchit_sphere,
+				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/stracer_rchit_variant_primitive_sphere_rchit.spv", 
+				{ nullptr, RHI::ShaderStages::CLOSEST_HIT });
+			GFX::GFXManager::get()->registerShaderModuleResource(rint_sphere,
+				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/custom_primitive/sphere_rint.spv", 
+				{ nullptr, RHI::ShaderStages::INTERSECTION });
 		}
 
 		Core::GUID rgen;
-		Core::GUID rchit;
+		Core::GUID rchit_trimesh;
+		Core::GUID rchit_sphere;
 		Core::GUID rmiss;
+		Core::GUID rint_sphere;
 
 		virtual auto registerPass(SRenderer* renderer) noexcept -> void override {
 			GFX::RDGraph* rdg = renderer->rdgraph;
@@ -44,7 +57,9 @@ namespace SIByL
 						{ {(uint32_t)RHI::ShaderStages::RAYGEN
 						 | (uint32_t)RHI::ShaderStages::COMPUTE
 						 | (uint32_t)RHI::ShaderStages::CLOSEST_HIT
+						 | (uint32_t)RHI::ShaderStages::INTERSECTION
 						 | (uint32_t)RHI::ShaderStages::MISS
+						 | (uint32_t)RHI::ShaderStages::CALLABLE
 						 | (uint32_t)RHI::ShaderStages::ANY_HIT, 0, sizeof(uint32_t)}},
 						{ renderer->commonDescData.set0_layout.get(),
 						  renderer->commonDescData.set1_layout_rt.get() }, });
@@ -56,7 +71,9 @@ namespace SIByL
 								RHI::SBTsDescriptor::MissSBT{{
 									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rmiss)->shaderModule.get()}, }},
 								RHI::SBTsDescriptor::HitGroupSBT{{ 
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rchit)->shaderModule.get()}, }}
+									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rchit_trimesh)->shaderModule.get()},
+									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rchit_sphere)->shaderModule.get(), nullptr,
+									 Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rint_sphere)->shaderModule.get(),}, }},
 							} });
 					}
 				std::shared_ptr<RHI::RayTracingPassEncoder> passEncoder[2] = {};
@@ -72,18 +89,22 @@ namespace SIByL
 				](GFX::RDGRegistry const& registry, RHI::CommandEncoder* cmdEncoder) mutable ->void {
 					uint32_t index = multiFrameFlights->getFlightIndex();
 					passEncoders[index] = cmdEncoder->beginRayTracingPass(RHI::RayTracingPassDescriptor{});
-					passEncoders[index]->setPipeline(pipelines[index].get());
-					passEncoders[index]->setBindGroup(0, rtBindGroup_set0[index], 0, 0);
-					passEncoders[index]->setBindGroup(1, rtBindGroup_set1[index], 0, 0);
-					passEncoders[index]->pushConstants(&renderer->state.batchIdx,
-						(uint32_t)RHI::ShaderStages::RAYGEN
-						| (uint32_t)RHI::ShaderStages::COMPUTE
-						| (uint32_t)RHI::ShaderStages::CLOSEST_HIT
-						| (uint32_t)RHI::ShaderStages::MISS
-						| (uint32_t)RHI::ShaderStages::ANY_HIT,
-						0, sizeof(uint32_t));
-					passEncoders[index]->traceRays(800, 600, 1);
-					passEncoders[index]->end();
+					if (renderer->sceneDataPack.geometry_buffer_cpu.size() > 0) {
+						passEncoders[index]->setPipeline(pipelines[index].get());
+						passEncoders[index]->setBindGroup(0, rtBindGroup_set0[index], 0, 0);
+						passEncoders[index]->setBindGroup(1, rtBindGroup_set1[index], 0, 0);
+						passEncoders[index]->pushConstants(&renderer->state.batchIdx,
+							(uint32_t)RHI::ShaderStages::RAYGEN
+							| (uint32_t)RHI::ShaderStages::COMPUTE
+							| (uint32_t)RHI::ShaderStages::CLOSEST_HIT
+							| (uint32_t)RHI::ShaderStages::INTERSECTION
+							| (uint32_t)RHI::ShaderStages::MISS
+							| (uint32_t)RHI::ShaderStages::CALLABLE
+							| (uint32_t)RHI::ShaderStages::ANY_HIT,
+							0, sizeof(uint32_t));
+						passEncoders[index]->traceRays(800, 600, 1);
+						passEncoders[index]->end();
+					}
 				};
 				return fn;
 				});

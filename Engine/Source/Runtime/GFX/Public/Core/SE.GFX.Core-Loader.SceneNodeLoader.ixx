@@ -289,10 +289,12 @@ namespace SIByL::GFX
                 }
             }
             Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Mesh>();
+            Core::ORID orid = Core::ResourceManager::get()->database.mapResourcePath(path.string().c_str());
+            Core::ResourceManager::get()->database.registerResource(orid, guid);
             Core::ResourceManager::get()->addResource<GFX::Mesh>(guid, std::move(mesh));
             GFX::Mesh* meshResourceRef = Core::ResourceManager::get()->getResource<GFX::Mesh>(guid);
+            meshResourceRef->ORID = orid;
             meshResourceRef->serialize();
-
             // bind scene
             GameObjectHandle rootNode = gfxscene.createGameObject(GFX::NULL_GO);
             gfxscene.getGameObject(rootNode)->getEntity().getComponent<TagComponent>()->name = path.filename().string();

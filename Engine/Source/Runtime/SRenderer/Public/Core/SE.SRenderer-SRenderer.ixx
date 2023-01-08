@@ -65,7 +65,7 @@ namespace SIByL
 			uint32_t indexSize;
 			uint32_t padding0;
 			uint32_t padding1;
-			uint32_t padding2;
+			uint32_t primitiveType;
 			float oddNegativeScaling;
 			RHI::AffineTransformMatrix geometryTransform = {};
 			RHI::AffineTransformMatrix geometryTransformInverse = {};
@@ -111,16 +111,35 @@ namespace SIByL
 
 			struct MeshReferenceRecord {
 				GFX::Mesh* mesh;
+				GFX::MeshReference* meshReference;
 				RHI::BLASInstance blasInstance;
 				std::vector<uint32_t> geometry_indices;
+				uint32_t primitiveType = 0;
 			};
 
 			bool geometryDirty = false;
 			std::unordered_map<GFX::Mesh*, MeshRecord> mesh_record = {};
 			std::unordered_map<GFX::Material*, uint32_t> material_record = {};
 			std::unordered_map<RHI::TextureView*, uint32_t> textureview_record = {};
-			std::unordered_map<GFX::MeshReference*, MeshReferenceRecord> mesh_ref_record = {};
+			std::unordered_map<Core::EntityHandle, MeshReferenceRecord> mesh_ref_record = {};
 		} sceneDataPack;
+		/**
+		* Custom Primitive definition
+		*/
+		struct CustomPrimitive {
+			RHI::BLASCustomGeometry customGeometry;
+			SceneDataPack::MeshRecord meshRecord = {};
+		};
+		struct CustomPrimitives {
+			CustomPrimitive sphere;
+		} customPrimitive;
+		/**
+		* Default setting definition
+		*/
+		struct DefaultResources {
+			Core::GUID defaultMaterial;
+			Core::GUID defaultTexture;
+		} defaultResources;
 		/** init non-scene resources */
 		inline auto init(GFX::RDGraph* rdg, GFX::Scene& scene) noexcept -> void;
 		/** invalid scene */
@@ -201,7 +220,9 @@ namespace SIByL
 			| (uint32_t)RHI::ShaderStages::FRAGMENT
 			| (uint32_t)RHI::ShaderStages::RAYGEN
 			| (uint32_t)RHI::ShaderStages::CLOSEST_HIT
+			| (uint32_t)RHI::ShaderStages::INTERSECTION
 			| (uint32_t)RHI::ShaderStages::MISS
+			| (uint32_t)RHI::ShaderStages::CALLABLE
 			| (uint32_t)RHI::ShaderStages::ANY_HIT
 			| (uint32_t)RHI::ShaderStages::COMPUTE;
 		commonDescData.set0_layout = device->createBindGroupLayout(
@@ -220,6 +241,33 @@ namespace SIByL
 				RHI::BindGroupLayoutEntry{ 1, stages, RHI::StorageTextureBindingLayout{}},
 				} }
 		);
+		// create default setting
+		{
+			defaultResources.defaultTexture = GFX::GFXManager::get()->registerTextureResource("../Engine/Binaries/Runtime/textures/uv_checker.png");
+		}
+		// create custom primitive records
+		{
+			customPrimitive.sphere.customGeometry = RHI::BLASCustomGeometry{
+			RHI::AffineTransformMatrix{},
+			std::vector<Math::bounds3>{Math::bounds3{{-1,-1,-1}, {+1, +1, +1} } },
+				(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION,
+			};
+			customPrimitive.sphere.meshRecord.submesh_geometry.push_back(GeometryDrawData{
+					0, // vertexOffset;
+					0, // indexOffset;
+					0, // materialID;
+					0, // indexSize;
+					0, // padding0;
+					0, // padding1;
+					0, // padding2;
+					0.f, //oddNegativeScaling;
+					RHI::AffineTransformMatrix{}, // geometryTransform
+					RHI::AffineTransformMatrix{}, // geometryTransformInverse
+				});
+			customPrimitive.sphere.meshRecord.blas_desc = RHI::BLASDescriptor{};
+			customPrimitive.sphere.meshRecord.blas_desc.customGeometries.push_back(customPrimitive.sphere.customGeometry);
+			customPrimitive.sphere.meshRecord.blases = device->createBLAS(customPrimitive.sphere.meshRecord.blas_desc);
+		}
 		// pack scene
 		packScene(scene);
 		// register textures
@@ -242,6 +290,9 @@ namespace SIByL
 			auto* go = scene.getGameObject(go_handle.first);
 			GFX::MeshReference* meshref = go->getEntity().getComponent<GFX::MeshReference>();
 			if (!meshref) continue;
+			GFX::MeshRenderer* meshrenderer = go->getEntity().getComponent<GFX::MeshRenderer>();
+			if (!meshrenderer) 
+				continue;
 			float oddScaling = 1.f;
 			Math::mat4 objectMat;
 			{	// get mesh transform matrix
@@ -256,7 +307,7 @@ namespace SIByL
 				}
 			}
 			// if do not have according record, add the record
-			auto meshRecordRef = sceneDataPack.mesh_ref_record.find(meshref);
+			auto meshRecordRef = sceneDataPack.mesh_ref_record.find(go->entity);
 			if (meshRecordRef == sceneDataPack.mesh_ref_record.end()) {
 			}
 			else {
@@ -279,8 +330,10 @@ namespace SIByL
 			{0, RHI::BindingResource{ sceneDataPack.tlas.get() }},
 		});
 		
-		auto geometry_buffer = rdgraph->getStructuredArrayMultiStorageBuffer<GeometryDrawData>("geometry_buffer");
-		geometry_buffer->setStructure(sceneDataPack.geometry_buffer_cpu.data(), fid);
+		if (sceneDataPack.geometry_buffer_cpu.size() > 0) {
+			auto geometry_buffer = rdgraph->getStructuredArrayMultiStorageBuffer<GeometryDrawData>("geometry_buffer");
+			geometry_buffer->setStructure(sceneDataPack.geometry_buffer_cpu.data(), fid);
+		}
 	}
 
 	inline auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
@@ -291,6 +344,7 @@ namespace SIByL
 			if (!meshref) continue;
 			GFX::MeshRenderer* meshrenderer = go->getEntity().getComponent<GFX::MeshRenderer>();
 			if (!meshrenderer) continue;
+			// if mesh reference is pointing to a triangle mesh
 			GFX::Mesh* mesh = meshref->mesh;
 			if (!mesh) continue;
 			// if do not have according mesh record, add the record
@@ -299,7 +353,8 @@ namespace SIByL
 				sceneDataPack.geometryDirty = true;
 				sceneDataPack.mesh_record[mesh] = {};
 				meshRecord = sceneDataPack.mesh_record.find(mesh);
-				{	// create mesh record, add all data buffers
+				{
+					// create mesh record, add all data buffers
 					uint32_t vertex_offset = sceneDataPack.vertex_buffer_cpu.size();
 					uint32_t position_offset = sceneDataPack.position_buffer_cpu.size();
 					sceneDataPack.vertex_buffer_cpu.resize(vertex_offset + mesh->vertexBuffer_host.size / sizeof(float));
@@ -357,13 +412,14 @@ namespace SIByL
 				if (oddScaling != 0) oddScaling / std::abs(oddScaling);
 			}
 			// if do not have according mesh ref record, add the record
-			auto meshRefRecord = sceneDataPack.mesh_ref_record.find(meshref);
+			auto meshRefRecord = sceneDataPack.mesh_ref_record.find(go->entity);
 			if (meshRefRecord == sceneDataPack.mesh_ref_record.end()) {
 				sceneDataPack.geometryDirty = true;
-				sceneDataPack.mesh_ref_record[meshref] = {};
-				meshRefRecord = sceneDataPack.mesh_ref_record.find(meshref);
+				sceneDataPack.mesh_ref_record[go->entity] = {};
+				meshRefRecord = sceneDataPack.mesh_ref_record.find(go->entity);
 				{	// create mesh record
 					meshRefRecord->second.mesh = mesh;
+					meshRefRecord->second.meshReference = meshref;
 					uint32_t geometry_start = sceneDataPack.geometry_buffer_cpu.size();
 					uint32_t offset = 0;
 					for (auto& iter : meshRecord->second.submesh_geometry) {
@@ -394,15 +450,24 @@ namespace SIByL
 							matData.normal_bump_tex = getTexID(normTexGUID);
 							sceneDataPack.material_buffer_cpu.push_back(matData);
 							sceneDataPack.material_record[mat] = matID;
+							findMat = sceneDataPack.material_record.find(mat);
 						}
 						GeometryDrawData geometrydata = iter;
 						geometrydata.geometryTransform = objectMat;
 						geometrydata.geometryTransformInverse = Math::inverse(objectMat);
 						geometrydata.oddNegativeScaling = oddScaling;
+						geometrydata.materialID = findMat->second;
+						geometrydata.primitiveType = meshref->customPrimitiveFlag;
 						sceneDataPack.geometry_buffer_cpu.emplace_back(geometrydata);
 					}
 					meshRefRecord->second.blasInstance.instanceCustomIndex = geometry_start;
+					meshRefRecord->second.primitiveType = meshref->customPrimitiveFlag;
 				}
+			}
+			// if mesh reference is pointing to a sphere mesh
+			if (meshref->customPrimitiveFlag == 1) {
+				//meshRefRecord->second.
+				//customPrimitive
 			}
 		}
 
@@ -472,7 +537,13 @@ namespace SIByL
 		}
 		for (auto& iter : sceneDataPack.mesh_ref_record) {
 			// if BLAS is not created
-			iter.second.blasInstance.blas = sceneDataPack.mesh_record[iter.second.mesh].blases.get();
+			if (iter.second.primitiveType == 0) {
+				iter.second.blasInstance.blas = sceneDataPack.mesh_record[iter.second.mesh].blases.get();
+			}
+			else if (iter.second.primitiveType == 1) {
+				iter.second.blasInstance.blas = customPrimitive.sphere.meshRecord.blases.get();
+				iter.second.blasInstance.instanceShaderBindingTableRecordOffset = 1;
+			}
 			sceneDataPack.tlas_desc.instances.push_back(iter.second.blasInstance);
 		}
 		sceneDataPack.tlas_desc.allowRefitting = true;

@@ -4205,6 +4205,8 @@ namespace SIByL::RHI
 		std::vector<RHI::AffineTransformMatrix> affine_transforms;
 		for (BLASTriangleGeometry const& triangleDesc : descriptor.triangleGeometries)
 			affine_transforms.push_back(RHI::AffineTransformMatrix(triangleDesc.transform));
+		for (BLASCustomGeometry const& customDesc : descriptor.customGeometries)
+			affine_transforms.push_back(RHI::AffineTransformMatrix(customDesc.transform));
 		std::unique_ptr<RHI::Buffer> transformBuffer = device->createDeviceLocalBuffer(affine_transforms.data(), 
 			affine_transforms.size() * sizeof(RHI::AffineTransformMatrix),
 			(uint32_t)RHI::BufferUsage::STORAGE
@@ -4239,6 +4241,34 @@ namespace SIByL::RHI
 			rangeInfo.transformOffset = transformOffset;
 			rangeInfos.push_back(rangeInfo);
 			primitiveCountArray.push_back(triangleDesc.primitiveCount);
+			transformOffset += sizeof(RHI::AffineTransformMatrix);
+		}
+		std::vector<std::unique_ptr<RHI::Buffer>> aabbBuffers;
+		for (BLASCustomGeometry const& customDesc : descriptor.customGeometries) {
+			std::unique_ptr<RHI::Buffer> aabbBuffer = device->createDeviceLocalBuffer((void*)customDesc.aabbs.data(),
+				customDesc.aabbs.size() * sizeof(Math::bounds3),
+				(uint32_t)RHI::BufferUsage::STORAGE
+				| (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS
+				| (uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY);
+			aabbBuffers.emplace_back(std::move(aabbBuffer));
+			VkDeviceAddress dataAddress = getBufferVkDeviceAddress(device, aabbBuffers.back().get());
+			VkAccelerationStructureGeometryAabbsDataKHR aabbs{ VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR };
+			aabbs.data.deviceAddress = dataAddress;
+			aabbs.stride = sizeof(Math::bounds3);
+			// Setting up the build info of the acceleration (C version, c++ gives wrong type)
+			VkAccelerationStructureGeometryKHR geometry = {};
+			geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+			geometry.geometryType = VK_GEOMETRY_TYPE_AABBS_KHR;
+			geometry.flags = getVkGeometryFlagsKHR(customDesc.geometryFlags);
+			geometry.geometry.aabbs = aabbs;
+			geometries.push_back(geometry);
+			VkAccelerationStructureBuildRangeInfoKHR rangeInfo{};
+			rangeInfo.firstVertex = 0;
+			rangeInfo.primitiveCount = (uint32_t)customDesc.aabbs.size();  // Nb aabb
+			rangeInfo.primitiveOffset = 0;
+			rangeInfo.transformOffset = transformOffset;
+			rangeInfos.push_back(rangeInfo);
+			primitiveCountArray.push_back(customDesc.aabbs.size());
 			transformOffset += sizeof(RHI::AffineTransformMatrix);
 		}
 		// 2. Partially specifying VkAccelerationStructureBuildGeometryInfoKHR and querying
@@ -4500,9 +4530,12 @@ namespace SIByL::RHI
 			instance.accelerationStructureReference = blasAddress;
 		}
 		// 2. Uploading an instance buffer of one instance to the VkDevice and waiting for it to complete.
-		std::unique_ptr<Buffer> bufferInstances = device->createDeviceLocalBuffer(
-			(void*)instances.data(), sizeof(VkAccelerationStructureInstanceKHR) * instances.size(), (uint32_t)BufferUsage::SHADER_DEVICE_ADDRESS |
-			(uint32_t)BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY);
+		std::unique_ptr<Buffer> bufferInstances = nullptr;
+		if (instances.size() > 0) {
+			bufferInstances = device->createDeviceLocalBuffer(
+				(void*)instances.data(), sizeof(VkAccelerationStructureInstanceKHR) * instances.size(), (uint32_t)BufferUsage::SHADER_DEVICE_ADDRESS |
+				(uint32_t)BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY);
+		}
 		//	  Add a memory barrier to ensure that createBuffer's upload command
 		//	  finishes before starting the TLAS build.
 		//	  *: here createDeviceLocalBuffer already implicit use a synchronized fence.
@@ -4513,13 +4546,10 @@ namespace SIByL::RHI
 		rangeInfo.firstVertex = 0;
 		rangeInfo.transformOffset = 0;
 		// 4. Constructing a VkAccelerationStructureGeometryKHR struct of instances
-		VkBufferDeviceAddressInfo deviceAddressInfo = {};
-		deviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-		deviceAddressInfo.buffer = static_cast<Buffer_VK*>(bufferInstances.get())->getVkBuffer();
 		VkAccelerationStructureGeometryInstancesDataKHR instancesVk = {};
 		instancesVk.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
 		instancesVk.arrayOfPointers = VK_FALSE;
-		instancesVk.data.deviceAddress = vkGetBufferDeviceAddress(device->getVkDevice(), &deviceAddressInfo);
+		instancesVk.data.deviceAddress = (bufferInstances != nullptr) ? getBufferVkDeviceAddress(device, bufferInstances.get()) : 0;
 		// Like creating the BLAS, point to the geometry (in this case, the
 		// instances) in a polymorphic object.
 		VkAccelerationStructureGeometryKHR geometry = {};
@@ -4572,8 +4602,7 @@ namespace SIByL::RHI
 			(uint32_t)BufferUsage::SHADER_DEVICE_ADDRESS | (uint32_t)BufferUsage::STORAGE,
 			BufferShareMode::EXCLUSIVE,
 			(uint32_t)MemoryProperty::DEVICE_LOCAL_BIT });
-		deviceAddressInfo.buffer = static_cast<Buffer_VK*>(scratchBuffer.get())->getVkBuffer();
-		buildInfo.scratchData.deviceAddress = vkGetBufferDeviceAddress(device->getVkDevice(), &deviceAddressInfo);
+		buildInfo.scratchData.deviceAddress = getBufferVkDeviceAddress(device, scratchBuffer.get());
 		// Create a one-element array of pointers to range info objects.
 		VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
 		// Build the TLAS.
@@ -4714,9 +4743,10 @@ namespace SIByL::RHI
 					if (hitGroupRecord.closetHitShader)		rtsg.closestHitShader = closetHitBegin + closetHitIdx++;
 					if (hitGroupRecord.anyHitShader)		rtsg.anyHitShader = anyHitBegin + anyHitIdx++;
 					if (hitGroupRecord.intersectionShader)	rtsg.intersectionShader = intersectionBegin + intersectionIdx++;
+					if (hitGroupRecord.intersectionShader) rtsg.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR;
 					rtsgci.push_back(rtsg); }}
 			if (desc.sbtsDescriptor.callableSBT.callableRecords.size() > 0) {
-				for (int i = 0; i < desc.sbtsDescriptor.missSBT.rmissRecords.size(); ++i) {
+				for (int i = 0; i < desc.sbtsDescriptor.callableSBT.callableRecords.size(); ++i) {
 					VkRayTracingShaderGroupCreateInfoKHR rtsg = rtsgTemplate;
 					rtsg.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
 					rtsg.generalShader = callableBegin + i;
@@ -4818,6 +4848,7 @@ namespace SIByL::RHI
 			rayGenRegion.deviceAddress = SBTBufferAddress;
 			missRegion.deviceAddress = SBTBufferAddress + rayGenRegion.size;
 			hitRegion.deviceAddress = SBTBufferAddress + rayGenRegion.size + missRegion.size;
+			callableRegion.deviceAddress = SBTBufferAddress + rayGenRegion.size + missRegion.size + hitRegion.size;
 		}
 	}
 

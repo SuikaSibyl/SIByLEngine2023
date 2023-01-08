@@ -182,6 +182,8 @@ namespace SIByL::GFX
 		inline auto serialize() noexcept -> void;
 		/** deserialize */
 		inline auto deserialize(RHI::Device* device, Core::ORID orid) noexcept -> void;
+		/** load the material from path */
+		inline auto loadPath() noexcept -> void;
 		/** all textures in material */
 		std::unordered_map<std::string, Core::GUID> textures;
 		/** ORID of the material */
@@ -366,6 +368,8 @@ namespace SIByL::GFX
 		MeshReference() = default;
 		/** mesh */
 		Mesh* mesh = nullptr;
+		/** custom primitive flag */
+		size_t customPrimitiveFlag = 0;
 		/** serialize */
 		static auto serialize(void* emitter, Core::EntityHandle const& handle) -> void;
 		/** deserialize */
@@ -403,6 +407,7 @@ namespace SIByL::GFX
 		/** request offline mesh resource */
 		auto requestOfflineMeshResource(Core::ORID orid) noexcept -> Core::GUID;
 		/** request offline material resource */
+		auto registerMaterialResource(char const* filepath) noexcept -> Core::GUID;
 		auto requestOfflineMaterialResource(Core::ORID orid) noexcept -> Core::GUID;
 		/** RHI layer */
 		RHI::RHILayer* rhiLayer = nullptr;
@@ -867,6 +872,7 @@ namespace SIByL::GFX
 	}
 
 	inline auto Material::deserialize(RHI::Device* device, Core::ORID orid) noexcept -> void {
+		ORID = orid;
 		std::filesystem::path metadata_path = "./bin/" + std::to_string(orid) + ".meta";
 		{
 			Core::Buffer metadata;
@@ -880,6 +886,10 @@ namespace SIByL::GFX
 			name = data["Name"].as<std::string>();
 			path = data["path"].as<std::string>();
 		}
+		loadPath();
+	}
+
+	inline auto Material::loadPath() noexcept -> void {
 		// load data
 		Core::Buffer matdata;
 		Core::syncReadFile(path, matdata);
@@ -895,53 +905,6 @@ namespace SIByL::GFX
 			Core::ORID orid = node["ORID"].as<Core::ORID>();
 			textures[tex_name] = GFXManager::get()->requestOfflineTextureResource(orid);
 		}
-
-		//name = data["Name"].as<std::string>();
-		//auto vbbl_node = data["VertexBufferLayout"];
-		//vertexBufferLayout.arrayStride = vbbl_node["ArrayStride"].as<size_t>();
-		//vertexBufferLayout.stepMode = (RHI::VertexStepMode)vbbl_node["ArrayStride"].as<uint32_t>();
-		//auto attribute_nodes = vbbl_node["VertexAttributes"];
-		//for (auto node : attribute_nodes) {
-		//	RHI::VertexAttribute attribute;
-		//	attribute.format = (RHI::VertexFormat)node["VertexFormat"].as<uint32_t>();
-		//	attribute.offset = node["Offset"].as<size_t>();
-		//	attribute.shaderLocation = node["Location"].as<uint32_t>();
-		//	vertexBufferLayout.attributes.push_back(attribute);
-		//}
-		//auto ps_node = data["PrimitiveState"];
-		//primitiveState.topology = (RHI::PrimitiveTopology)ps_node["PrimitiveTopology"].as<uint32_t>();
-		//primitiveState.stripIndexFormat = (RHI::IndexFormat)ps_node["IndexFormat"].as<uint32_t>();
-		//primitiveState.frontFace = (RHI::FrontFace)ps_node["FrontFace"].as<uint32_t>();
-		//primitiveState.cullMode = (RHI::CullMode)ps_node["CullMode"].as<uint32_t>();
-		//primitiveState.unclippedDepth = ps_node["UnclippedDepth"].as<bool>();
-		//// load buffers
-		//size_t vb_size, ib_size, pb_size;
-		//vb_size = data["VertexBufferSize"].as<size_t>();
-		//ib_size = data["IndexBufferSize"].as<size_t>();
-		//pb_size = data["PosOnlyBufferSize"].as<size_t>();
-		//// load submeshes
-		//auto submeshes_node = data["Submeshes"];
-		//for (auto node : submeshes_node) {
-		//	Submesh submesh;
-		//	submesh.baseVertex = node["BaseVertex"].as<uint32_t>();
-		//	submesh.offset = node["Offset"].as<uint32_t>();
-		//	submesh.size = node["Size"].as<uint32_t>();
-		//	submesh.matID = node["MatID"].as<uint32_t>();
-		//	submeshes.push_back(submesh);
-		//}
-		//Core::Buffer bindata;
-		//Core::syncReadFile(bindata_path, bindata);
-
-		//vertexBuffer_device = device->createDeviceLocalBuffer((void*)bindata.data, vb_size,
-		//	(uint32_t)RHI::BufferUsage::VERTEX | (uint32_t)RHI::BufferUsage::STORAGE);
-		//indexBuffer_device = device->createDeviceLocalBuffer((void*)&(((uint16_t*)(&(((char*)(bindata.data))[vb_size])))[0]), ib_size,
-		//	(uint32_t)RHI::BufferUsage::INDEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
-		//	(uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
-		//if (pb_size != 0) {
-		//	positionBuffer_device = device->createDeviceLocalBuffer((void*)&(((uint16_t*)(&(((char*)(bindata.data))[vb_size + ib_size])))[0]), pb_size,
-		//		(uint32_t)RHI::BufferUsage::INDEX | (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
-		//		(uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | (uint32_t)RHI::BufferUsage::STORAGE);
-		//}
 	}
 
 #pragma endregion
@@ -1005,7 +968,8 @@ namespace SIByL::GFX
 		if (meshRef != nullptr) {
 			emitter << YAML::Key << "MeshReference";
 			emitter << YAML::Value << YAML::BeginMap;
-			emitter << YAML::Key << "ORID" << YAML::Value << meshRef->mesh->ORID;
+			emitter << YAML::Key << "ORID" << YAML::Value << ((meshRef->mesh == nullptr) ? Core::ORID_NONE : meshRef->mesh->ORID);
+			emitter << YAML::Key << "CPF" << YAML::Value << meshRef->customPrimitiveFlag;
 			emitter << YAML::EndMap;
 		}
 	}
@@ -1018,10 +982,16 @@ namespace SIByL::GFX
 			MeshReference* meshRef = entity.addComponent<MeshReference>();
 			Core::ORID orid = meshRefComponentAoS["ORID"].as<uint64_t>();
 			Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Mesh>();
-			GFX::Mesh mesh;
-			Core::ResourceManager::get()->addResource(guid, std::move(mesh));
-			Core::ResourceManager::get()->getResource<GFX::Mesh>(guid)->deserialize(RHI::RHILayer::get()->getDevice(), orid);
-			meshRef->mesh = Core::ResourceManager::get()->getResource<GFX::Mesh>(guid);
+			if (orid == Core::ORID_NONE) {
+				meshRef->mesh = nullptr;
+			}
+			else {
+				GFX::Mesh mesh;
+				Core::ResourceManager::get()->addResource(guid, std::move(mesh));
+				Core::ResourceManager::get()->getResource<GFX::Mesh>(guid)->deserialize(RHI::RHILayer::get()->getDevice(), orid);
+				meshRef->mesh = Core::ResourceManager::get()->getResource<GFX::Mesh>(guid);
+			}
+			meshRef->customPrimitiveFlag = meshRefComponentAoS["CPF"].as<size_t>();
 		}
 	}
 
@@ -1030,33 +1000,33 @@ namespace SIByL::GFX
 #pragma region MESH_FILTER_COMPONENT_IMPL
 
 	auto MeshRenderer::serialize(void* pemitter, Core::EntityHandle const& handle) -> void {
-		//YAML::Emitter& emitter = *reinterpret_cast<YAML::Emitter*>(pemitter);
-		//Core::Entity entity(handle);
-		//CameraComponent* camera = entity.getComponent<CameraComponent>();
-		//if (camera != nullptr) {
-		//	emitter << YAML::Key << "MeshRendererComponent";
-		//	emitter << YAML::Value << YAML::BeginMap;
-		//	emitter << YAML::Key << "fovy" << YAML::Value << camera->fovy;
-		//	emitter << YAML::Key << "aspect" << YAML::Value << camera->aspect;
-		//	emitter << YAML::Key << "near" << YAML::Value << camera->near;
-		//	emitter << YAML::Key << "far" << YAML::Value << camera->far;
-		//	emitter << YAML::Key << "ProjectType" << YAML::Value << (uint32_t)camera->projectType;
-		//	emitter << YAML::EndMap;
-		//}
+		YAML::Emitter& emitter = *reinterpret_cast<YAML::Emitter*>(pemitter);
+		Core::Entity entity(handle);
+		MeshRenderer* renderer = entity.getComponent<MeshRenderer>();
+		if (renderer != nullptr) {
+			emitter << YAML::Key << "MeshRendererComponent";
+			emitter << YAML::Value << YAML::BeginSeq;
+			for (auto& material : renderer->materials) {
+				emitter << YAML::BeginMap;
+				emitter << YAML::Key << "ORID" << YAML::Value << material->ORID;
+				emitter << YAML::EndMap;
+			}
+			emitter << YAML::EndSeq;
+		}
 	}
 
 	auto MeshRenderer::deserialize(void* compAoS, Core::EntityHandle const& handle) -> void {
-		//YAML::NodeAoS& components = *reinterpret_cast<YAML::NodeAoS*>(compAoS);
-		//Core::Entity entity(handle);
-		//auto cameraComponentAoS = components["MeshRendererComponent"];
-		//if (cameraComponentAoS) {
-		//	CameraComponent* camRef = entity.addComponent<CameraComponent>();
-		//	camRef->fovy = cameraComponentAoS["fovy"].as<float>();
-		//	camRef->aspect = cameraComponentAoS["aspect"].as<float>();
-		//	camRef->near = cameraComponentAoS["near"].as<float>();
-		//	camRef->far = cameraComponentAoS["far"].as<float>();
-		//	camRef->projectType = (ProjectType)cameraComponentAoS["ProjectType"].as<uint32_t>();
-		//}
+		YAML::NodeAoS& components = *reinterpret_cast<YAML::NodeAoS*>(compAoS);
+		Core::Entity entity(handle);
+		auto meshRendererComponentAoS = components["MeshRendererComponent"];
+		if (meshRendererComponentAoS) {
+			MeshRenderer* meshRenderer = entity.addComponent<MeshRenderer>();
+			for (auto node : meshRendererComponentAoS) {
+				Core::GUID guid = GFX::GFXManager::get()->requestOfflineMaterialResource(node["ORID"].as<Core::ORID>());
+				GFX::Material* material = Core::ResourceManager::get()->getResource<GFX::Material>(guid);
+				meshRenderer->materials.push_back(material);
+			}
+		}
 	}
 
 #pragma endregion
@@ -1285,7 +1255,28 @@ namespace SIByL::GFX
 		}
 		return guid;
 	}
-	
+
+	auto GFXManager::registerMaterialResource(char const* filepath) noexcept -> Core::GUID {
+		std::filesystem::path path(filepath);
+		std::filesystem::path current_path = std::filesystem::current_path();
+		std::filesystem::path relative_path = std::filesystem::relative(path, current_path);
+		Core::ORID orid = Core::ResourceManager::get()->database.findResourcePath(filepath);
+		if (orid == Core::ORID_NONE) {
+			Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Material>();
+			orid = Core::ResourceManager::get()->database.mapResourcePath(filepath);
+			Core::ResourceManager::get()->database.registerResource(orid, guid);
+			GFX::Material material;
+			material.path = std::string(filepath);
+			material.loadPath();
+			material.ORID = orid;
+			material.serialize();
+			Core::ResourceManager::get()->addResource(guid, std::move(material));
+		}
+		else {
+			return requestOfflineMaterialResource(orid);
+		}
+	}
+
 	auto GFXManager::requestOfflineMaterialResource(Core::ORID orid) noexcept -> Core::GUID {
 		Core::GUID guid = Core::ResourceManager::get()->database.findResource(orid);
 		// if not loaded

@@ -1,0 +1,9 @@
+#ifndef _SRENDERER_COMMON_CONFIG_HEADER_
+#define _SRENDERER_COMMON_CONFIG_HEADER_
+
+#define PRIMITIVE_TRIANGLE      0
+#define PRIMITIVE_SPHERE        1
+
+const float T_MAX  = 100000;
+
+#endif

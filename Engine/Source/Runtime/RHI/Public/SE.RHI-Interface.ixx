@@ -2026,10 +2026,17 @@ namespace SIByL::RHI
 		uint32_t				materialID = 0;
 	};
 
+	export struct BLASCustomGeometry {
+		AffineTransformMatrix		transform;
+		std::vector<Math::bounds3>	aabbs;
+		BLASGeometryFlags			geometryFlags = 0;
+	};
+
 	export struct BLASDescriptor {
 		std::vector<BLASTriangleGeometry> triangleGeometries;
 		bool allowRefitting	= false;
 		bool allowCompaction = false;
+		std::vector<BLASCustomGeometry> customGeometries;
 	};
 
 	export struct TLAS {

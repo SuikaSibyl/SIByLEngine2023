@@ -74,28 +74,28 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		//Core::ResourceManager::get()->getResource<GFX::Texture>(mat.textures["normal_bump"])->serialize();
 		
 		
-		Core::GUID matID = GFX::GFXManager::get()->requestOfflineMaterialResource(1658126809923959644);
-		GFX::Material* mat = Core::ResourceManager::get()->getResource<GFX::Material>(matID);
 		//mat.path = "./content/cerberus.mat";
 		//mat.textures["normal_bump"] = GFX::GFXManager::get()->requestOfflineTextureResource(1658119028953168732);
+		//Core::GUID matID = GFX::GFXManager::get()->registerMaterialResource("P:/GitProjects/SIByLEngine2022/Sandbox/content/default.mat");
+		//GFX::Material* mat = Core::ResourceManager::get()->getResource<GFX::Material>(matID);
 		//mat.textures["base_color"] = GFX::GFXManager::get()->requestOfflineTextureResource(1658119031102545654);
 		//mat.serialize();
 		//mat.textures["base_color"] = GFX::GFXManager::get()->registerTextureResource("P:/GitProjects/SIByLEngine2022/Sandbox/content/textures/Cerberus_B.png");
 		//Core::ResourceManager::get()->getResource<GFX::Texture>(mat.textures["base_color"])->serialize();
 
 		GFX::GFXManager::get()->config.meshLoaderConfig = SRenderer::meshLoadConfig;
-		scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/CERBERUS.scene");
+		scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/test_scene.scene");
 		//GFX::SceneNodeLoader_obj::loadSceneNode("P:/GitProjects/SIByLEngine2022/Sandbox/content/cerberus.obj", scene, SRenderer::meshLoadConfig);
 		//GFX::SceneNodeLoader_obj::loadSceneNode("P:/GitProjects/SIByLEngine2022/Sandbox/content/scenes/wuson.obj", scene, SRenderer::meshLoadConfig);
-		for (auto handle : scene.gameObjects) {
-			GFX::GameObject* go = scene.getGameObject(handle.first);
-			Math::mat4 objectMat;
-			GFX::MeshReference* meshref = go->getEntity().getComponent<GFX::MeshReference>();
-			if (meshref) {
-				GFX::MeshRenderer* meshrenderer = go->getEntity().addComponent<GFX::MeshRenderer>();
-				meshrenderer->materials.push_back(mat);
-			}
-		}
+		//for (auto handle : scene.gameObjects) {
+		//	GFX::GameObject* go = scene.getGameObject(handle.first);
+		//	Math::mat4 objectMat;
+		//	GFX::MeshReference* meshref = go->getEntity().getComponent<GFX::MeshReference>();
+		//	if (meshref) {
+		//		GFX::MeshRenderer* meshrenderer = go->getEntity().addComponent<GFX::MeshRenderer>();
+		//		meshrenderer->materials.push_back(mat);
+		//	}
+		//}
 		//GFX::SceneNodeLoader_glTF::loadSceneNode("D:/Downloads/glTF-Sample-Models-master/glTF-Sample-Models-master/2.0/Sponza/glTF/Sponza.gltf", scene);
 		//GFX::SceneNodeLoader_glTF::loadSceneNode("P:/GitProjects/SIByLEngine2022/Sandbox/content/scenes/cornellBox.gltf", scene);
 		//scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/cornellBox.scene");

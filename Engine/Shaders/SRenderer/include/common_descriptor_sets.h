@@ -6,6 +6,8 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #extension GL_EXT_nonuniform_qualifier : enable
 
+#include "common_config.h"
+
 /**
 * Descriptor Set 0
 * --------------------------
@@ -38,7 +40,7 @@ struct GeometryInfo {
   uint indexSize;
   uint padding0;
   uint padding1;
-  uint padding2;
+  uint primitiveType;
   float oddNegativeScaling;
   vec4 transform[3];
   vec4 transformInverse[3];
@@ -60,7 +62,6 @@ layout(binding = 2, set = 0, scalar) buffer _IndicesBuffer  { uint indices[]; };
 layout(binding = 3, set = 0, scalar) buffer _GeometryBuffer { GeometryInfo geometryInfos[]; };
 layout(binding = 4, set = 0, scalar) buffer _MaterialBuffer { MaterialData materials[]; };
 layout(binding = 5, set = 0) uniform sampler2D textures[];
-
 
 // Utilities
 

@@ -1,0 +1,8 @@
+ResourceType: Material
+Name: New Material
+Textures:
+  - Name: normal_bump
+    ORID: 1658119028953168732
+  - Name: base_color
+    ORID: 1658382002334841692
+End: TRUE

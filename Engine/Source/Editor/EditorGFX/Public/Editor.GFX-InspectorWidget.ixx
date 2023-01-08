@@ -9,6 +9,7 @@ module;
 #include <imgui.h>
 #include <imgui_internal.h>
 export module SE.Editor.GFX:InspectorWidget;
+import :Utils;
 import :ResourceViewer;
 import SE.Editor.Core;
 import SE.Core.ECS;
