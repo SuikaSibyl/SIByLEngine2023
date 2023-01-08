@@ -1,8 +1,8 @@
-# SIByLEngine 2022.0
+# SIByLEngine 2023.0
 
 `SIByLEngine` is a personal toy game engine by [@SuikaSibyl](https://github.com/SuikaSibyl). I am planning to keep working on it for a long time and implement lots of realtime & offline effects in it.
 
-Previous version could be find in: [SibylEngine2021](https://github.com/SuikaSibyl/SibylEngine2021). Version 2022 is a complete refactoring including better and more extendable structure, solution, design.
+Previous version could be find in: [SibylEngine2021](https://github.com/SuikaSibyl/SibylEngine2021). Version 2023 is a complete refactoring including better and more extendable structure, solution, design.
 
 ![EditorDemoImg](https://imagehost-suikasibyl-us.oss-us-west-1.aliyuncs.com/SIByLEngine20221123_editor.jpg)
 
@@ -17,6 +17,7 @@ By default, Nvidia GPU with Turing or higher architecture is required to correct
   - Fully using C++ 20 `Module` modern solution.
   - [Math module](./docs/SIByLDocument_002_Math.md) from scratch with SIMD acceleration.
   - [ECS module](./docs/SIByLDocument_003_ECS.md) from scratch (experimental).
+  - [Resource module](./docs/SIByLDocument_004_Resource.md) from scratch (experimental).
 - Rendering
   - [RHI module](./docs/SIByLDocument_004_RHI.md), with `WebGPU`-style API (only Vulkan backend supported now).
   - [Tracer module](./docs/SIByLDocument_005_Tracer.md) (CPU/GPU implementation are not integrated yet)
@@ -27,6 +28,13 @@ By default, Nvidia GPU with Turing or higher architecture is required to correct
           - [*AAF Global Illumination*](https://cseweb.ucsd.edu/~ravir/filtering_GI_final.pdf)
           - [*MAAF Combined Effects*](https://cseweb.ucsd.edu/~ravir/paper_maaf.pdf)
     - CPU based raytracing (now only a core subset of PBRT)
+  - [GFX module](./docs/SIByLDocument_006_GFX.md)
+    - Basic Components & Resources
+    - Render Dependency Graph System (experimental).
+  - [SRenderer module](./docs/SIByLDocument_008_SRenderer.md)
+    - Uniform scene packing for both rasterizer & ray tracer.
+    - Procedure sphere primitive for ray tracing pipeline
+
 - Physics
   - // TODO.
 - Editor Toolchain
