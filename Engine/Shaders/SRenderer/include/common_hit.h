@@ -36,7 +36,7 @@ HitGeometry getHitGeometry() {
     // Record the intersection
     const vec3 hitPoint = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
     const vec3 geometric_normal = normalize(hitPoint - sphere_center);
-    const vec3 cartesian = geometric_normal;
+    const vec3 cartesian = normalize((transpose(o2wn) * vec4(geometric_normal, 0)).xyz);
     // We use the spherical coordinates as uv
     // We use the convention that y is up axis.
     // https://en.wikipedia.org/wiki/Spherical_coordinate_system#Cartesian_coordinates
