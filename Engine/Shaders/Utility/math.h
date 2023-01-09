@@ -17,6 +17,10 @@ float atan2(in float y, in float x) {
     return x == 0.0 ? sign(y)*k_pi/2 : atan(y, x);
 }
 
+float distance_squared(in vec3 v0, in vec3 v1) {
+    return dot(v0-v1, v0-v1);
+}
+
 /**
 * Numerically stable quadratic equation solver at^2 + bt + c = 0
 * @return:  false when it can't find solutions.

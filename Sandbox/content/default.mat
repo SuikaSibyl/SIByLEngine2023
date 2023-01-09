@@ -5,4 +5,5 @@ Textures:
     ORID: 1658119028953168732
   - Name: base_color
     ORID: 1658382002334841692
+Emissive: false
 End: TRUE

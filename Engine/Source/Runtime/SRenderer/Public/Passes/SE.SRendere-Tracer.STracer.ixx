@@ -24,6 +24,11 @@ namespace SIByL
 			rchit_sphere = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 			rint_sphere = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 
+			shadow_ray_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			shadow_ray_rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+
+			sphere_sampling_rcall = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+
 			GFX::GFXManager::get()->registerShaderModuleResource(rgen, "../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/stracer_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
 			GFX::GFXManager::get()->registerShaderModuleResource(rmiss, "../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/stracer_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
 			GFX::GFXManager::get()->registerShaderModuleResource(rchit_trimesh, 
@@ -35,6 +40,17 @@ namespace SIByL
 			GFX::GFXManager::get()->registerShaderModuleResource(rint_sphere,
 				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/custom_primitive/sphere_rint.spv", 
 				{ nullptr, RHI::ShaderStages::INTERSECTION });
+
+			GFX::GFXManager::get()->registerShaderModuleResource(shadow_ray_rchit,
+				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/spt_shadow_ray_rchit.spv", 
+				{ nullptr, RHI::ShaderStages::CLOSEST_HIT });
+			GFX::GFXManager::get()->registerShaderModuleResource(shadow_ray_rmiss,
+				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/spt_shadow_ray_rmiss.spv", 
+				{ nullptr, RHI::ShaderStages::MISS });
+
+			GFX::GFXManager::get()->registerShaderModuleResource(sphere_sampling_rcall,
+				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/custom_primitive/sphere_sample_rcall.spv", 
+				{ nullptr, RHI::ShaderStages::CALLABLE });
 		}
 
 		Core::GUID rgen;
@@ -42,6 +58,11 @@ namespace SIByL
 		Core::GUID rchit_sphere;
 		Core::GUID rmiss;
 		Core::GUID rint_sphere;
+
+		Core::GUID shadow_ray_rchit;
+		Core::GUID shadow_ray_rmiss;
+
+		Core::GUID sphere_sampling_rcall;
 
 		virtual auto registerPass(SRenderer* renderer) noexcept -> void override {
 			GFX::RDGraph* rdg = renderer->rdgraph;
@@ -53,6 +74,11 @@ namespace SIByL
 				[&, renderer = renderer, rdg = rdg]()->GFX::CustomPassExecuteFn {
 					// bindgroup layout
 					RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
+					struct PushConstant {
+						uint32_t width;
+						uint32_t height;
+						uint32_t sample_batch;
+					};
 					std::shared_ptr<RHI::PipelineLayout> pipelineLayout = device->createPipelineLayout(RHI::PipelineLayoutDescriptor{
 						{ {(uint32_t)RHI::ShaderStages::RAYGEN
 						 | (uint32_t)RHI::ShaderStages::COMPUTE
@@ -60,7 +86,7 @@ namespace SIByL
 						 | (uint32_t)RHI::ShaderStages::INTERSECTION
 						 | (uint32_t)RHI::ShaderStages::MISS
 						 | (uint32_t)RHI::ShaderStages::CALLABLE
-						 | (uint32_t)RHI::ShaderStages::ANY_HIT, 0, sizeof(uint32_t)}},
+						 | (uint32_t)RHI::ShaderStages::ANY_HIT, 0, sizeof(PushConstant)}},
 						{ renderer->commonDescData.set0_layout.get(),
 						  renderer->commonDescData.set1_layout_rt.get() }, });
 					std::shared_ptr<RHI::RayTracingPipeline> tracingPipeline[MULTIFRAME_FLIGHTS_COUNT];
@@ -69,11 +95,17 @@ namespace SIByL
 							pipelineLayout.get(), 3, RHI::SBTsDescriptor{
 								RHI::SBTsDescriptor::RayGenerationSBT{{ Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rgen)->shaderModule.get() }},
 								RHI::SBTsDescriptor::MissSBT{{
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rmiss)->shaderModule.get()}, }},
+									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rmiss)->shaderModule.get()},
+									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(shadow_ray_rmiss)->shaderModule.get()}, }},
 								RHI::SBTsDescriptor::HitGroupSBT{{ 
 									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rchit_trimesh)->shaderModule.get()},
 									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rchit_sphere)->shaderModule.get(), nullptr,
+									 Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rint_sphere)->shaderModule.get(),},
+									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(shadow_ray_rchit)->shaderModule.get()},
+									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(shadow_ray_rchit)->shaderModule.get(), nullptr,
 									 Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rint_sphere)->shaderModule.get(),}, }},
+								RHI::SBTsDescriptor::CallableSBT{{
+									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(sphere_sampling_rcall)->shaderModule.get()}, }},
 							} });
 					}
 				std::shared_ptr<RHI::RayTracingPassEncoder> passEncoder[2] = {};
@@ -93,7 +125,12 @@ namespace SIByL
 						passEncoders[index]->setPipeline(pipelines[index].get());
 						passEncoders[index]->setBindGroup(0, rtBindGroup_set0[index], 0, 0);
 						passEncoders[index]->setBindGroup(1, rtBindGroup_set1[index], 0, 0);
-						passEncoders[index]->pushConstants(&renderer->state.batchIdx,
+						PushConstant pConst = {
+							renderer->state.width,
+							renderer->state.height,
+							renderer->state.batchIdx
+						};
+						passEncoders[index]->pushConstants(&pConst,
 							(uint32_t)RHI::ShaderStages::RAYGEN
 							| (uint32_t)RHI::ShaderStages::COMPUTE
 							| (uint32_t)RHI::ShaderStages::CLOSEST_HIT
@@ -101,9 +138,10 @@ namespace SIByL
 							| (uint32_t)RHI::ShaderStages::MISS
 							| (uint32_t)RHI::ShaderStages::CALLABLE
 							| (uint32_t)RHI::ShaderStages::ANY_HIT,
-							0, sizeof(uint32_t));
-						passEncoders[index]->traceRays(800, 600, 1);
+							0, sizeof(PushConstant));
+						passEncoders[index]->traceRays(renderer->state.width, renderer->state.height, 1);
 						passEncoders[index]->end();
+						++renderer->state.batchIdx;
 					}
 				};
 				return fn;

@@ -6,8 +6,6 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #extension GL_EXT_nonuniform_qualifier : enable
 
-#include "common_config.h"
-
 /**
 * Descriptor Set 0
 * --------------------------

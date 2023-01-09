@@ -168,6 +168,7 @@ namespace SIByL::Editor
 				}
 				ImGui::TreePop();
 			}
+			ImGui::BulletText(("Emissive: " + std::to_string(material->isEmissive)).c_str());
 		}
 	};
 }

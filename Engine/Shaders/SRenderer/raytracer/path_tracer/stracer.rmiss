@@ -1,9 +1,12 @@
 #version 460
-#extension GL_EXT_ray_tracing : require
+#extension GL_GOOGLE_include_directive : enable
 
-layout(location = 0) rayPayloadInEXT vec3 hitValue;
+#include "../include/common_trace.h"
+
+layout(location = 0) rayPayloadInEXT PrimaryPayload primaryPld;
 
 void main()
 {
-    hitValue = vec3(0.0);
+    primaryPld.baseColor = vec3(0.0);
+    setIntersected(primaryPld.flags, false);
 }

@@ -4,7 +4,7 @@
 struct PushConstants { uint geometry_idx; };
 layout(push_constant) uniform PushConsts { PushConstants pushConstants; };
 
-#include "../../include/common_vert.h"
+#include "../include/common_vert.h"
 
 layout(location = 0) out vec2 uv;
 layout(location = 1) out uint matID;

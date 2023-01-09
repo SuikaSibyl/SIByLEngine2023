@@ -1,7 +1,8 @@
 #ifndef _SRENDERER_COMMON_CUSTOM_PRIMITIVES_HEADER_
 #define _SRENDERER_COMMON_CUSTOM_PRIMITIVES_HEADER_
 
-#include "../../Utility/math.h"
+#include "../../../Utility/math.h"
+#include "../include/common_rt_config.h"
 
 /** 
 * Compute intersection of a ray and a sphere 
@@ -25,19 +26,5 @@ float hitSphere(
         t = t1;
     return t;
 }
-
-// float hitAabb(
-//     in vec3 minimum, in vec3 maximum, 
-//     in vec3 origin, in vec3 direction)
-// {
-//     vec3  invDir = 1.0 / r.direction;
-//     vec3  tbot   = invDir * (minimum - origin);
-//     vec3  ttop   = invDir * (maximum - origin);
-//     vec3  tmin   = min(ttop, tbot);
-//     vec3  tmax   = max(ttop, tbot);
-//     float t0     = max(tmin.x, max(tmin.y, tmin.z));
-//     float t1     = min(tmax.x, min(tmax.y, tmax.z));
-//     return t1 > max(t0, 0.0) ? t0 : -1.0;
-// }
 
 #endif

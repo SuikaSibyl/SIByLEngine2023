@@ -7,7 +7,7 @@
 #extension GL_EXT_buffer_reference2 : require
 
 #include "../../include/common_descriptor_sets.h"
-#include "../../include/common_custom_primitives.h"
+#include "common_custom_primitives.h"
 
 void main()
 {

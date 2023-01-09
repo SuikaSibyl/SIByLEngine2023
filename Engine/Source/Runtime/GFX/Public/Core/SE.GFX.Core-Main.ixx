@@ -190,6 +190,8 @@ namespace SIByL::GFX
 		Core::ORID ORID = Core::ORID_NONE;
 		/** resource name */
 		std::string name = "New Material";
+		/** emission */
+		bool isEmissive = false;
 		/** resource path */
 		std::string path;
 	};
@@ -860,6 +862,8 @@ namespace SIByL::GFX
 				}
 			}
 			out << YAML::EndSeq;
+			// output emissive
+			out << YAML::Key << "Emissive" << YAML::Value << isEmissive;
 			// output tail
 			out << YAML::Key << "End" << YAML::Value << "TRUE";
 			out << YAML::EndMap;
@@ -905,6 +909,7 @@ namespace SIByL::GFX
 			Core::ORID orid = node["ORID"].as<Core::ORID>();
 			textures[tex_name] = GFXManager::get()->requestOfflineTextureResource(orid);
 		}
+		isEmissive = data["Emissive"].as<bool>();
 	}
 
 #pragma endregion

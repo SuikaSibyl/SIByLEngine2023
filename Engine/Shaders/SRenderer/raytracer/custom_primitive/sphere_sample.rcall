@@ -1,0 +1,59 @@
+#version 460 core
+#extension GL_EXT_ray_tracing           : enable
+#extension GL_GOOGLE_include_directive  : enable
+
+#include "../include/common_sample_shape.h"
+#include "../../../Utility/math.h"
+#include "../../../Utility/geometry.h"
+
+layout(location = 0) callableDataInEXT SampleQuery cSampleQuery;
+
+/**
+* Sample a point on a sphere light.
+* @ref: https://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Sampling_Light_Sources#x2-SamplingSpheres
+*/
+void main()
+{
+    const uint geometryID = cSampleQuery.geometry_id;
+    const GeometryInfo geometryInfo = geometryInfos[geometryID];
+    const mat4 o2w = ObjectToWorld(geometryInfo);
+    const vec3  center = (o2w * vec4(0,0,0,1)).xyz;
+    const float r = length((o2w * vec4(1,0,0,1)).xyz - center);
+
+        // If the reference point is inside the sphere, just sample the whole sphere uniformly
+    if (distance_squared(cSampleQuery.ref_point, center) < r * r) {
+        float z = 1 - 2 * cSampleQuery.uv.x;
+        float r_ = sqrt(max(0., 1 - z * z));
+        float phi = 2 * k_pi * cSampleQuery.uv.y;
+        vec3 offset = vec3(r_ * cos(phi), r_ * sin(phi), z);
+        cSampleQuery.position = center + r * offset;
+        cSampleQuery.normal = offset;
+        return;
+    }
+
+    // Otherwise sample a ray inside a cone towards the sphere center.
+    // Build a coordinate system with n pointing towards the sphere
+    vec3 dir_to_center = normalize(center - cSampleQuery.ref_point);
+    mat3 frame = createONB(dir_to_center);
+    // These are not exactly "elevation" and "azimuth": elevation here
+    // stands for the extended angle of the cone, and azimuth here stands
+    // for the polar coordinate angle on the substended disk.
+    // I just don't like the theta/phi naming convention...
+    float sin_elevation_max_sq = r * r / distance_squared(cSampleQuery.ref_point, center);
+    float cos_elevation_max = sqrt(max(0.f, 1 - sin_elevation_max_sq));
+    // Uniformly interpolate between 1 (angle 0) and max
+    float cos_elevation = (1 - cSampleQuery.uv[0]) + cSampleQuery.uv[0] * cos_elevation_max;
+    float sin_elevation = sqrt(max(0.f, 1 - cos_elevation * cos_elevation));
+    float azimuth = cSampleQuery.uv[1] * 2 * k_pi;
+    float dc = distance(cSampleQuery.ref_point, center);
+    float ds = dc * cos_elevation -
+        sqrt(max(0.f, r * r - dc * dc * sin_elevation * sin_elevation));
+    float cos_alpha = (dc * dc + r * r - ds * ds) / (2 * dc * r);
+    float sin_alpha = sqrt(max(0.f, 1 - cos_alpha * cos_alpha));
+    // Add negative sign since normals point outwards.
+    vec3 n_on_sphere = - frame * vec3(sin_alpha * cos(azimuth), sin_alpha * sin(azimuth), cos_alpha);
+    vec3 p_on_sphere = r * n_on_sphere + center;
+    cSampleQuery.position = p_on_sphere;
+    cSampleQuery.normal = n_on_sphere;
+    return;
+}

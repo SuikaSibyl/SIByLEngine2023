@@ -57,6 +57,17 @@ namespace SIByL
 			uint32_t roughness_metalic_ao_tex;
 		};
 
+		/** standard light data */
+		struct LightData {
+			// 0: diffuse area light - sphere
+			// 1: diffuse area light - triangle mesh
+			// 2: env map
+			uint32_t	lightType;
+			Math::vec3	emission;
+			uint32_t	index;		// geometry index (type 0/1) or texture index (type 2)
+			Math::vec3	padding;
+		};
+
 		/** mesh / geometry draw call data */
 		struct GeometryDrawData {
 			uint32_t vertexOffset;
@@ -150,6 +161,8 @@ namespace SIByL
 		inline auto updateCamera(GFX::TransformComponent const& transform, GFX::CameraComponent const& camera) noexcept -> void;
 
 		struct {
+			uint32_t width = 800;
+			uint32_t height = 600;
 			uint32_t batchIdx = 0;
 		} state;
 		/**
@@ -564,11 +577,15 @@ namespace SIByL
 
 	inline auto SRenderer::updateCamera(GFX::TransformComponent const& transform, GFX::CameraComponent const& camera) noexcept -> void {
 		RHI::MultiFrameFlights* multiFrameFlights = GFX::GFXManager::get()->rhiLayer->getMultiFrameFlights();
+		static GlobalUniforms globalUniRecord;
 		GlobalUniforms globalUni;
 		globalUni.view = Math::transpose(Math::lookAt(transform.translation, transform.translation + transform.getRotatedForward(), Math::vec3(0, 1, 0)).m);
 		globalUni.proj = Math::transpose(Math::perspective(camera.fovy, camera.aspect, camera.near, camera.far).m);
 		globalUni.viewInverse = Math::inverse(globalUni.view);
 		globalUni.projInverse = Math::inverse(globalUni.proj);
+		if (globalUniRecord.view != globalUni.view || globalUniRecord.proj != globalUni.proj)
+			state.batchIdx = 0;
+		globalUniRecord = globalUni;
 		rdgraph->getStructuredUniformBuffer<GlobalUniforms>("global_uniform_buffer")->setStructure(globalUni, multiFrameFlights->getFlightIndex());
 	}
 

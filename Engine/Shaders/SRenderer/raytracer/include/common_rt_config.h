@@ -1,0 +1,11 @@
+#ifndef _SRENDERER_COMMON_RT_CONFIG_HEADER_
+#define _SRENDERER_COMMON_RT_CONFIG_HEADER_
+
+#define PRIMITIVE_TRIANGLE      0
+#define PRIMITIVE_SPHERE        1
+
+#define PRIMITIVE_TYPE_COUNT    2
+
+const float T_MAX  = 100000;
+const int MAX_DEPTH = 3;
+#endif

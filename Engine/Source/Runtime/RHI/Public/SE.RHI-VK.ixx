@@ -4524,7 +4524,7 @@ namespace SIByL::RHI
 				for (int n = 0; n < 4; ++n)
 					instance.transform.matrix[m][n] = descriptor.instances[i].transform.data[m][n];
 			instance.instanceCustomIndex = descriptor.instances[i].instanceCustomIndex;
-			instance.mask = 0xFF;
+			instance.mask = descriptor.instances[i].mask;
 			instance.instanceShaderBindingTableRecordOffset = descriptor.instances[i].instanceShaderBindingTableRecordOffset;
 			instance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
 			instance.accelerationStructureReference = blasAddress;
