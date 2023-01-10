@@ -21,5 +21,5 @@ void main() {
     normal = normalize(normal * 2.0 - 1.0);   
     normal = normalize(TBN * normal);
 
-    outColor = vec4(TBN[2], 1.0);
+    outColor = vec4(base_color, 1.0);
 }

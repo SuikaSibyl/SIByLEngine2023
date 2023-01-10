@@ -34,7 +34,7 @@ HitGeometry getHitGeometry() {
     const vec3  sphere_center = (o2w * vec4(0,0,0,1)).xyz;
     const float sphere_radius = length((o2w * vec4(1,0,0,1)).xyz - sphere_center);
     // Record the intersection
-    const vec3 hitPoint = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
+    const vec3 hitPoint = sphere_center + sphere_radius * normalize(gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT - sphere_center);
     const vec3 geometric_normal = normalize(hitPoint - sphere_center);
     const vec3 cartesian = normalize((transpose(o2wn) * vec4(geometric_normal, 0)).xyz);
     // We use the spherical coordinates as uv
@@ -42,7 +42,7 @@ HitGeometry getHitGeometry() {
     // https://en.wikipedia.org/wiki/Spherical_coordinate_system#Cartesian_coordinates
     const float elevation = acos(clamp(cartesian.y, -1., 1.));
     const float azimuth = atan2(cartesian.z, cartesian.x);
-    hit.worldPosition = geometric_normal;
+    hit.worldPosition = hitPoint;
     hit.uv = vec2(-azimuth * k_inv_2_pi, elevation * k_inv_pi);
     const vec3 wNormal = geometric_normal;
     const vec3 wTangent = cross(geometric_normal, vec3(0,1,0));
