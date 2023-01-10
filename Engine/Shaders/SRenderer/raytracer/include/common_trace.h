@@ -12,11 +12,16 @@ layout(binding = 1, set = 1, rgba32f) uniform image2D storageImage;
 
 /** Primary Payload Struct */
 struct PrimaryPayload {
-    vec3    hitPoint;       // position of hit point
-    uint    rngState;       // state of the random number generator
-    vec3    hitNormal;      // normal of hit point
-    uint    flags;          // flags of the hit result
-    vec3    baseColor;      // normal of hit point
+    vec3    position;       // 00: position of hit point
+    uint    flags;          // 12: flags of the hit result
+    vec2    uv;             // 16: uv of hit point
+    uint    matID;          // 24: material ID of hit point
+    uint    padding;        // 28: padding ?
+    mat3    TBN;            // 32: TBN frame of hit point
+};
+/** Primary Payload Struct */
+struct ShadowPayload {
+    bool    occluded;
 };
 
 /** Flag Definition */

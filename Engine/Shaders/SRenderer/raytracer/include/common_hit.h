@@ -48,6 +48,7 @@ HitGeometry getHitGeometry() {
     const vec3 wTangent = cross(geometric_normal, vec3(0,1,0));
     vec3 wBitangent = cross(wNormal, wTangent) * geometryInfo.oddNegativeScaling;
     hit.TBN = mat3(wTangent, wBitangent, wNormal);
+    hit.TBN[2] = faceforward(hit.TBN[2], gl_WorldRayDirectionEXT, hit.TBN[2]);
 #elif (PRIMITIVE_TYPE == PRIMITIVE_TRIANGLE)
     // Get the indices of the vertices of the triangle
     const uint i0 = indices[3 * primitiveID + 0 + geometryInfo.indexOffset];
@@ -85,6 +86,7 @@ HitGeometry getHitGeometry() {
         TBN[i] = mat3(wTangent, wBitangent, wNormal);
     }
     hit.TBN = barycentrics.x * TBN[0] + barycentrics.y * TBN[1] + barycentrics.z * TBN[2];
+    hit.TBN[2] = faceforward(hit.TBN[2], gl_WorldRayDirectionEXT, hit.TBN[2]);
 #endif
     // Return hit geometry
     return hit;

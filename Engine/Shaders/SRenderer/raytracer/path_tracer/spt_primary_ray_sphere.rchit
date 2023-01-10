@@ -4,4 +4,4 @@
 #include "../include/common_trace.h"
 #define PRIMITIVE_TYPE PRIMITIVE_SPHERE
 
-#include "stracer_rchit.glsl"
+#include "spt_primary_ray_common.glsl"

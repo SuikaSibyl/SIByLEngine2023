@@ -32,10 +32,10 @@ namespace SIByL
 			GFX::GFXManager::get()->registerShaderModuleResource(rgen, "../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/stracer_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
 			GFX::GFXManager::get()->registerShaderModuleResource(rmiss, "../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/stracer_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
 			GFX::GFXManager::get()->registerShaderModuleResource(rchit_trimesh, 
-				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/stracer_rchit_variant_primitive_trimesh_rchit.spv", 
+				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/spt_primary_ray_trimesh_rchit.spv", 
 				{ nullptr, RHI::ShaderStages::CLOSEST_HIT });
 			GFX::GFXManager::get()->registerShaderModuleResource(rchit_sphere,
-				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/stracer_rchit_variant_primitive_sphere_rchit.spv", 
+				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/spt_primary_ray_sphere_rchit.spv", 
 				{ nullptr, RHI::ShaderStages::CLOSEST_HIT });
 			GFX::GFXManager::get()->registerShaderModuleResource(rint_sphere,
 				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/custom_primitive/sphere_rint.spv", 

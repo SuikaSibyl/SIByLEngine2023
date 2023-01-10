@@ -6,6 +6,10 @@
 
 #define PRIMITIVE_TYPE_COUNT    2
 
+#define CALLABLE_SAMPLING_OFFSET    0
+#define CALLABLE_SPHERE_SAMPLING    0
+#define CALLABLE_PDF_SPHERE_SAMPLING    0
+
 const float T_MAX  = 100000;
-const int MAX_DEPTH = 3;
+const int MAX_DEPTH = 4;
 #endif

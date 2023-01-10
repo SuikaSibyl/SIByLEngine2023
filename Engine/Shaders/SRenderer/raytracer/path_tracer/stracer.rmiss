@@ -7,6 +7,5 @@ layout(location = 0) rayPayloadInEXT PrimaryPayload primaryPld;
 
 void main()
 {
-    primaryPld.baseColor = vec3(0.0);
     setIntersected(primaryPld.flags, false);
 }

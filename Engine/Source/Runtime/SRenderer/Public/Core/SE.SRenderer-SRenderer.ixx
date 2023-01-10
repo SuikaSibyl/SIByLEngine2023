@@ -273,7 +273,7 @@ namespace SIByL
 					0, // padding0;
 					0, // padding1;
 					0, // padding2;
-					0.f, //oddNegativeScaling;
+					1.f, //oddNegativeScaling;
 					RHI::AffineTransformMatrix{}, // geometryTransform
 					RHI::AffineTransformMatrix{}, // geometryTransformInverse
 				});
@@ -327,7 +327,7 @@ namespace SIByL
 				for (auto idx : meshRecordRef->second.geometry_indices) {
 					sceneDataPack.geometry_buffer_cpu[idx].geometryTransform = objectMat;
 					sceneDataPack.geometry_buffer_cpu[idx].geometryTransformInverse = Math::inverse(objectMat);
-					sceneDataPack.geometry_buffer_cpu[idx].oddNegativeScaling = oddScaling;
+					sceneDataPack.geometry_buffer_cpu[idx].oddNegativeScaling = oddScaling >= 0 ? 1.f : -1.f;
 				}
 				meshRecordRef->second.blasInstance.transform = objectMat;
 				sceneDataPack.tlas_desc.instances.push_back(meshRecordRef->second.blasInstance);

@@ -2,8 +2,10 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_ray_tracing : require
 
-layout(location = 1) rayPayloadInEXT bool hitOccluder;
+#include "../include/common_trace.h"
+
+layout(location = 1) rayPayloadInEXT ShadowPayload rShadowPld;
 
 void main() {
-    hitOccluder = true;
+    rShadowPld.occluded = true;
 }
