@@ -71,6 +71,7 @@ HitGeometry getHitGeometry() {
     const vec2 u2 = vertices[i2 + geometryInfo.vertexOffset].texCoords;
     hit.uv = u0 * barycentrics.x + u1 * barycentrics.y + u2 * barycentrics.z;
     // Get BTN
+    const vec3 geometryNormal = normalize((o2wn * vec4(cross(v1 - v0, v2 - v0), 0)).xyz);
     vec3 n[3], t[3];
     mat3 TBN[3];
     n[0] = vertices[i0 + geometryInfo.vertexOffset].normal;
@@ -86,7 +87,7 @@ HitGeometry getHitGeometry() {
         TBN[i] = mat3(wTangent, wBitangent, wNormal);
     }
     hit.TBN = barycentrics.x * TBN[0] + barycentrics.y * TBN[1] + barycentrics.z * TBN[2];
-    hit.TBN[2] = faceforward(hit.TBN[2], gl_WorldRayDirectionEXT, hit.TBN[2]);
+    hit.TBN[2] = faceforward(hit.TBN[2], gl_WorldRayDirectionEXT, geometryNormal);
 #endif
     // Return hit geometry
     return hit;

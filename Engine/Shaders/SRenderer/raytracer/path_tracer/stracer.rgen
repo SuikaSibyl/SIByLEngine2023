@@ -132,6 +132,7 @@ vec3 unidirectional_path_tracing(in Ray ray, in uint RNG) {
 
         vec2 bsdf_uv = vec2(stepAndOutputRNGFloat(RNG), stepAndOutputRNGFloat(RNG));
         vec3 dir_bsdf = rPrimaryPld.TBN * cosineSampleHemisphere(bsdf_uv);
+        radiance = rPrimaryPld.TBN[2];
 
         // Trace a ray towards bsdf_dir. Note that again we have
         // to have an "epsilon" tnear to prevent self intersection.
@@ -148,7 +149,7 @@ vec3 unidirectional_path_tracing(in Ray ray, in uint RNG) {
             break;
         }
         ray = bsdf_ray;
-        
+        break;
         // // Remember "path_throughput" already stores all the path contribution on and before v_i.
         // // So we only need to compute G(v_{i}, v_{i+1}) * f(v_{i-1}, v_{i}, v_{i+1}) * L(v_{i}, v_{i+1})
 
