@@ -12,6 +12,8 @@ hitAttributeEXT vec2 attributes;
 struct HitGeometry {
     vec3 worldPosition;
     uint matID;
+    vec3 geometryNormal;
+    uint lightID;
     vec2 uv;
     mat3 TBN;
 };
@@ -34,6 +36,7 @@ HitGeometry getHitGeometry() {
     const vec3  sphere_center = (o2w * vec4(0,0,0,1)).xyz;
     const float sphere_radius = length((o2w * vec4(1,0,0,1)).xyz - sphere_center);
     // Record the intersection
+    // *: we should re-normalize it, using tHit is super unstable
     const vec3 hitPoint = sphere_center + sphere_radius * normalize(gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT - sphere_center);
     const vec3 geometric_normal = normalize(hitPoint - sphere_center);
     const vec3 cartesian = normalize((transpose(o2wn) * vec4(geometric_normal, 0)).xyz);
@@ -49,6 +52,7 @@ HitGeometry getHitGeometry() {
     vec3 wBitangent = cross(wNormal, wTangent) * geometryInfo.oddNegativeScaling;
     hit.TBN = mat3(wTangent, wBitangent, wNormal);
     hit.TBN[2] = faceforward(hit.TBN[2], gl_WorldRayDirectionEXT, hit.TBN[2]);
+    hit.geometryNormal = hit.TBN[2]; // for sphere, geometry normal and shading normal are similar
 #elif (PRIMITIVE_TYPE == PRIMITIVE_TRIANGLE)
     // Get the indices of the vertices of the triangle
     const uint i0 = indices[3 * primitiveID + 0 + geometryInfo.indexOffset];
@@ -88,6 +92,7 @@ HitGeometry getHitGeometry() {
     }
     hit.TBN = barycentrics.x * TBN[0] + barycentrics.y * TBN[1] + barycentrics.z * TBN[2];
     hit.TBN[2] = faceforward(hit.TBN[2], gl_WorldRayDirectionEXT, geometryNormal);
+    hit.geometryNormal = faceforward(geometryNormal, gl_WorldRayDirectionEXT, geometryNormal);
 #endif
     // Return hit geometry
     return hit;

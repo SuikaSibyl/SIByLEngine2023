@@ -19,6 +19,7 @@ layout(location = 0) callableDataEXT SampleQuery cSampleQuery;
 
 struct PathVertex {
     vec3 position;
+    vec3 offsetedPosition;
     bool intersected;
 };
 
@@ -27,6 +28,13 @@ struct Ray {
     float   tnear;
     vec3    direction;
     float   tfar;
+};
+
+struct LightSample {
+    vec3 position;
+    uint lightID;
+    vec3 normal;
+    uint lightType;
 };
 
 vec3 skyColor(in vec3 rayDir) {
@@ -64,15 +72,33 @@ PathVertex tracePrimaryRay(in Ray ray) {
             0);                    // Location of payload
     PathVertex vertex;
     vertex.position = rPrimaryPld.position;
+    // *: notice that we should offset the position by geometry normal rather than shading normal
+    vertex.offsetedPosition = offsetPositionAlongNormal(rPrimaryPld.position, rPrimaryPld.geometryNormal);
     vertex.intersected = getIntersected(rPrimaryPld.flags);
     return vertex;
 }
 
+LightSample sampleLight(in vec3 refPoint, inout uint RNG) {
+    cSampleQuery.ref_point = refPoint;
+    cSampleQuery.geometry_id = 2; // TODO :: flexible ID
+    cSampleQuery.uv = vec2(stepAndOutputRNGFloat(RNG), stepAndOutputRNGFloat(RNG));
+    executeCallableEXT(0, 0);
+    // create light sample
+    LightSample lightSample;
+    lightSample.position = offsetPositionAlongNormal(cSampleQuery.position, cSampleQuery.normal);
+    lightSample.normal = cSampleQuery.normal;
+    return lightSample;
+}
+
 vec3 unidirectional_path_tracing(in Ray ray, in uint RNG) {
-    // 
-    ray.tnear = 0.0001;
+    // loop carrying variable definition
     vec3 radiance = vec3(0);
     vec3 path_throughput = vec3(1);
+    // eta_scale stores the scale introduced by Snell-Descartes law to the BSDF (eta^2).
+    // We use the same Russian roulette strategy as Mitsuba/pbrt-v3
+    // and tracking eta_scale and removing it from the
+    // path contribution is crucial for many bounces of refraction.
+    float eta_scale = 1.f;
 
     // primary intersection
     PathVertex vertex = tracePrimaryRay(ray);
@@ -81,11 +107,6 @@ vec3 unidirectional_path_tracing(in Ray ray, in uint RNG) {
         // return skyColor(ray.direction);
         return vec3(0,0,0);
     }
-    // eta_scale stores the scale introduced by Snell-Descartes law to the BSDF (eta^2).
-    // We use the same Russian roulette strategy as Mitsuba/pbrt-v3
-    // and tracking eta_scale and removing it from the
-    // path contribution is crucial for many bounces of refraction.
-    float eta_scale = 1.f;
     // TODO :: check whether hit a light source
     // We hit a light immediately. 
     // This path has only two vertices and has contribution
@@ -98,24 +119,13 @@ vec3 unidirectional_path_tracing(in Ray ray, in uint RNG) {
     
     // We iteratively sum up path contributions from paths with different number of vertices
     // If max_depth == -1, we rely on Russian roulette for path termination.
-    for (int num_vertices = 3; MAX_DEPTH == -1 || num_vertices <= 4; ++num_vertices) {
+    for (int num_vertices = 3; MAX_DEPTH == -1 || num_vertices <= 3; ++num_vertices) {
         MaterialData material = materials[rPrimaryPld.matID];
         vec3 baseColor = texture(textures[material.basecolor_opacity_tex], rPrimaryPld.uv).rgb;
-        cSampleQuery.ref_point = rPrimaryPld.position;
-        cSampleQuery.geometry_id = 2; // TODO :: flexible ID
-        cSampleQuery.uv = vec2(stepAndOutputRNGFloat(RNG), stepAndOutputRNGFloat(RNG));
-        executeCallableEXT(0, 0);
-        const vec3 lightPos = cSampleQuery.position;
-        const vec3 lightNormal = cSampleQuery.normal;
-        const vec3 shadowRayOrigin = offsetPositionAlongNormal(rPrimaryPld.position, rPrimaryPld.TBN[2]);
-        const vec3 lightSample = lightPos;
-        const vec3 lightDir = normalize(lightSample - shadowRayOrigin);
-        // If the point on light is occluded, G is 0. So we need to test for occlusion.
-        // To avoid self intersection, we need to set the tnear of the ray
-        // to a small "epsilon". We set the epsilon to be a small constant times the
-        // scale of the scene, which we can obtain through the get_shadow_epsilon() function.
-        // TODO:: Fix this
-        const float lightDist = length(lightSample - shadowRayOrigin) - 0.001;
+
+        LightSample lightSample = sampleLight(vertex.offsetedPosition, RNG);
+        const vec3 toLightSample = lightSample.position - vertex.offsetedPosition;
+
         rShadowPld.occluded = false;            
         traceRayEXT(tlas,           // Top-level acceleration structure
             gl_RayFlagsOpaqueEXT,   // Ray flags, here saying "treat all geometry as opaque"
@@ -123,15 +133,15 @@ vec3 unidirectional_path_tracing(in Ray ray, in uint RNG) {
             PRIMITIVE_TYPE_COUNT,   // SBT record offset
             0,                      // SBT record stride for offset
             1,                      // Miss index
-            shadowRayOrigin,        // Ray origin
+            vertex.offsetedPosition,        // Ray origin
             0.0,                    // Minimum t-value
-            lightDir,               // Ray direction
-            lightDist,              // Maximum t-value
+            normalize(toLightSample),               // Ray direction
+            length(toLightSample),              // Maximum t-value
             1);                     // Location of payload
-        // if(!rShadowPld.occluded && num_vertices!=3)
-        //     radiance += path_throughput * baseColor;
-        if(num_vertices==4)
-            radiance += baseColor;
+        if(!rShadowPld.occluded && num_vertices==3)
+            radiance = vec3(1);
+        // radiance = rPrimaryPld.TBN[2];
+        break;
         vec2 bsdf_uv = vec2(stepAndOutputRNGFloat(RNG), stepAndOutputRNGFloat(RNG));
         vec3 dir_bsdf = rPrimaryPld.TBN * cosineSampleHemisphere(bsdf_uv);
 

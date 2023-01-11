@@ -55,6 +55,10 @@ namespace SIByL
 			uint32_t basecolor_opacity_tex;
 			uint32_t normal_bump_tex;
 			uint32_t roughness_metalic_ao_tex;
+			uint32_t padding_0;
+			uint32_t padding_1;
+			uint32_t padding_2;
+			uint32_t padding_3;
 		};
 
 		/** standard light data */

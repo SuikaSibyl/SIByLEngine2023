@@ -52,7 +52,12 @@ struct MaterialData {
   uint basecolor_opacity_tex;
   uint normal_bump_tex;
   uint roughness_metalic_ao_tex;
+  uint padding0;
+  uint padding1;
+  uint padding2;
+  uint padding3;
 };
+
 // binding definition
 layout(binding = 0, set = 0, scalar) uniform _GlobalUniforms { GlobalUniforms globalUniform; };
 layout(binding = 1, set = 0, scalar) buffer _VerticesBuffer { InterleavedVertex vertices[]; };

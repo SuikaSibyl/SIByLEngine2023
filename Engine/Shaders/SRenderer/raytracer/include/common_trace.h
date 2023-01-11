@@ -16,8 +16,10 @@ struct PrimaryPayload {
     uint    flags;          // 12: flags of the hit result
     vec2    uv;             // 16: uv of hit point
     uint    matID;          // 24: material ID of hit point
-    uint    padding;        // 28: padding ?
-    mat3    TBN;            // 32: TBN frame of hit point
+    uint    padding_0;      // 28: padding ?
+    vec3    geometryNormal; // 32: geometry normal
+    uint    padding_1;      // 44: padding ?
+    mat3    TBN;            // 48: TBN frame of hit point
 };
 /** Primary Payload Struct */
 struct ShadowPayload {
