@@ -26,7 +26,7 @@ void main()
         float phi = 2 * k_pi * cSampleQuery.uv.y;
         vec3 offset = vec3(r_ * cos(phi), r_ * sin(phi), z);
         cSampleQuery.position = center + r * offset;
-        cSampleQuery.normal = vec3(1,0,0);
+        cSampleQuery.normal = offset;
         return;
     }
     // Otherwise sample a ray inside a cone towards the sphere center.

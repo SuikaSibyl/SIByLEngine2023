@@ -22,6 +22,5 @@ void main()
     const float sphere_radius = length((o2w * vec4(1,0,0,1)).xyz - sphere_center);
     // Sphere intersection
     const float tHit = hitSphere(sphere_center, sphere_radius, ray_origin, ray_direction);
-    // Report hit point
     if(tHit > 0) reportIntersectionEXT(tHit, 1);
 }

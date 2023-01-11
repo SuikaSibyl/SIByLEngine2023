@@ -90,6 +90,22 @@ LightSample sampleLight(in vec3 refPoint, inout uint RNG) {
     return lightSample;
 }
 
+bool traceOccludeRay(in Ray ray) {
+    rShadowPld.occluded = false;
+    traceRayEXT(tlas,           // Top-level acceleration structure
+        gl_RayFlagsOpaqueEXT,   // Ray flags, here saying "treat all geometry as opaque"
+        0xFF,                   // 8-bit instance mask, here saying "trace against all instances"
+        PRIMITIVE_TYPE_COUNT,   // SBT record offset
+        0,                      // SBT record stride for offset
+        1,                      // Miss index
+        ray.origin,             // Ray origin
+        ray.tnear,              // Minimum t-value
+        ray.direction,          // Ray direction
+        ray.tfar,               // Maximum t-value
+        1);                     // Location of payload
+    return rShadowPld.occluded;
+}
+
 vec3 unidirectional_path_tracing(in Ray ray, in uint RNG) {
     // loop carrying variable definition
     vec3 radiance = vec3(0);
@@ -125,21 +141,24 @@ vec3 unidirectional_path_tracing(in Ray ray, in uint RNG) {
 
         LightSample lightSample = sampleLight(vertex.offsetedPosition, RNG);
         const vec3 toLightSample = lightSample.position - vertex.offsetedPosition;
+        // cast shadow ray
+        Ray shadow_ray;
+        shadow_ray.origin     = vertex.offsetedPosition;
+        shadow_ray.tnear      = 0.000;
+        shadow_ray.direction  = normalize(toLightSample);
+        shadow_ray.tfar       = length(toLightSample);
 
-        rShadowPld.occluded = false;            
-        traceRayEXT(tlas,           // Top-level acceleration structure
-            gl_RayFlagsOpaqueEXT,   // Ray flags, here saying "treat all geometry as opaque"
-            0xFF,                   // 8-bit instance mask, here saying "trace against all instances"
-            PRIMITIVE_TYPE_COUNT,   // SBT record offset
-            0,                      // SBT record stride for offset
-            1,                      // Miss index
-            vertex.offsetedPosition,        // Ray origin
-            0.0,                    // Minimum t-value
-            normalize(toLightSample),               // Ray direction
-            length(toLightSample),              // Maximum t-value
-            1);                     // Location of payload
-        if(!rShadowPld.occluded && num_vertices==3)
-            radiance = vec3(1);
+        // const int geometryID = 2;
+        // const GeometryInfo geometryInfo = geometryInfos[geometryID];
+        // const mat4 o2w = ObjectToWorld(geometryInfo);
+        // const vec3  sphere_center = (o2w * vec4(0,0,0,1)).xyz;
+        // const float sphere_radius = length((o2w * vec4(1,0,0,1)).xyz - sphere_center);
+        // vec3 target = shadow_ray.origin + shadow_ray.direction * shadow_ray.tfar;
+        // if(distance(target, sphere_center) > sphere_radius)
+        //     radiance = vec3(0.9);
+        bool occluded = traceOccludeRay(shadow_ray);        
+        if(!occluded && num_vertices==3)
+            radiance = vec3(0.9);
         // radiance = rPrimaryPld.TBN[2];
         break;
         vec2 bsdf_uv = vec2(stepAndOutputRNGFloat(RNG), stepAndOutputRNGFloat(RNG));
