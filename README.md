@@ -4,7 +4,7 @@
 
 Previous version could be find in: [SibylEngine2021](https://github.com/SuikaSibyl/SibylEngine2021). Version 2023 is a complete refactoring including better and more extendable structure, solution, design.
 
-![EditorDemoImg](https://imagehost-suikasibyl-us.oss-us-west-1.aliyuncs.com/SIByLEngine20221123_editor.jpg)
+![EditorDemoImg](https://imagehost-suikasibyl-us.oss-us-west-1.aliyuncs.com/SE2023_0_demo_ui.png)
 
 ## Builds
 
@@ -34,7 +34,7 @@ By default, Nvidia GPU with Turing or higher architecture is required to correct
   - [SRenderer module](./docs/SIByLDocument_008_SRenderer.md)
     - Uniform scene packing for both rasterizer & ray tracer.
     - Procedure sphere primitive for ray tracing pipeline
-
+    - Path Tracer (on going ...)
 - Physics
   - // TODO.
 - Editor Toolchain
