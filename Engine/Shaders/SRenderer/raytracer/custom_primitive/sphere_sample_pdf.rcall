@@ -1,0 +1,52 @@
+#version 460 core
+#extension GL_EXT_ray_tracing           : enable
+#extension GL_GOOGLE_include_directive  : enable
+
+#include "../include/common_sample_shape.h"
+#include "../../../Utility/math.h"
+#include "../../../Utility/geometry.h"
+#include "../../../Utility/sampling.h"
+
+layout(location = 1) callableDataInEXT SamplePdfQuery cSamplePdfQuery;
+
+float surface_area_sphere(in float radius) {
+    return 4 * k_pi * radius * radius;
+}
+
+/**
+* Get the pdf of a sampled point on a sphere light.
+* @ref: https://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Sampling_Light_Sources#x2-SamplingSpheres
+*/
+void main()
+{
+    const uint geometryID = cSamplePdfQuery.geometry_id;
+    const GeometryInfo geometryInfo = geometryInfos[geometryID];
+    const mat4 o2w = ObjectToWorld(geometryInfo);
+    const vec3  center = (o2w * vec4(0,0,0,1)).xyz;
+    const float r = length((o2w * vec4(1,0,0,1)).xyz - center);
+    
+    if (distance_squared(cSamplePdfQuery.ref_point, center) < r * r) {
+        // If the reference point is inside the sphere, just sample the whole sphere uniformly
+        cSamplePdfQuery.pdf = 1 / surface_area_sphere(r);
+        return;
+    }
+    float sin_theta_max_sq = r * r / distance_squared(cSamplePdfQuery.ref_point, center);
+    float cos_theta_max = sqrt(max(0.f, 1 - sin_theta_max_sq));
+    if(cos_theta_max > 0.999999) {
+        vec3 mdir_to_center = normalize(cSamplePdfQuery.ref_point - center);
+        cSamplePdfQuery.pdf = cosineHemispherePdf(abs(dot(mdir_to_center, cSamplePdfQuery.sample_normal)));
+    }
+    else {
+        // Uniform sampling PDF of a cone.
+        float pdf_solid_angle = 1 / (2 * k_pi * (1 - cos_theta_max));
+        // Convert it back to area measure
+        vec3 p_on_sphere = cSamplePdfQuery.sample_position;
+        vec3 n_on_sphere = cSamplePdfQuery.sample_normal;
+        vec3 dir = normalize(p_on_sphere - cSamplePdfQuery.ref_point);
+        // Output the result
+        cSamplePdfQuery.pdf = pdf_solid_angle * abs(dot(n_on_sphere, dir)) /
+            distance_squared(cSamplePdfQuery.ref_point, p_on_sphere);
+    }
+
+    return;
+}

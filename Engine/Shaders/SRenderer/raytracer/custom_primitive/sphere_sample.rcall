@@ -4,6 +4,7 @@
 
 #include "../include/common_sample_shape.h"
 #include "../../../Utility/math.h"
+#include "../../../Utility/sampling.h"
 #include "../../../Utility/geometry.h"
 
 layout(location = 0) callableDataInEXT SampleQuery cSampleQuery;
@@ -35,18 +36,25 @@ void main()
     mat3 frame = createONB(dir_to_center);
     float sin_theta_max_sq = r * r / distance_squared(cSampleQuery.ref_point, center);
     float cos_theta_max = sqrt(max(0.f, 1 - sin_theta_max_sq));
-    // Uniformly interpolate between 1 (angle 0) and max
-    float cos_theta = (1 - cSampleQuery.uv[0]) + cSampleQuery.uv[0] * cos_theta_max;
-    float sin_theta = sqrt(max(0.f, 1 - cos_theta * cos_theta));
-    float phi = cSampleQuery.uv[1] * 2 * k_pi;
-    // Compute angle from center of sphere to sampled point on surface
-    float dc = distance(cSampleQuery.ref_point, center);
-    float ds = dc * cos_theta - sqrt(max(0.f, r * r - dc * dc * sin_theta * sin_theta));
-    float cos_alpha = (dc * dc + r * r - ds * ds) / (2 * dc * r);
-    float sin_alpha = sqrt(max(0.f, 1 - cos_alpha * cos_alpha));
+    vec3 n_on_sphere;
+    if(cos_theta_max > 0.999999) {
+        n_on_sphere = - normalize(frame * cosineSampleHemisphere(cSampleQuery.uv));
+    }
+    else {
+        // Uniformly interpolate between 1 (angle 0) and max
+        float cos_theta = (1 - cSampleQuery.uv[0]) + cSampleQuery.uv[0] * cos_theta_max;
+        float sin_theta = sqrt(max(0.f, 1 - cos_theta * cos_theta));
+        float phi = cSampleQuery.uv[1] * 2 * k_pi;
+        // Compute angle from center of sphere to sampled point on surface
+        float dc = distance(cSampleQuery.ref_point, center);
+        float ds = dc * cos_theta - sqrt(max(0.f, r * r - dc * dc * sin_theta * sin_theta));
+        float cos_alpha = (dc * dc + r * r - ds * ds) / (2 * dc * r);
+        float sin_alpha = sqrt(max(0.f, 1 - cos_alpha * cos_alpha));
+        // get the normal of the sample
+        n_on_sphere = - normalize(frame * vec3(sin_alpha * cos(phi), sin_alpha * sin(phi), cos_alpha));
+    }
     // Compute surface normal and sampled point on sphere
     // Add negative sign since normals point outwards
-    vec3 n_on_sphere = - normalize(frame * vec3(sin_alpha * cos(phi), sin_alpha * sin(phi), cos_alpha));
     vec3 p_on_sphere = r * n_on_sphere + center;
     cSampleQuery.position = p_on_sphere;
     cSampleQuery.normal = n_on_sphere;

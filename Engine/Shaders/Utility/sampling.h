@@ -53,4 +53,19 @@ vec3 cosineSampleHemisphere(in vec2 u, out float inv_pdf) {
     return smp;
 }
 
+float cosineHemispherePdf(in float cosTheta) {
+    return cosTheta * k_inv_pi;
+}
+
+vec3 uniformSampleCone(in vec2 u, float cosThetaMax) {
+    float cosTheta = (1.f - u[0]) + u[0] * cosThetaMax;
+    float sinTheta = sqrt(1.f - cosTheta * cosTheta);
+    float phi = u[1] * 2 * k_pi;
+    return vec3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+}
+
+float uniformConePdf(float cosThetaMax) {
+    return 1 / (2 * k_pi * (1 - cosThetaMax));
+}
+
 #endif

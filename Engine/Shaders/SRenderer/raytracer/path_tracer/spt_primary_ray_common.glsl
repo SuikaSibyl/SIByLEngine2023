@@ -13,5 +13,7 @@ void main()
     primaryPld.TBN              = geoInfo.TBN;
     primaryPld.matID            = geoInfo.matID;
     primaryPld.uv               = geoInfo.uv;
+    primaryPld.geometryID       = geoInfo.geometryID;
+    primaryPld.lightID          = geoInfo.lightID;
     setIntersected(primaryPld.flags, true);
 }

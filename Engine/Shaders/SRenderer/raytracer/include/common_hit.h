@@ -15,6 +15,8 @@ struct HitGeometry {
     vec3 geometryNormal;
     uint lightID;
     vec2 uv;
+    uint geometryID;
+    uint padding;
     mat3 TBN;
 };
 
@@ -28,6 +30,8 @@ HitGeometry getHitGeometry() {
     const mat4 o2wn = ObjectToWorldNormal(geometryInfo);
     // Get matID
     hit.matID = geometryInfo.materialID;
+    hit.geometryID = geometryID;
+    hit.lightID = geometryInfo.lightID;
 #if (PRIMITIVE_TYPE == PRIMITIVE_SPHERE)
     // ray data
     const vec3 ray_origin    = gl_WorldRayOriginEXT;

@@ -8,6 +8,7 @@ module;
 #include "../../../Application/Public/SE.Application.Config.h"
 export module SE.SRenderer:SRenderer;
 import SE.Core.Resource;
+import SE.Core.ECS;
 import SE.Math.Geometric;
 import SE.RHI;
 import SE.GFX.Core;
@@ -67,9 +68,15 @@ namespace SIByL
 			// 1: diffuse area light - triangle mesh
 			// 2: env map
 			uint32_t	lightType;
-			Math::vec3	emission;
-			uint32_t	index;		// geometry index (type 0/1) or texture index (type 2)
-			Math::vec3	padding;
+			Math::vec3	intensity;
+			uint32_t	index;						// geometry index (type 0/1) or texture index (type 2)
+			uint32_t	sample_dist_size_0;			// sample distribution unit size
+			uint32_t	sample_dist_offset_pmf_0;	// sample distribution offset for pmf start
+			uint32_t	sample_dist_offset_cdf_0;	// sample distribution offset for cdf start
+			float		total_value;
+			uint32_t	sample_dist_size_1;			// (another dim of) sample distribution unit size
+			uint32_t	sample_dist_offset_pmf_1;	// (another dim of) sample distribution offset for pmf start
+			uint32_t	sample_dist_offset_cdf_1;	// (another dim of) sample distribution offset for cdf start
 		};
 
 		/** mesh / geometry draw call data */
@@ -79,7 +86,7 @@ namespace SIByL
 			uint32_t materialID;
 			uint32_t indexSize;
 			uint32_t padding0;
-			uint32_t padding1;
+			uint32_t lightID;
 			uint32_t primitiveType;
 			float oddNegativeScaling;
 			RHI::AffineTransformMatrix geometryTransform = {};
@@ -94,6 +101,17 @@ namespace SIByL
 			Math::mat4 projInverse;
 		};
 
+		/** scene information uniforms data for render descriptor set */
+		struct SceneInfoUniforms {
+			uint32_t  light_num;
+			uint32_t  light_offset_pmf;
+			uint32_t  light_offset_cdf;
+			uint32_t  padding;
+			Math::vec4 padding_v0;
+			Math::vec4 padding_v1;
+			Math::vec4 padding_v2;
+		};
+
 		/**
 		* Scene Updating
 		* --------------------------------
@@ -106,14 +124,18 @@ namespace SIByL
 			std::unique_ptr<RHI::Buffer> position_buffer		= nullptr;
 			std::unique_ptr<RHI::Buffer> index_buffer			= nullptr;
 			std::unique_ptr<RHI::Buffer> material_buffer		= nullptr;
+			std::unique_ptr<RHI::Buffer> light_buffer			= nullptr;
+			std::unique_ptr<RHI::Buffer> sample_dist_buffer		= nullptr;
 			// unbinded textures array to contain all textures
 			std::vector<RHI::TextureView*> unbinded_textures = {};
 			// cpu data
-			std::vector<float>				position_buffer_cpu	= {};	// position buffer cpu
-			std::vector<float>				vertex_buffer_cpu	= {};	// vertex buffer cpu
-			std::vector<uint32_t>			index_buffer_cpu	= {};	// index buffer cpu
-			std::vector<GeometryDrawData>	geometry_buffer_cpu	= {};	// geometries data
-			std::vector<MaterialData>		material_buffer_cpu	= {};	// geometries data
+			std::vector<float>				position_buffer_cpu		= {};		// position buffer cpu
+			std::vector<float>				vertex_buffer_cpu		= {};		// vertex buffer cpu
+			std::vector<float>				sample_dist_buffer_cpu	= {};		// sample dist buffer cpu
+			std::vector<uint32_t>			index_buffer_cpu		= {};		// index buffer cpu
+			std::vector<GeometryDrawData>	geometry_buffer_cpu		= {};		// geometries data
+			std::vector<MaterialData>		material_buffer_cpu		= {};		// material data
+			std::vector<LightData>			light_buffer_cpu		= {};		// light data
 			RHI::TLASDescriptor				tlas_desc = {};
 			std::shared_ptr<RHI::TLAS>		tlas = {};
 			std::shared_ptr<RHI::TLAS>		back_tlas = {};
@@ -137,6 +159,7 @@ namespace SIByL
 			std::unordered_map<GFX::Material*, uint32_t> material_record = {};
 			std::unordered_map<RHI::TextureView*, uint32_t> textureview_record = {};
 			std::unordered_map<Core::EntityHandle, MeshReferenceRecord> mesh_ref_record = {};
+			std::unordered_map<Core::EntityHandle, uint32_t> light_comp_record = {};
 		} sceneDataPack;
 		/**
 		* Custom Primitive definition
@@ -231,6 +254,7 @@ namespace SIByL
 		rdgraph = rdg;
 		// create global uniform buffer
 		rdg->createStructuredUniformBuffer<GlobalUniforms>("global_uniform_buffer");
+		rdg->createStructuredUniformBuffer<SceneInfoUniforms>("scene_info_buffer");
 		// create common descriptor data
 		RHI::ShaderStagesFlags stages =
 			  (uint32_t)RHI::ShaderStages::VERTEX
@@ -249,7 +273,10 @@ namespace SIByL
 				RHI::BindGroupLayoutEntry{ 2, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
 				RHI::BindGroupLayoutEntry{ 3, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
 				RHI::BindGroupLayoutEntry{ 4, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
-				RHI::BindGroupLayoutEntry{ 5, stages, RHI::BindlessTexturesBindingLayout{}},
+				RHI::BindGroupLayoutEntry{ 5, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
+				RHI::BindGroupLayoutEntry{ 6, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
+				RHI::BindGroupLayoutEntry{ 7, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::UNIFORM}},
+				RHI::BindGroupLayoutEntry{ 8, stages, RHI::BindlessTexturesBindingLayout{}},
 				} }
 		);
 		commonDescData.set1_layout_rt = device->createBindGroupLayout(
@@ -310,6 +337,7 @@ namespace SIByL
 			GFX::MeshRenderer* meshrenderer = go->getEntity().getComponent<GFX::MeshRenderer>();
 			if (!meshrenderer) 
 				continue;
+			GFX::LightComponent* lightComponenet = go->getEntity().getComponent<GFX::LightComponent>();
 			float oddScaling = 1.f;
 			Math::mat4 objectMat;
 			{	// get mesh transform matrix
@@ -364,6 +392,7 @@ namespace SIByL
 			// if mesh reference is pointing to a triangle mesh
 			GFX::Mesh* mesh = meshref->mesh;
 			if (!mesh) continue;
+			GFX::LightComponent* lightComponenet = go->getEntity().getComponent<GFX::LightComponent>();
 			// if do not have according mesh record, add the record
 			auto meshRecord = sceneDataPack.mesh_record.find(mesh);
 			if (meshRecord == sceneDataPack.mesh_record.end()) {
@@ -475,6 +504,7 @@ namespace SIByL
 						geometrydata.oddNegativeScaling = oddScaling;
 						geometrydata.materialID = findMat->second;
 						geometrydata.primitiveType = meshref->customPrimitiveFlag;
+						geometrydata.lightID = lightComponenet ? 0 : 4294967295;
 						sceneDataPack.geometry_buffer_cpu.emplace_back(geometrydata);
 					}
 					meshRefRecord->second.blasInstance.instanceCustomIndex = geometry_start;
@@ -486,7 +516,20 @@ namespace SIByL
 				//meshRefRecord->second.
 				//customPrimitive
 			}
+			// if do not have according light record, add the record
+			if (lightComponenet) {
+				auto lightCompRecord = sceneDataPack.light_comp_record.find(go->entity);
+				sceneDataPack.light_comp_record[go->entity] = sceneDataPack.light_buffer_cpu.size();
+				sceneDataPack.light_buffer_cpu.push_back(LightData{
+					uint32_t(lightComponenet->type),
+					lightComponenet->intensity,
+					static_cast<uint32_t>(sceneDataPack.light_buffer_cpu.size()),
+					0,
+					});
+			}
 		}
+		// TODO :: do light sampling precomputation
+		sceneDataPack.sample_dist_buffer_cpu.push_back(1.f);
 
 		// if geometry is dirty, rebuild all the buffers
 		if (sceneDataPack.geometryDirty) {
@@ -507,6 +550,16 @@ namespace SIByL
 				sceneDataPack.material_buffer_cpu.data(),
 				sceneDataPack.material_buffer_cpu.size() * sizeof(MaterialData),
 				  (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS
+				| (uint32_t)RHI::BufferUsage::STORAGE);
+			sceneDataPack.light_buffer = device->createDeviceLocalBuffer(
+				sceneDataPack.light_buffer_cpu.data(),
+				sceneDataPack.light_buffer_cpu.size() * sizeof(LightData),
+				(uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS
+				| (uint32_t)RHI::BufferUsage::STORAGE);
+			sceneDataPack.sample_dist_buffer = device->createDeviceLocalBuffer(
+				sceneDataPack.sample_dist_buffer_cpu.data(),
+				sceneDataPack.sample_dist_buffer_cpu.size() * sizeof(float),
+				(uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS
 				| (uint32_t)RHI::BufferUsage::STORAGE);
 			if (config.enableRayTracing) {
 				sceneDataPack.position_buffer = device->createDeviceLocalBuffer(
@@ -530,7 +583,10 @@ namespace SIByL
 							{2,RHI::BindingResource{{sceneDataPack.index_buffer.get(), 0, sceneDataPack.index_buffer->size()}}},
 							{3,RHI::BindingResource{rdgraph->getStructuredArrayMultiStorageBuffer<GeometryDrawData>("geometry_buffer")->getBufferBinding(i)}},
 							{4,RHI::BindingResource{{sceneDataPack.material_buffer.get(), 0, sceneDataPack.material_buffer->size()}}},
-							{5,RHI::BindingResource{sceneDataPack.unbinded_textures,
+							{5,RHI::BindingResource{{sceneDataPack.light_buffer.get(), 0, sceneDataPack.light_buffer->size()}}},
+							{6,RHI::BindingResource{{sceneDataPack.sample_dist_buffer.get(), 0, sceneDataPack.sample_dist_buffer->size()}}},
+							{7,RHI::BindingResource{rdgraph->getStructuredUniformBuffer<SceneInfoUniforms>("scene_info_buffer")->getBufferBinding(i)}},
+							{8,RHI::BindingResource{sceneDataPack.unbinded_textures,
 								Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler.get()}},
 					} });
 					commonDescData.set0_flights_array[i] = commonDescData.set0_flights[i].get();

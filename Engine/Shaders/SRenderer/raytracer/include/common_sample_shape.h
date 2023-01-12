@@ -14,4 +14,14 @@ struct SampleQuery {
     vec3    normal;
 };
 
+struct SamplePdfQuery {
+    // input
+    vec3    ref_point;
+    uint    geometry_id;
+    vec3    sample_position;
+    vec3    sample_normal;
+    // output
+    float   pdf;
+};
+
 #endif

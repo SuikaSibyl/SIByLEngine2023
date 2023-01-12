@@ -389,6 +389,28 @@ namespace SIByL::GFX
 		static auto deserialize(void* compAoS, Core::EntityHandle const& handle) -> void;
 	};
 
+	export struct LightComponent {
+		/* constructor */
+		LightComponent() = default;
+		/* light type */
+		enum struct LightType {
+			DIFFUSE_AREA_LIGHT,
+			MAX_ENUM,
+		} type;
+		/* light intensity to scale the light */
+		Math::vec3 intensity = Math::vec3(1, 1, 1);
+		/** serialize */
+		static auto serialize(void* emitter, Core::EntityHandle const& handle) -> void;
+		/** deserialize */
+		static auto deserialize(void* compAoS, Core::EntityHandle const& handle) -> void;
+	};
+
+	export inline auto to_string(LightComponent::LightType type) noexcept -> std::string {
+		switch (type) {
+		case SIByL::GFX::LightComponent::LightType::DIFFUSE_AREA_LIGHT:	return "Diffuse Area Light";
+		default: return "Unknown Type"; }
+	}
+
 	/** A singleton manager manages graphic components and resources. */
 	export struct GFXManager :public Core::Manager {
 		// online resource registers
@@ -1036,6 +1058,34 @@ namespace SIByL::GFX
 
 #pragma endregion
 
+#pragma region LIGHT_COMPONENT_IMPL
+
+	auto LightComponent::serialize(void* pemitter, Core::EntityHandle const& handle) -> void {
+		YAML::Emitter& emitter = *reinterpret_cast<YAML::Emitter*>(pemitter);
+		Core::Entity entity(handle);
+		LightComponent* lightComponent = entity.getComponent<LightComponent>();
+		if (lightComponent != nullptr) {
+			emitter << YAML::Key << "LightComponent";
+			emitter << YAML::Value << YAML::BeginMap;
+			emitter << YAML::Key << "Type" << YAML::Value << uint32_t(lightComponent->type);
+			emitter << YAML::Key << "Intensity" << YAML::Value << lightComponent->intensity;
+			emitter << YAML::EndMap;
+		}
+	}
+
+	auto LightComponent::deserialize(void* compAoS, Core::EntityHandle const& handle) -> void {
+		YAML::NodeAoS& components = *reinterpret_cast<YAML::NodeAoS*>(compAoS);
+		Core::Entity entity(handle);
+		auto lightComponentAoS = components["LightComponent"];
+		if (lightComponentAoS) {
+			LightComponent* lightComponent = entity.addComponent<LightComponent>();
+			lightComponent->type = LightType(lightComponentAoS["Type"].as<uint32_t>());
+			lightComponent->intensity = lightComponentAoS["Intensity"].as<Math::vec3>();
+		}
+	}
+
+#pragma endregion
+
 #pragma region GFX_MANAGER_IMPL
 
 	GFXManager* GFXManager::singleton = nullptr;
@@ -1049,6 +1099,7 @@ namespace SIByL::GFX
 		Core::ComponentManager::get()->registerComponent<GFX::MeshReference>();
 		Core::ComponentManager::get()->registerComponent<GFX::MeshRenderer>();
 		Core::ComponentManager::get()->registerComponent<GFX::CameraComponent>();
+		Core::ComponentManager::get()->registerComponent<GFX::LightComponent>();
 		// register resource types
 		Core::ResourceManager::get()->registerResource<GFX::Buffer>();
 		Core::ResourceManager::get()->registerResource<GFX::Mesh>();

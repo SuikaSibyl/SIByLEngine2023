@@ -37,7 +37,7 @@ struct GeometryInfo {
   uint materialID;
   uint indexSize;
   uint padding0;
-  uint padding1;
+  uint lightID;
   uint primitiveType;
   float oddNegativeScaling;
   vec4 transform[3];
@@ -57,14 +57,38 @@ struct MaterialData {
   uint padding2;
   uint padding3;
 };
-
+// light info
+struct LightData {
+  // 0: diffuse area light - sphere
+  // 1: diffuse area light - triangle mesh
+  // 2: env map
+  uint	lightType;
+  vec3	intensity;
+  uint	index;						// geometry index (type 0/1) or texture index (type 2)
+  uint	sample_dist_size_0;			// sample distribution unit size
+  uint	sample_dist_offset_pmf_0;	// sample distribution offset for pmf start
+  uint	sample_dist_offset_cdf_0;	// sample distribution offset for cdf start
+  float total_value;
+  uint	sample_dist_size_1;			// (another dim of) sample distribution unit size
+  uint	sample_dist_offset_pmf_1;	// (another dim of) sample distribution offset for pmf start
+  uint	sample_dist_offset_cdf_1;	// (another dim of) sample distribution offset for cdf start
+};
+// scene info uniforms
+struct SceneInfoUniforms {
+  uint  light_num;
+  uint  light_offset_pmf;
+  uint  light_offset_cdf;
+};
 // binding definition
-layout(binding = 0, set = 0, scalar) uniform _GlobalUniforms { GlobalUniforms globalUniform; };
-layout(binding = 1, set = 0, scalar) buffer _VerticesBuffer { InterleavedVertex vertices[]; };
-layout(binding = 2, set = 0, scalar) buffer _IndicesBuffer  { uint indices[]; };
-layout(binding = 3, set = 0, scalar) buffer _GeometryBuffer { GeometryInfo geometryInfos[]; };
-layout(binding = 4, set = 0, scalar) buffer _MaterialBuffer { MaterialData materials[]; };
-layout(binding = 5, set = 0) uniform sampler2D textures[];
+layout(binding = 0, set = 0, scalar) uniform _GlobalUniforms  { GlobalUniforms globalUniform; };
+layout(binding = 1, set = 0, scalar) buffer _VerticesBuffer   { InterleavedVertex vertices[]; };
+layout(binding = 2, set = 0, scalar) buffer _IndicesBuffer    { uint indices[]; };
+layout(binding = 3, set = 0, scalar) buffer _GeometryBuffer   { GeometryInfo geometryInfos[]; };
+layout(binding = 4, set = 0, scalar) buffer _MaterialBuffer   { MaterialData materials[]; };
+layout(binding = 5, set = 0, scalar) buffer _LightBuffer      { LightData lights[]; };
+layout(binding = 6, set = 0, scalar) buffer _SampleDistBuffer { float sampleDistDatas[]; };
+layout(binding = 7, set = 0, scalar) uniform _SceneInfoBuffer { SceneInfoUniforms sceneInfoUniform; };
+layout(binding = 8, set = 0) uniform sampler2D textures[];
 
 // Utilities
 

@@ -174,6 +174,35 @@ namespace SIByL::Editor
 		}
 	};
 
+	export struct LightComponentFragment :public ComponentElucidator {
+		virtual auto elucidateComponent(GameObjectInspector::GameObjectData* data) noexcept -> void {
+			GFX::GameObject* go = data->scene->getGameObject(data->handle);
+			GFX::LightComponent* lightComp = go->getEntity().getComponent<GFX::LightComponent>();
+			if (lightComp) {
+				drawComponent<GFX::LightComponent>(go, "LightComponent", [](GFX::LightComponent* component) {
+					// set type
+					static std::string lightTypeNames;
+					static bool inited = false;
+					if (!inited) {
+						for (uint32_t i = 0; i < static_cast<uint32_t>(GFX::LightComponent::LightType::MAX_ENUM); ++i) {
+							if (i != 0)lightTypeNames += "\0";
+							lightTypeNames += GFX::to_string(static_cast<GFX::LightComponent::LightType>(i));
+						}
+						lightTypeNames += "\0\0";
+						inited = true;
+					}
+					int item_current = static_cast<int>(component->type);
+					ImGui::Combo("Light Type", &item_current, lightTypeNames.c_str());
+					// set scale
+					Math::vec3 intensity = component->intensity;
+					drawVec3Control("Intensity", intensity, 0, 100);
+					if (intensity != component->intensity)
+						component->intensity = intensity;
+				});
+			}
+		}
+	};
+
 	export struct CameraComponentFragment :public ComponentElucidator {
 		virtual auto elucidateComponent(GameObjectInspector::GameObjectData* data) noexcept -> void {
 			GFX::GameObject* go = data->scene->getGameObject(data->handle);
