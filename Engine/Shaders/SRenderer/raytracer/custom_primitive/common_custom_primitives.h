@@ -2,6 +2,7 @@
 #define _SRENDERER_COMMON_CUSTOM_PRIMITIVES_HEADER_
 
 #include "../../../Utility/math.h"
+#include "../../../Utility/geometry.h"
 #include "../include/common_rt_config.h"
 
 /** 

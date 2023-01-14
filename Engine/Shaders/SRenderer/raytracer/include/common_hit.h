@@ -81,7 +81,6 @@ HitGeometry getHitGeometry() {
     // Get BTN
     const vec3 geometryNormal = normalize((o2wn * vec4(cross(v1 - v0, v2 - v0), 0)).xyz);
     vec3 n[3], t[3];
-    mat3 TBN[3];
     n[0] = vertices[i0 + geometryInfo.vertexOffset].normal;
     n[1] = vertices[i1 + geometryInfo.vertexOffset].normal;
     n[2] = vertices[i2 + geometryInfo.vertexOffset].normal;
@@ -89,12 +88,12 @@ HitGeometry getHitGeometry() {
     t[1] = vertices[i1 + geometryInfo.vertexOffset].tangent;
     t[2] = vertices[i2 + geometryInfo.vertexOffset].tangent;
     for(int i=0; i<3; ++i) {
-        const vec3 wNormal = normalize((o2wn * vec4(n[i], 0)).xyz);
-        const vec3 wTangent = normalize((o2w * vec4(t[i], 0)).xyz);
-        vec3 wBitangent = cross(wNormal, wTangent) * geometryInfo.oddNegativeScaling;
-        TBN[i] = mat3(wTangent, wBitangent, wNormal);
+        n[i] = normalize((o2wn * vec4(n[i], 0)).xyz);
+        t[i] = normalize((o2w * vec4(t[i], 0)).xyz);
     }
-    hit.TBN = barycentrics.x * TBN[0] + barycentrics.y * TBN[1] + barycentrics.z * TBN[2];
+    const vec3 normal = n[0] * barycentrics.x + n[1] * barycentrics.y + n[2] * barycentrics.z;
+    const vec3 tangent = t[0] * barycentrics.x + t[1] * barycentrics.y + t[2] * barycentrics.z;
+    hit.TBN = buildTangentToWorld(vec4(tangent, geometryInfo.oddNegativeScaling), normal);
     hit.TBN[2] = faceforward(hit.TBN[2], gl_WorldRayDirectionEXT, geometryNormal);
     hit.geometryNormal = faceforward(geometryNormal, gl_WorldRayDirectionEXT, geometryNormal);
 #endif

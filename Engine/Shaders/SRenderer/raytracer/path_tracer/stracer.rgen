@@ -210,6 +210,7 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
         // return skyColor(ray.direction);
         return vec3(0,0,0);
     }
+    
     // We hit a light immediately. 
     // This path has only two vertices and has contribution
     // C = W(v0, v1) * G(v0, v1) * L(v0, v1)
@@ -224,6 +225,7 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
     // We iteratively sum up path contributions from paths with different number of vertices
     // If max_depth == -1, we rely on Russian roulette for path termination.
     for (int num_vertices = 3; MAX_DEPTH == -1 || num_vertices <= MAX_DEPTH + 1; ++num_vertices) {
+        
         // 1.
         // ---------------------------------------------
         // 1.1 Sample a light and a point on the light.
@@ -290,221 +292,89 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
                 C1 /= p1;
             }
         }
+        radiance += path_throughput * C1 * w1;
 
-        radiance += path_throughput * C1; // * w1;
-
-        // vec2 bsdf_uv = vec2(stepAndOutputRNGFloat(RNG), stepAndOutputRNGFloat(RNG));
-        // vec3 dir_bsdf = rPrimaryPld.TBN * cosineSampleHemisphere(bsdf_uv);
-
-        // MaterialData material = materials[rPrimaryPld.matID];
-        // vec3 baseColor = texture(textures[material.basecolor_opacity_tex], rPrimaryPld.uv).rgb;
-
-        // // Trace a ray towards bsdf_dir. Note that again we have
-        // // to have an "epsilon" tnear to prevent self intersection.
-        // vec3 recursiveRayOrigin = offsetPositionAlongNormal(rPrimaryPld.position, rPrimaryPld.TBN[2]);
-        // Ray bsdf_ray;
-        // bsdf_ray.origin     = recursiveRayOrigin;
-        // bsdf_ray.tnear      = 0.000;
-        // bsdf_ray.direction  = dir_bsdf;
-        // bsdf_ray.tfar       = T_MAX;
-        // PathVertex bsdf_vertex = tracePrimaryRay(bsdf_ray);
-        // if(!bsdf_vertex.intersected) {
-        //     // TODO:: add background / env map
-        //     // return skyColor(ray.direction);
-        //     break;
-        // }
-        // ray = bsdf_ray;
-        // vertex = bsdf_vertex;
-        // // Remember "path_throughput" already stores all the path contribution on and before v_i.
-        // // So we only need to compute G(v_{i}, v_{i+1}) * f(v_{i-1}, v_{i}, v_{i+1}) * L(v_{i}, v_{i+1})
-
-        // MaterialData material = materials[rPrimaryPld.matID];
-        
-        // // First, we sample a point on the light source.
-        // // We do this by first picking a light source, then pick a point on it.
-        // // TODO: sample light sources
-        // cSampleQuery.ref_point = rPrimaryPld.position;
-        // cSampleQuery.geometry_id = 2; // TODO :: flexible ID
-        // cSampleQuery.uv = vec2(stepAndOutputRNGFloat(RNG), stepAndOutputRNGFloat(RNG));
-        // executeCallableEXT(0, 0);
-        // const vec3 lightPos = cSampleQuery.position;
-        // const vec3 lightNormal = cSampleQuery.normal;
-
-        // // Next, we compute w1*C1/p1. We store C1/p1 in C1.
-        // vec3 C1 = vec3(0.f);
-        // float w1 = 0;
-        // // Remember "path_throughput" already stores all the path contribution on and before v_i.
-        // // So we only need to compute G(v_{i}, v_{i+1}) * f(v_{i-1}, v_{i}, v_{i+1}) * L(v_{i}, v_{i+1})
-        // {
-        //     // Let's first deal with C1 = G * f * L.
-        //     // Let's first compute G.
-        //     float G = 0;
-        //     vec3 dir_light;
-        //     // The geometry term is different between directional light sources and
-        //     // others. Currently we only have environment maps as directional light sources.
-        //     if(true){
-        //         const vec3 shadowRayOrigin = offsetPositionAlongNormal(rPrimaryPld.position, rPrimaryPld.TBN[2]);
-        //         const vec3 lightSample = lightPos;
-        //         const vec3 lightDir = normalize(lightSample - shadowRayOrigin);
-        //         // If the point on light is occluded, G is 0. So we need to test for occlusion.
-        //         // To avoid self intersection, we need to set the tnear of the ray
-        //         // to a small "epsilon". We set the epsilon to be a small constant times the
-        //         // scale of the scene, which we can obtain through the get_shadow_epsilon() function.
-        //         // TODO:: Fix this
-        //         const float lightDist = length(lightSample - shadowRayOrigin) - 0.001;
-        //         rShadowPld.occluded = false;            
-        //         traceRayEXT(tlas,           // Top-level acceleration structure
-        //             gl_RayFlagsOpaqueEXT,   // Ray flags, here saying "treat all geometry as opaque"
-        //             0xFF,                   // 8-bit instance mask, here saying "trace against all instances"
-        //             PRIMITIVE_TYPE_COUNT,   // SBT record offset
-        //             0,                      // SBT record stride for offset
-        //             1,                      // Miss index
-        //             shadowRayOrigin,        // Ray origin
-        //             0.0,                    // Minimum t-value
-        //             lightDir,               // Ray direction
-        //             lightDist,              // Maximum t-value
-        //             1);                     // Location of payload
-        //         if(!rShadowPld.occluded) {
-        //             G = 1;
-        //         }
-        //     }
-        //     else {
-        //     // if is_envmap
-        //     // TODO :: add envmap
-        //     }
-
-        //     // Before we proceed, we first compute the probability density p1(v1)
-        //     // The probability density for light sampling to sample our point is
-        //     // just the probability of sampling a light times the probability of sampling a point
-        //     float p1 = 1;
-        //     // TODO :: Fix light_pmf(scene, light_id) *
-        //     //             pdf_point_on_light(light, point_on_light, vertex.position, scene);
-
-        //     // We don't need to continue the computation if G is 0.
-        //     // Also sometimes there can be some numerical issue such that we generate
-        //     // a light path with probability zero
-        //     if (G > 0 && p1 > 0) {
-        //         // Let's compute f (BSDF) next.
-        //         vec3 dir_view = -ray.direction;
-        //         // TODO :: fix f computation
-        //         // vec3 f = eval(mat, dir_view, dir_light, vertex);
-        //         vec3 f = texture(textures[material.basecolor_opacity_tex], rPrimaryPld.uv).rgb;
-        //         // Evaluate the emission
-        //         // We set the footprint to zero since it is not fully clear how
-        //         // to set it in this case.
-        //         // One way is to use a roughness based heuristics, but we have multi-layered BRDFs.
-        //         // See "Real-time Shading with Filtered Importance Sampling" from Colbert et al.
-        //         // for the roughness based heuristics.
-        //         // TODO :: fix L computation
-        //         // vec3 L = emission(light, -dir_light, 0.f, point_on_light, scene);
-        //         vec3 L = vec3(1.f);
-        //         // C1 is just a product of all of them!
-        //         C1 = G * f * L;
-                
-        //         // Next let's compute w1
-
-        //         // Remember that we want to set
-        //         // w1 = p_1(v^1)^2 / (p_1(v^1)^2 + p_2(v^1)^2)
-        //         // Notice that all of the probability density share the same path prefix and those cancel out.
-        //         // Therefore we only need to account for the generation of the vertex v_{i+1}.
-
-        //         // The probability density for our hemispherical sampling to sample
-        //         // TODO :: fix p2 computation
-        //         // float p2 = pdf_sample_bsdf(mat, dir_view, dir_light, vertex, scene.texture_pool);
-        //         float p2 = pdf_sample_bsdf_lambertian(rPrimaryPld.TBN, dir_view, dir_light);
-        //         // !!!! IMPORTANT !!!!
-        //         // In general, p1 and p2 now live in different spaces!!
-        //         // our BSDF API outputs a probability density in the solid angle measure
-        //         // while our light probability density is in the area measure.
-        //         // We need to make sure that they are in the same space.
-        //         // This can be done by accounting for the Jacobian of the transformation
-        //         // between the two measures.
-        //         // In general, I recommend to transform everything to area measure 
-        //         // (except for directional lights) since it fits to the path-space math better.
-        //         // Converting a solid angle measure to an area measure is just a
-        //         // multiplication of the geometry term G (let solid angle be dS, area be dA,
-        //         // we have dA/dS = G).
-        //         p2 *= G;
-
-        //         w1 = (p1*p1) / (p1*p1 + p2*p2);
-        //         C1 /= p1;
-        //     }
-        // }
-        // radiance += path_throughput * C1 * w1;
-
-        // // Let's do the hemispherical sampling next.
-        // vec3 dir_view = -ray.direction;
-        // vec2 bsdf_rnd_param_uv = vec2(stepAndOutputRNGFloat(RNG), stepAndOutputRNGFloat(RNG));
-        // // float bsdf_rnd_param_w = stepAndOutputRNGFloat(RNG);
-
-        // // // std::optional<BSDFSampleRecord> bsdf_sample_ =
-        // // //     sample_bsdf(mat,
-        // // //                 dir_view,
-        // // //                 vertex,
-        // // //                 scene.texture_pool,
-        // // //                 bsdf_rnd_param_uv,
-        // // //                 bsdf_rnd_param_w);
-        // // if (!bsdf_sample_) {
-        // //     // BSDF sampling failed. Abort the loop.
-        // //     break;
-        // // }
-        // // const BSDFSampleRecord &bsdf_sample = *bsdf_sample_;
-        // // Vector3 dir_bsdf = bsdf_sample.dir_out;
-        // vec3 dir_bsdf = rPrimaryPld.TBN * cosineSampleHemisphere(bsdf_rnd_param_uv);
-
-        // // Trace a ray towards bsdf_dir. Note that again we have
-        // // to have an "epsilon" tnear to prevent self intersection.
-        // const vec3 recursiveRayOrigin = offsetPositionAlongNormal(rPrimaryPld.position, rPrimaryPld.TBN[2]);
-        // Ray bsdf_ray;
-        // bsdf_ray.origin     = recursiveRayOrigin;
-        // bsdf_ray.tnear      = 0; // get_intersection_epsilon(scene);
-        // bsdf_ray.direction  = dir_bsdf;
-        // bsdf_ray.tfar       = T_MAX;
-        // // trace recursive primary ray
-        // PathVertex bsdf_vertex = tracePrimaryRay(bsdf_ray);
-        // // To update path_throughput
-        // // we need to multiply G(v_{i}, v_{i+1}) * f(v_{i-1}, v_{i}, v_{i+1}) to it
-        // // and divide it with the pdf for getting v_{i+1} using hemisphere sampling.
-        // float G;        
-        // if(bsdf_vertex.intersected) {
-        //     G = abs(dot(dir_bsdf, rPrimaryPld.TBN[2])) /
-        //         distance_squared(bsdf_vertex.position, vertex.position); // cos/d2
+        // 1.2 Sample the hemisphere with bsdf importance
+        vec2 bsdf_uv = vec2(stepAndOutputRNGFloat(RNG), stepAndOutputRNGFloat(RNG));
+        vec3 dir_bsdf = vertex.frame * cosineSampleHemisphere(bsdf_uv);
+        // TODO :: polymorphic bsdf sampling 
+        // TODO :: Update ray differentials & eta_scale
+        // if (bsdf_sample.eta == 0) {
+        //     ray_diff.spread = reflect(ray_diff, vertex.mean_curvature, bsdf_sample.roughness);
         // } else {
-        //     // We hit nothing, set G to 1 to account for the environment map contribution.
-        //     G = 1;
-        // }
-        // vec3 f = texture(textures[material.basecolor_opacity_tex], rPrimaryPld.uv).rgb;
-        // float p2 = pdf_sample_bsdf_lambertian(rPrimaryPld.TBN, dir_view, dir_bsdf);
-        // if (p2 <= 0) {
-        //     // Numerical issue -- we generated some invalid rays.
-        //     break;
+        //     ray_diff.spread = refract(ray_diff, vertex.mean_curvature, bsdf_sample.eta, bsdf_sample.roughness);
+        //     eta_scale /= (bsdf_sample.eta * bsdf_sample.eta);
         // }
 
-        // // Remember to convert p2 to area measure!
-        // p2 *= G;
-        // // note that G cancels out in the division f/p, but we still need
-        // // G later for the calculation of w2.
+        float G = 0;
 
-        // // Now we want to check whether dir_bsdf hit a light source, and
-        // // account for the light contribution (C2 & w2 & p2).
-        // // There are two possibilities: either we hit an emissive surface,
-        // // or we hit an environment map.
-        // // We will handle them separately.
-        // // if (bsdf_vertex && is_light(scene.shapes[bsdf_vertex->shape_id])) {
-            
-        // // }
-        // // else if (!bsdf_vertex && has_envmap(scene)) {
-        // // }
+        // Trace a ray towards bsdf_dir. Note that again we have
+        // to have an "epsilon" tnear to prevent self intersection.
+        Ray bsdf_ray;
+        bsdf_ray.origin     = vertex.offsetedPosition;
+        bsdf_ray.tnear      = 0.000;
+        bsdf_ray.direction  = dir_bsdf;
+        bsdf_ray.tfar       = T_MAX;
+        PathVertex bsdf_vertex = tracePrimaryRay(bsdf_ray);
+        if(bsdf_vertex.intersected) {
+            // TEST(?) :: abs(-dot(dir_bsdf, bsdf_vertex.geometricNormal)) / 
+            G = max(-dot(dir_bsdf, bsdf_vertex.geometricNormal), 0) /
+                        distance_squared(bsdf_vertex.position, vertex.offsetedPosition);
+        }
+        else {
+            G = 1;
+        }
+                
+        vec3 dir_view = -ray.direction;
+        vec3 f = eval(vertex.matID, dir_view, dir_bsdf, vertex);
+        float p2 = pdf_sample_bsdf(vertex.matID, dir_view, dir_bsdf, vertex);
 
-        // if (!bsdf_vertex.intersected) {
-        //     // Hit nothing -- can't continue tracing.
-        //     break;
+        if (p2 <= 0) {
+            // Numerical issue -- we generated some invalid rays.
+            break;
+        }
+        // Remember to convert p2 to area measure!
+        p2 *= G;
+        // Now we want to check whether dir_bsdf hit a light source, and
+        // account for the light contribution (C2 & w2 & p2).
+        // There are two possibilities: either we hit an emissive surface,
+        // or we hit an environment map.
+        // We will handle them separately.
+        if(bsdf_vertex.intersected && is_light(bsdf_vertex)) {
+            LightSample bsdfHitSample;
+            bsdfHitSample.position = bsdf_vertex.position;
+            bsdfHitSample.normal = bsdf_vertex.geometricNormal;
+            vec3 L = emission(0, // TODO:: flexible light ID
+                        -dir_bsdf,
+                        0, bsdfHitSample);
+            vec3 C2 = G * f * L;
+            // Next let's compute p1(v2): the probability of the light source sampling
+            // directly drawing the point corresponds to bsdf_dir.
+            int light_id = 0; // TODO :: flexible light id
+
+            // const Light &light = lights[light_id];
+            float p1 = 1. * //light_pmf(scene, light_id) *
+                pdf_point_on_light(vertex.offsetedPosition,
+                                2, // TODO :: flexible ID
+                                bsdf_vertex.position, 
+                                bsdf_vertex.geometricNormal);
+            float w2 = (p2*p2) / (p1*p1 + p2*p2);
+            C2 /= p2;
+            radiance += path_throughput * C2 * w2;  
+        }
+        // TODO :: ENV MAP
+        // else if () {
+
         // }
 
+        if(!bsdf_vertex.intersected) {
+            break;
+        }
+        
         // // TODO :: Russian roulette
         // // // Update rays/intersection/path_throughput/current_pdf
         // // // Russian roulette heuristics
-        // float rr_prob = 1;
+        float rr_prob = 1;
         // // if (num_vertices - 1 >= scene.options.rr_depth) {
         // //     rr_prob = min(max((1 / eta_scale) * path_throughput), Real(0.95));
         // //     if (next_pcg32_real<Real>(rng) > rr_prob) {
@@ -513,9 +383,9 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
         // //     }
         // // }
 
-        // ray = bsdf_ray;
-        // vertex = bsdf_vertex;
-        // path_throughput *= (G * f) / (p2 * rr_prob);
+        ray = bsdf_ray;
+        vertex = bsdf_vertex;
+        path_throughput *= (G * f) / (p2 * rr_prob);
     }
 
     return radiance;

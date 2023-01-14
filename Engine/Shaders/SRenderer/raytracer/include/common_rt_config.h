@@ -13,5 +13,5 @@
 #define NOT_A_LIGHT 4294967295
 
 const float T_MAX  = 100000;
-const int MAX_DEPTH = 3;
+const int MAX_DEPTH = 5;
 #endif

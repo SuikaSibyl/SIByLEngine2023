@@ -8,23 +8,19 @@ layout(push_constant) uniform PushConsts { PushConstants pushConstants; };
 
 layout(location = 0) out vec2 uv;
 layout(location = 1) out uint matID;
-layout(location = 2) out vec3 color;
-layout(location = 3) out mat3 TBN;
+layout(location = 2) out vec3 normalWS;
+layout(location = 3) out vec4 tangentWS;
 
 void main() {
     InterleavedVertex vertex = fetchVertex();
     GeometryInfo geometry = geometryInfos[pushConstants.geometry_idx];
-
+    // compute position, uv, matID
     mat4 o2w = ObjectToWorld(geometry);
     vec4 positionWorld =  o2w * vec4(vertex.position, 1);
     gl_Position = globalUniform.proj * globalUniform.view * positionWorld;
     uv = vertex.texCoords;
     matID = geometry.materialID;
-
-    vec3 wNormal = normalize((ObjectToWorldNormal(geometry) * vec4(vertex.normal, 0)).xyz);
-    vec3 wTangent = normalize((o2w * vec4(vertex.tangent, 0)).xyz);
-    vec3 wBitangent = cross(wNormal, wTangent) * geometry.oddNegativeScaling;
-    TBN = mat3(wTangent, wBitangent, wNormal);
-
-    color = vec3(wNormal);
+    // compute normal, tangent
+    normalWS = normalize((ObjectToWorldNormal(geometry) * vec4(vertex.normal, 0)).xyz);
+    tangentWS = vec4(normalize((o2w * vec4(vertex.tangent, 0)).xyz), geometry.oddNegativeScaling);
 }
