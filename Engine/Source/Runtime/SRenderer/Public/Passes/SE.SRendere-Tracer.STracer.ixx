@@ -28,7 +28,9 @@ namespace SIByL
 			shadow_ray_rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 
 			sphere_sampling_rcall = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			trimesh_sampling_rcall = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 			sphere_sampling_pdf_rcall = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			trimesh_sampling_pdf_rcall = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 
 			GFX::GFXManager::get()->registerShaderModuleResource(rgen, "../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/stracer_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
 			GFX::GFXManager::get()->registerShaderModuleResource(rmiss, "../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/stracer_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
@@ -52,6 +54,9 @@ namespace SIByL
 			GFX::GFXManager::get()->registerShaderModuleResource(sphere_sampling_rcall,
 				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/custom_primitive/sphere_sample_rcall.spv", 
 				{ nullptr, RHI::ShaderStages::CALLABLE });
+			GFX::GFXManager::get()->registerShaderModuleResource(trimesh_sampling_rcall,
+				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/custom_primitive/trimesh_sample_rcall.spv", 
+				{ nullptr, RHI::ShaderStages::CALLABLE });
 
 			GFX::GFXManager::get()->registerShaderModuleResource(sphere_sampling_pdf_rcall,
 				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/custom_primitive/sphere_sample_pdf_rcall.spv", 
@@ -68,7 +73,9 @@ namespace SIByL
 		Core::GUID shadow_ray_rmiss;
 
 		Core::GUID sphere_sampling_rcall;
+		Core::GUID trimesh_sampling_rcall;
 		Core::GUID sphere_sampling_pdf_rcall;
+		Core::GUID trimesh_sampling_pdf_rcall;
 
 		virtual auto registerPass(SRenderer* renderer) noexcept -> void override {
 			GFX::RDGraph* rdg = renderer->rdgraph;
@@ -112,6 +119,7 @@ namespace SIByL
 									 Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rint_sphere)->shaderModule.get(),}, }},
 								RHI::SBTsDescriptor::CallableSBT{{
 									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(sphere_sampling_rcall)->shaderModule.get()},
+									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(trimesh_sampling_rcall)->shaderModule.get()},
 									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(sphere_sampling_pdf_rcall)->shaderModule.get()}, }},
 							} });
 					}

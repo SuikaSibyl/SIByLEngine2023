@@ -18,6 +18,7 @@ struct HitGeometry {
     uint geometryID;
     uint padding;
     mat3 TBN;
+    vec3 geometryNormalUnflipped;
 };
 
 HitGeometry getHitGeometry() {
@@ -55,6 +56,7 @@ HitGeometry getHitGeometry() {
     const vec3 wTangent = cross(geometric_normal, vec3(0,1,0));
     vec3 wBitangent = cross(wNormal, wTangent) * geometryInfo.oddNegativeScaling;
     hit.TBN = mat3(wTangent, wBitangent, wNormal);
+    hit.geometryNormalUnflipped = hit.TBN[2];
     hit.TBN[2] = faceforward(hit.TBN[2], gl_WorldRayDirectionEXT, hit.TBN[2]);
     hit.geometryNormal = hit.TBN[2]; // for sphere, geometry normal and shading normal are similar
 #elif (PRIMITIVE_TYPE == PRIMITIVE_TRIANGLE)
@@ -95,6 +97,7 @@ HitGeometry getHitGeometry() {
     const vec3 tangent = t[0] * barycentrics.x + t[1] * barycentrics.y + t[2] * barycentrics.z;
     hit.TBN = buildTangentToWorld(vec4(tangent, geometryInfo.oddNegativeScaling), normal);
     hit.TBN[2] = faceforward(hit.TBN[2], gl_WorldRayDirectionEXT, geometryNormal);
+    hit.geometryNormalUnflipped = geometryNormal;
     hit.geometryNormal = faceforward(geometryNormal, gl_WorldRayDirectionEXT, geometryNormal);
 #endif
     // Return hit geometry

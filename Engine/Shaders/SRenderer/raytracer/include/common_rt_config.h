@@ -8,10 +8,11 @@
 
 #define CALLABLE_SAMPLING_OFFSET        0
 #define CALLABLE_SPHERE_SAMPLING        0
-#define CALLABLE_SPHERE_SAMPLING_PDF    1
+#define CALLABLE_TRIMESH_SAMPLING       1
+#define CALLABLE_SPHERE_SAMPLING_PDF    2
 
 #define NOT_A_LIGHT 4294967295
 
 const float T_MAX  = 100000;
-const int MAX_DEPTH = 5;
+const int MAX_DEPTH = 2;
 #endif

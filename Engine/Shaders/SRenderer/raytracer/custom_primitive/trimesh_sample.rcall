@@ -1,0 +1,55 @@
+#version 460 core
+#extension GL_EXT_ray_tracing           : enable
+#extension GL_GOOGLE_include_directive  : enable
+
+#include "../include/common_sample_shape.h"
+#include "../../../Utility/math.h"
+#include "../../../Utility/sampling.h"
+#include "../../../Utility/geometry.h"
+
+layout(location = 0) callableDataInEXT SampleQuery cSampleQuery;
+
+/**
+* Sample a point on a triangle mesh light.
+* @ref: https://pbr-book.org/3ed-2018/Monte_Carlo_Integration/2D_Sampling_with_Multidimensional_Transformations#SamplingaTriangle
+*/
+void main()
+{
+    // sample a triangle in the geometry
+    const uint primitive_id = uint(sampleTableDist1D(
+        int(cSampleQuery.offset.x), 
+        int(cSampleQuery.size.x), 
+        cSampleQuery.w));
+    const uint geometryID = cSampleQuery.geometry_id;
+    const GeometryInfo geometryInfo = geometryInfos[geometryID];
+    // Get the indices of the vertices of the triangle
+    const uint i0 = indices[3 * primitive_id + 0 + geometryInfo.indexOffset];
+    const uint i1 = indices[3 * primitive_id + 1 + geometryInfo.indexOffset];
+    const uint i2 = indices[3 * primitive_id + 2 + geometryInfo.indexOffset];
+    // Get the vertices / normals of the triangle
+    const vec3 v0 = vertices[i0 + geometryInfo.vertexOffset].position;
+    const vec3 v1 = vertices[i1 + geometryInfo.vertexOffset].position;
+    const vec3 v2 = vertices[i2 + geometryInfo.vertexOffset].position;
+    const vec3 n0 = vertices[i0 + geometryInfo.vertexOffset].normal;
+    const vec3 n1 = vertices[i1 + geometryInfo.vertexOffset].normal;
+    const vec3 n2 = vertices[i2 + geometryInfo.vertexOffset].normal;
+    // Get the transforms
+    const mat4 o2w = ObjectToWorld(geometryInfo);
+    const mat4 o2wn = ObjectToWorldNormal(geometryInfo);
+    // Sample on the triangle
+    const vec3 e1 = v1 - v0;
+    const vec3 e2 = v2 - v0;
+    const float a = sqrt(clamp(cSampleQuery.uv[0], 0., 1.));
+    const float b1 = 1 - a;
+    const float b2 = a * cSampleQuery.uv[1];
+    vec3 geometric_normal = normalize(cross(e1, e2));
+    // Flip the geometric normal to the same side as the shading normal
+    const vec3 shading_normal = normalize((1 - b1 - b2) * n0 + b1 * n1 + b2 * n2);
+    if (dot(geometric_normal, shading_normal) < 0) {
+        geometric_normal = -geometric_normal;
+    }
+    // Output the sample query result
+    cSampleQuery.position = (o2w * vec4(v0 + (e1 * b1) + (e2 * b2), 1)).xyz;
+    cSampleQuery.normal   = normalize((o2wn * vec4(geometric_normal, 0)).xyz);
+    return;
+}

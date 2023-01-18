@@ -85,7 +85,7 @@ namespace SIByL
 			uint32_t indexOffset;
 			uint32_t materialID;
 			uint32_t indexSize;
-			uint32_t padding0;
+			float	 surfaceArea;
 			uint32_t lightID;
 			uint32_t primitiveType;
 			float oddNegativeScaling;
@@ -110,6 +110,13 @@ namespace SIByL
 			Math::vec4 padding_v0;
 			Math::vec4 padding_v1;
 			Math::vec4 padding_v2;
+		};
+
+		struct TableDist1D {
+			TableDist1D() = default;
+			TableDist1D(std::vector<float> const& f);
+			std::vector<float> pmf;
+			std::vector<float> cdf;
 		};
 
 		/**
@@ -154,12 +161,20 @@ namespace SIByL
 				uint32_t primitiveType = 0;
 			};
 
+			struct EntityLightRecord {
+				std::vector<uint32_t> lightIndices;
+				std::vector<TableDist1D> tableDists;
+			};
+
 			bool geometryDirty = false;
 			std::unordered_map<GFX::Mesh*, MeshRecord> mesh_record = {};
 			std::unordered_map<GFX::Material*, uint32_t> material_record = {};
 			std::unordered_map<RHI::TextureView*, uint32_t> textureview_record = {};
 			std::unordered_map<Core::EntityHandle, MeshReferenceRecord> mesh_ref_record = {};
-			std::unordered_map<Core::EntityHandle, uint32_t> light_comp_record = {};
+			std::unordered_map<Core::EntityHandle, EntityLightRecord> light_comp_record = {};
+
+			SceneInfoUniforms sceneInfoUniform = {};
+			TableDist1D lightTableDist = {};
 		} sceneDataPack;
 		/**
 		* Custom Primitive definition
@@ -374,7 +389,8 @@ namespace SIByL
 		commonDescData.set1_flights_rt[fid]->updateBinding(std::vector<RHI::BindGroupEntry>{
 			{0, RHI::BindingResource{ sceneDataPack.tlas.get() }},
 		});
-		
+		rdgraph->getStructuredUniformBuffer<SceneInfoUniforms>("scene_info_buffer")->setStructure(sceneDataPack.sceneInfoUniform, fid);
+
 		if (sceneDataPack.geometry_buffer_cpu.size() > 0) {
 			auto geometry_buffer = rdgraph->getStructuredArrayMultiStorageBuffer<GeometryDrawData>("geometry_buffer");
 			geometry_buffer->setStructure(sceneDataPack.geometry_buffer_cpu.data(), fid);
@@ -511,26 +527,115 @@ namespace SIByL
 					meshRefRecord->second.primitiveType = meshref->customPrimitiveFlag;
 				}
 			}
-			// if mesh reference is pointing to a sphere mesh
-			if (meshref->customPrimitiveFlag == 1) {
-				//meshRefRecord->second.
-				//customPrimitive
-			}
 			// if do not have according light record, add the record
 			if (lightComponenet) {
-				auto lightCompRecord = sceneDataPack.light_comp_record.find(go->entity);
-				sceneDataPack.light_comp_record[go->entity] = sceneDataPack.light_buffer_cpu.size();
-				sceneDataPack.light_buffer_cpu.push_back(LightData{
-					uint32_t(lightComponenet->type),
-					lightComponenet->intensity,
-					static_cast<uint32_t>(sceneDataPack.light_buffer_cpu.size()),
-					0,
-					});
+				std::function<float(Math::vec3)> luminance = [](Math::vec3 const& rgb) {
+					return rgb.x * float(0.212671) + rgb.y * float(0.715160) + rgb.z * float(0.072169);
+				};
+				auto entityLightCompRecord = sceneDataPack.light_comp_record.find(go->entity);
+				if (entityLightCompRecord == sceneDataPack.light_comp_record.end()) {
+					sceneDataPack.light_comp_record[go->entity] = SceneDataPack::EntityLightRecord{};
+					entityLightCompRecord = sceneDataPack.light_comp_record.find(go->entity);
+					// if mesh reference is pointing to a triangle mesh
+					if (meshref->customPrimitiveFlag == 0) {
+						float totalArea = 0;
+						for (uint32_t geoidx : meshRefRecord->second.geometry_indices) {
+							sceneDataPack.geometry_buffer_cpu[geoidx].lightID = sceneDataPack.light_buffer_cpu.size();
+							entityLightCompRecord->second.lightIndices.push_back(sceneDataPack.light_buffer_cpu.size());
+							sceneDataPack.light_buffer_cpu.push_back(LightData{
+								1, // type 1, sphere area light
+								lightComponenet->intensity,
+								geoidx,
+								0,
+								});
+							//GFX::Mesh* meshPtr = meshRefRecord->second.meshReference->mesh;
+							size_t primitiveNum = meshRefRecord->second.meshReference->mesh->indexBuffer_host.size / (3 * sizeof(uint32_t));
+							uint32_t* indexBuffer = static_cast<uint32_t*>(meshRefRecord->second.meshReference->mesh->indexBuffer_host.data);
+							float* vertexBuffer = static_cast<float*>(meshRefRecord->second.meshReference->mesh->vertexBuffer_host.data);
+							size_t vertexStride = sizeof(InterleavedVertex) / sizeof(float);
+							std::vector<float> areas;
+							for (size_t i = 0; i < primitiveNum; ++i) {
+								uint32_t i0 = indexBuffer[3 * i + 0];
+								uint32_t i1 = indexBuffer[3 * i + 1];
+								uint32_t i2 = indexBuffer[3 * i + 2];
+								Math::vec3 const& pos0 = *(Math::vec3*)(&(vertexBuffer[i0 * vertexStride]));
+								Math::vec3 const& pos1 = *(Math::vec3*)(&(vertexBuffer[i1 * vertexStride]));
+								Math::vec3 const& pos2 = *(Math::vec3*)(&(vertexBuffer[i2 * vertexStride]));
+								Math::vec3 v0 = Math::vec3(objectMat * Math::vec4(pos0, 0));
+								Math::vec3 v1 = Math::vec3(objectMat * Math::vec4(pos1, 0));
+								Math::vec3 v2 = Math::vec3(objectMat * Math::vec4(pos2, 0));
+								Math::vec3 const e1 = v1 - v0;
+								Math::vec3 const e2 = v2 - v0;
+								float area = Math::length(Math::cross(e1, e2)) / 2;
+								areas.push_back(area);
+								totalArea += area;
+							}
+							// create dist1D
+							//entityLightCompRecord->second.tableDist = areas;
+							entityLightCompRecord->second.tableDists.emplace_back(TableDist1D{ areas });
+							sceneDataPack.light_buffer_cpu.back().total_value = totalArea * 3.1415926 * luminance(lightComponenet->intensity);
+							sceneDataPack.geometry_buffer_cpu[geoidx].surfaceArea = totalArea;
+						}
+					}
+					// if mesh reference is pointing to a sphere mesh
+					else if (meshref->customPrimitiveFlag == 1) {
+						entityLightCompRecord->second.lightIndices.push_back(sceneDataPack.light_buffer_cpu.size());
+						sceneDataPack.light_buffer_cpu.push_back(LightData{
+							0, // type 0, sphere area light
+							lightComponenet->intensity,
+							meshRefRecord->second.geometry_indices[0],
+							0,
+							});
+						float const radius = Math::length(Math::vec3(objectMat * Math::vec4(1, 0, 0, 1)) - Math::vec3(objectMat * Math::vec4(0, 0, 0, 1)));
+						float const surfaceArea = 4 * 3.1415926 * radius * radius;
+						sceneDataPack.light_buffer_cpu.back().total_value = surfaceArea * 3.1415926 * luminance(lightComponenet->intensity);
+						sceneDataPack.geometry_buffer_cpu[meshRefRecord->second.geometry_indices[0]].surfaceArea = surfaceArea;
+					}
+				}
 			}
 		}
 		// TODO :: do light sampling precomputation
-		sceneDataPack.sample_dist_buffer_cpu.push_back(1.f);
-
+		{
+			std::vector<float> lightPowerArray = {};
+			for (auto& lightCompRecord : sceneDataPack.light_comp_record) {
+				uint32_t i = 0;
+				for (uint32_t subLightIdx : lightCompRecord.second.lightIndices) {
+					auto& light = sceneDataPack.light_buffer_cpu[subLightIdx];
+					// push light power
+					lightPowerArray.push_back(light.total_value);
+					// push light dist array
+					if (lightCompRecord.second.tableDists.size() == 0) {
+						continue;
+					}
+					else {
+						light.sample_dist_size_0 = lightCompRecord.second.tableDists[i].pmf.size();
+						light.sample_dist_offset_pmf_0 = sceneDataPack.sample_dist_buffer_cpu.size();
+						sceneDataPack.sample_dist_buffer_cpu.insert(sceneDataPack.sample_dist_buffer_cpu.end(),
+							lightCompRecord.second.tableDists[i].pmf.begin(), lightCompRecord.second.tableDists[i].pmf.end());
+						light.sample_dist_offset_cdf_0 = sceneDataPack.sample_dist_buffer_cpu.size();
+						sceneDataPack.sample_dist_buffer_cpu.insert(sceneDataPack.sample_dist_buffer_cpu.end(),
+							lightCompRecord.second.tableDists[i].cdf.begin(), lightCompRecord.second.tableDists[i].cdf.end());
+						++i;
+					}
+				}
+			}
+			sceneDataPack.lightTableDist = TableDist1D{ lightPowerArray };
+			sceneDataPack.sceneInfoUniform.light_num = sceneDataPack.lightTableDist.pmf.size();
+			sceneDataPack.sceneInfoUniform.light_offset_pmf = sceneDataPack.sample_dist_buffer_cpu.size();
+			sceneDataPack.sample_dist_buffer_cpu.insert(sceneDataPack.sample_dist_buffer_cpu.end(),
+				sceneDataPack.lightTableDist.pmf.begin(), sceneDataPack.lightTableDist.pmf.end());
+			sceneDataPack.sceneInfoUniform.light_offset_cdf = sceneDataPack.sample_dist_buffer_cpu.size();
+			sceneDataPack.sample_dist_buffer_cpu.insert(sceneDataPack.sample_dist_buffer_cpu.end(),
+				sceneDataPack.lightTableDist.cdf.begin(), sceneDataPack.lightTableDist.cdf.end());
+			// also set pmf
+			size_t i = 0;
+			for (auto& lightCompRecord : sceneDataPack.light_comp_record) {
+				for (uint32_t subLightIdx : lightCompRecord.second.lightIndices) {
+					auto& light = sceneDataPack.light_buffer_cpu[subLightIdx];
+					light.total_value = sceneDataPack.lightTableDist.pmf[i++];
+				}
+			}
+		}
 		// if geometry is dirty, rebuild all the buffers
 		if (sceneDataPack.geometryDirty) {
 			sceneDataPack.vertex_buffer = device->createDeviceLocalBuffer(
@@ -647,6 +752,28 @@ namespace SIByL
 			state.batchIdx = 0;
 		globalUniRecord = globalUni;
 		rdgraph->getStructuredUniformBuffer<GlobalUniforms>("global_uniform_buffer")->setStructure(globalUni, multiFrameFlights->getFlightIndex());
+	}
+
+	SRenderer::TableDist1D::TableDist1D(std::vector<float> const& f) {
+		pmf = f;
+		cdf = std::vector<float>(f.size() + 1);
+		cdf[0] = 0;
+		for (int i = 0; i < (int)f.size(); i++)
+			cdf[i + 1] = cdf[i] + pmf[i];
+		float total = cdf.back();
+		if (total > 0)
+			for (int i = 0; i < (int)pmf.size(); i++) {
+				pmf[i] /= total;
+				cdf[i] /= total;
+			}
+		else {
+			for (int i = 0; i < (int)pmf.size(); i++) {
+				pmf[i] = float(1) / float(pmf.size());
+				cdf[i] = float(i) / float(pmf.size());
+			}
+			cdf.back() = 1;
+		}
+		cdf.back() = 1;
 	}
 
 #pragma endregion

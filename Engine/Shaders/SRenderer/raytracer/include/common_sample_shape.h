@@ -9,6 +9,8 @@ struct SampleQuery {
     uint    geometry_id;
     vec2    uv;         // for selecting a point on a 2D surface
     float   w;          // for selecting triangles
+    uvec2    offset;
+    uvec2    size;
     // output
     vec3    position;
     vec3    normal;

@@ -36,7 +36,7 @@ struct GeometryInfo {
   uint indexOffset;
   uint materialID;
   uint indexSize;
-  uint padding0;
+  float surfaceArea;
   uint lightID;
   uint primitiveType;
   float oddNegativeScaling;
@@ -68,7 +68,7 @@ struct LightData {
   uint	sample_dist_size_0;			// sample distribution unit size
   uint	sample_dist_offset_pmf_0;	// sample distribution offset for pmf start
   uint	sample_dist_offset_cdf_0;	// sample distribution offset for cdf start
-  float total_value;
+  float pmf;
   uint	sample_dist_size_1;			// (another dim of) sample distribution unit size
   uint	sample_dist_offset_pmf_1;	// (another dim of) sample distribution offset for pmf start
   uint	sample_dist_offset_cdf_1;	// (another dim of) sample distribution offset for cdf start
@@ -102,6 +102,28 @@ mat4 WorldToObject(in GeometryInfo geometry) {
 
 mat4 ObjectToWorldNormal(in GeometryInfo geometry) {
   return mat4(geometry.transformInverse[0], geometry.transformInverse[1], geometry.transformInverse[2], vec4(0,0,0,1));
+}
+
+int upper_bound(int offset, int size, float param) {
+  int i=offset;
+  for(; i<offset+size; ++i) {
+    if(sampleDistDatas[i] > param)
+      break;
+  }
+  return i;
+}
+
+int sampleTableDist1D(in int cdf_offset, in int pmf_size, in float rnd_param) {
+  const int find = upper_bound(cdf_offset, pmf_size + 1, rnd_param);
+  int offset = clamp(find-1, cdf_offset, cdf_offset + pmf_size - 1);
+  return offset - cdf_offset;
+}
+
+int sampleOneLight(in float x) {
+  return sampleTableDist1D(
+    int(sceneInfoUniform.light_offset_cdf),
+    int(sceneInfoUniform.light_num),
+    x);
 }
 
 #endif

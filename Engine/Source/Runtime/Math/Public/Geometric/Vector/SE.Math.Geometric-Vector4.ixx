@@ -29,12 +29,15 @@ namespace SIByL::Math
 		Vector4(T const& _v) :x(_v), y(_v), z(_v), w(_v) {}
 		Vector4(Vector2<T> const& _v) :x(_v.x), y(_v.y), z(0), w(0) {}
 		Vector4(Vector3<T> const& _v) :x(_v.x), y(_v.y), z(_v.z), w(0) {}
+		Vector4(Vector3<T> const& _v, T _w) :x(_v.x), y(_v.y), z(_v.z), w(_w) {}
 		Vector4(T const& _x, T const& _y, T const& _z = 0, T const& _w = 0) :x(_x), y(_y), z(_z), w(_w) {}
 
 		operator T* () { return data; }
 		operator const T* const () { return static_cast<const T*>(data); }
 		auto operator [](size_t idx) ->T& { return data[idx]; }
 		auto operator [](size_t idx) const ->T const& { return data[idx]; }
+
+		explicit operator Vector3<T>() { return Vector3<T>{ x,y,z }; }
 
 		auto operator-() const->Vector4<T>;
 		auto operator*(T s) const->Vector4<T>;
@@ -175,6 +178,10 @@ namespace SIByL::Math
 	export template <class T> inline auto lerp(float t, Vector4<T> const& x, Vector4<T>& y) noexcept -> Vector4<T>
 	{
 		return (1 - t) * x + t * y;
+	}
+
+	export template <class T> inline auto length(Vector4<T> const& x) noexcept -> T {
+		return std::sqrt(x.lengthSquared());
 	}
 
 	template <class T>

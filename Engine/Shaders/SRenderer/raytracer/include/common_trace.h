@@ -20,6 +20,7 @@ struct PrimaryPayload {
     vec3    geometryNormal; // 32: geometry normal
     uint    lightID;        // 44: light ID
     mat3    TBN;            // 48: TBN frame of hit point
+    float   normalFlipping; // ....
 };
 /** Primary Payload Struct */
 struct ShadowPayload {

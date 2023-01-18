@@ -27,7 +27,7 @@ void main()
     
     if (distance_squared(cSamplePdfQuery.ref_point, center) < r * r) {
         // If the reference point is inside the sphere, just sample the whole sphere uniformly
-        cSamplePdfQuery.pdf = 1 / surface_area_sphere(r);
+        cSamplePdfQuery.pdf = 1. / surface_area_sphere(r);
         return;
     }
     float sin_theta_max_sq = r * r / distance_squared(cSamplePdfQuery.ref_point, center);

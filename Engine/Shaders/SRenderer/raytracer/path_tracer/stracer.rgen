@@ -27,6 +27,7 @@ struct PathVertex {
     vec3 geometricNormal;
     mat3 frame;
     vec2 uv;
+    vec3 lightNormal;
 };
 
 struct Ray {
@@ -88,20 +89,29 @@ PathVertex tracePrimaryRay(in Ray ray) {
     vertex.frame = rPrimaryPld.TBN;
     vertex.uv = rPrimaryPld.uv;
     vertex.matID = rPrimaryPld.matID;
+    vertex.lightNormal =  (rPrimaryPld.normalFlipping == 0)
+            ? vertex.geometricNormal
+            : vertex.geometricNormal * rPrimaryPld.normalFlipping;
     return vertex;
 }
 
 LightSample sampleLight(in vec3 refPoint, inout uint RNG) {
+    int lightID = sampleOneLight(stepAndOutputRNGFloat(RNG));
+    LightData light = lights[lightID];
     cSampleQuery.ref_point = refPoint;
-    cSampleQuery.geometry_id = 2; // TODO :: flexible ID
+    cSampleQuery.geometry_id = light.index; // TODO :: flexible ID
     cSampleQuery.uv = vec2(stepAndOutputRNGFloat(RNG), stepAndOutputRNGFloat(RNG));
-    executeCallableEXT(0, 0);
+    cSampleQuery.w = stepAndOutputRNGFloat(RNG);
+    cSampleQuery.offset = uvec2(light.sample_dist_offset_cdf_0, light.sample_dist_offset_cdf_1);
+    cSampleQuery.size = uvec2(light.sample_dist_size_0, light.sample_dist_size_1);
+    executeCallableEXT(light.lightType, 0);
     // create light sample
     LightSample lightSample;
     lightSample.position = offsetPositionAlongNormal(cSampleQuery.position, cSampleQuery.normal);
     lightSample.normal = cSampleQuery.normal;
     lightSample.rayDirection = normalize(cSampleQuery.position - cSampleQuery.ref_point);
     lightSample.unoffsetPosition = cSampleQuery.position;
+    lightSample.lightID = lightID;
     return lightSample;
 }
 
@@ -136,15 +146,23 @@ vec3 emission(in uint lightID,
 }
 
 float pdf_point_on_light(in vec3 ref_point, 
-                         in uint geometry_id,
+                         in uint light_id,
                          in vec3 sample_position,
                          in vec3 sample_normal) {
-    cSamplePdfQuery.ref_point = ref_point;
-    cSamplePdfQuery.geometry_id = geometry_id;
-    cSamplePdfQuery.sample_position = sample_position;
-    cSamplePdfQuery.sample_normal = sample_normal;
-    executeCallableEXT(1, 1);
-    return cSamplePdfQuery.pdf;
+    LightData light = lights[light_id];
+    float geometry_pdf = 0.f;
+    if(light.lightType == 0) { // sphere
+        cSamplePdfQuery.ref_point = ref_point;
+        cSamplePdfQuery.geometry_id = light.index;
+        cSamplePdfQuery.sample_position = sample_position;
+        cSamplePdfQuery.sample_normal = sample_normal;
+        executeCallableEXT(CALLABLE_SPHERE_SAMPLING_PDF, 1);
+        geometry_pdf = cSamplePdfQuery.pdf;
+    }
+    else if(light.lightType == 1) { // triangle
+        geometry_pdf = 1.f/geometryInfos[light.index].surfaceArea;
+    }
+    return light.pmf * geometry_pdf;
 }
 
 vec3 eval(in uint materialID,
@@ -217,7 +235,7 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
     if (is_light(vertex)) {
         LightSample vertexLight;
         vertexLight.position = vertex.position;
-        vertexLight.normal = rPrimaryPld.TBN[2];
+        vertexLight.normal = vertex.lightNormal;
         radiance += path_throughput
                   * emission(vertex.lightID, -ray.direction, 0, vertexLight);
     }
@@ -229,7 +247,7 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
         // 1.
         // ---------------------------------------------
         // 1.1 Sample a light and a point on the light.
-        LightSample lightSample = sampleLight(vertex.offsetedPosition, RNG);
+        LightSample lightSample = sampleLight(vertex.position, RNG);
         // 1.2 Compute w1*C1/p1
         vec3 C1 = vec3(0); // stores C1/p1
         float w1;
@@ -261,7 +279,7 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
             // just the probability of sampling a light times the probability of sampling a point
             float p1 = 1 * // TODO :: use light_pmf(scene, light_id) *
                 pdf_point_on_light(vertex.offsetedPosition,
-                                2, // TODO :: flexible ID
+                                lightSample.lightID, // TODO :: flexible ID
                                 lightSample.unoffsetPosition, 
                                 lightSample.normal);
 
@@ -278,11 +296,11 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
                 // One way is to use a roughness based heuristics, but we have multi-layered BRDFs.
                 // See "Real-time Shading with Filtered Importance Sampling" from Colbert et al.
                 // for the roughness based heuristics.
-                vec3 L = emission(0, // TODO:: flexible light ID
+                vec3 L = emission(lightSample.lightID,
                             -lightSample.rayDirection,
                             0, lightSample);
                 C1 = G * f * L;
-
+                
                 // Next let's compute w1
                 float p2 = pdf_sample_bsdf(vertex.matID, dir_view, lightSample.rayDirection, vertex);
 
@@ -343,8 +361,8 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
         if(bsdf_vertex.intersected && is_light(bsdf_vertex)) {
             LightSample bsdfHitSample;
             bsdfHitSample.position = bsdf_vertex.position;
-            bsdfHitSample.normal = bsdf_vertex.geometricNormal;
-            vec3 L = emission(0, // TODO:: flexible light ID
+            bsdfHitSample.normal = bsdf_vertex.lightNormal;
+            vec3 L = emission(lightSample.lightID, // TODO:: flexible light ID
                         -dir_bsdf,
                         0, bsdfHitSample);
             vec3 C2 = G * f * L;
@@ -355,7 +373,7 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
             // const Light &light = lights[light_id];
             float p1 = 1. * //light_pmf(scene, light_id) *
                 pdf_point_on_light(vertex.offsetedPosition,
-                                2, // TODO :: flexible ID
+                                lightSample.lightID, // TODO :: flexible ID
                                 bsdf_vertex.position, 
                                 bsdf_vertex.geometricNormal);
             float w2 = (p2*p2) / (p1*p1 + p2*p2);
