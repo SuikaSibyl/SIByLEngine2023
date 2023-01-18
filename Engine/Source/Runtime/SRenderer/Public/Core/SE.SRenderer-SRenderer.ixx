@@ -132,6 +132,7 @@ namespace SIByL
 			std::unique_ptr<RHI::Buffer> index_buffer			= nullptr;
 			std::unique_ptr<RHI::Buffer> material_buffer		= nullptr;
 			std::unique_ptr<RHI::Buffer> light_buffer			= nullptr;
+			std::unique_ptr<RHI::Buffer> back_light_buffer		= nullptr;
 			std::unique_ptr<RHI::Buffer> sample_dist_buffer		= nullptr;
 			// unbinded textures array to contain all textures
 			std::vector<RHI::TextureView*> unbinded_textures = {};
@@ -341,6 +342,8 @@ namespace SIByL
 	}
 
 	inline auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
+
+		bool invalidAccumulate = false;
 		// 
 		RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
 		sceneDataPack.tlas_desc.instances.clear();
@@ -372,6 +375,8 @@ namespace SIByL
 			}
 			else {
 				for (auto idx : meshRecordRef->second.geometry_indices) {
+					if (sceneDataPack.geometry_buffer_cpu[idx].geometryTransform != objectMat)
+						invalidAccumulate = true;
 					sceneDataPack.geometry_buffer_cpu[idx].geometryTransform = objectMat;
 					sceneDataPack.geometry_buffer_cpu[idx].geometryTransformInverse = Math::inverse(objectMat);
 					sceneDataPack.geometry_buffer_cpu[idx].oddNegativeScaling = oddScaling >= 0 ? 1.f : -1.f;
@@ -379,9 +384,32 @@ namespace SIByL
 				meshRecordRef->second.blasInstance.transform = objectMat;
 				sceneDataPack.tlas_desc.instances.push_back(meshRecordRef->second.blasInstance);
 			}
+			// update light
+			if (lightComponenet) {
+				// now only diffuse area light is supported, we must have mesh record
+				auto entityLightCompRecord = sceneDataPack.light_comp_record.find(go->entity);
+				if (entityLightCompRecord == sceneDataPack.light_comp_record.end()) {
+				}
+				else {
+					for (size_t index : entityLightCompRecord->second.lightIndices) {
+						if (sceneDataPack.light_buffer_cpu[index].intensity != lightComponenet->intensity) {
+							invalidAccumulate = true;
+						}
+						sceneDataPack.light_buffer_cpu[index].intensity = lightComponenet->intensity;
+					}
+				}
+			}
 		}
 		sceneDataPack.back_tlas = sceneDataPack.tlas;
 		sceneDataPack.tlas = device->createTLAS(sceneDataPack.tlas_desc);
+
+		sceneDataPack.back_light_buffer = std::move(sceneDataPack.light_buffer);
+		sceneDataPack.light_buffer = device->createDeviceLocalBuffer(
+			sceneDataPack.light_buffer_cpu.data(),
+			sceneDataPack.light_buffer_cpu.size() * sizeof(LightData),
+			(uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS
+			| (uint32_t)RHI::BufferUsage::STORAGE);
+
 
 		RHI::MultiFrameFlights* multiFrameFlights = GFX::GFXManager::get()->rhiLayer->getMultiFrameFlights();
 		uint32_t fid = multiFrameFlights->getFlightIndex();
@@ -389,8 +417,15 @@ namespace SIByL
 		commonDescData.set1_flights_rt[fid]->updateBinding(std::vector<RHI::BindGroupEntry>{
 			{0, RHI::BindingResource{ sceneDataPack.tlas.get() }},
 		});
+		commonDescData.set0_flights[fid]->updateBinding(std::vector<RHI::BindGroupEntry>{
+			{5, RHI::BindingResource{ {sceneDataPack.light_buffer.get(), 0, sceneDataPack.light_buffer->size()} }},
+		});
+		
 		rdgraph->getStructuredUniformBuffer<SceneInfoUniforms>("scene_info_buffer")->setStructure(sceneDataPack.sceneInfoUniform, fid);
 
+		if (invalidAccumulate) {
+			state.batchIdx = 0;
+		}
 		if (sceneDataPack.geometry_buffer_cpu.size() > 0) {
 			auto geometry_buffer = rdgraph->getStructuredArrayMultiStorageBuffer<GeometryDrawData>("geometry_buffer");
 			geometry_buffer->setStructure(sceneDataPack.geometry_buffer_cpu.data(), fid);
