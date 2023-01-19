@@ -362,7 +362,7 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
             LightSample bsdfHitSample;
             bsdfHitSample.position = bsdf_vertex.position;
             bsdfHitSample.normal = bsdf_vertex.lightNormal;
-            vec3 L = emission(lightSample.lightID, // TODO:: flexible light ID
+            vec3 L = emission(bsdf_vertex.lightID, // TODO:: flexible light ID
                         -dir_bsdf,
                         0, bsdfHitSample);
             vec3 C2 = G * f * L;
@@ -373,7 +373,7 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
             // const Light &light = lights[light_id];
             float p1 = 1. * //light_pmf(scene, light_id) *
                 pdf_point_on_light(vertex.offsetedPosition,
-                                lightSample.lightID, // TODO :: flexible ID
+                                bsdf_vertex.lightID, // TODO :: flexible ID
                                 bsdf_vertex.position, 
                                 bsdf_vertex.geometricNormal);
             float w2 = (p2*p2) / (p1*p1 + p2*p2);

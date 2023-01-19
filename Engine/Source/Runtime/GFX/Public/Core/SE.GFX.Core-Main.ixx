@@ -10,6 +10,7 @@ module;
 #include <typeinfo>
 #include <filesystem>
 #include <functional>
+#include <tuple>
 #include <unordered_map>
 #include <yaml-cpp/yaml.h>
 #include <yaml-cpp/node/node.h>
@@ -103,6 +104,8 @@ namespace SIByL::GFX
 		std::vector<Submesh> submeshes;
 		/** resource name */
 		std::string name = "New Mesh";
+		/** compute the surface area */
+		auto surfaceAreaEveryPrimitive(Math::mat4 const& transform) noexcept -> std::tuple<float, std::vector<float>>;
 		/** serialize */
 		inline auto serialize() noexcept -> void;
 		/** deserialize */
@@ -579,6 +582,32 @@ namespace SIByL::GFX
 #pragma endregion
 
 #pragma region MESH_IMPL
+	
+	auto Mesh::surfaceAreaEveryPrimitive(Math::mat4 const& transform) noexcept -> std::tuple<float, std::vector<float>> {
+		size_t primitiveNum = indexBuffer_host.size / (3 * sizeof(uint32_t));
+		uint32_t* indexBuffer = static_cast<uint32_t*>(indexBuffer_host.data);
+		float* vertexBuffer = static_cast<float*>(vertexBuffer_host.data);
+		size_t vertexStride = vertexBufferLayout.arrayStride / sizeof(float);
+		std::vector<float> areas;
+		float totalArea  =  0.f;
+		for (size_t i = 0; i < primitiveNum; ++i) {
+			uint32_t i0 = indexBuffer[3 * i + 0];
+			uint32_t i1 = indexBuffer[3 * i + 1];
+			uint32_t i2 = indexBuffer[3 * i + 2];
+			Math::vec3 const& pos0 = *(Math::vec3*)(&(vertexBuffer[i0 * vertexStride]));
+			Math::vec3 const& pos1 = *(Math::vec3*)(&(vertexBuffer[i1 * vertexStride]));
+			Math::vec3 const& pos2 = *(Math::vec3*)(&(vertexBuffer[i2 * vertexStride]));
+			Math::vec3 v0 = Math::vec3(transform * Math::vec4(pos0, 0));
+			Math::vec3 v1 = Math::vec3(transform * Math::vec4(pos1, 0));
+			Math::vec3 v2 = Math::vec3(transform * Math::vec4(pos2, 0));
+			Math::vec3 const e1 = v1 - v0;
+			Math::vec3 const e2 = v2 - v0;
+			float area = Math::length(Math::cross(e1, e2)) / 2;
+			areas.push_back(area);
+			totalArea += area;
+		}
+		return std::make_tuple(totalArea, areas);
+	}
 
 	inline auto Mesh::serialize() noexcept -> void {
 		if (ORID == Core::ORID_NONE) {

@@ -134,6 +134,7 @@ namespace SIByL
 			std::unique_ptr<RHI::Buffer> light_buffer			= nullptr;
 			std::unique_ptr<RHI::Buffer> back_light_buffer		= nullptr;
 			std::unique_ptr<RHI::Buffer> sample_dist_buffer		= nullptr;
+			std::unique_ptr<RHI::Buffer> back_sample_dist_buffer= nullptr;
 			// unbinded textures array to contain all textures
 			std::vector<RHI::TextureView*> unbinded_textures = {};
 			// cpu data
@@ -164,7 +165,9 @@ namespace SIByL
 
 			struct EntityLightRecord {
 				std::vector<uint32_t> lightIndices;
+				std::vector<uint32_t> lightPowers;
 				std::vector<TableDist1D> tableDists;
+				Math::vec3 scaling;
 			};
 
 			bool geometryDirty = false;
@@ -341,64 +344,243 @@ namespace SIByL
 		}
 	}
 
-	inline auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
+	struct SceneDataPackState {
+		bool invalidVIPBuffer		= false;
+		bool invalidGeometryBuffer	= false;
+		bool dirtyGeometryBuffer	= false;
+		bool invalidLightBuffer		= false;
+		bool invalidAccumulation	= false;
+		bool invalidLightDistBuffer = false;
+	};
 
-		bool invalidAccumulate = false;
+	inline auto invalid_mesh_record(GFX::Mesh* mesh, SRenderer* srenderer, SceneDataPackState& state) noexcept -> 
+		std::unordered_map<GFX::Mesh*, SRenderer::SceneDataPack::MeshRecord>::iterator 
+	{
+		srenderer->sceneDataPack.mesh_record[mesh] = {};
+		auto meshRecord = srenderer->sceneDataPack.mesh_record.find(mesh);
+		{	// create mesh record, add all data buffers
+			uint32_t vertex_offset = srenderer->sceneDataPack.vertex_buffer_cpu.size();
+			uint32_t position_offset = srenderer->sceneDataPack.position_buffer_cpu.size();
+			srenderer->sceneDataPack.vertex_buffer_cpu.resize(vertex_offset + mesh->vertexBuffer_host.size / sizeof(float));
+			memcpy(&(srenderer->sceneDataPack.vertex_buffer_cpu[vertex_offset]), mesh->vertexBuffer_host.data, mesh->vertexBuffer_host.size);
+			if (srenderer->config.enableRayTracing) {
+				srenderer->sceneDataPack.position_buffer_cpu.resize(position_offset + mesh->positionBuffer_host.size / sizeof(float));
+				memcpy(&(srenderer->sceneDataPack.position_buffer_cpu[position_offset]), mesh->positionBuffer_host.data, mesh->positionBuffer_host.size);
+			}
+			uint32_t index_offset = srenderer->sceneDataPack.index_buffer_cpu.size();
+			srenderer->sceneDataPack.index_buffer_cpu.resize(index_offset + mesh->indexBuffer_host.size / sizeof(uint32_t));
+			memcpy(&(srenderer->sceneDataPack.index_buffer_cpu[index_offset]), mesh->indexBuffer_host.data, mesh->indexBuffer_host.size);
+			// add all submeshes
+			for (auto& submesh : mesh->submeshes) {
+				SRenderer::GeometryDrawData geometry;
+				geometry.vertexOffset = submesh.baseVertex + vertex_offset * sizeof(float) / SRenderer::vertexBufferLayout.arrayStride;
+				geometry.indexOffset = submesh.offset + index_offset;
+				geometry.materialID = 0;
+				geometry.indexSize = submesh.size;
+				geometry.geometryTransform = {};
+				meshRecord->second.submesh_geometry.push_back(geometry);
+				if (srenderer->config.enableRayTracing) {
+					RHI::BLASDescriptor& blasDesc = meshRecord->second.blas_desc;
+					blasDesc.triangleGeometries.push_back(RHI::BLASTriangleGeometry{
+						nullptr,
+						nullptr,
+						nullptr,
+						RHI::IndexFormat::UINT32_T,
+						uint32_t(mesh->positionBuffer_host.size / (sizeof(float) * 3)),
+						geometry.vertexOffset,
+						geometry.indexSize / 3,
+						uint32_t(geometry.indexOffset * sizeof(uint32_t)),
+						RHI::AffineTransformMatrix{},
+						(uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION,
+						geometry.materialID
+						}
+					);
+				}
+			}
+			// set dirty of Vertex/Index/Position Buffer:
+			state.invalidVIPBuffer = true;
+		}
+		return meshRecord;
+	}
+
+	inline auto luminance(Math::vec3 const& rgb) noexcept -> float {
+		return rgb.x * float(0.212671) + rgb.y * float(0.715160) + rgb.z * float(0.072169);
+	}
+
+	inline auto invalid_game_object(GFX::GameObject* gameobject, GFX::Scene& scene, SRenderer* srenderer, SceneDataPackState& state) noexcept -> void {
+		// fetch components
+		GFX::TransformComponent* transform = gameobject->getEntity().getComponent<GFX::TransformComponent>();
+		GFX::MeshReference* meshref = gameobject->getEntity().getComponent<GFX::MeshReference>();
+		GFX::MeshRenderer* meshrenderer = gameobject->getEntity().getComponent<GFX::MeshRenderer>();
+		GFX::LightComponent* lightComponenet = gameobject->getEntity().getComponent<GFX::LightComponent>();
+		// we do not cares those game object has no relative components
+		if (meshref == nullptr && meshrenderer == nullptr && lightComponenet == nullptr)
+			return;
+		// get transform
+		Math::mat4 objectTransform;
+		float oddScaling = 1.f;
+		Math::vec3 scaling = Math::vec3{ 1,1,1 };
+		{	// get mesh transform matrix
+			GFX::GameObject* go = gameobject;
+			GFX::TransformComponent* transform = go->getEntity().getComponent<GFX::TransformComponent>();
+			objectTransform = transform->getTransform() * objectTransform;
+			oddScaling *= transform->scale.x * transform->scale.y * transform->scale.z;
+			scaling *= transform->scale;
+			while (go->parent != Core::NULL_ENTITY) {
+				go = scene.getGameObject(go->parent);
+				GFX::TransformComponent* transform = go->getEntity().getComponent<GFX::TransformComponent>();
+				objectTransform = transform->getTransform() * objectTransform;
+				oddScaling *= transform->scale.x * transform->scale.y * transform->scale.z;
+				scaling *= transform->scale;
+			}
+		}
+		// geometry processing
+		bool transformChanged = false;
+		if (meshref && meshrenderer) {
+			// mesh resource
+			GFX::Mesh* mesh = meshref->mesh;
+			auto meshRecord = srenderer->sceneDataPack.mesh_record.find(mesh);
+			{	// insert mesh to the index / vertex buffer if it does not exist now
+				if (meshRecord == srenderer->sceneDataPack.mesh_record.end())
+					meshRecord = invalid_mesh_record(mesh, srenderer, state);
+			}
+			// mesh reference
+			auto meshRefRecord = srenderer->sceneDataPack.mesh_ref_record.find(gameobject->entity);
+			{	// add mesh reference if not exist now
+				if (meshRefRecord == srenderer->sceneDataPack.mesh_ref_record.end()) {
+					state.invalidGeometryBuffer = true;
+				}
+				for (auto idx : meshRefRecord->second.geometry_indices) {
+					if (srenderer->sceneDataPack.geometry_buffer_cpu[idx].geometryTransform != objectTransform) {
+						transformChanged = true;
+						state.dirtyGeometryBuffer = true;
+						state.invalidAccumulation = true;
+						srenderer->sceneDataPack.geometry_buffer_cpu[idx].geometryTransform = objectTransform;
+						srenderer->sceneDataPack.geometry_buffer_cpu[idx].geometryTransformInverse = Math::inverse(objectTransform);
+						srenderer->sceneDataPack.geometry_buffer_cpu[idx].oddNegativeScaling = oddScaling >= 0 ? 1.f : -1.f;
+					}
+				}
+				meshRefRecord->second.blasInstance.transform = objectTransform;
+				srenderer->sceneDataPack.tlas_desc.instances.push_back(meshRefRecord->second.blasInstance);
+			}
+		}
+		// light processing
+		if (lightComponenet) {
+			// if light is diffuse area light
+			if (lightComponenet->type == GFX::LightComponent::LightType::DIFFUSE_AREA_LIGHT) {
+				auto meshRefRecord = srenderer->sceneDataPack.mesh_ref_record.find(gameobject->entity);
+				if (meshRefRecord != srenderer->sceneDataPack.mesh_ref_record.end()) {
+					// now only diffuse area light is supported, we must have mesh record
+					auto entityLightCompRecord = srenderer->sceneDataPack.light_comp_record.find(gameobject->entity);
+					if (entityLightCompRecord == srenderer->sceneDataPack.light_comp_record.end()) {
+					}
+					for (size_t index : entityLightCompRecord->second.lightIndices) {
+						if (srenderer->sceneDataPack.light_buffer_cpu[index].intensity != lightComponenet->intensity) {
+							state.invalidAccumulation = true;
+							state.invalidLightBuffer = true;
+							srenderer->sceneDataPack.light_buffer_cpu[index].intensity = lightComponenet->intensity;
+						}
+						// if transform changed, we need to recompute surface area thing
+						if (transformChanged && entityLightCompRecord->second.scaling != scaling) {
+							state.invalidLightDistBuffer = true;
+							auto& lightData = srenderer->sceneDataPack.light_buffer_cpu[index];
+							if (meshref->customPrimitiveFlag == 0) {
+								float totalArea = 0;
+								for (uint32_t geoidx : meshRefRecord->second.geometry_indices) {
+									//GFX::Mesh* meshPtr = meshRefRecord->second.meshReference->mesh;
+									size_t primitiveNum = meshRefRecord->second.meshReference->mesh->indexBuffer_host.size / (3 * sizeof(uint32_t));
+									uint32_t* indexBuffer = static_cast<uint32_t*>(meshRefRecord->second.meshReference->mesh->indexBuffer_host.data);
+									float* vertexBuffer = static_cast<float*>(meshRefRecord->second.meshReference->mesh->vertexBuffer_host.data);
+									size_t vertexStride = sizeof(SRenderer::InterleavedVertex) / sizeof(float);
+									std::vector<float> areas;
+									for (size_t i = 0; i < primitiveNum; ++i) {
+										uint32_t i0 = indexBuffer[3 * i + 0];
+										uint32_t i1 = indexBuffer[3 * i + 1];
+										uint32_t i2 = indexBuffer[3 * i + 2];
+										Math::vec3 const& pos0 = *(Math::vec3*)(&(vertexBuffer[i0 * vertexStride]));
+										Math::vec3 const& pos1 = *(Math::vec3*)(&(vertexBuffer[i1 * vertexStride]));
+										Math::vec3 const& pos2 = *(Math::vec3*)(&(vertexBuffer[i2 * vertexStride]));
+										Math::vec3 v0 = Math::vec3(objectTransform * Math::vec4(pos0, 0));
+										Math::vec3 v1 = Math::vec3(objectTransform * Math::vec4(pos1, 0));
+										Math::vec3 v2 = Math::vec3(objectTransform * Math::vec4(pos2, 0));
+										Math::vec3 const e1 = v1 - v0;
+										Math::vec3 const e2 = v2 - v0;
+										float area = Math::length(Math::cross(e1, e2)) / 2;
+										areas.push_back(area);
+										totalArea += area;
+									}
+									// create dist1D
+									//entityLightCompRecord->second.tableDist = areas;
+									entityLightCompRecord->second.tableDists[0] = SRenderer::TableDist1D{ areas };
+									entityLightCompRecord->second.lightPowers[0] = totalArea * 3.1415926 * luminance(lightComponenet->intensity);
+									srenderer->sceneDataPack.geometry_buffer_cpu[geoidx].surfaceArea = totalArea;
+								}
+							}
+							// if mesh reference is pointing to a sphere mesh
+							else if (meshref->customPrimitiveFlag == 1) {
+								float const radius = Math::length(Math::vec3(objectTransform * Math::vec4(1, 0, 0, 1)) - Math::vec3(objectTransform * Math::vec4(0, 0, 0, 1)));
+								float const surfaceArea = 4 * 3.1415926 * radius * radius;
+								entityLightCompRecord->second.lightPowers[0] = surfaceArea * 3.1415926 * luminance(lightComponenet->intensity);
+								srenderer->sceneDataPack.geometry_buffer_cpu[meshRefRecord->second.geometry_indices[0]].surfaceArea = surfaceArea;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	inline auto invalidSceneLightingSetting(SRenderer* srenderer) noexcept -> void {
+		srenderer->sceneDataPack.sample_dist_buffer_cpu.clear();
+		std::vector<float> lightPowerArray = {};
+		for (auto& lightCompRecord : srenderer->sceneDataPack.light_comp_record) {
+			uint32_t i = 0;
+			for (uint32_t subLightIdx : lightCompRecord.second.lightIndices) {
+				auto& light = srenderer->sceneDataPack.light_buffer_cpu[subLightIdx];
+				// push light power
+				lightPowerArray.push_back(lightCompRecord.second.lightPowers[i]);
+				// push light dist array
+				if (lightCompRecord.second.tableDists.size() == 0) {
+					continue;
+				}
+				else {
+					light.sample_dist_size_0 = lightCompRecord.second.tableDists[i].pmf.size();
+					light.sample_dist_offset_pmf_0 = srenderer->sceneDataPack.sample_dist_buffer_cpu.size();
+					srenderer->sceneDataPack.sample_dist_buffer_cpu.insert(srenderer->sceneDataPack.sample_dist_buffer_cpu.end(),
+						lightCompRecord.second.tableDists[i].pmf.begin(), lightCompRecord.second.tableDists[i].pmf.end());
+					light.sample_dist_offset_cdf_0 = srenderer->sceneDataPack.sample_dist_buffer_cpu.size();
+					srenderer->sceneDataPack.sample_dist_buffer_cpu.insert(srenderer->sceneDataPack.sample_dist_buffer_cpu.end(),
+						lightCompRecord.second.tableDists[i].cdf.begin(), lightCompRecord.second.tableDists[i].cdf.end());
+					++i;
+				}
+			}
+		}
+		srenderer->sceneDataPack.lightTableDist = SRenderer::TableDist1D{ lightPowerArray };
+		srenderer->sceneDataPack.sceneInfoUniform.light_num = srenderer->sceneDataPack.lightTableDist.pmf.size();
+		srenderer->sceneDataPack.sceneInfoUniform.light_offset_pmf = srenderer->sceneDataPack.sample_dist_buffer_cpu.size();
+		srenderer->sceneDataPack.sample_dist_buffer_cpu.insert(srenderer->sceneDataPack.sample_dist_buffer_cpu.end(),
+			srenderer->sceneDataPack.lightTableDist.pmf.begin(), srenderer->sceneDataPack.lightTableDist.pmf.end());
+		srenderer->sceneDataPack.sceneInfoUniform.light_offset_cdf = srenderer->sceneDataPack.sample_dist_buffer_cpu.size();
+		srenderer->sceneDataPack.sample_dist_buffer_cpu.insert(srenderer->sceneDataPack.sample_dist_buffer_cpu.end(),
+			srenderer->sceneDataPack.lightTableDist.cdf.begin(), srenderer->sceneDataPack.lightTableDist.cdf.end());
+		// also set pmf
+		size_t i = 0;
+		for (auto& lightCompRecord : srenderer->sceneDataPack.light_comp_record) {
+			for (uint32_t subLightIdx : lightCompRecord.second.lightIndices) {
+				auto& light = srenderer->sceneDataPack.light_buffer_cpu[subLightIdx];
+				light.total_value = srenderer->sceneDataPack.lightTableDist.pmf[i++];
+			}
+		}
+	}
+
+	inline auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
 		// 
 		RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
 		sceneDataPack.tlas_desc.instances.clear();
 		// for all mesh refs
+		SceneDataPackState packstate;
 		for (auto go_handle : scene.gameObjects) {
-			auto* go = scene.getGameObject(go_handle.first);
-			GFX::MeshReference* meshref = go->getEntity().getComponent<GFX::MeshReference>();
-			if (!meshref) continue;
-			GFX::MeshRenderer* meshrenderer = go->getEntity().getComponent<GFX::MeshRenderer>();
-			if (!meshrenderer) 
-				continue;
-			GFX::LightComponent* lightComponenet = go->getEntity().getComponent<GFX::LightComponent>();
-			float oddScaling = 1.f;
-			Math::mat4 objectMat;
-			{	// get mesh transform matrix
-				GFX::TransformComponent* transform = go->getEntity().getComponent<GFX::TransformComponent>();
-				objectMat = transform->getTransform() * objectMat;
-				oddScaling *= transform->scale.x * transform->scale.y * transform->scale.z;
-				while (go->parent != Core::NULL_ENTITY) {
-					go = scene.getGameObject(go->parent);
-					GFX::TransformComponent* transform = go->getEntity().getComponent<GFX::TransformComponent>();
-					objectMat = transform->getTransform() * objectMat;
-					oddScaling *= transform->scale.x * transform->scale.y * transform->scale.z;
-				}
-			}
-			// if do not have according record, add the record
-			auto meshRecordRef = sceneDataPack.mesh_ref_record.find(go->entity);
-			if (meshRecordRef == sceneDataPack.mesh_ref_record.end()) {
-			}
-			else {
-				for (auto idx : meshRecordRef->second.geometry_indices) {
-					if (sceneDataPack.geometry_buffer_cpu[idx].geometryTransform != objectMat)
-						invalidAccumulate = true;
-					sceneDataPack.geometry_buffer_cpu[idx].geometryTransform = objectMat;
-					sceneDataPack.geometry_buffer_cpu[idx].geometryTransformInverse = Math::inverse(objectMat);
-					sceneDataPack.geometry_buffer_cpu[idx].oddNegativeScaling = oddScaling >= 0 ? 1.f : -1.f;
-				}
-				meshRecordRef->second.blasInstance.transform = objectMat;
-				sceneDataPack.tlas_desc.instances.push_back(meshRecordRef->second.blasInstance);
-			}
-			// update light
-			if (lightComponenet) {
-				// now only diffuse area light is supported, we must have mesh record
-				auto entityLightCompRecord = sceneDataPack.light_comp_record.find(go->entity);
-				if (entityLightCompRecord == sceneDataPack.light_comp_record.end()) {
-				}
-				else {
-					for (size_t index : entityLightCompRecord->second.lightIndices) {
-						if (sceneDataPack.light_buffer_cpu[index].intensity != lightComponenet->intensity) {
-							invalidAccumulate = true;
-						}
-						sceneDataPack.light_buffer_cpu[index].intensity = lightComponenet->intensity;
-					}
-				}
-			}
+			invalid_game_object(scene.getGameObject(go_handle.first), scene, this, packstate);
 		}
 		sceneDataPack.back_tlas = sceneDataPack.tlas;
 		sceneDataPack.tlas = device->createTLAS(sceneDataPack.tlas_desc);
@@ -423,7 +605,24 @@ namespace SIByL
 		
 		rdgraph->getStructuredUniformBuffer<SceneInfoUniforms>("scene_info_buffer")->setStructure(sceneDataPack.sceneInfoUniform, fid);
 
-		if (invalidAccumulate) {
+		if (packstate.invalidLightDistBuffer) {
+			invalidSceneLightingSetting(this);
+			sceneDataPack.back_sample_dist_buffer = std::move(sceneDataPack.sample_dist_buffer);
+			sceneDataPack.sample_dist_buffer = device->createDeviceLocalBuffer(
+				sceneDataPack.sample_dist_buffer_cpu.data(),
+				sceneDataPack.sample_dist_buffer_cpu.size() * sizeof(float),
+				(uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS
+				| (uint32_t)RHI::BufferUsage::STORAGE);
+			commonDescData.set0_flights[fid]->updateBinding(std::vector<RHI::BindGroupEntry>{
+				{6, RHI::BindingResource{ {sceneDataPack.sample_dist_buffer.get(), 0, sceneDataPack.sample_dist_buffer->size()} }},
+			});
+		}
+
+		commonDescData.set0_flights[fid]->updateBinding(std::vector<RHI::BindGroupEntry>{
+			{6, RHI::BindingResource{ {sceneDataPack.sample_dist_buffer.get(), 0, sceneDataPack.sample_dist_buffer->size()} }},
+		});
+
+		if (packstate.invalidAccumulation) {
 			state.batchIdx = 0;
 		}
 		if (sceneDataPack.geometry_buffer_cpu.size() > 0) {
@@ -496,15 +695,18 @@ namespace SIByL
 			// get transform
 			float oddScaling = 1;
 			Math::mat4 objectMat;
+			Math::vec3 scaling = Math::vec3{ 1,1,1 };
 			{	// get mesh transform matrix
 				GFX::TransformComponent* transform = go->getEntity().getComponent<GFX::TransformComponent>();
 				objectMat = transform->getTransform() * objectMat;
 				oddScaling *= transform->scale.x * transform->scale.y * transform->scale.z;
+				scaling *= transform->scale;
 				while (go->parent != Core::NULL_ENTITY) {
 					go = scene.getGameObject(go->parent);
 					GFX::TransformComponent* transform = go->getEntity().getComponent<GFX::TransformComponent>();
 					objectMat = transform->getTransform() * objectMat;
 					oddScaling *= transform->scale.x * transform->scale.y * transform->scale.z;
+					scaling *= transform->scale;
 				}
 				if (oddScaling != 0) oddScaling / std::abs(oddScaling);
 			}
@@ -552,7 +754,7 @@ namespace SIByL
 						GeometryDrawData geometrydata = iter;
 						geometrydata.geometryTransform = objectMat;
 						geometrydata.geometryTransformInverse = Math::inverse(objectMat);
-						geometrydata.oddNegativeScaling = oddScaling;
+						geometrydata.oddNegativeScaling = oddScaling >= 0 ? 1.f : -1.f;
 						geometrydata.materialID = findMat->second;
 						geometrydata.primitiveType = meshref->customPrimitiveFlag;
 						geometrydata.lightID = lightComponenet ? 0 : 4294967295;
@@ -564,13 +766,11 @@ namespace SIByL
 			}
 			// if do not have according light record, add the record
 			if (lightComponenet) {
-				std::function<float(Math::vec3)> luminance = [](Math::vec3 const& rgb) {
-					return rgb.x * float(0.212671) + rgb.y * float(0.715160) + rgb.z * float(0.072169);
-				};
 				auto entityLightCompRecord = sceneDataPack.light_comp_record.find(go->entity);
 				if (entityLightCompRecord == sceneDataPack.light_comp_record.end()) {
 					sceneDataPack.light_comp_record[go->entity] = SceneDataPack::EntityLightRecord{};
 					entityLightCompRecord = sceneDataPack.light_comp_record.find(go->entity);
+					entityLightCompRecord->second.scaling = scaling;
 					// if mesh reference is pointing to a triangle mesh
 					if (meshref->customPrimitiveFlag == 0) {
 						float totalArea = 0;
@@ -608,7 +808,7 @@ namespace SIByL
 							// create dist1D
 							//entityLightCompRecord->second.tableDist = areas;
 							entityLightCompRecord->second.tableDists.emplace_back(TableDist1D{ areas });
-							sceneDataPack.light_buffer_cpu.back().total_value = totalArea * 3.1415926 * luminance(lightComponenet->intensity);
+							entityLightCompRecord->second.lightPowers.emplace_back(totalArea * 3.1415926 * luminance(lightComponenet->intensity));
 							sceneDataPack.geometry_buffer_cpu[geoidx].surfaceArea = totalArea;
 						}
 					}
@@ -623,7 +823,7 @@ namespace SIByL
 							});
 						float const radius = Math::length(Math::vec3(objectMat * Math::vec4(1, 0, 0, 1)) - Math::vec3(objectMat * Math::vec4(0, 0, 0, 1)));
 						float const surfaceArea = 4 * 3.1415926 * radius * radius;
-						sceneDataPack.light_buffer_cpu.back().total_value = surfaceArea * 3.1415926 * luminance(lightComponenet->intensity);
+						entityLightCompRecord->second.lightPowers.emplace_back(surfaceArea * 3.1415926 * luminance(lightComponenet->intensity));
 						sceneDataPack.geometry_buffer_cpu[meshRefRecord->second.geometry_indices[0]].surfaceArea = surfaceArea;
 					}
 				}
@@ -637,7 +837,7 @@ namespace SIByL
 				for (uint32_t subLightIdx : lightCompRecord.second.lightIndices) {
 					auto& light = sceneDataPack.light_buffer_cpu[subLightIdx];
 					// push light power
-					lightPowerArray.push_back(light.total_value);
+					lightPowerArray.push_back(lightCompRecord.second.lightPowers[i]);
 					// push light dist array
 					if (lightCompRecord.second.tableDists.size() == 0) {
 						continue;
