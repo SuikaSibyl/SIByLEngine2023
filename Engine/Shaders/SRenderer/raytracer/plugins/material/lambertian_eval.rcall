@@ -1,0 +1,26 @@
+#version 460 core
+#extension GL_EXT_ray_tracing           : enable
+#extension GL_GOOGLE_include_directive  : enable
+
+#include "../../include/common_trace.h"
+#include "../../../include/plugins/material/lambertian_common.h"
+#include "../../../../Utility/math.h"
+#include "../../../../Utility/geometry.h"
+#include "../../../../Utility/sampling.h"
+
+layout(location = CALLABLE_LOC_BSDF_EVAL) callableDataInEXT BSDFEvalQuery cBSDFEvalQuery;
+
+void main()
+{
+    if (dot(cBSDFEvalQuery.geometric_normal, cBSDFEvalQuery.dir_in) < 0 ||
+        dot(cBSDFEvalQuery.geometric_normal, cBSDFEvalQuery.dir_out) < 0) {
+        // No light below the surface
+        cBSDFEvalQuery.bsdf = vec3(0);
+        return;
+    }   
+    // TODO :: MIPMAP stuff...
+    // eval(bsdf.reflectance, vertex.uv, vertex.uv_screen_size, texture_pool) / c_PI
+    cBSDFEvalQuery.bsdf = max(dot(cBSDFEvalQuery.frame[2], cBSDFEvalQuery.dir_out), 0.f) *
+        texture(textures[lambertian_materials[cBSDFEvalQuery.mat_id].basecolor_opacity_tex], cBSDFEvalQuery.uv).rgb / k_pi;
+        return;
+}

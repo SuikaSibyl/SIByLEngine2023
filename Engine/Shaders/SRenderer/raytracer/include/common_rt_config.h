@@ -6,13 +6,38 @@
 
 #define PRIMITIVE_TYPE_COUNT    2
 
-#define CALLABLE_SAMPLING_OFFSET        0
-#define CALLABLE_SPHERE_SAMPLING        0
-#define CALLABLE_TRIMESH_SAMPLING       1
-#define CALLABLE_SPHERE_SAMPLING_PDF    2
+#define CALLABLE_LOC_SHAPE_SAMPLE       0
+#define CALLABLE_LOC_SHAPE_SAMPLE_PDF   1
+#define CALLABLE_LOC_BSDF_EVAL          2
+#define CALLABLE_LOC_BSDF_SAMPLE        3
+#define CALLABLE_LOC_BSDF_PDF           4
+
+// Plugins - primitives:
+#define SHAPE_SAMPLE_OFFSET             0
+#define SHAPE_TYPE_COUNT                2
+#define SHAPE_SAMPLE_IDX(TYPE_ID)       (SHAPE_SAMPLE_OFFSET + ((TYPE_ID) * 2) )
+#define SHAPE_SAMPLE_PDF_IDX(TYPE_ID)   (SHAPE_SAMPLE_OFFSET + ((TYPE_ID) * 2) + 1)
+//  - sphere
+#define CALLABLE_SPHERE_SAMPLING        (SHAPE_SAMPLE_OFFSET + 0)
+#define CALLABLE_SPHERE_SAMPLING_PDF    (SHAPE_SAMPLE_OFFSET + 1)
+//  - trimesh
+#define CALLABLE_TRIMESH_SAMPLING       (SHAPE_SAMPLE_OFFSET + 2)
+#define CALLABLE_TRIMESH_SAMPLING_PDF   (SHAPE_SAMPLE_OFFSET + 3)
+
+// Plugins - bsdf:
+#define BSDF_OFFSET                     (SHAPE_SAMPLE_OFFSET + (SHAPE_TYPE_COUNT * 2))
+#define BSDF_EVAL_IDX(BSDF_ID)          (BSDF_OFFSET + ((BSDF_ID) * 3) + 0)
+#define BSDF_SAMPLE_IDX(BSDF_ID)        (BSDF_OFFSET + ((BSDF_ID) * 3) + 1)
+#define BSDF_PDF_IDX(BSDF_ID)           (BSDF_OFFSET + ((BSDF_ID) * 3) + 2)
+//  - lambertian
+#define CALLABLE_LAMBERTIAN_EVAL        (SHAPE_SAMPLE_OFFSET + 0)
+#define CALLABLE_LAMBERTIAN_SAMPLE      (SHAPE_SAMPLE_OFFSET + 1)
+#define CALLABLE_LAMBERTIAN_PDF         (SHAPE_SAMPLE_OFFSET + 2)
+
 
 #define NOT_A_LIGHT 4294967295
 
 const float T_MAX  = 100000;
 const int MAX_DEPTH = 4;
+
 #endif

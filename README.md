@@ -33,8 +33,14 @@ By default, Nvidia GPU with Turing or higher architecture is required to correct
     - Render Dependency Graph System (experimental).
   - [SRenderer module](./docs/SIByLDocument_008_SRenderer.md)
     - Uniform scene packing for both rasterizer & ray tracer.
-    - Procedure sphere primitive for ray tracing pipeline
-    - Path Tracer (on going ...)
+    - Primitive Supported
+      - Triangle mesh
+      - Procedure sphere
+    - BSDF Supported
+      - Lambertian material
+      - Disney principled material
+    - Ray Tracer Pipeline
+      - Unidirectional path tracer
 - Physics
   - // TODO.
 - Editor Toolchain

@@ -1,5 +1,4 @@
 #include "../include/common_hit.h"
-#include "../include/common_sample_shape.h"
 #include "../../../Utility/random.h"
 
 layout(location = 0) rayPayloadInEXT PrimaryPayload primaryPld;
@@ -15,10 +14,11 @@ void main()
     primaryPld.uv               = geoInfo.uv;
     primaryPld.geometryID       = geoInfo.geometryID;
     primaryPld.lightID          = geoInfo.lightID;
+    primaryPld.hitFrontface     = (geoInfo.geometryNormalUnflipped == geoInfo.geometryNormal) ? 1.f : -1.f;
 #if PRIMITIVE_TYPE == PRIMITIVE_SPHERE
     primaryPld.normalFlipping   = 0.f;
 #elif PRIMITIVE_TYPE == PRIMITIVE_TRIANGLE
-    primaryPld.normalFlipping   = (geoInfo.geometryNormalUnflipped == geoInfo.geometryNormal) ? 1.f : -1.f;
+    primaryPld.normalFlipping   = primaryPld.hitFrontface;
 #endif
     setIntersected(primaryPld.flags, true);
 }

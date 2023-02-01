@@ -59,7 +59,7 @@ namespace SIByL
 			uint32_t padding_0;
 			uint32_t padding_1;
 			uint32_t padding_2;
-			uint32_t padding_3;
+			uint32_t bsdf_id = 1;
 		};
 
 		/** standard light data */

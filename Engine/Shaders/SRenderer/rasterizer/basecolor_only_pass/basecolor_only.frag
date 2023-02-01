@@ -2,6 +2,7 @@
 #extension GL_GOOGLE_include_directive : enable
 
 #include "../../include/common_descriptor_sets.h"
+#include "../../include/plugins/material/principled_common.h"
 #include "../../../Utility/geometry.h"
 
 layout(location = 0) in vec2 uv;
@@ -19,7 +20,7 @@ void main() {
     // mat3 TBN = inTBN;
     // if(!gl_FrontFacing) TBN[2] = -TBN[2];
 
-    MaterialData material = materials[matID];
+    PrincipledMaterialData material = principled_materials[matID];
 
     vec3 base_color = texture(textures[material.basecolor_opacity_tex], uv).rgb;
     // vec3 normal = texture(textures[material.normal_bump_tex], uv).rgb;

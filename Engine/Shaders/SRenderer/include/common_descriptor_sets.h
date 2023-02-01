@@ -45,17 +45,11 @@ struct GeometryInfo {
 };
 // material info
 struct MaterialData {
-  vec4 albedo_tint;
-  vec2 uv_tiling;
-  vec2 uv_scaling;
-  uint mat_type;
-  uint basecolor_opacity_tex;
-  uint normal_bump_tex;
-  uint roughness_metalic_ao_tex;
-  uint padding0;
-  uint padding1;
-  uint padding2;
-  uint padding3;
+  vec4 data_pack_0;
+  vec4 data_pack_1;
+  vec4 data_pack_2;
+  vec3 data_pack_3;
+  uint bsdf_type;
 };
 // light info
 struct LightData {

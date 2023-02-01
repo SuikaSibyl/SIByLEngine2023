@@ -5,7 +5,9 @@
 #extension GL_EXT_ray_query : require
 
 #include "common_rt_config.h"
+#include "common_callable.h"
 #include "../../include/common_descriptor_sets.h"
+#include "../../include/common_utils.h"
 
 layout(binding = 0, set = 1) uniform accelerationStructureEXT tlas;
 layout(binding = 1, set = 1, rgba32f) uniform image2D storageImage;
@@ -21,6 +23,7 @@ struct PrimaryPayload {
     uint    lightID;        // 44: light ID
     mat3    TBN;            // 48: TBN frame of hit point
     float   normalFlipping; // ....
+    float   hitFrontface; // ....
 };
 /** Primary Payload Struct */
 struct ShadowPayload {

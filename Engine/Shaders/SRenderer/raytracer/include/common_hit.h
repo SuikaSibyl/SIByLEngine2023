@@ -2,7 +2,8 @@
 #define _SRENDERER_COMMON_HIT_HEADER_
 
 #include "common_trace.h"
-#include "../custom_primitive/common_custom_primitives.h"
+#include "../../../Utility/math.h"
+#include "../../../Utility/geometry.h"
 
 // This will store two of the barycentric coordinates of the intersection when
 // closest-hit shaders are called:

@@ -1,0 +1,246 @@
+#version 460 core
+#extension GL_EXT_ray_tracing           : enable
+#extension GL_GOOGLE_include_directive  : enable
+
+#include "../../include/common_trace.h"
+#include "../../../include/microfacet.h"
+#include "../../../include/plugins/material/principled_common.h"
+#include "../../../../Utility/math.h"
+#include "../../../../Utility/geometry.h"
+#include "../../../../Utility/sampling.h"
+
+layout(location = CALLABLE_LOC_BSDF_SAMPLE) callableDataInEXT BSDFSampleQuery cBSDFSampleQuery;
+
+
+vec3 sample_visible_normals_aniso(
+    vec3 local_dir_in, 
+    in const float ax, 
+    in const float ay, 
+    in const vec2 rnd_param)
+{
+    // The incoming direction is in the "ellipsodial configuration" in Heitz's paper
+    float negative = 1;
+    if (local_dir_in.z < 0) {
+        // Ensure the input is on top of the surface.
+        local_dir_in = -local_dir_in;
+        negative = -1;
+    }
+
+    // Transform the incoming direction to the "hemisphere configuration".
+    vec3 hemi_dir_in = normalize(vec3(ax * local_dir_in.x, ay * local_dir_in.y, local_dir_in.z));
+
+    // Parameterization of the projected area of a hemisphere.
+    // First, sample a disk.
+    float r = sqrt(rnd_param.x);
+    float phi = 2 * k_pi * rnd_param.y;
+    float t1 = r * cos(phi);
+    float t2 = r * sin(phi);
+    // Vertically scale the position of a sample to account for the projection.
+    float s = (1 + hemi_dir_in.z) / 2;
+    t2 = (1 - s) * sqrt(1 - t1 * t1) + s * t2;
+    // Point in the disk space
+    vec3 disk_N = vec3(t1, t2, sqrt(max(float(0), 1 - t1 * t1 - t2 * t2)));
+
+    // Reprojection onto hemisphere -- we get our sampled normal in hemisphere space.
+    mat3 hemi_frame = createFrame(hemi_dir_in);
+    vec3 hemi_N = to_world(hemi_frame, disk_N);
+
+    // Transforming the normal back to the ellipsoid configuration
+    return negative * normalize(vec3(ax * hemi_N.x, ay * hemi_N.y, max(float(0), hemi_N.z)));
+}
+
+vec3 sample_visible_normals_clearcoat(
+    in const vec3 local_dir_in, 
+    in const float a,
+    in const vec2 rnd_param)
+{
+    float a2 = a * a;
+    float cos_helevation = sqrt((float(1) - pow(a2, float(1) - rnd_param.x)) / (1 - a2));
+    float sin_helevation = sqrt(max(1 - cos_helevation * cos_helevation, float(0)));
+    float h_azimuth = 2 * k_pi * rnd_param.y;
+    return vec3(
+        sin_helevation * cos(h_azimuth),
+        sin_helevation * sin(h_azimuth),
+        cos_helevation);
+}
+
+void sample_disney_diffuse(
+    in const vec3 base_color,
+    in const float roughness,
+    in const float subsurface
+) {
+    // No light below the surface
+    if (dot(cBSDFSampleQuery.geometric_normal, cBSDFSampleQuery.dir_in) < 0) {
+        return;
+    }
+    cBSDFSampleQuery.dir_out = to_world(cBSDFSampleQuery.frame, cosineSampleHemisphere(cBSDFSampleQuery.rnd_uv));
+    return;
+}
+
+void sample_disney_metal(
+    in const vec3 base_color,
+    in const float roughness,
+    in const float anisotropic
+) {
+    // No light below the surface
+    if (dot(cBSDFSampleQuery.geometric_normal, cBSDFSampleQuery.dir_in) < 0) {
+        return;
+    }
+    // - BRDF data
+    const float a_min = 0.0001;
+    const float aspect = sqrt(float(1) - float(0.9) * anisotropic);
+    const float a_x = max(a_min, roughness * roughness / aspect);
+    const float a_y = max(a_min, roughness * roughness * aspect);
+    // - sample VNDF
+    vec3 local_dir_in = to_local(cBSDFSampleQuery.frame, cBSDFSampleQuery.dir_in);
+    vec3 local_micro_normal = sample_visible_normals_aniso(local_dir_in, a_x, a_y, cBSDFSampleQuery.rnd_uv);
+    // Transform the micro normal to world space
+    vec3 half_vector = to_world(cBSDFSampleQuery.frame, local_micro_normal);
+    // Reflect over the world space normal
+    vec3 reflected = normalize(-cBSDFSampleQuery.dir_in + 2 * dot(cBSDFSampleQuery.dir_in, half_vector) * half_vector);
+    cBSDFSampleQuery.dir_out = reflected;
+}
+
+void sample_disney_glass(
+    in const vec3 base_color,
+    in const float roughness,
+    in const float anisotropic,
+    in const float eta
+) {
+    // Flip the shading frame if it is inconsistent with the geometry normal
+    mat3 frame = cBSDFSampleQuery.frame;
+    if (dot(frame[2], cBSDFSampleQuery.dir_in) * dot(cBSDFSampleQuery.geometric_normal, cBSDFSampleQuery.dir_in) < 0) {
+        frame = -frame;
+    }
+    // - BRDF data
+    const float a_min = 0.0001;
+    const float aspect = sqrt(float(1) - float(0.9) * anisotropic);
+    const float a_x = max(a_min, roughness * roughness / aspect);
+    const float a_y = max(a_min, roughness * roughness * aspect);
+    // Clamp roughness to avoid numerical issues.
+    //roughness = std::clamp(roughness, float(0.01), float(1));
+    // Sample a micro normal and transform it to world space -- this is our half-vector.
+    // - sample VNDF
+    vec3 local_dir_in = to_local(frame, cBSDFSampleQuery.dir_in);
+    vec3 local_micro_normal = sample_visible_normals_aniso(local_dir_in, a_x, a_y, cBSDFSampleQuery.rnd_uv);
+    // Transform the micro normal to world space
+    vec3 half_vector = to_world(frame, local_micro_normal);
+    // Flip half-vector if it's below surface
+    if (dot(half_vector, frame[2]) < 0) {
+        half_vector = -half_vector;
+    }
+
+    // Now we need to decide whether to reflect or refract.
+    // We do this using the Fresnel term.
+    float h_dot_in = dot(half_vector, cBSDFSampleQuery.dir_in);
+    float F = fresnel_dielectric(h_dot_in, eta);
+
+    if (cBSDFSampleQuery.rnd_w <= F) {
+        // Reflection
+        vec3 reflected = normalize(-cBSDFSampleQuery.dir_in + 2 * dot(cBSDFSampleQuery.dir_in, half_vector) * half_vector);
+        // set eta to 0 since we are not transmitting
+        cBSDFSampleQuery.dir_out = reflected;
+        return;
+    }
+    else {
+        // Refraction
+        // https://en.wikipedia.org/wiki/Snell%27s_law#Vector_form
+        // (note that our eta is eta2 / eta1, and l = -dir_in)
+        float h_dot_out_sq = 1 - (1 - h_dot_in * h_dot_in) / (eta * eta);
+        if (h_dot_out_sq <= 0) {
+            // Total internal reflection
+            // This shouldn't floatly happen, as F will be 1 in this case.
+            return;
+        }
+        // flip half_vector if needed
+        if (h_dot_in < 0) {
+            half_vector = -half_vector;
+        }
+        float h_dot_out = sqrt(h_dot_out_sq);
+        vec3 refracted = -cBSDFSampleQuery.dir_in / eta + (abs(h_dot_in) / eta - h_dot_out) * half_vector;
+        cBSDFSampleQuery.dir_out = refracted;
+        return;
+    }
+}
+
+void sample_disney_clearcoat(
+    in const float clearcoat_gloss
+) {
+    if (dot(cBSDFSampleQuery.geometric_normal, cBSDFSampleQuery.dir_in) < 0) {
+        // No light below the surface
+        return;
+    }
+    const mat3 frame = cBSDFSampleQuery.frame;
+    // - BRDF data
+    float a = (1 - clearcoat_gloss) * 0.1 + clearcoat_gloss * 0.001;
+    // - sample VNDF
+    vec3 local_dir_in = to_local(frame, cBSDFSampleQuery.dir_in);
+    vec3 local_micro_normal = sample_visible_normals_clearcoat(local_dir_in, a, cBSDFSampleQuery.rnd_uv);
+    // Transform the micro normal to world space
+    vec3 half_vector = to_world(frame, local_micro_normal);
+    // Reflect over the world space normal
+    vec3 reflected = normalize(-cBSDFSampleQuery.dir_in + 2 * dot(cBSDFSampleQuery.dir_in, half_vector) * half_vector);
+    cBSDFSampleQuery.dir_out = reflected;
+    return;
+}
+
+void main()
+{
+    vec3 unflipped_geometric_normal = cBSDFSampleQuery.geometric_normal * cBSDFSampleQuery.hitFrontface;
+
+    // First fetch parameters
+    vec3  base_color = texture(textures[principled_materials[cBSDFSampleQuery.mat_id].basecolor_opacity_tex], cBSDFSampleQuery.uv).rgb;
+    float specular_transmission = 0.5;
+    float metallic          = 0.5;
+    float subsurface        = 0.5;
+    float specular          = 0.5;
+    float roughness         = 0.1;
+    float specular_tint     = 0.5;
+    float anisotropic       = 0.5;
+    float sheen             = 0.5;
+    float sheen_tint        = 0.5;
+    float clearcoat         = 0.5;
+    float clearcoat_gloss   = 0.5;
+    float eta = dot(unflipped_geometric_normal, cBSDFSampleQuery.dir_in) > 0 ? 1.5 : (1. / 1.5);
+
+    // if going form inside of the geometry
+    if (dot(unflipped_geometric_normal, cBSDFSampleQuery.dir_in) <= 0) {
+        sample_disney_glass(base_color, roughness, anisotropic, eta);
+        return;
+    }
+    else {
+        float weights[4] = {
+            (1 - metallic) * (1 - specular_transmission),
+            (1 - specular_transmission * (1 - metallic)),
+            (1 - metallic) * specular_transmission,
+            0.25 * clearcoat
+        };
+
+        float weightPrefix[5];
+        weightPrefix[0] = 0;
+        for (int i = 1; i < 5; i++)
+            weightPrefix[i] = weightPrefix[i - 1] + weights[i - 1];
+        for (int i = 0; i < 5; i++)
+            weightPrefix[i] /= weightPrefix[4];
+
+        float w = cBSDFSampleQuery.rnd_w;
+        int selected = -1;
+        for (int i = 0; i < 5; ++i) {
+            if (w < weightPrefix[i]) {
+                selected = i;
+                break;
+            }
+        }
+        // modify w for material glass sample
+        if (selected == 3) {
+            cBSDFSampleQuery.rnd_w = (w - weightPrefix[2]) / (weightPrefix[3] - weightPrefix[2]);
+        }
+        switch (selected) {
+        case 1:     sample_disney_diffuse(base_color, roughness, subsurface); return;
+        case 2:     sample_disney_metal(base_color, roughness, anisotropic); return;
+        case 3:     sample_disney_glass(base_color, roughness, anisotropic, eta); return;
+        case 4:     sample_disney_clearcoat(clearcoat_gloss); return;
+        default:    sample_disney_diffuse(base_color, roughness, subsurface); return;
+        }
+    }
+}

@@ -27,10 +27,17 @@ namespace SIByL
 			shadow_ray_rchit = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 			shadow_ray_rmiss = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 
-			sphere_sampling_rcall = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 			trimesh_sampling_rcall = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-			sphere_sampling_pdf_rcall = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 			trimesh_sampling_pdf_rcall = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			sphere_sampling_rcall = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			sphere_sampling_pdf_rcall = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+
+			lambertian_eval = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			lambertian_sample = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			lambertian_pdf = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			principled_eval = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			principled_sample = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+			principled_pdf = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
 
 			GFX::GFXManager::get()->registerShaderModuleResource(rgen, "../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/stracer_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
 			GFX::GFXManager::get()->registerShaderModuleResource(rmiss, "../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/stracer_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
@@ -40,9 +47,6 @@ namespace SIByL
 			GFX::GFXManager::get()->registerShaderModuleResource(rchit_sphere,
 				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/spt_primary_ray_sphere_rchit.spv", 
 				{ nullptr, RHI::ShaderStages::CLOSEST_HIT });
-			GFX::GFXManager::get()->registerShaderModuleResource(rint_sphere,
-				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/custom_primitive/sphere_rint.spv", 
-				{ nullptr, RHI::ShaderStages::INTERSECTION });
 
 			GFX::GFXManager::get()->registerShaderModuleResource(shadow_ray_rchit,
 				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/spt_shadow_ray_rchit.spv", 
@@ -51,15 +55,45 @@ namespace SIByL
 				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/spt_shadow_ray_rmiss.spv", 
 				{ nullptr, RHI::ShaderStages::MISS });
 
+			// Plugins: primitives
+			// - sphere
+			GFX::GFXManager::get()->registerShaderModuleResource(rint_sphere,
+				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/primitive/sphere_hint_rint.spv", 
+				{ nullptr, RHI::ShaderStages::INTERSECTION });
 			GFX::GFXManager::get()->registerShaderModuleResource(sphere_sampling_rcall,
-				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/custom_primitive/sphere_sample_rcall.spv", 
+				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/primitive/sphere_sample_rcall.spv", 
 				{ nullptr, RHI::ShaderStages::CALLABLE });
+			GFX::GFXManager::get()->registerShaderModuleResource(sphere_sampling_pdf_rcall,
+				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/primitive/sphere_sample_pdf_rcall.spv", 
+				{ nullptr, RHI::ShaderStages::CALLABLE });
+			// - trimesh
 			GFX::GFXManager::get()->registerShaderModuleResource(trimesh_sampling_rcall,
-				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/custom_primitive/trimesh_sample_rcall.spv", 
+				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/primitive/trimesh_sample_rcall.spv", 
+				{ nullptr, RHI::ShaderStages::CALLABLE });
+			GFX::GFXManager::get()->registerShaderModuleResource(trimesh_sampling_pdf_rcall,
+				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/primitive/trimesh_sample_pdf_rcall.spv", 
 				{ nullptr, RHI::ShaderStages::CALLABLE });
 
-			GFX::GFXManager::get()->registerShaderModuleResource(sphere_sampling_pdf_rcall,
-				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/custom_primitive/sphere_sample_pdf_rcall.spv", 
+			// Plugins: bsdfs
+			// - lambertian
+			GFX::GFXManager::get()->registerShaderModuleResource(lambertian_eval,
+				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/material/lambertian_eval_rcall.spv", 
+				{ nullptr, RHI::ShaderStages::CALLABLE });
+			GFX::GFXManager::get()->registerShaderModuleResource(lambertian_sample,
+				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/material/lambertian_sample_rcall.spv", 
+				{ nullptr, RHI::ShaderStages::CALLABLE });
+			GFX::GFXManager::get()->registerShaderModuleResource(lambertian_pdf,
+				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/material/lambertian_pdf_rcall.spv", 
+				{ nullptr, RHI::ShaderStages::CALLABLE });
+			// - principled
+			GFX::GFXManager::get()->registerShaderModuleResource(principled_eval,
+				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/material/principled_eval_rcall.spv",
+				{ nullptr, RHI::ShaderStages::CALLABLE });
+			GFX::GFXManager::get()->registerShaderModuleResource(principled_sample,
+				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/material/principled_sample_rcall.spv",
+				{ nullptr, RHI::ShaderStages::CALLABLE });
+			GFX::GFXManager::get()->registerShaderModuleResource(principled_pdf,
+				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/material/principled_pdf_rcall.spv",
 				{ nullptr, RHI::ShaderStages::CALLABLE });
 		}
 
@@ -67,15 +101,28 @@ namespace SIByL
 		Core::GUID rchit_trimesh;
 		Core::GUID rchit_sphere;
 		Core::GUID rmiss;
-		Core::GUID rint_sphere;
 
 		Core::GUID shadow_ray_rchit;
 		Core::GUID shadow_ray_rmiss;
 
+		// Plugins: primitives
+		// - sphere
+		Core::GUID rint_sphere;
 		Core::GUID sphere_sampling_rcall;
-		Core::GUID trimesh_sampling_rcall;
 		Core::GUID sphere_sampling_pdf_rcall;
+		// - trimesh
+		Core::GUID trimesh_sampling_rcall;
 		Core::GUID trimesh_sampling_pdf_rcall;
+
+		// Plugins: bsdfs
+		// - lambertian
+		Core::GUID lambertian_eval;
+		Core::GUID lambertian_sample;
+		Core::GUID lambertian_pdf;
+		// - principled
+		Core::GUID principled_eval;
+		Core::GUID principled_sample;
+		Core::GUID principled_pdf;
 
 		virtual auto registerPass(SRenderer* renderer) noexcept -> void override {
 			GFX::RDGraph* rdg = renderer->rdgraph;
@@ -119,8 +166,17 @@ namespace SIByL
 									 Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rint_sphere)->shaderModule.get(),}, }},
 								RHI::SBTsDescriptor::CallableSBT{{
 									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(sphere_sampling_rcall)->shaderModule.get()},
+									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(sphere_sampling_pdf_rcall)->shaderModule.get()},
 									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(trimesh_sampling_rcall)->shaderModule.get()},
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(sphere_sampling_pdf_rcall)->shaderModule.get()}, }},
+									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(trimesh_sampling_pdf_rcall)->shaderModule.get()},
+									// lambertian
+									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lambertian_eval)->shaderModule.get()},
+									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lambertian_sample)->shaderModule.get()},
+									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lambertian_pdf)->shaderModule.get()},
+									// principled
+									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(principled_eval)->shaderModule.get()},
+									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(principled_sample)->shaderModule.get()},
+									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(principled_pdf)->shaderModule.get()}, }},
 							} });
 					}
 				std::shared_ptr<RHI::RayTracingPassEncoder> passEncoder[2] = {};

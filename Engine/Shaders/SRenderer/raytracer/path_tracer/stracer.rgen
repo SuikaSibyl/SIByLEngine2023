@@ -8,26 +8,32 @@ struct PushConstants {
 layout(push_constant) uniform PushConsts { PushConstants pushConstants; };
 
 #include "../include/common_trace.h"
-#include "../include/common_sample_shape.h"
+
 #include "../../../Utility/random.h"
 #include "../../../Utility/sampling.h"
 
 layout(location = 0) rayPayloadEXT PrimaryPayload   rPrimaryPld;
 layout(location = 1) rayPayloadEXT ShadowPayload    rShadowPld;
 
-layout(location = 0) callableDataEXT SampleQuery    cSampleQuery;
-layout(location = 1) callableDataEXT SamplePdfQuery cSamplePdfQuery;
+
+layout(location = CALLABLE_LOC_SHAPE_SAMPLE)        callableDataEXT ShapeSampleQuery    cShapeSampleQuery;
+layout(location = CALLABLE_LOC_SHAPE_SAMPLE_PDF)    callableDataEXT ShapeSamplePdfQuery cShapeSamplePdfQuery;
+layout(location = CALLABLE_LOC_BSDF_EVAL)           callableDataEXT BSDFEvalQuery       cBSDFEvalQuery;
+layout(location = CALLABLE_LOC_BSDF_SAMPLE)         callableDataEXT BSDFSampleQuery     cBSDFSampleQuery;
+layout(location = CALLABLE_LOC_BSDF_PDF)            callableDataEXT BSDFSamplePDFQuery  cBSDFSamplePDFQuery;
 
 struct PathVertex {
     vec3 position;
     vec3 offsetedPosition;
     bool intersected;
+    vec3 offsetedPositionInv;
     uint lightID;
     uint matID;
     vec3 geometricNormal;
     mat3 frame;
     vec2 uv;
     vec3 lightNormal;
+    float hitFrontface;
 };
 
 struct Ray {
@@ -51,22 +57,6 @@ vec3 skyColor(in vec3 rayDir) {
     return (1.0-t)*vec3(1.0) + t*vec3(0.5, 0.7, 1.0);
 }
 
-float pdf_sample_bsdf_lambertian(
-    in mat3 TBN,
-    in vec3 dir_in,
-    in vec3 dir_out) 
-{
-    vec3 normal = TBN[2];
-    if (dot(normal, dir_in) < 0 ||
-            dot(normal, dir_out) < 0) {
-        // No light below the surface
-        return 0.f;
-    }
-    // Flip the shading frame if it is inconsistent with the geometry normal
-    // For Lambertian, we importance sample the cosine hemisphere domain.
-    return max(dot(normal, dir_out), 0.f) / k_pi;
-}
-
 PathVertex tracePrimaryRay(in Ray ray) {
     traceRayEXT(tlas,              // Top-level acceleration structure
             gl_RayFlagsOpaqueEXT,  // Ray flags, here saying "treat all geometry as opaque"
@@ -83,6 +73,7 @@ PathVertex tracePrimaryRay(in Ray ray) {
     vertex.position = rPrimaryPld.position;
     // *: notice that we should offset the position by geometry normal rather than shading normal
     vertex.offsetedPosition = offsetPositionAlongNormal(rPrimaryPld.position, rPrimaryPld.geometryNormal);
+    vertex.offsetedPositionInv = offsetPositionAlongNormal(rPrimaryPld.position, -rPrimaryPld.geometryNormal);
     vertex.intersected = getIntersected(rPrimaryPld.flags);
     vertex.lightID = rPrimaryPld.lightID;
     vertex.geometricNormal = rPrimaryPld.geometryNormal;
@@ -92,25 +83,26 @@ PathVertex tracePrimaryRay(in Ray ray) {
     vertex.lightNormal =  (rPrimaryPld.normalFlipping == 0)
             ? vertex.geometricNormal
             : vertex.geometricNormal * rPrimaryPld.normalFlipping;
+    vertex.hitFrontface = rPrimaryPld.hitFrontface;
     return vertex;
 }
 
 LightSample sampleLight(in vec3 refPoint, inout uint RNG) {
     int lightID = sampleOneLight(stepAndOutputRNGFloat(RNG));
     LightData light = lights[lightID];
-    cSampleQuery.ref_point = refPoint;
-    cSampleQuery.geometry_id = light.index; // TODO :: flexible ID
-    cSampleQuery.uv = vec2(stepAndOutputRNGFloat(RNG), stepAndOutputRNGFloat(RNG));
-    cSampleQuery.w = stepAndOutputRNGFloat(RNG);
-    cSampleQuery.offset = uvec2(light.sample_dist_offset_cdf_0, light.sample_dist_offset_cdf_1);
-    cSampleQuery.size = uvec2(light.sample_dist_size_0, light.sample_dist_size_1);
-    executeCallableEXT(light.lightType, 0);
+    cShapeSampleQuery.ref_point = refPoint;
+    cShapeSampleQuery.geometry_id = light.index; // TODO :: flexible ID
+    cShapeSampleQuery.uv = vec2(stepAndOutputRNGFloat(RNG), stepAndOutputRNGFloat(RNG));
+    cShapeSampleQuery.w = stepAndOutputRNGFloat(RNG);
+    cShapeSampleQuery.offset = uvec2(light.sample_dist_offset_cdf_0, light.sample_dist_offset_cdf_1);
+    cShapeSampleQuery.size = uvec2(light.sample_dist_size_0, light.sample_dist_size_1);
+    executeCallableEXT(SHAPE_SAMPLE_IDX(light.lightType), 0);
     // create light sample
     LightSample lightSample;
-    lightSample.position = offsetPositionAlongNormal(cSampleQuery.position, cSampleQuery.normal);
-    lightSample.normal = cSampleQuery.normal;
-    lightSample.rayDirection = normalize(cSampleQuery.position - cSampleQuery.ref_point);
-    lightSample.unoffsetPosition = cSampleQuery.position;
+    lightSample.position = offsetPositionAlongNormal(cShapeSampleQuery.position, cShapeSampleQuery.normal);
+    lightSample.normal = cShapeSampleQuery.normal;
+    lightSample.rayDirection = normalize(cShapeSampleQuery.position - cShapeSampleQuery.ref_point);
+    lightSample.unoffsetPosition = cShapeSampleQuery.position;
     lightSample.lightID = lightID;
     return lightSample;
 }
@@ -151,52 +143,78 @@ float pdf_point_on_light(in vec3 ref_point,
                          in vec3 sample_normal) {
     LightData light = lights[light_id];
     float geometry_pdf = 0.f;
-    if(light.lightType == 0) { // sphere
-        cSamplePdfQuery.ref_point = ref_point;
-        cSamplePdfQuery.geometry_id = light.index;
-        cSamplePdfQuery.sample_position = sample_position;
-        cSamplePdfQuery.sample_normal = sample_normal;
-        executeCallableEXT(CALLABLE_SPHERE_SAMPLING_PDF, 1);
-        geometry_pdf = cSamplePdfQuery.pdf;
-    }
-    else if(light.lightType == 1) { // triangle
-        geometry_pdf = 1.f/geometryInfos[light.index].surfaceArea;
-    }
+
+    cShapeSamplePdfQuery.ref_point = ref_point;
+    cShapeSamplePdfQuery.geometry_id = light.index;
+    cShapeSamplePdfQuery.sample_position = sample_position;
+    cShapeSamplePdfQuery.sample_normal = sample_normal;
+    executeCallableEXT(SHAPE_SAMPLE_PDF_IDX(light.lightType), 1);
+    geometry_pdf = cShapeSamplePdfQuery.pdf;
+
     return light.pmf * geometry_pdf;
 }
 
-vec3 eval(in uint materialID,
-          in vec3 dir_in,
+vec3 bsdf_eval(in vec3 dir_in,
           in vec3 dir_out,
           in PathVertex vertex)
 {
-    if (dot(vertex.geometricNormal, dir_in) < 0 ||
-            dot(vertex.geometricNormal, dir_out) < 0) {
-        // No light below the surface
-        return vec3(0.f);
-    }
-    // // Sometimes the shading normal can be inconsistent with
-    // // the geometry normal. We flip the shading frame in that
-    // // case so that we don't produces "black fringes".
-    // if (dot(vertex.frame[2], dir_in) < 0) {
-    //     vertex.frame = -vertex.frame;
-    // }
-    return max(dot(vertex.frame[2], dir_out), 0.f) *
-        texture(textures[materials[materialID].basecolor_opacity_tex], vertex.uv).rgb / k_pi;
-        //    eval(bsdf.reflectance, vertex.uv, vertex.uv_screen_size, texture_pool) / c_PI;
+    uint bsdf_type = materials[vertex.matID].bsdf_type;
+
+    cBSDFEvalQuery.dir_in = normalize(dir_in);
+    cBSDFEvalQuery.dir_out = normalize(dir_out);
+    cBSDFEvalQuery.mat_id = vertex.matID;
+    cBSDFEvalQuery.geometric_normal = vertex.geometricNormal;
+    cBSDFEvalQuery.uv = vertex.uv;
+    cBSDFEvalQuery.frame = vertex.frame;
+    cBSDFEvalQuery.hitFrontface = vertex.hitFrontface;
+
+    executeCallableEXT(BSDF_EVAL_IDX(bsdf_type), CALLABLE_LOC_BSDF_EVAL);
+
+    return cBSDFEvalQuery.bsdf;
 }
 
-float pdf_sample_bsdf(in uint materialID,
-          in vec3 dir_in,
-          in vec3 dir_out,
-          in PathVertex vertex)
-{
-    if (dot(vertex.geometricNormal, dir_in) < 0 ||
-            dot(vertex.geometricNormal, dir_out) < 0) {
-        // No light below the surface
-        return 0.f;
-    }
-    return max(dot(vertex.frame[2], dir_out), 0.f) / k_pi;
+vec3 bsdf_sample(
+    in vec3 dir_in,
+    in vec2 rnd_uv,
+    in float rnd_w,
+    in PathVertex vertex) 
+{    
+    uint bsdf_type = materials[vertex.matID].bsdf_type;
+
+    cBSDFSampleQuery.dir_in = normalize(dir_in);
+    cBSDFSampleQuery.mat_id = vertex.matID;
+    cBSDFSampleQuery.geometric_normal = vertex.geometricNormal;
+    cBSDFSampleQuery.frame = vertex.frame;
+    cBSDFSampleQuery.hitFrontface = vertex.hitFrontface;
+    cBSDFSampleQuery.uv = vertex.uv;
+    cBSDFSampleQuery.rnd_uv = rnd_uv;
+    cBSDFSampleQuery.rnd_w = rnd_w;
+
+    executeCallableEXT(BSDF_SAMPLE_IDX(bsdf_type), CALLABLE_LOC_BSDF_SAMPLE);
+
+    return normalize(cBSDFSampleQuery.dir_out);
+}
+
+float bsdf_pdf(
+    in vec3 dir_in,
+    in vec3 dir_out,
+    in PathVertex vertex) 
+{    
+    uint bsdf_type = materials[vertex.matID].bsdf_type;
+
+    cBSDFSamplePDFQuery.dir_in = normalize(dir_in);
+    cBSDFSamplePDFQuery.mat_id = vertex.matID;
+    cBSDFSamplePDFQuery.dir_out = normalize(dir_out);
+    cBSDFSamplePDFQuery.geometric_normal = vertex.geometricNormal;
+    cBSDFSamplePDFQuery.frame = vertex.frame;
+    cBSDFSamplePDFQuery.uv = vertex.uv;
+    cBSDFSamplePDFQuery.hitFrontface = vertex.hitFrontface;
+
+    executeCallableEXT(BSDF_PDF_IDX(bsdf_type), CALLABLE_LOC_BSDF_PDF);
+
+    // Flip the shading frame if it is inconsistent with the geometry normal
+    // For Lambertian, we importance sample the cosine hemisphere domain.
+    return cBSDFSamplePDFQuery.pdf;
 }
 
 vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
@@ -289,7 +307,7 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
             if (G > 0 && p1 > 0) {
                 // Let's compute f (BSDF) next.
                 vec3 dir_view = -ray.direction;
-                vec3 f = eval(vertex.matID, dir_view, lightSample.rayDirection, vertex);
+                vec3 f = bsdf_eval(dir_view, lightSample.rayDirection, vertex);
                 // Evaluate the emission
                 // We set the footprint to zero since it is not fully clear how
                 // to set it in this case.
@@ -302,7 +320,7 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
                 C1 = G * f * L;
                 
                 // Next let's compute w1
-                float p2 = pdf_sample_bsdf(vertex.matID, dir_view, lightSample.rayDirection, vertex);
+                float p2 = bsdf_pdf(dir_view, lightSample.rayDirection, vertex);
 
                 p2 *= G;
 
@@ -310,11 +328,15 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
                 C1 /= p1;
             }
         }
-        radiance += path_throughput * C1 * w1;
+        // radiance += path_throughput * C1 * w1;
 
         // 1.2 Sample the hemisphere with bsdf importance
         vec2 bsdf_uv = vec2(stepAndOutputRNGFloat(RNG), stepAndOutputRNGFloat(RNG));
-        vec3 dir_bsdf = vertex.frame * cosineSampleHemisphere(bsdf_uv);
+        const vec3 dir_view = -ray.direction;
+        vec3 dir_bsdf = bsdf_sample(dir_view,
+            bsdf_uv,
+            stepAndOutputRNGFloat(RNG),
+            vertex);
         // TODO :: polymorphic bsdf sampling 
         // TODO :: Update ray differentials & eta_scale
         // if (bsdf_sample.eta == 0) {
@@ -343,9 +365,8 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
             G = 1;
         }
                 
-        vec3 dir_view = -ray.direction;
-        vec3 f = eval(vertex.matID, dir_view, dir_bsdf, vertex);
-        float p2 = pdf_sample_bsdf(vertex.matID, dir_view, dir_bsdf, vertex);
+        vec3 f = bsdf_eval(dir_view, dir_bsdf, vertex);
+        float p2 = bsdf_pdf(dir_view, dir_bsdf, vertex);
 
         if (p2 <= 0) {
             // Numerical issue -- we generated some invalid rays.
@@ -377,6 +398,15 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
                                 bsdf_vertex.position, 
                                 bsdf_vertex.geometricNormal);
             float w2 = (p2*p2) / (p1*p1 + p2*p2);
+            // w2 = w2 < 0 ? 0 : w2;
+            // w2 = w2 >= 0 ? w2 : 0;
+            // if(isnan(p1)) w2 = 0;
+            // if(isnan(p2)) w2 = 0;
+            // if(isinf(p1)) w2 = 0;
+            // if(isinf(p2)) w2 = 0;
+            // if(p1==0) w2 = 0;
+            // if(p2==0) w2 = 0;
+            // if(isinf(w2)) w2 = 0;
             C2 /= p2;
             radiance += path_throughput * C2 * w2;  
         }

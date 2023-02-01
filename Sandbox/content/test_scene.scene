@@ -18,8 +18,8 @@ SceneNodes:
     components:
       TagComponent: Camera Object
       Transform:
-        translation: [18.4566174, 7.25460148, 5.38841057]
-        eulerAngles: [-0.252886415, 22.2619133, 0]
+        translation: [18.856554, 6.77908564, -4.11041546]
+        eulerAngles: [-0.251369745, 21.7431755, 0]
         scale: [1, 1, 1]
       CameraComponent:
         fovy: 22
@@ -56,7 +56,7 @@ SceneNodes:
         - ORID: 1658390946990111580
       LightComponent:
         Type: 0
-        Intensity: [1, 1, 1]
+        Intensity: [5, 5, 5]
   - uid: 4
     parent: 18446744073709551615
     components:

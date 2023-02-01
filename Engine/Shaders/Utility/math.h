@@ -21,6 +21,11 @@ float distance_squared(in vec3 v0, in vec3 v1) {
     return dot(v0-v1, v0-v1);
 }
 
+float pow5(in float x) {
+    float x2 = x * x;
+    return x2 * x2 * x;
+};
+
 /**
 * Numerically stable quadratic equation solver at^2 + bt + c = 0
 * @return:  false when it can't find solutions.

@@ -1,0 +1,183 @@
+#version 460 core
+#extension GL_EXT_ray_tracing           : enable
+#extension GL_GOOGLE_include_directive  : enable
+
+#include "../../include/common_trace.h"
+#include "../../../include/microfacet.h"
+#include "../../../include/plugins/material/principled_common.h"
+#include "../../../../Utility/math.h"
+#include "../../../../Utility/geometry.h"
+#include "../../../../Utility/sampling.h"
+
+layout(location = CALLABLE_LOC_BSDF_PDF) callableDataInEXT BSDFSamplePDFQuery cBSDFSamplePDFQuery;
+
+
+float pdf_disney_diffuse() {
+    if (dot(cBSDFSamplePDFQuery.geometric_normal, cBSDFSamplePDFQuery.dir_in) < 0 ||
+            dot(cBSDFSamplePDFQuery.geometric_normal, cBSDFSamplePDFQuery.dir_out) < 0) {
+        // No light below the surface
+        return float(0);
+    }
+    // Flip the shading frame if it is inconsistent with the geometry normal
+    // Simply use a cosine hemisphere sampling
+    return max(dot(cBSDFSamplePDFQuery.frame[2], cBSDFSamplePDFQuery.dir_out), float(0)) / k_pi;
+}
+
+float pdf_disney_metal(
+    in const float roughness,
+    in const float anisotropic
+) {
+    if (dot(cBSDFSamplePDFQuery.geometric_normal, cBSDFSamplePDFQuery.dir_in) < 0 ||
+        dot(cBSDFSamplePDFQuery.geometric_normal, cBSDFSamplePDFQuery.dir_out) < 0) {
+        // No light below the surface
+        return 0;
+    }
+    // Flip the shading frame if it is inconsistent with the geometry normal
+    // Second compute common data
+    const vec3 h = normalize(cBSDFSamplePDFQuery.dir_in + cBSDFSamplePDFQuery.dir_out);
+    float n_dot_in = dot(cBSDFSamplePDFQuery.frame[2], cBSDFSamplePDFQuery.dir_in);
+    const float a_min = 0.0001;
+    const float aspect = sqrt(float(1) - float(0.9) * anisotropic);
+    const float a_x = max(a_min, roughness * roughness / aspect);
+    const float a_y = max(a_min, roughness * roughness * aspect);
+    // - D_m component
+    const float D = GGX_aniso(a_x, a_y, h, cBSDFSamplePDFQuery.frame);
+    // - G_m component
+    vec3 view_local = to_local(cBSDFSamplePDFQuery.frame, cBSDFSamplePDFQuery.dir_in);
+    float G = smith_masking_gtr2_aniso(to_local(cBSDFSamplePDFQuery.frame, cBSDFSamplePDFQuery.dir_in), a_x, a_y);
+    return (G * D * max(float(0), n_dot_in)) / (4 * view_local.z * n_dot_in);
+}
+
+float pdf_disney_glass(
+    in const float roughness,
+    in const float anisotropic,
+    in const float eta
+) {
+    bool reflected = dot(cBSDFSamplePDFQuery.geometric_normal, cBSDFSamplePDFQuery.dir_in) *
+                     dot(cBSDFSamplePDFQuery.geometric_normal, cBSDFSamplePDFQuery.dir_out) > 0;
+    // If we are going into the surface, then we use normal eta
+    // (internal/external), otherwise we use external/internal.
+    vec3 half_vector;
+    if (reflected) {
+        half_vector = normalize(cBSDFSamplePDFQuery.dir_in + cBSDFSamplePDFQuery.dir_out);
+    }
+    else {
+        // "Generalized half-vector" from Walter et al.
+        // See "Microfacet Models for Refraction through Rough Surfaces"
+        half_vector = normalize(cBSDFSamplePDFQuery.dir_in + cBSDFSamplePDFQuery.dir_out * eta);
+    }
+
+    // Flip half-vector if it's below surface
+    if (dot(half_vector, cBSDFSamplePDFQuery.frame[2]) < 0) {
+        half_vector = -half_vector;
+    }
+    // Clamp roughness to avoid numerical issues.
+    //roughness = clamp(roughness, float(0.01), float(1));
+    const float a_min = 0.0001;
+    const float aspect = sqrt(float(1) - float(0.9) * anisotropic);
+    const float a_x = max(a_min, roughness * roughness / aspect);
+    const float a_y = max(a_min, roughness * roughness * aspect);
+
+    // Compute F / D / G
+    // Note that we use the incoming direction
+    // for evaluating the Fresnel reflectedion amount.
+    // We can also use outgoing direction -- then we would need to
+    // use 1/bsdf.eta and we will get the same result.
+    // However, using the incoming direction allows
+    // us to use F to decide whether to reflected or refract during sampling.
+    float h_dot_in = dot(half_vector, cBSDFSamplePDFQuery.dir_in);
+    float F = fresnel_dielectric(h_dot_in, eta);
+    float D = GGX_aniso(a_x, a_y, half_vector, cBSDFSamplePDFQuery.frame);
+    float G_in = smith_masking_gtr2_aniso(to_local(cBSDFSamplePDFQuery.frame, cBSDFSamplePDFQuery.dir_in), a_x, a_y);
+
+    if (reflected) {
+        return (F * D * G_in) / (4 * abs(dot(cBSDFSamplePDFQuery.frame[2], cBSDFSamplePDFQuery.dir_in)));
+    }
+    else {
+        float h_dot_out = dot(half_vector, cBSDFSamplePDFQuery.dir_out);
+        float sqrt_denom = h_dot_in + eta * h_dot_out;
+        float dh_dout = eta * eta * h_dot_out / (sqrt_denom * sqrt_denom);
+        return (1 - F) * D * G_in * abs(dh_dout * h_dot_in / dot(cBSDFSamplePDFQuery.frame[2], cBSDFSamplePDFQuery.dir_in));
+    }
+}
+
+float pdf_disney_clearcoat(
+    in const float clearcoat_gloss
+) {
+     if (dot(cBSDFSamplePDFQuery.geometric_normal, cBSDFSamplePDFQuery.dir_in) < 0 ||
+         dot(cBSDFSamplePDFQuery.geometric_normal, cBSDFSamplePDFQuery.dir_out) < 0) {
+        // No light below the surface
+        return 0;
+    }
+    
+    // Flip the shading frame if it is inconsistent with the geometry normal
+    // Second compute common data
+    const vec3 h = normalize(cBSDFSamplePDFQuery.dir_in + cBSDFSamplePDFQuery.dir_out);
+    const vec3 hl = to_local(cBSDFSamplePDFQuery.frame, h);
+    const float dot_hwout = max(dot(h, cBSDFSamplePDFQuery.dir_out), float(0));
+    const float dot_nwin = max(dot(cBSDFSamplePDFQuery.frame[2], cBSDFSamplePDFQuery.dir_in), float(0));
+    const float dot_nwout = max(dot(cBSDFSamplePDFQuery.frame[2], cBSDFSamplePDFQuery.dir_out), float(0));
+    const float dot_nh = max(dot(cBSDFSamplePDFQuery.frame[2], h), float(0));
+    const float pow5_one_minus_hwout = pow5(float(1) - dot_hwout);
+
+    const float eta = 1.5;
+    float R_0 = ((eta - float(1)) * (eta - float(1))) / ((eta + float(1)) * (eta + float(1)));
+    float F_c = R_0 + (1 - R_0) * pow5_one_minus_hwout;
+    float a_g = (1 - clearcoat_gloss) * 0.1 + clearcoat_gloss * 0.001;
+    float a_g2 = a_g * a_g;
+    float D_c = (a_g2 - 1) / (k_pi * log(a_g2) * (1 + (a_g2 - 1) * hl.z * hl.z));
+    float pdf = D_c / (4 * dot_hwout);
+    return pdf;
+}
+
+void main()
+{
+    vec3 unflipped_geometric_normal = cBSDFSamplePDFQuery.geometric_normal * cBSDFSamplePDFQuery.hitFrontface;
+
+    bool reflected = dot(cBSDFSamplePDFQuery.geometric_normal, cBSDFSamplePDFQuery.dir_in) *
+        dot(cBSDFSamplePDFQuery.geometric_normal, cBSDFSamplePDFQuery.dir_out) > 0;
+    // Flip the shading frame if it is inconsistent with the geometry normal
+
+    vec3  base_color = texture(textures[principled_materials[cBSDFSamplePDFQuery.mat_id].basecolor_opacity_tex], cBSDFSamplePDFQuery.uv).rgb;
+    float specular_transmission = 0.5;
+    float metallic          = 0.5;
+    float subsurface        = 0.5;
+    float specular          = 0.5;
+    float roughness         = 0.1;
+    float specular_tint     = 0.5;
+    float anisotropic       = 0.5;
+    float sheen             = 0.5;
+    float sheen_tint        = 0.5;
+    float clearcoat         = 0.5;
+    float clearcoat_gloss   = 0.5;
+    float eta = dot(unflipped_geometric_normal, cBSDFSamplePDFQuery.dir_in) > 0 ? 1.5 : (1. / 1.5);
+
+    // if going form inside of the geometry
+    if (dot(unflipped_geometric_normal, cBSDFSamplePDFQuery.dir_in) <= 0) {
+        cBSDFSamplePDFQuery.pdf = pdf_disney_glass(roughness, anisotropic, eta);
+        return;
+    }
+    // if going form outside of the geometry
+    else {
+        float weights[4] = {
+            (1 - metallic) * (1 - specular_transmission),
+            (1 - specular_transmission * (1 - metallic)),
+            (1 - metallic) * specular_transmission,
+            0.25 * clearcoat
+        };
+        float pdfs[4] = {
+            pdf_disney_diffuse(),
+            pdf_disney_metal(roughness, anisotropic),
+            pdf_disney_glass(roughness, anisotropic, eta),
+            pdf_disney_clearcoat(clearcoat_gloss)
+        };
+        float pdfTotal = 0;
+        float pdfWeight = 0;
+        for (int i = 0; i < 4; i++) {
+            pdfTotal += pdfs[i] * weights[i];
+            pdfWeight += weights[i];
+        }
+        cBSDFSamplePDFQuery.pdf =  pdfTotal / (pdfWeight);
+        return;
+    }
+}

@@ -2,12 +2,12 @@
 #extension GL_EXT_ray_tracing           : enable
 #extension GL_GOOGLE_include_directive  : enable
 
-#include "../include/common_sample_shape.h"
-#include "../../../Utility/math.h"
-#include "../../../Utility/sampling.h"
-#include "../../../Utility/geometry.h"
+#include "../../include/common_trace.h"
+#include "../../../../Utility/math.h"
+#include "../../../../Utility/sampling.h"
+#include "../../../../Utility/geometry.h"
 
-layout(location = 0) callableDataInEXT SampleQuery cSampleQuery;
+layout(location = 0) callableDataInEXT ShapeSampleQuery cSampleQuery;
 
 /**
 * Sample a point on a sphere light.

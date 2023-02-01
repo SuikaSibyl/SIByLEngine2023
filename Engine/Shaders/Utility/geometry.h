@@ -44,9 +44,19 @@ mat3 buildTangentToWorld(in vec4 tangentWS, in vec3 normalWS) {
     return mat3(T, B, N);
 }
 
-// /** Compute TBN matrix according to normal an tangent */
-// vec3 computeTBN(in vec3 tangent, in vec3 normal) {
-//     return cross(tangent, normal)
-// }
+// /** Compute TBN matrix according to normal */
+mat3 createFrame(in vec3 n) {
+    if (n[2] < float(-1 + 1e-6)) {
+        return mat3(vec3(0, -1, 0),
+                    vec3(-1, 0, 0),
+                    n);
+    } else {
+        const float a = 1 / (1 + n[2]);
+        const float b = -n[0] * n[1] * a;
+        return mat3(vec3(1 - n[0] * n[0] * a, b, -n[0]),
+                    vec3(b, 1 - n[1] * n[1] * a, -n[1]),
+                    n);
+    }
+}
 
 #endif

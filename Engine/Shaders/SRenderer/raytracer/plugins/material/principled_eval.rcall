@@ -1,0 +1,198 @@
+#version 460 core
+#extension GL_EXT_ray_tracing           : enable
+#extension GL_GOOGLE_include_directive  : enable
+
+#include "../../include/common_trace.h"
+#include "../../../include/plugins/material/lambertian_common.h"
+#include "../../../include/microfacet.h"
+#include "../../../../Utility/math.h"
+#include "../../../../Utility/geometry.h"
+#include "../../../../Utility/sampling.h"
+
+layout(location = CALLABLE_LOC_BSDF_EVAL) callableDataInEXT BSDFEvalQuery cBSDFEvalQuery;
+
+float F_whatever(in const float F_90, in const float pow5_one_minus_nw) {
+    return float(1) + (F_90 - float(1)) * pow5_one_minus_nw;
+};
+
+float G_cw (in const mat3 frame, in const vec3 w) {
+    const vec3 wl = to_local(frame, w);
+    float t1 = wl.x * 0.25;
+    float t2 = wl.y * 0.25;
+    float t3 = 1 + ((t1 * t1 + t2 * t2) / (wl.z * wl.z));
+    float Lambda = (sqrt(t3) - 1) / 2;
+    return float(1) / (float(1) + Lambda);
+};
+
+void main()
+{
+    const vec3 dir_in  = cBSDFEvalQuery.dir_in;
+    const vec3 dir_out = cBSDFEvalQuery.dir_out;
+
+    vec3 unflipped_geometric_normal = cBSDFEvalQuery.geometric_normal * cBSDFEvalQuery.hitFrontface;
+    bool fromInside = dot(unflipped_geometric_normal, dir_in) < 0;
+    bool isReflect  = dot(unflipped_geometric_normal, dir_in) *
+                      dot(unflipped_geometric_normal, dir_out) > 0;
+    bool onlyGlass  = dot(unflipped_geometric_normal, dir_in) < 0 ||
+                      dot(unflipped_geometric_normal, dir_out) < 0;
+
+    // Flip the shading frame if it is inconsistent with the geometry normal
+    mat3 frame = cBSDFEvalQuery.frame;
+    if (dot(frame[2], cBSDFEvalQuery.dir_in) * dot(unflipped_geometric_normal, cBSDFEvalQuery.dir_in) < 0) {
+        frame = -frame;
+    }
+
+    // First fetch parameters
+    vec3  base_color = texture(textures[lambertian_materials[cBSDFEvalQuery.mat_id].basecolor_opacity_tex], cBSDFEvalQuery.uv).rgb;
+    float specular_transmission = 0.5;
+    float metallic          = 0.5;
+    float subsurface        = 0.5;
+    float specular          = 0.5;
+    float roughness         = 0.1;
+    float specular_tint     = 0.5;
+    float anisotropic       = 0.5;
+    float sheen             = 0.5;
+    float sheen_tint        = 0.5;
+    float clearcoat         = 0.5;
+    float clearcoat_gloss   = 0.5;
+    float eta = dot(unflipped_geometric_normal, dir_in) > 0 ? 1.5 : (1. / 1.5);
+    
+    // Second compute common data
+    const vec3 h = normalize(dir_in + dir_out);
+    const vec3 hl = to_local(frame, h);
+    const float dot_nwin = max(dot(frame[2], dir_in), float(0));
+    const float dot_nwout = max(dot(frame[2], dir_out), float(0));
+    const float dot_hwout = max(dot(h, dir_out), float(0));
+
+    const float pow5_one_minus_nwout = pow5(float(1) - dot_nwout);
+    const float pow5_one_minus_nwin = pow5(float(1) - dot_nwin);
+    const float pow5_one_minus_hwout = pow5(float(1) - dot_hwout);
+    // anisotropy
+    const float a_min = 0.0001;
+    const float aspect = sqrt(float(1) - float(0.9) * anisotropic);
+    const float a_x = max(a_min, roughness * roughness / aspect);
+    const float a_y = max(a_min, roughness * roughness * aspect);
+
+    vec3 f_glass = vec3(0,0,0);
+    // Compute f_glass component
+    {
+        vec3 half_vector;
+        if (isReflect) {
+            half_vector = normalize(dir_in + dir_out);
+        }
+        else {
+            // "Generalized half-vector" from Walter et al.
+            // See "Microfacet Models for Refraction through Rough Surfaces"
+            half_vector = normalize(dir_in + dir_out * eta);
+        }
+
+        // Flip half-vector if it's below surface
+        if (dot(half_vector, frame[2]) < 0) {
+            half_vector = -half_vector;
+        }
+
+        // Clamp roughness to avoid numerical issues.
+        //roughness = std::clamp(roughness, float(0.01), float(1));
+        const float a_min = 0.0001;
+        const float aspect = sqrt(float(1) - float(0.9) * anisotropic);
+        const float a_x = max(a_min, roughness * roughness / aspect);
+        const float a_y = max(a_min, roughness * roughness * aspect);
+
+        // Compute F / D / G
+        // Note that we use the incoming direction
+        // for evaluating the Fresnel reflection amount.
+        // We can also use outgoing direction -- then we would need to
+        // use 1/bsdf.eta and we will get the same result.
+        // However, using the incoming direction allows
+        // us to use F to decide whether to reflect or refract during sampling.
+        float h_dot_in = dot(half_vector, dir_in);
+        float F = fresnel_dielectric(h_dot_in, eta);
+        float D = GGX_aniso(a_x, a_y, half_vector, frame);
+        float G = smith_masking_gtr2_aniso(to_local(frame, dir_in), a_x, a_y)
+            * smith_masking_gtr2_aniso(to_local(frame, dir_out), a_x, a_y);
+
+        if (isReflect) {
+            f_glass = base_color * (F * D * G) / (4 * abs(dot(frame[2], dir_in)));
+        }
+        else {
+            // Snell-Descartes law predicts that the light will contract/expand 
+            // due to the different index of refraction. So the normal BSDF needs
+            // to scale with 1/eta^2. However, the "adjoint" of the BSDF does not have
+            // the eta term. This is due to the non-reciprocal nature of the index of refraction:
+            // f(wi -> wo) / eta_o^2 = f(wo -> wi) / eta_i^2
+            // thus f(wi -> wo) = f(wo -> wi) (eta_o / eta_i)^2
+            // The adjoint of a BSDF is defined as swapping the parameter, and
+            // this cancels out the eta term.
+            // See Chapter 5 of Eric Veach's thesis "Robust Monte Carlo Methods for Light Transport Simulation"
+            // for more details.
+            const float h_dot_out = dot(half_vector, dir_out);
+            const float sqrt_denom = h_dot_in + eta * h_dot_out;
+            // Very complicated BSDF. See Walter et al.'s paper for more details.
+            // "Microfacet Models for Refraction through Rough Surfaces"
+            f_glass = sqrt(base_color) * (1 - F) * D * G * abs(h_dot_out * h_dot_in) /
+                (abs(dot(frame[2], dir_in)) * sqrt_denom * sqrt_denom);
+        }
+    }
+
+
+    if (!onlyGlass && !fromInside) {
+        vec3 f_diffuse  = {0,0,0};
+        vec3 f_sheen  = {0,0,0};
+        vec3 f_metal = {0,0,0};
+        vec3 f_clearcoat = {0,0,0};
+
+        const float lumiance_basecolor = luminance(base_color);
+        vec3 C_tint = lumiance_basecolor > 0 ? (base_color / lumiance_basecolor) : vec3(1, 1, 1);
+
+        // Compute diffuse component
+        {   const float F_D90 = float(0.5) + 2 * roughness * dot_hwout * dot_hwout;
+            const vec3 f_basediffuse = base_color * F_whatever(F_D90, pow5_one_minus_nwin) * F_whatever(F_D90, pow5_one_minus_nwout) * dot_nwout / k_pi;
+            // Compute f_subsurface part
+            const float F_SS90 = roughness * dot_hwout * dot_hwout;
+            const vec3 f_subsurface = base_color * float(1.25) * dot_nwout / k_pi
+                * (F_whatever(F_SS90, pow5_one_minus_nwin) * F_whatever(F_SS90, pow5_one_minus_nwout) * (float(1) / (dot_nwin + dot_nwout) - float(0.5)) + float(0.5));
+            // Return the mixture of f_basediffuse & f_subsurface by subsurface parameter.
+            f_diffuse = (float(1) - subsurface) * f_basediffuse + subsurface * f_subsurface;
+        }
+        // Compute sheen component
+        { 
+            vec3 C_sheen = (1 - sheen_tint) * vec3(1, 1, 1) + sheen_tint * C_tint;
+            f_sheen = C_sheen * pow5_one_minus_hwout * dot_nwout;
+        }
+        // Compute metal component
+        float R_0 = ((eta - float(1)) * (eta - float(1))) / ((eta + float(1)) * (eta + float(1)));
+        {   // - F_m component
+            float lumiance_basecolor = luminance(base_color);
+            vec3 K_s = (1 - specular_tint) + specular_tint * C_tint;
+            vec3 C0 = specular * R_0 * (float(1) - metallic) * K_s + metallic * base_color;
+            const vec3 F_m = C0 + (1 - C0) * pow5_one_minus_hwout;
+            // - D_m component
+            const float D_m = GGX_aniso(a_x, a_y, h, frame);
+            // - G_m component
+            //to_local(frame, dir_in)
+            const float G_m = smith_masking_gtr2_aniso(to_local(frame, dir_in), a_x, a_y)
+                * smith_masking_gtr2_aniso(to_local(frame, dir_out), a_x, a_y);
+            // Finally compute the f_metal
+            f_metal = F_m * D_m * G_m / (float(4) * dot_nwin);
+        }
+        // Compute clearcoat component
+        {   float F_c = R_0 + (1 - R_0) * pow5_one_minus_hwout;
+            float a_g = (1 - clearcoat_gloss) * 0.1 + clearcoat_gloss * 0.001;
+            float a_g2 = a_g * a_g;
+            float D_c = (a_g2 - 1) / (k_pi * log(a_g2) * (1 + (a_g2 - 1) * hl.z * hl.z));
+
+            float G_c = G_cw(frame, dir_in) * G_cw(frame, dir_out);
+            f_clearcoat = vec3(1, 1, 1) * F_c * D_c * G_c / (4 * dot_nwin);
+        }
+        cBSDFEvalQuery.bsdf = (1 - specular_transmission) * (1 - metallic) * f_diffuse
+            + (1 - metallic) * sheen * f_sheen
+            + (1 - specular_transmission * (1 - metallic)) * f_metal
+            + 0.25 * clearcoat * f_clearcoat
+            + (1 - metallic) * specular_transmission * f_glass;
+        return;
+    }
+    else {
+        cBSDFEvalQuery.bsdf = (1 - metallic) * specular_transmission * f_glass;
+        return;
+    }
+}
