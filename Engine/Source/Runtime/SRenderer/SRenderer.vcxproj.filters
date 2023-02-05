@@ -33,5 +33,8 @@
     <ClCompile Include="Public\Utils\SE.SRendere-Tracer.CustomPrimitive.Sphere.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Passes\SE.SRendere-Tracer.SMultiCubemap.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

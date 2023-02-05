@@ -1,0 +1,490 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+
+struct PushConstants { 
+    uvec2 resolution;
+    uint sample_batch; 
+};
+layout(push_constant) uniform PushConsts { PushConstants pushConstants; };
+
+#include "../include/common_trace.h"
+
+#include "../../../Utility/random.h"
+#include "../../../Utility/sampling.h"
+
+layout(location = 0) rayPayloadEXT PrimaryPayload   rPrimaryPld;
+layout(location = 1) rayPayloadEXT ShadowPayload    rShadowPld;
+
+
+layout(location = CALLABLE_LOC_SHAPE_SAMPLE)        callableDataEXT ShapeSampleQuery    cShapeSampleQuery;
+layout(location = CALLABLE_LOC_SHAPE_SAMPLE_PDF)    callableDataEXT ShapeSamplePdfQuery cShapeSamplePdfQuery;
+layout(location = CALLABLE_LOC_BSDF_EVAL)           callableDataEXT BSDFEvalQuery       cBSDFEvalQuery;
+layout(location = CALLABLE_LOC_BSDF_SAMPLE)         callableDataEXT BSDFSampleQuery     cBSDFSampleQuery;
+layout(location = CALLABLE_LOC_BSDF_PDF)            callableDataEXT BSDFSamplePDFQuery  cBSDFSamplePDFQuery;
+
+layout(binding = 0, set = 2, rgba32f) uniform image2DArray multi_cubemap_0;
+
+struct PathVertex {
+    vec3 position;
+    vec3 offsetedPosition;
+    bool intersected;
+    vec3 offsetedPositionInv;
+    uint lightID;
+    uint matID;
+    vec3 geometricNormal;
+    mat3 frame;
+    vec2 uv;
+    vec3 lightNormal;
+    float hitFrontface;
+};
+
+struct Ray {
+    vec3    origin;
+    float   tnear;
+    vec3    direction;
+    float   tfar;
+};
+
+struct LightSample {
+    vec3 position;
+    uint lightID;
+    vec3 normal;
+    uint lightType;
+    vec3 rayDirection;
+    vec3 unoffsetPosition;
+};
+
+vec3 skyColor(in vec3 rayDir) {
+    const float t = 0.5 * (rayDir.y + 1.0);
+    return (1.0-t)*vec3(1.0) + t*vec3(0.5, 0.7, 1.0);
+}
+
+PathVertex tracePrimaryRay(in Ray ray) {
+    traceRayEXT(tlas,              // Top-level acceleration structure
+            gl_RayFlagsOpaqueEXT,  // Ray flags, here saying "treat all geometry as opaque"
+            0xFF,                  // 8-bit instance mask, here saying "trace against all instances"
+            0,                     // SBT record offset
+            0,                     // SBT record stride for offset
+            0,                     // Miss index
+            ray.origin,            // Ray origin
+            ray.tnear,             // Minimum t-value
+            ray.direction,         // Ray direction
+            ray.tfar,              // Maximum t-value
+            0);                    // Location of payload
+    PathVertex vertex;
+    vertex.position = rPrimaryPld.position;
+    // *: notice that we should offset the position by geometry normal rather than shading normal
+    vertex.offsetedPosition = offsetPositionAlongNormal(rPrimaryPld.position, rPrimaryPld.geometryNormal);
+    vertex.offsetedPositionInv = offsetPositionAlongNormal(rPrimaryPld.position, -rPrimaryPld.geometryNormal);
+    vertex.intersected = getIntersected(rPrimaryPld.flags);
+    vertex.lightID = rPrimaryPld.lightID;
+    vertex.geometricNormal = rPrimaryPld.geometryNormal;
+    vertex.frame = rPrimaryPld.TBN;
+    vertex.uv = rPrimaryPld.uv;
+    vertex.matID = rPrimaryPld.matID;
+    vertex.lightNormal =  (rPrimaryPld.normalFlipping == 0)
+            ? vertex.geometricNormal
+            : vertex.geometricNormal * rPrimaryPld.normalFlipping;
+    vertex.hitFrontface = rPrimaryPld.hitFrontface;
+    return vertex;
+}
+
+LightSample sampleLight(in vec3 refPoint, inout uint RNG) {
+    int lightID = sampleOneLight(stepAndOutputRNGFloat(RNG));
+    LightData light = lights[lightID];
+    cShapeSampleQuery.ref_point = refPoint;
+    cShapeSampleQuery.geometry_id = light.index; // TODO :: flexible ID
+    cShapeSampleQuery.uv = vec2(stepAndOutputRNGFloat(RNG), stepAndOutputRNGFloat(RNG));
+    cShapeSampleQuery.w = stepAndOutputRNGFloat(RNG);
+    cShapeSampleQuery.offset = uvec2(light.sample_dist_offset_cdf_0, light.sample_dist_offset_cdf_1);
+    cShapeSampleQuery.size = uvec2(light.sample_dist_size_0, light.sample_dist_size_1);
+    executeCallableEXT(SHAPE_SAMPLE_IDX(light.lightType), 0);
+    // create light sample
+    LightSample lightSample;
+    lightSample.position = offsetPositionAlongNormal(cShapeSampleQuery.position, cShapeSampleQuery.normal);
+    lightSample.normal = cShapeSampleQuery.normal;
+    lightSample.rayDirection = normalize(cShapeSampleQuery.position - cShapeSampleQuery.ref_point);
+    lightSample.unoffsetPosition = cShapeSampleQuery.position;
+    lightSample.lightID = lightID;
+    return lightSample;
+}
+
+bool traceOccludeRay(in Ray ray) {
+    rShadowPld.occluded = false;
+    traceRayEXT(tlas,           // Top-level acceleration structure
+        gl_RayFlagsOpaqueEXT,   // Ray flags, here saying "treat all geometry as opaque"
+        0xFF,                   // 8-bit instance mask, here saying "trace against all instances"
+        PRIMITIVE_TYPE_COUNT,   // SBT record offset
+        0,                      // SBT record stride for offset
+        1,                      // Miss index
+        ray.origin,             // Ray origin
+        ray.tnear,              // Minimum t-value
+        ray.direction,          // Ray direction
+        ray.tfar,               // Maximum t-value
+        1);                     // Location of payload
+    return rShadowPld.occluded;
+}
+
+bool is_light(in PathVertex vertex) {
+    return vertex.lightID != NOT_A_LIGHT;
+}
+
+vec3 emission(in uint lightID,
+              in vec3 view_dir,
+              in float view_footprint,
+              in LightSample point_on_light)
+{
+    if (dot(point_on_light.normal, view_dir) <= 0)
+        return vec3(0.f);
+    return lights[lightID].intensity;
+}
+
+float pdf_point_on_light(in vec3 ref_point, 
+                         in uint light_id,
+                         in vec3 sample_position,
+                         in vec3 sample_normal) {
+    LightData light = lights[light_id];
+    float geometry_pdf = 0.f;
+
+    cShapeSamplePdfQuery.ref_point = ref_point;
+    cShapeSamplePdfQuery.geometry_id = light.index;
+    cShapeSamplePdfQuery.sample_position = sample_position;
+    cShapeSamplePdfQuery.sample_normal = sample_normal;
+    executeCallableEXT(SHAPE_SAMPLE_PDF_IDX(light.lightType), 1);
+    geometry_pdf = cShapeSamplePdfQuery.pdf;
+
+    return light.pmf * geometry_pdf;
+}
+
+vec3 bsdf_eval(in vec3 dir_in,
+          in vec3 dir_out,
+          in PathVertex vertex)
+{
+    uint bsdf_type = materials[vertex.matID].bsdf_type;
+
+    cBSDFEvalQuery.dir_in = normalize(dir_in);
+    cBSDFEvalQuery.dir_out = normalize(dir_out);
+    cBSDFEvalQuery.mat_id = vertex.matID;
+    cBSDFEvalQuery.geometric_normal = vertex.geometricNormal;
+    cBSDFEvalQuery.uv = vertex.uv;
+    cBSDFEvalQuery.frame = vertex.frame;
+    cBSDFEvalQuery.hitFrontface = vertex.hitFrontface;
+
+    executeCallableEXT(BSDF_EVAL_IDX(bsdf_type), CALLABLE_LOC_BSDF_EVAL);
+
+    return cBSDFEvalQuery.bsdf;
+}
+
+vec3 bsdf_sample(
+    in vec3 dir_in,
+    in vec2 rnd_uv,
+    in float rnd_w,
+    in PathVertex vertex) 
+{    
+    uint bsdf_type = materials[vertex.matID].bsdf_type;
+
+    cBSDFSampleQuery.dir_in = normalize(dir_in);
+    cBSDFSampleQuery.mat_id = vertex.matID;
+    cBSDFSampleQuery.geometric_normal = vertex.geometricNormal;
+    cBSDFSampleQuery.frame = vertex.frame;
+    cBSDFSampleQuery.hitFrontface = vertex.hitFrontface;
+    cBSDFSampleQuery.uv = vertex.uv;
+    cBSDFSampleQuery.rnd_uv = rnd_uv;
+    cBSDFSampleQuery.rnd_w = rnd_w;
+
+    executeCallableEXT(BSDF_SAMPLE_IDX(bsdf_type), CALLABLE_LOC_BSDF_SAMPLE);
+
+    return normalize(cBSDFSampleQuery.dir_out);
+}
+
+float bsdf_pdf(
+    in vec3 dir_in,
+    in vec3 dir_out,
+    in PathVertex vertex) 
+{    
+    uint bsdf_type = materials[vertex.matID].bsdf_type;
+
+    cBSDFSamplePDFQuery.dir_in = normalize(dir_in);
+    cBSDFSamplePDFQuery.mat_id = vertex.matID;
+    cBSDFSamplePDFQuery.dir_out = normalize(dir_out);
+    cBSDFSamplePDFQuery.geometric_normal = vertex.geometricNormal;
+    cBSDFSamplePDFQuery.frame = vertex.frame;
+    cBSDFSamplePDFQuery.uv = vertex.uv;
+    cBSDFSamplePDFQuery.hitFrontface = vertex.hitFrontface;
+
+    executeCallableEXT(BSDF_PDF_IDX(bsdf_type), CALLABLE_LOC_BSDF_PDF);
+
+    // Flip the shading frame if it is inconsistent with the geometry normal
+    // For Lambertian, we importance sample the cosine hemisphere domain.
+    return cBSDFSamplePDFQuery.pdf;
+}
+
+vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
+    // loop carrying variable definition
+    // A path's contribution is 
+    // C(v) = W(v0, v1) * G(v0, v1) * f(v0, v1, v2) * 
+    //                    G(v1, v2) * f(v1, v2, v3) * 
+    //                  ........
+    //                  * G(v_{n-1}, v_n) * L(v_{n-1}, v_n)
+    // where v is the path vertices, W is the sensor response
+    // G is the geometry term, f is the BSDF, L is the emission
+    vec3 radiance = vec3(0);
+    // current_path_throughput stores the ratio between
+    // 1) the path contribution from v0 up to v_{i} (the BSDF f(v_{i-1}, v_i, v_{i+1}) is not included), 
+    // where i is where the PathVertex "vertex" lies on, and
+    // 2) the probability density for computing the path v from v0 up to v_i,
+    // so that we can compute the Monte Carlo estimates C/p. 
+    vec3 path_throughput = vec3(1);
+    // eta_scale stores the scale introduced by Snell-Descartes law to the BSDF (eta^2).
+    // We use the same Russian roulette strategy as Mitsuba/pbrt-v3
+    // and tracking eta_scale and removing it from the
+    // path contribution is crucial for many bounces of refraction.
+    float eta_scale = 1.f;
+
+    // primary intersection
+    PathVertex vertex = tracePrimaryRay(ray);   // TODO :: ray differential
+    if(!vertex.intersected) {
+        // TODO:: add background / env map
+        // return skyColor(ray.direction);
+        return vec3(0,0,0);
+    }
+    
+    // We hit a light immediately. 
+    // This path has only two vertices and has contribution
+    // C = W(v0, v1) * G(v0, v1) * L(v0, v1)
+    if (is_light(vertex)) {
+        LightSample vertexLight;
+        vertexLight.position = vertex.position;
+        vertexLight.normal = vertex.lightNormal;
+        radiance += path_throughput
+                  * emission(vertex.lightID, -ray.direction, 0, vertexLight);
+    }
+
+    // We iteratively sum up path contributions from paths with different number of vertices
+    // If max_depth == -1, we rely on Russian roulette for path termination.
+    for (int num_vertices = 3; MAX_DEPTH == -1 || num_vertices <= MAX_DEPTH + 1; ++num_vertices) {
+        
+        // 1.
+        // ---------------------------------------------
+        // 1.1 Sample a light and a point on the light.
+        LightSample lightSample = sampleLight(vertex.position, RNG);
+        // 1.2 Compute w1*C1/p1
+        vec3 C1 = vec3(0); // stores C1/p1
+        float w1;
+        {
+            // 1.2.1 Compute C1 = G * f * L
+            float G = 0;
+            if(true) {
+                // cast shadow ray
+                const vec3 toLightSample = lightSample.position - vertex.offsetedPosition;
+                Ray shadow_ray;
+                shadow_ray.origin     = vertex.offsetedPosition;
+                shadow_ray.tnear      = 0.000;
+                shadow_ray.direction  = normalize(toLightSample);
+                shadow_ray.tfar       = length(toLightSample);
+                bool occluded = traceOccludeRay(shadow_ray);
+                // We use different direction for shadow ray and shading.
+                // Generally because a point on the light geometry will probabily has unwanted
+                // self intersection, a "wrong" shadow ray direction could solve this.
+                // But we have to use the true direction for shading
+                if(!occluded)
+                    G = max(-dot(lightSample.rayDirection, lightSample.normal), 0.f) /
+                        distance_squared(lightSample.unoffsetPosition, vertex.offsetedPosition);
+            }
+            else {
+                // TODO :: envmap case
+            }
+
+            // The probability density for light sampling to sample our point is
+            // just the probability of sampling a light times the probability of sampling a point
+            float p1 = 1 * // TODO :: use light_pmf(scene, light_id) *
+                pdf_point_on_light(vertex.offsetedPosition,
+                                lightSample.lightID, // TODO :: flexible ID
+                                lightSample.unoffsetPosition, 
+                                lightSample.normal);
+
+            // We don't need to continue the computation if G is 0.
+            // Also sometimes there can be some numerical issue such that we generate
+            // a light path with probability zero
+            if (G > 0 && p1 > 0) {
+                // Let's compute f (BSDF) next.
+                vec3 dir_view = -ray.direction;
+                vec3 f = bsdf_eval(dir_view, lightSample.rayDirection, vertex);
+                // Evaluate the emission
+                // We set the footprint to zero since it is not fully clear how
+                // to set it in this case.
+                // One way is to use a roughness based heuristics, but we have multi-layered BRDFs.
+                // See "Real-time Shading with Filtered Importance Sampling" from Colbert et al.
+                // for the roughness based heuristics.
+                vec3 L = emission(lightSample.lightID,
+                            -lightSample.rayDirection,
+                            0, lightSample);
+                C1 = G * f * L;
+                
+                // Next let's compute w1
+                float p2 = bsdf_pdf(dir_view, lightSample.rayDirection, vertex);
+
+                p2 *= G;
+
+                w1 = (p1*p1) / (p1*p1 + p2*p2);
+                C1 /= p1;
+            }
+        }
+        // radiance += path_throughput * C1 * w1;
+
+        // 1.2 Sample the hemisphere with bsdf importance
+        vec2 bsdf_uv = vec2(stepAndOutputRNGFloat(RNG), stepAndOutputRNGFloat(RNG));
+        const vec3 dir_view = -ray.direction;
+        vec3 dir_bsdf = bsdf_sample(dir_view,
+            bsdf_uv,
+            stepAndOutputRNGFloat(RNG),
+            vertex);
+        // TODO :: polymorphic bsdf sampling 
+        // TODO :: Update ray differentials & eta_scale
+        // if (bsdf_sample.eta == 0) {
+        //     ray_diff.spread = reflect(ray_diff, vertex.mean_curvature, bsdf_sample.roughness);
+        // } else {
+        //     ray_diff.spread = refract(ray_diff, vertex.mean_curvature, bsdf_sample.eta, bsdf_sample.roughness);
+        //     eta_scale /= (bsdf_sample.eta * bsdf_sample.eta);
+        // }
+
+        float G = 0;
+
+        // Trace a ray towards bsdf_dir. Note that again we have
+        // to have an "epsilon" tnear to prevent self intersection.
+        Ray bsdf_ray;
+        bsdf_ray.origin     = vertex.offsetedPosition;
+        bsdf_ray.tnear      = 0.000;
+        bsdf_ray.direction  = dir_bsdf;
+        bsdf_ray.tfar       = T_MAX;
+        PathVertex bsdf_vertex = tracePrimaryRay(bsdf_ray);
+        if(bsdf_vertex.intersected) {
+            // TEST(?) :: abs(-dot(dir_bsdf, bsdf_vertex.geometricNormal)) / 
+            G = max(-dot(dir_bsdf, bsdf_vertex.geometricNormal), 0) /
+                        distance_squared(bsdf_vertex.position, vertex.offsetedPosition);
+        }
+        else {
+            G = 1;
+        }
+                
+        vec3 f = bsdf_eval(dir_view, dir_bsdf, vertex);
+        float p2 = bsdf_pdf(dir_view, dir_bsdf, vertex);
+
+        if (p2 <= 0) {
+            // Numerical issue -- we generated some invalid rays.
+            break;
+        }
+        // Remember to convert p2 to area measure!
+        p2 *= G;
+        // Now we want to check whether dir_bsdf hit a light source, and
+        // account for the light contribution (C2 & w2 & p2).
+        // There are two possibilities: either we hit an emissive surface,
+        // or we hit an environment map.
+        // We will handle them separately.
+        if(bsdf_vertex.intersected && is_light(bsdf_vertex)) {
+            LightSample bsdfHitSample;
+            bsdfHitSample.position = bsdf_vertex.position;
+            bsdfHitSample.normal = bsdf_vertex.lightNormal;
+            vec3 L = emission(bsdf_vertex.lightID, // TODO:: flexible light ID
+                        -dir_bsdf,
+                        0, bsdfHitSample);
+            vec3 C2 = G * f * L;
+            // Next let's compute p1(v2): the probability of the light source sampling
+            // directly drawing the point corresponds to bsdf_dir.
+            int light_id = 0; // TODO :: flexible light id
+
+            // const Light &light = lights[light_id];
+            float p1 = 1. * //light_pmf(scene, light_id) *
+                pdf_point_on_light(vertex.offsetedPosition,
+                                bsdf_vertex.lightID, // TODO :: flexible ID
+                                bsdf_vertex.position, 
+                                bsdf_vertex.geometricNormal);
+            float w2 = (p2*p2) / (p1*p1 + p2*p2);
+            // w2 = w2 < 0 ? 0 : w2;
+            // w2 = w2 >= 0 ? w2 : 0;
+            // if(isnan(p1)) w2 = 0;
+            // if(isnan(p2)) w2 = 0;
+            // if(isinf(p1)) w2 = 0;
+            // if(isinf(p2)) w2 = 0;
+            // if(p1==0) w2 = 0;
+            // if(p2==0) w2 = 0;
+            // if(isinf(w2)) w2 = 0;
+            C2 /= p2;
+            radiance += path_throughput * C2 * w2;  
+        }
+        // TODO :: ENV MAP
+        // else if () {
+
+        // }
+
+        if(!bsdf_vertex.intersected) {
+            break;
+        }
+        
+        // // TODO :: Russian roulette
+        // // // Update rays/intersection/path_throughput/current_pdf
+        // // // Russian roulette heuristics
+        float rr_prob = 1;
+        // // if (num_vertices - 1 >= scene.options.rr_depth) {
+        // //     rr_prob = min(max((1 / eta_scale) * path_throughput), Real(0.95));
+        // //     if (next_pcg32_real<Real>(rng) > rr_prob) {
+        // //         // Terminate the path
+        // //         break;
+        // //     }
+        // // }
+
+        ray = bsdf_ray;
+        vertex = bsdf_vertex;
+        path_throughput *= (G * f) / (p2 * rr_prob);
+    }
+
+    return radiance;
+}
+
+void main() {
+    // The resolution of the image, which is the same as the launch size:
+    const ivec2 resolution = ivec2(pushConstants.resolution);
+    const ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
+    // If the pixel is outside of the image, don't do anything:
+    if((pixel.x >= resolution.x) || (pixel.y >= resolution.y)) {
+        return;
+    }
+
+    // if((pixel.x<512) && (pixel.y<512)) {
+    //     imageStore(multi_cubemap_0, ivec3(pixel.x, pixel.y, 0), vec4(0.0, 0.0, 0.0, 1.0));  
+    //     imageStore(multi_cubemap_0, ivec3(pixel.x, pixel.y, 1), vec4(1.0, 0.0, 0.0, 1.0)); 
+    //     imageStore(multi_cubemap_0, ivec3(pixel.x, pixel.y, 2), vec4(0.0, 1.0, 0.0, 1.0)); 
+    //     imageStore(multi_cubemap_0, ivec3(pixel.x, pixel.y, 3), vec4(0.0, 0.0, 1.0, 1.0)); 
+    //     imageStore(multi_cubemap_0, ivec3(pixel.x, pixel.y, 4), vec4(1.0, 1.0, 0.0, 1.0)); 
+    //     imageStore(multi_cubemap_0, ivec3(pixel.x, pixel.y, 5), vec4(0.0, 1.0, 1.0, 1.0)); 
+    // }
+    
+    // As we only use 1spp, no random offset.
+    const vec2 pixelCenter  = vec2(pixel.xy) + vec2(0.5);
+    const vec2 inUV         = pixelCenter/vec2(resolution.xy);
+    const vec2 d            = inUV * 2.0 - 1.0;
+
+    const float focus_dist = 0.0f;
+    const float length_radius = 0.;
+    const vec3 targetOnFocusPlane = (globalUniform.projInverse * vec4(d.x, d.y, 1, 1)).xyz;
+    const vec2 diskSample = vec2(0);
+    // const vec2 diskSample = uniformSampleDisk(vec2(stepAndOutputRNGFloat(pld.rngState), stepAndOutputRNGFloat(pld.rngState)));
+    const vec3 sampleOnApeture = vec3(length_radius * diskSample, 0);
+    const vec4 origin       = globalUniform.viewInverse * vec4(vec3(0), 1);
+    const vec4 direction    = globalUniform.viewInverse * vec4(normalize(targetOnFocusPlane - sampleOnApeture), 0);
+ 
+    uint RNG = uint((pushConstants.sample_batch * resolution.y + pixel.y) * resolution.x + pixel.x);
+
+    Ray primaryRay;
+    primaryRay.origin       = origin.xyz;
+    primaryRay.direction    = normalize(direction.xyz);
+    primaryRay.tnear        = 0.0;
+    primaryRay.tfar         = 10000.0;
+    vec3 pixelColor = unidirectional_path_tracing(primaryRay, RNG);
+
+    if(pushConstants.sample_batch != 0) {
+        vec3 color = imageLoad(storageImage, ivec2(pixel)).rgb;
+        pixelColor = (pushConstants.sample_batch * color + pixelColor) / (pushConstants.sample_batch + 1);
+    }
+    imageStore(storageImage, pixel, vec4(pixelColor, 1.0));
+}

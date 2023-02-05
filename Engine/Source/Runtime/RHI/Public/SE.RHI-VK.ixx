@@ -24,6 +24,7 @@ import SE.Core.Log;
 import SE.Math.Misc;
 import SE.Math.Geometric;
 import SE.Platform.Window;
+import SE.Utility;
 
 namespace SIByL::RHI
 {
@@ -1629,6 +1630,12 @@ namespace SIByL::RHI
 		return usageFlags;
 	}
 
+	inline auto getVkImageCreateFlags(TextureFlags descflags) noexcept -> VkImageCreateFlags {
+		VkImageCreateFlags flags = 0;
+		if (uint32_t(descflags) & (uint32_t)TextureFlags::CUBE_COMPATIBLE) flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+		return flags;
+	}
+
 	Texture_VK::Texture_VK(Device_VK* device, TextureDescriptor const& desc)
 		: device(device), descriptor{desc}
 	{
@@ -1637,21 +1644,21 @@ namespace SIByL::RHI
 		imageInfo.imageType = getVkImageType(desc.dimension);
 		imageInfo.extent.width = static_cast<uint32_t>(desc.size.width);
 		imageInfo.extent.height = static_cast<uint32_t>(desc.size.height);
-		imageInfo.extent.depth = desc.size.depthOrArrayLayers;
+		imageInfo.extent.depth = (desc.dimension == TextureDimension::TEX2D) ? 1 : desc.size.depthOrArrayLayers;
 		imageInfo.mipLevels = desc.mipLevelCount;
-		imageInfo.arrayLayers = desc.size.depthOrArrayLayers;
+		imageInfo.arrayLayers = (desc.dimension == TextureDimension::TEX2D) ? desc.size.depthOrArrayLayers : 1;
 		imageInfo.format = getVkFormat(desc.format);
-		imageInfo.tiling = desc.hostVisible ? VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL;
+		imageInfo.tiling = hasBit(desc.flags, RHI::TextureFlags::HOSTI_VISIBLE) ? VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL;
 		imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		imageInfo.usage = getVkImageUsageFlagBits(desc.usage);
 		imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-		imageInfo.flags = 0; // Optional
+		imageInfo.flags = getVkImageCreateFlags(desc.flags); // Optional
 
 #ifdef USE_VMA
 		VmaAllocationCreateInfo allocInfo = {};
 		allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-		if (desc.hostVisible) {
+		if (hasBit(desc.flags, RHI::TextureFlags::HOSTI_VISIBLE)) {
 			allocInfo.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 		}
 		if (vmaCreateImage(device->getVMAAllocator(), &imageInfo, &allocInfo, &image, &allocation, nullptr) != VK_SUCCESS) {

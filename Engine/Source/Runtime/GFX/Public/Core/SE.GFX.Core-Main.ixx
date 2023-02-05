@@ -27,6 +27,7 @@ import SE.Math.Misc;
 import SE.Math.Geometric;
 import SE.Image;
 import SE.RHI;
+import SE.Utility;
 
 namespace SIByL::GFX 
 {
@@ -135,6 +136,8 @@ namespace SIByL::GFX
 		std::unique_ptr<RHI::Texture> texture = nullptr;
 		/** texture display view*/
 		std::unique_ptr<RHI::TextureView> originalView = nullptr;
+		/** texture display view arrays*/
+		std::vector<std::unique_ptr<RHI::TextureView>> viewArrays;
 		/** path string */
 		std::optional<std::string> resourcePath;
 		/** name */
@@ -1255,7 +1258,7 @@ namespace SIByL::GFX
 			(uint32_t)RHI::DependencyType::NONE,
 			{}, {},
 			{ RHI::TextureMemoryBarrierDescriptor{
-				textureResource.texture.get(), RHI::ImageSubresourceRange{aspectMask, 0,1,0,1},
+				textureResource.texture.get(), RHI::ImageSubresourceRange{aspectMask, 0,1,0,uint32_t((hasBit(desc.flags, RHI::TextureFlags::CUBE_COMPATIBLE)) ? 6 : 1)},
 				(uint32_t)RHI::AccessFlagBits::NONE,
 				targetAccessFlags,
 				RHI::TextureLayout::UNDEFINED,
@@ -1266,8 +1269,23 @@ namespace SIByL::GFX
 		rhiLayer->getDevice()->getGraphicsQueue()->waitIdle();
 		RHI::TextureViewDescriptor viewDesc = { desc.format };
 		viewDesc.aspect = RHI::getTextureAspect(desc.format);
-		if (!desc.hostVisible) // if host visible we do not create view
+		viewDesc.baseArrayLayer = 0;
+		viewDesc.arrayLayerCount = 1;
+		viewDesc.dimension = RHI::TextureViewDimension::TEX2D;
+		if (!hasBit(desc.flags, RHI::TextureFlags::CUBE_COMPATIBLE)) // if host visible we do not create view
 			textureResource.originalView = textureResource.texture->createView(viewDesc);
+		else {
+			textureResource.viewArrays.resize(6);
+			for (int i = 0; i < 6; ++i) {
+				viewDesc.baseArrayLayer = i;
+				textureResource.viewArrays[i] = textureResource.texture->createView(viewDesc);
+			}
+			viewDesc.dimension = RHI::TextureViewDimension::TEX2D_ARRAY;
+			viewDesc.baseArrayLayer = 0;
+			viewDesc.arrayLayerCount = 6;
+			textureResource.originalView = textureResource.texture->createView(viewDesc);
+		}
+
 		textureResource.guid = guid;
 		Core::ResourceManager::get()->addResource(guid, std::move(textureResource));
 	}

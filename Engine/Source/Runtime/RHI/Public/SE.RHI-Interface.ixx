@@ -9,6 +9,7 @@ import SE.Core.Log;
 import SE.Core.Memory;
 import SE.Platform.Window;
 import SE.Math.Geometric;
+import SE.Utility;
 
 namespace SIByL::RHI
 {
@@ -521,6 +522,12 @@ namespace SIByL::RHI
 		virtual auto unmap() noexcept -> void = 0;
 	};
 
+	export enum struct TextureFlags {
+		NONE			= 0,
+		HOSTI_VISIBLE	= 1<<0,
+		CUBE_COMPATIBLE = 1<<1,
+	};
+
 	export struct TextureDescriptor {
 		Extend3D size;
 		uint32_t mipLevelCount = 1;
@@ -534,7 +541,7 @@ namespace SIByL::RHI
 		* on this texture (in addition to the texture’s actual format).
 		*/
 		std::vector<TextureFormat> viewFormats;
-		bool hostVisible = false;
+		TextureFlags flags = TextureFlags::NONE;
 	};
 
 	export enum struct TextureViewDimension {
@@ -2194,7 +2201,7 @@ namespace SIByL::RHI
 	auto Device::readbackDeviceLocalTexture(Texture* texture, void* data, uint32_t size) noexcept -> void {
 		RHI::TextureDescriptor desc = texture->getDescriptor();
 		desc.usage = (uint32_t)RHI::TextureUsage::COPY_DST;
-		desc.hostVisible = true;
+		desc.flags = desc.flags | RHI::TextureFlags::HOSTI_VISIBLE;
 		uint32_t pixel_size = 0;
 		if (desc.format == TextureFormat::RGBA8_UNORM)
 			pixel_size = sizeof(uint8_t) * 4;

@@ -72,6 +72,7 @@ namespace SIByL::GFX
 			uint32_t sampleCount = 1;
 			RHI::TextureDimension dimension = RHI::TextureDimension::TEX2D;
 			RHI::TextureFormat format;
+			RHI::TextureFlags flags = RHI::TextureFlags::NONE;
 		};
 		/** texture desc */
 		RHI::TextureDescriptor descriptor = {};
@@ -301,7 +302,8 @@ namespace SIByL::GFX
 		texture->descriptor = RHI::TextureDescriptor{
 			desc.size, desc.mipLevelCount, desc.sampleCount, desc.dimension, desc.format,
 			(uint32_t)RHI::TextureUsage::TEXTURE_BINDING | (uint32_t)RHI::TextureUsage::COPY_SRC,
-			{desc.format}
+			{desc.format},
+			desc.flags
 		};
 		texture->name = name;
 		return texture;

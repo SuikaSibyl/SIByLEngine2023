@@ -200,8 +200,38 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			}}
 			});
 
+		//commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+		//	(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
+		//	(uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR,
+		//	(uint32_t)RHI::DependencyType::NONE,
+		//	{}, {},
+		//	{ RHI::TextureMemoryBarrierDescriptor{
+		//		rdg->getTexture("MultiCubemap_0")->texture->texture.get(),
+		//		RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,6},
+		//		(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
+		//		(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT | (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
+		//		RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
+		//		RHI::TextureLayout::GENERAL
+		//	}}
+		//	});
+
 		rdg->execute(commandEncoder.get());
 
+
+		//commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+		//	(uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR,
+		//	(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
+		//	(uint32_t)RHI::DependencyType::NONE,
+		//	{}, {},
+		//	{ RHI::TextureMemoryBarrierDescriptor{
+		//		rdg->getTexture("MultiCubemap_0")->texture->texture.get(),
+		//		RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,6},
+		//		(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT | (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
+		//		(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
+		//		RHI::TextureLayout::GENERAL,
+		//		RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL
+		//	}}
+		//	});
 
 		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
 			(uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR,
@@ -265,7 +295,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				RHI::TextureFormat::RGBA32_FLOAT,
 				(uint32_t)RHI::TextureUsage::COPY_DST,
 				{ RHI::TextureFormat::RGBA32_FLOAT },
-				true
+				RHI::TextureFlags::HOSTI_VISIBLE
 			};
 			GFX::GFXManager::get()->registerTextureResource(copyDst, desc);
 		}
