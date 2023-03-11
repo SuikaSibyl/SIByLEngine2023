@@ -10,7 +10,8 @@ import :SRenderer;
 import :Raster.Albedo;
 import :Tracer.STracer;
 import :Tracer.SMultiCubemap;
-
+import :Tracer.SBDPT;
+import :Raster.ClearImagePass;
 
 namespace SIByL {
 	export struct SRendererRegister {
@@ -38,16 +39,22 @@ namespace SIByL {
 					RHI::TextureFormat::RGBA32_FLOAT }
 				});
 			srenderer->textures.emplace_back(SRenderer::TextureRegisterInfo{
-				"MultiCubemap_0",
+				"AtomicMutex",
 				GFX::RDGTexture::Desc{
-					{512,512,6},
+					{800,600,1},
 					1, 1, RHI::TextureDimension::TEX2D,
-					RHI::TextureFormat::RGBA32_FLOAT,
-					RHI::TextureFlags::CUBE_COMPATIBLE}
+					RHI::TextureFormat::R32_SINT }
 				});
-			// register passes
-			srenderer->passes.emplace_back(std::make_unique<AlbedoOnlyPass>());
-			//srenderer->passes.emplace_back(std::make_unique<PathTracerPass>());
+			srenderer->textures.emplace_back(SRenderer::TextureRegisterInfo{
+				"AtomicRGB32",
+				GFX::RDGTexture::Desc{
+					{800,600,4},
+					1, 1, RHI::TextureDimension::TEX2D,
+					RHI::TextureFormat::R32_FLOAT }
+				});
+ 			srenderer->passes.emplace_back(std::make_unique<AlbedoOnlyPass>());
+			srenderer->passes.emplace_back(std::make_unique<ClearImagePass>());
+			srenderer->passes.emplace_back(std::make_unique<BDPathTracerPass>());
 		}
 	};
 }

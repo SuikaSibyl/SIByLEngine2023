@@ -18,10 +18,8 @@ namespace SIByL
 	export struct AlbedoOnlyPass :public SRenderer::Pass {
 
 		virtual auto loadShaders() noexcept -> void override {
-			vert = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-			frag = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-			GFX::GFXManager::get()->registerShaderModuleResource(vert, "../Engine/Binaries/Runtime/spirv/SRenderer/rasterizer/basecolor_only_pass/basecolor_only_vert.spv", { nullptr, RHI::ShaderStages::VERTEX });
-			GFX::GFXManager::get()->registerShaderModuleResource(frag, "../Engine/Binaries/Runtime/spirv/SRenderer/rasterizer/basecolor_only_pass/basecolor_only_frag.spv", { nullptr, RHI::ShaderStages::FRAGMENT });
+			vert = GFX::GFXManager::get()->registerShaderModuleResource("../Engine/Binaries/Runtime/spirv/SRenderer/rasterizer/basecolor_only_pass/basecolor_only_vert.spv", { nullptr, RHI::ShaderStages::VERTEX });
+			frag = GFX::GFXManager::get()->registerShaderModuleResource("../Engine/Binaries/Runtime/spirv/SRenderer/rasterizer/basecolor_only_pass/basecolor_only_frag.spv", { nullptr, RHI::ShaderStages::FRAGMENT });
 		}
 
 		Core::GUID vert, frag;

@@ -24,6 +24,10 @@ struct ShapeSamplePdfQuery {
     float   pdf;
 };
 
+bool validRefPoint(in const vec3 ref_point) {
+    return !(isnan(ref_point.x) || isnan(ref_point.y) || isnan(ref_point.z));
+}
+
 struct BSDFEvalQuery {
     // input
     vec3    dir_in;

@@ -185,14 +185,18 @@ namespace SIByL::Editor
 					static bool inited = false;
 					if (!inited) {
 						for (uint32_t i = 0; i < static_cast<uint32_t>(GFX::LightComponent::LightType::MAX_ENUM); ++i) {
-							if (i != 0)lightTypeNames += "\0";
+							if (i != 0)
+								lightTypeNames.push_back('\0');
 							lightTypeNames += GFX::to_string(static_cast<GFX::LightComponent::LightType>(i));
 						}
-						lightTypeNames += "\0\0";
+						lightTypeNames.push_back('\0');
+						lightTypeNames.push_back('\0');
 						inited = true;
 					}
 					int item_current = static_cast<int>(component->type);
 					ImGui::Combo("Light Type", &item_current, lightTypeNames.c_str());
+					if (item_current != static_cast<int>(component->type))
+						component->type = GFX::LightComponent::LightType(item_current);
 					// set scale
 					Math::vec3 intensity = component->intensity;
 					drawVec3Control("Intensity", intensity, 0, 100);

@@ -139,7 +139,9 @@
   <ItemGroup>
     <ClCompile Include="Public\Core\SE.SRenderer-Config.ixx" />
     <ClCompile Include="Public\Core\SE.SRenderer-SRenderer.ixx" />
+    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRendere-Raster.ClearImage.ixx" />
     <ClCompile Include="Public\Passes\SE.SRendere-Raster.Albedo.ixx" />
+    <ClCompile Include="Public\Passes\SE.SRendere-Tracer.SBDPT.ixx" />
     <ClCompile Include="Public\Passes\SE.SRendere-Tracer.SMultiCubemap.ixx" />
     <ClCompile Include="Public\Passes\SE.SRendere-Tracer.STracer.ixx" />
     <ClCompile Include="Public\SE.SRenderer.ixx" />

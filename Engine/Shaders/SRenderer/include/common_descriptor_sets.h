@@ -6,6 +6,8 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #extension GL_EXT_nonuniform_qualifier : enable
 
+#include "definitions/camera.h"
+
 /**
 * Descriptor Set 0
 * --------------------------
@@ -18,10 +20,11 @@
 */
 // Global uniforms carrying camera information.
 struct GlobalUniforms {
-  mat4 view;
-  mat4 proj;
-  mat4 viewInverse;  // Camera inverse view matrix
-  mat4 projInverse;  // Camera inverse projection matrix
+  CameraData cameraData;
+  // mat4 view;
+  // mat4 proj;
+  // mat4 viewInverse;  // Camera inverse view matrix
+  // mat4 projInverse;  // Camera inverse projection matrix
 };
 // interleaved vertex layout
 struct InterleavedVertex {
@@ -72,6 +75,7 @@ struct SceneInfoUniforms {
   uint  light_num;
   uint  light_offset_pmf;
   uint  light_offset_cdf;
+  uint  env_map;
 };
 // binding definition
 layout(binding = 0, set = 0, scalar) uniform _GlobalUniforms  { GlobalUniforms globalUniform; };
@@ -83,6 +87,7 @@ layout(binding = 5, set = 0, scalar) buffer _LightBuffer      { LightData lights
 layout(binding = 6, set = 0, scalar) buffer _SampleDistBuffer { float sampleDistDatas[]; };
 layout(binding = 7, set = 0, scalar) uniform _SceneInfoBuffer { SceneInfoUniforms sceneInfoUniform; };
 layout(binding = 8, set = 0) uniform sampler2D textures[];
+layout(binding = 8, set = 0) uniform samplerCube textures_cube[];
 
 // Utilities
 

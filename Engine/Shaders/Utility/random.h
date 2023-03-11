@@ -52,4 +52,13 @@ vec3 randomPointInSphere(inout uint rngState) {
     return vec3(r * cos(theta), r * sin(theta), u);
 }
 
+vec4 uniformGenVec4(inout uint RNG) {
+    return vec4(
+      stepAndOutputRNGFloat(RNG),
+      stepAndOutputRNGFloat(RNG),
+      stepAndOutputRNGFloat(RNG),
+      stepAndOutputRNGFloat(RNG)
+    );
+}
+
 #endif

@@ -159,6 +159,7 @@ namespace SIByL
 					uint32_t width;
 					uint32_t height;
 					uint32_t sample_batch;
+					uint32_t all_batch = 0;
 				};
 				std::shared_ptr<RHI::PipelineLayout> pipelineLayout = device->createPipelineLayout(RHI::PipelineLayoutDescriptor{
 					{ {(uint32_t)RHI::ShaderStages::RAYGEN
@@ -231,7 +232,8 @@ namespace SIByL
 						PushConstant pConst = {
 							renderer->state.width,
 							renderer->state.height,
-							renderer->state.batchIdx
+							renderer->state.batchIdx,
+							renderer->state.allBatch
 						};
 						passEncoders[index]->pushConstants(&pConst,
 							(uint32_t)RHI::ShaderStages::RAYGEN
@@ -245,6 +247,7 @@ namespace SIByL
 						passEncoders[index]->traceRays(renderer->state.width, renderer->state.height, 1);
 						passEncoders[index]->end();
 						++renderer->state.batchIdx;
+						++renderer->state.allBatch;
 					}
 				};
 				return fn;

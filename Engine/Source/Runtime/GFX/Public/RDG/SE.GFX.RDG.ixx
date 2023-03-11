@@ -142,6 +142,38 @@ namespace SIByL::GFX
 		uint32_t size;
 	};
 
+
+	export struct RenderPassReflection {
+		/** A field of resource in rreflection .*/
+		struct Field {
+			/** Field type */
+			enum struct Type {
+				Texture1D,
+				Texture2D,
+				Texture3D,
+				TextureCube,
+				RawBuffer,
+			};
+
+		};
+
+		auto addInput(std::string const& name) noexcept -> Field&;
+		auto addOutput(std::string const& name) noexcept -> Field&;
+	};
+
+	export struct RenderPass {
+		/** This function describes what resources the pass needs and sets a name
+		* to refer to them by using the RenderPassReflection class. */
+		virtual auto reflect() noexcept -> void = 0;
+		/** Compile time behavior. */
+		virtual auto compile() noexcept -> void = 0;
+		/** This function runs the pass and contains all required render and/or
+		* compute operations to produce the desired output.
+		* All requested resources are available through renderData
+		* under the same names assigned to them in reflect(). */
+		virtual auto execute() noexcept -> void = 0;
+	};
+
 	export struct RDGraph {
 		////////////////////////////////////
 		//  Setup Phase
@@ -210,6 +242,23 @@ namespace SIByL::GFX
 		/** behaviors */
 		std::unordered_map<BehaviorPhase, std::vector<Behavior>> behaviors;
 	};
+
+	namespace EXPERIMENTAL {
+
+		export struct RDGraph {
+
+			auto addPass(
+				RenderPass& pass,
+				std::string const& name) noexcept -> void;
+
+			auto addEdge(
+				std::string const& output_pass, 
+				std::string const& output_resource,
+				std::string const& input_pass,
+				std::string const& input_resource) noexcept -> void;
+		};
+
+	}
 
 #pragma region RDGRAPH_IMPL
 

@@ -10,6 +10,7 @@ export module SE.SRenderer:SRenderer;
 import SE.Core.Resource;
 import SE.Core.ECS;
 import SE.Math.Geometric;
+import SE.Math.Misc;
 import SE.RHI;
 import SE.GFX.Core;
 import SE.GFX.RDG;
@@ -93,12 +94,49 @@ namespace SIByL
 			RHI::AffineTransformMatrix geometryTransformInverse = {};
 		};
 
+		/**
+		* Universal camera data for both rasterizer & raytracer.
+		* Definition & annotations are modified from Falcor:
+		* @ref: https://github.com/NVIDIAGameWorks/Falcor
+		*/
+		struct CameraData {
+			Math::mat4	viewMat;                   ///< Camera view matrix.
+			Math::mat4	prevViewMat;               ///< Camera view matrix associated to previous frame.
+			Math::mat4	projMat;                   ///< Camera projection matrix.
+			Math::mat4	viewProjMat;               ///< Camera view-projection matrix.
+			Math::mat4	invViewProj;               ///< Camera inverse view-projection matrix.
+			Math::mat4	viewProjMatNoJitter;       ///< Camera view-projection matrix. No jittering is applied!
+			Math::mat4	prevViewProjMatNoJitter;   ///< Camera view-projection matrix associated to previous frame. No jittering is applied!
+			Math::mat4	projMatNoJitter;           ///< Camera projection matrix. No jittering is applied!
+
+			Math::vec3	posW;                      ///< Camera world-space position.
+			float		focalLength;               ///< Camera focal length in mm. Default is 59 degree vertical, 90 horizontal FOV at 16:9 aspect ratio.
+			Math::vec3	prevPosW;                  ///< Camera world-space position associated to previous frame.
+			float		rectArea;                  ///< Recrtangles area A at z=1 plane.
+			Math::vec3	up;                        ///< Camera world-space up vector.
+			float		aspectRatio;               ///< Camera film frame aspect ratio, equal to frameWidth / frameHeight
+			Math::vec3	target;                    ///< Camera target point in world-space.
+			float		nearZ;                     ///< Camera near plane.
+			Math::vec3	cameraU;                   ///< Camera base vector U. Normalized it indicates the right image plane vector. The length is dependent on the FOV.
+			float		farZ;                      ///< Camera far plane.
+			Math::vec3	cameraV;                   ///< Camera base vector V. Normalized it indicates the up image plane vector. The length is dependent on the FOV.
+			float		jitterX;                   ///< Eventual camera jitter along the x axis expressed as a subpixel offset divided by screen width (positive value shifts the image right).
+			Math::vec3	cameraW;                   ///< Camera base vector W. Normalized it indicates the forward direction. The length is the camera focal distance.
+			float		jitterY;                   ///< Eventual camera jitter along the y axis expressed as a subpixel offset divided by screen height (positive value shifts the image up).
+
+			float       frameHeight;               ///< Camera film frame height in mm. 24 is the height of a 35mm film
+			float       frameWidth;                ///< Camera film frame width in mm.  42 2/3 is the width assuming 24mm height and a 16:9 aspect ratio
+			float       focalDistance;             ///< Camera focal distance in scene units.
+			float       apertureRadius;            ///< Camera aperture radius in scene units.
+			float       shutterSpeed;              ///< Camera shutter speed in seconds.
+			float       ISOSpeed;                  ///< Camera film speed based on ISO standards.
+			float      _padding1;
+			float      _padding2;
+		};
+
 		/** global uniforms data for render descriptor set */
-		struct GlobalUniforms {
-			Math::mat4 view;
-			Math::mat4 proj;
-			Math::mat4 viewInverse;
-			Math::mat4 projInverse;
+		struct alignas(64) GlobalUniforms {
+			CameraData cameraData;
 		};
 
 		/** scene information uniforms data for render descriptor set */
@@ -106,7 +144,7 @@ namespace SIByL
 			uint32_t  light_num;
 			uint32_t  light_offset_pmf;
 			uint32_t  light_offset_cdf;
-			uint32_t  padding;
+			uint32_t  env_map;
 			Math::vec4 padding_v0;
 			Math::vec4 padding_v1;
 			Math::vec4 padding_v2;
@@ -210,6 +248,7 @@ namespace SIByL
 			uint32_t width = 800;
 			uint32_t height = 600;
 			uint32_t batchIdx = 0;
+			uint32_t allBatch = 0;
 		} state;
 		/**
 		* SRenderer info
@@ -527,6 +566,9 @@ namespace SIByL
 					}
 				}
 			}
+			else if (lightComponenet->type == GFX::LightComponent::LightType::CUBEMAP_ENV_MAP) {
+				lightComponenet->texture;
+			}
 		}
 	}
 
@@ -631,18 +673,35 @@ namespace SIByL
 		}
 	}
 
+	auto packTexture(SRenderer* srenderer, Core::GUID guid)->uint32_t {
+		RHI::TextureView* texView = Core::ResourceManager::get()->getResource<GFX::Texture>(guid)->originalView.get();
+		auto findTex = srenderer->sceneDataPack.textureview_record.find(texView);
+		if (findTex == srenderer->sceneDataPack.textureview_record.end()) {
+			uint32_t texID = srenderer->sceneDataPack.unbinded_textures.size();
+			srenderer->sceneDataPack.unbinded_textures.push_back(texView);
+			srenderer->sceneDataPack.textureview_record[texView] = texID;
+			findTex = srenderer->sceneDataPack.textureview_record.find(texView);
+		}
+		return findTex->second;
+	};
+
 	inline auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
 		RHI::Device* device = GFX ::GFXManager::get()->rhiLayer->getDevice();
 		for (auto go_handle : scene.gameObjects) {
 			auto* go = scene.getGameObject(go_handle.first);
 			GFX::MeshReference* meshref = go->getEntity().getComponent<GFX::MeshReference>();
-			if (!meshref) continue;
 			GFX::MeshRenderer* meshrenderer = go->getEntity().getComponent<GFX::MeshRenderer>();
-			if (!meshrenderer) continue;
+			GFX::LightComponent* lightComponenet = go->getEntity().getComponent<GFX::LightComponent>();
+			if (lightComponenet && !meshref) {
+				if (lightComponenet->type == GFX::LightComponent::LightType::CUBEMAP_ENV_MAP) {
+					sceneDataPack.sceneInfoUniform.env_map = packTexture(this, lightComponenet->texture->guid);
+				}
+			}
 			// if mesh reference is pointing to a triangle mesh
+			if (!meshref) continue;
 			GFX::Mesh* mesh = meshref->mesh;
 			if (!mesh) continue;
-			GFX::LightComponent* lightComponenet = go->getEntity().getComponent<GFX::LightComponent>();
+			if (!meshrenderer) continue;
 			// if do not have according mesh record, add the record
 			auto meshRecord = sceneDataPack.mesh_record.find(mesh);
 			if (meshRecord == sceneDataPack.mesh_record.end()) {
@@ -768,63 +827,68 @@ namespace SIByL
 			if (lightComponenet) {
 				auto entityLightCompRecord = sceneDataPack.light_comp_record.find(go->entity);
 				if (entityLightCompRecord == sceneDataPack.light_comp_record.end()) {
-					sceneDataPack.light_comp_record[go->entity] = SceneDataPack::EntityLightRecord{};
-					entityLightCompRecord = sceneDataPack.light_comp_record.find(go->entity);
-					entityLightCompRecord->second.scaling = scaling;
-					// if mesh reference is pointing to a triangle mesh
-					if (meshref->customPrimitiveFlag == 0) {
-						float totalArea = 0;
-						for (uint32_t geoidx : meshRefRecord->second.geometry_indices) {
-							sceneDataPack.geometry_buffer_cpu[geoidx].lightID = sceneDataPack.light_buffer_cpu.size();
+					if (lightComponenet->type == GFX::LightComponent::LightType::CUBEMAP_ENV_MAP) {
+						sceneDataPack.sceneInfoUniform.env_map = packTexture(this, lightComponenet->texture->guid);
+					}
+					else {
+						sceneDataPack.light_comp_record[go->entity] = SceneDataPack::EntityLightRecord{};
+						entityLightCompRecord = sceneDataPack.light_comp_record.find(go->entity);
+						entityLightCompRecord->second.scaling = scaling;
+						// if mesh reference is pointing to a triangle mesh
+						if (meshref->customPrimitiveFlag == 0) {
+							float totalArea = 0;
+							for (uint32_t geoidx : meshRefRecord->second.geometry_indices) {
+								sceneDataPack.geometry_buffer_cpu[geoidx].lightID = sceneDataPack.light_buffer_cpu.size();
+								entityLightCompRecord->second.lightIndices.push_back(sceneDataPack.light_buffer_cpu.size());
+								sceneDataPack.light_buffer_cpu.push_back(LightData{
+									1, // type 1, sphere area light
+									lightComponenet->intensity,
+									geoidx,
+									0,
+									});
+								//GFX::Mesh* meshPtr = meshRefRecord->second.meshReference->mesh;
+								size_t primitiveNum = meshRefRecord->second.meshReference->mesh->indexBuffer_host.size / (3 * sizeof(uint32_t));
+								uint32_t* indexBuffer = static_cast<uint32_t*>(meshRefRecord->second.meshReference->mesh->indexBuffer_host.data);
+								float* vertexBuffer = static_cast<float*>(meshRefRecord->second.meshReference->mesh->vertexBuffer_host.data);
+								size_t vertexStride = sizeof(InterleavedVertex) / sizeof(float);
+								std::vector<float> areas;
+								for (size_t i = 0; i < primitiveNum; ++i) {
+									uint32_t i0 = indexBuffer[3 * i + 0];
+									uint32_t i1 = indexBuffer[3 * i + 1];
+									uint32_t i2 = indexBuffer[3 * i + 2];
+									Math::vec3 const& pos0 = *(Math::vec3*)(&(vertexBuffer[i0 * vertexStride]));
+									Math::vec3 const& pos1 = *(Math::vec3*)(&(vertexBuffer[i1 * vertexStride]));
+									Math::vec3 const& pos2 = *(Math::vec3*)(&(vertexBuffer[i2 * vertexStride]));
+									Math::vec3 v0 = Math::vec3(objectMat * Math::vec4(pos0, 0));
+									Math::vec3 v1 = Math::vec3(objectMat * Math::vec4(pos1, 0));
+									Math::vec3 v2 = Math::vec3(objectMat * Math::vec4(pos2, 0));
+									Math::vec3 const e1 = v1 - v0;
+									Math::vec3 const e2 = v2 - v0;
+									float area = Math::length(Math::cross(e1, e2)) / 2;
+									areas.push_back(area);
+									totalArea += area;
+								}
+								// create dist1D
+								//entityLightCompRecord->second.tableDist = areas;
+								entityLightCompRecord->second.tableDists.emplace_back(TableDist1D{ areas });
+								entityLightCompRecord->second.lightPowers.emplace_back(totalArea * 3.1415926 * luminance(lightComponenet->intensity));
+								sceneDataPack.geometry_buffer_cpu[geoidx].surfaceArea = totalArea;
+							}
+						}
+						// if mesh reference is pointing to a sphere mesh
+						else if (meshref->customPrimitiveFlag == 1) {
 							entityLightCompRecord->second.lightIndices.push_back(sceneDataPack.light_buffer_cpu.size());
 							sceneDataPack.light_buffer_cpu.push_back(LightData{
-								1, // type 1, sphere area light
+								0, // type 0, sphere area light
 								lightComponenet->intensity,
-								geoidx,
+								meshRefRecord->second.geometry_indices[0],
 								0,
 								});
-							//GFX::Mesh* meshPtr = meshRefRecord->second.meshReference->mesh;
-							size_t primitiveNum = meshRefRecord->second.meshReference->mesh->indexBuffer_host.size / (3 * sizeof(uint32_t));
-							uint32_t* indexBuffer = static_cast<uint32_t*>(meshRefRecord->second.meshReference->mesh->indexBuffer_host.data);
-							float* vertexBuffer = static_cast<float*>(meshRefRecord->second.meshReference->mesh->vertexBuffer_host.data);
-							size_t vertexStride = sizeof(InterleavedVertex) / sizeof(float);
-							std::vector<float> areas;
-							for (size_t i = 0; i < primitiveNum; ++i) {
-								uint32_t i0 = indexBuffer[3 * i + 0];
-								uint32_t i1 = indexBuffer[3 * i + 1];
-								uint32_t i2 = indexBuffer[3 * i + 2];
-								Math::vec3 const& pos0 = *(Math::vec3*)(&(vertexBuffer[i0 * vertexStride]));
-								Math::vec3 const& pos1 = *(Math::vec3*)(&(vertexBuffer[i1 * vertexStride]));
-								Math::vec3 const& pos2 = *(Math::vec3*)(&(vertexBuffer[i2 * vertexStride]));
-								Math::vec3 v0 = Math::vec3(objectMat * Math::vec4(pos0, 0));
-								Math::vec3 v1 = Math::vec3(objectMat * Math::vec4(pos1, 0));
-								Math::vec3 v2 = Math::vec3(objectMat * Math::vec4(pos2, 0));
-								Math::vec3 const e1 = v1 - v0;
-								Math::vec3 const e2 = v2 - v0;
-								float area = Math::length(Math::cross(e1, e2)) / 2;
-								areas.push_back(area);
-								totalArea += area;
-							}
-							// create dist1D
-							//entityLightCompRecord->second.tableDist = areas;
-							entityLightCompRecord->second.tableDists.emplace_back(TableDist1D{ areas });
-							entityLightCompRecord->second.lightPowers.emplace_back(totalArea * 3.1415926 * luminance(lightComponenet->intensity));
-							sceneDataPack.geometry_buffer_cpu[geoidx].surfaceArea = totalArea;
+							float const radius = Math::length(Math::vec3(objectMat * Math::vec4(1, 0, 0, 1)) - Math::vec3(objectMat * Math::vec4(0, 0, 0, 1)));
+							float const surfaceArea = 4 * 3.1415926 * radius * radius;
+							entityLightCompRecord->second.lightPowers.emplace_back(surfaceArea * 3.1415926 * luminance(lightComponenet->intensity));
+							sceneDataPack.geometry_buffer_cpu[meshRefRecord->second.geometry_indices[0]].surfaceArea = surfaceArea;
 						}
-					}
-					// if mesh reference is pointing to a sphere mesh
-					else if (meshref->customPrimitiveFlag == 1) {
-						entityLightCompRecord->second.lightIndices.push_back(sceneDataPack.light_buffer_cpu.size());
-						sceneDataPack.light_buffer_cpu.push_back(LightData{
-							0, // type 0, sphere area light
-							lightComponenet->intensity,
-							meshRefRecord->second.geometry_indices[0],
-							0,
-							});
-						float const radius = Math::length(Math::vec3(objectMat * Math::vec4(1, 0, 0, 1)) - Math::vec3(objectMat * Math::vec4(0, 0, 0, 1)));
-						float const surfaceArea = 4 * 3.1415926 * radius * radius;
-						entityLightCompRecord->second.lightPowers.emplace_back(surfaceArea * 3.1415926 * luminance(lightComponenet->intensity));
-						sceneDataPack.geometry_buffer_cpu[meshRefRecord->second.geometry_indices[0]].surfaceArea = surfaceArea;
 					}
 				}
 			}
@@ -979,11 +1043,38 @@ namespace SIByL
 		RHI::MultiFrameFlights* multiFrameFlights = GFX::GFXManager::get()->rhiLayer->getMultiFrameFlights();
 		static GlobalUniforms globalUniRecord;
 		GlobalUniforms globalUni;
-		globalUni.view = Math::transpose(Math::lookAt(transform.translation, transform.translation + transform.getRotatedForward(), Math::vec3(0, 1, 0)).m);
-		globalUni.proj = Math::transpose(Math::perspective(camera.fovy, camera.aspect, camera.near, camera.far).m);
-		globalUni.viewInverse = Math::inverse(globalUni.view);
-		globalUni.projInverse = Math::inverse(globalUni.proj);
-		if (globalUniRecord.view != globalUni.view || globalUniRecord.proj != globalUni.proj)
+
+		{
+			CameraData& camData = globalUni.cameraData;
+
+			camData.nearZ = camera.near;
+			camData.farZ = camera.far;
+
+			camData.posW = transform.translation;
+			camData.target = transform.translation + transform.getRotatedForward();
+
+			camData.viewMat = Math::transpose(Math::lookAt(camData.posW, camData.target, Math::vec3(0, 1, 0)).m);
+			camData.projMat = Math::transpose(Math::perspective(camera.fovy, camera.aspect, camera.near, camera.far).m);
+
+			camData.viewProjMat = camData.viewMat * camData.projMat;
+			camData.invViewProj = Math::inverse(camData.viewProjMat);
+
+			// Ray tracing related vectors
+			camData.focalDistance = 1;
+			camData.aspectRatio = camera.aspect;
+			camData.up = Math::vec3(0, 1, 0);
+			camData.cameraW = Math::normalize(camData.target - camData.posW) * camData.focalDistance;
+			camData.cameraU = Math::normalize(Math::cross(camData.cameraW, camData.up));
+			camData.cameraV = Math::normalize(Math::cross(camData.cameraU, camData.cameraW));
+			const float ulen = camData.focalDistance * std::tan(Math::radians(camera.fovy) * 0.5f) * camData.aspectRatio;
+			camData.cameraU *= ulen;
+			const float vlen = camData.focalDistance * std::tan(Math::radians(camera.fovy) * 0.5f);
+			camData.cameraV *= vlen;
+
+			camData.rectArea = 4 * ulen * vlen / (camData.focalDistance * camData.focalDistance);
+
+		}
+		if (globalUniRecord.cameraData.viewMat != globalUni.cameraData.viewMat || globalUniRecord.cameraData.projMat != globalUni.cameraData.projMat)
 			state.batchIdx = 0;
 		globalUniRecord = globalUni;
 		rdgraph->getStructuredUniformBuffer<GlobalUniforms>("global_uniform_buffer")->setStructure(globalUni, multiFrameFlights->getFlightIndex());

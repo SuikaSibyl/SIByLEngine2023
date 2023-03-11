@@ -35,9 +35,10 @@
 #define CALLABLE_LAMBERTIAN_PDF         (SHAPE_SAMPLE_OFFSET + 2)
 
 
-#define NOT_A_LIGHT 4294967295
+#define UINT_MAX 4294967295
+#define NOT_A_LIGHT UINT_MAX
 
 const float T_MAX  = 100000;
-const int MAX_DEPTH = 4;
+#define MAX_DEPTH 3
 
 #endif

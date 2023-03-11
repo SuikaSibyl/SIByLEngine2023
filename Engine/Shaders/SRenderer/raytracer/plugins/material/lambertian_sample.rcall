@@ -16,6 +16,15 @@ void main()
         // Incoming direction is below the surface.
         return;
     }
-    cBSDFSampleQuery.dir_out = to_world(cBSDFSampleQuery.frame, cosineSampleHemisphere(cBSDFSampleQuery.rnd_uv));
+
+    // Sometimes the shading normal can be inconsistent with
+    // the geometry normal. We flip the shading frame in that
+    // case so that we don't produces "black fringes".
+    mat3 frame = cBSDFSampleQuery.frame;
+    if (dot(frame[2], cBSDFSampleQuery.dir_in) < 0) {
+        frame = -frame;
+    }
+    frame = createFrame(cBSDFSampleQuery.geometric_normal);
+    cBSDFSampleQuery.dir_out = frame * cosineSampleHemisphere(cBSDFSampleQuery.rnd_uv);
     return;
 }

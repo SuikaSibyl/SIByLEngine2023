@@ -20,14 +20,17 @@ void main()
     const mat4 o2w = ObjectToWorld(geometryInfo);
     const vec3  center = (o2w * vec4(0,0,0,1)).xyz;
     const float r = length((o2w * vec4(1,0,0,1)).xyz - center);
+
+    bool validRef = validRefPoint(cSampleQuery.ref_point);
+
     // If the reference point is inside the sphere, just sample the whole sphere uniformly
-    if (distance_squared(cSampleQuery.ref_point, center) < r * r) {
+    if (!validRef || distance_squared(cSampleQuery.ref_point, center) < r * r) {
         float z = 1 - 2 * cSampleQuery.uv.x;
         float r_ = sqrt(max(0., 1 - z * z));
         float phi = 2 * k_pi * cSampleQuery.uv.y;
         vec3 offset = normalize(vec3(r_ * cos(phi), r_ * sin(phi), z));
         cSampleQuery.position = center + r * offset;
-        cSampleQuery.normal = -offset;
+        cSampleQuery.normal = validRef ? -offset : offset;
         return;
     }
     // Otherwise sample a ray inside a cone towards the sphere center.

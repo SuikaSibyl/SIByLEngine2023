@@ -140,12 +140,22 @@ namespace SIByL::GFX
 		std::vector<std::unique_ptr<RHI::TextureView>> viewArrays;
 		/** path string */
 		std::optional<std::string> resourcePath;
+		/** path string */
+		std::optional<std::vector<std::string>> resourcePathArray;
 		/** name */
 		std::string name;
 		/** get name */
 		virtual auto getName() const noexcept -> char const* {
 			return texture->getName().c_str();
 		}
+		/** Get the UAV of the texture */
+		auto getUAV(uint32_t mipLevel, uint32_t firstArraySlice, uint32_t arraySize) noexcept -> RHI::TextureView*;
+		/** Get the RTV of the texture */
+		auto getRTV(uint32_t mipLevel, uint32_t firstArraySlice, uint32_t arraySize) noexcept -> RHI::TextureView*;
+		/** Get the RTV of the texture */
+		auto getDSV(uint32_t mipLevel, uint32_t firstArraySlice, uint32_t arraySize) noexcept -> RHI::TextureView*;
+		/** Get the SRV of the texture */
+		auto getSRV(uint32_t mostDetailedMip, uint32_t mipCount, uint32_t firstArraySlice, uint32_t arraySize) noexcept -> RHI::TextureView*;
 	};
 
 	export struct Sampler :public Core::Resource {
@@ -401,10 +411,14 @@ namespace SIByL::GFX
 		/* light type */
 		enum struct LightType {
 			DIFFUSE_AREA_LIGHT,
+			CUBEMAP_ENV_MAP,
+			SPHERICAL_COORD_ENV_MAP,
 			MAX_ENUM,
 		} type;
 		/* light intensity to scale the light */
 		Math::vec3 intensity = Math::vec3(1, 1, 1);
+		/** texture guid */
+		GFX::Texture* texture = nullptr;
 		/** serialize */
 		static auto serialize(void* emitter, Core::EntityHandle const& handle) -> void;
 		/** deserialize */
@@ -414,6 +428,8 @@ namespace SIByL::GFX
 	export inline auto to_string(LightComponent::LightType type) noexcept -> std::string {
 		switch (type) {
 		case SIByL::GFX::LightComponent::LightType::DIFFUSE_AREA_LIGHT:	return "Diffuse Area Light";
+		case SIByL::GFX::LightComponent::LightType::CUBEMAP_ENV_MAP:	return "Cubemap Env Map";
+		case SIByL::GFX::LightComponent::LightType::SPHERICAL_COORD_ENV_MAP:	return "Spherical Coord Env Map";
 		default: return "Unknown Type"; }
 	}
 
@@ -426,11 +442,14 @@ namespace SIByL::GFX
 		auto registerTextureResource(Core::GUID guid, RHI::TextureDescriptor const& desc) noexcept -> void;
 		auto registerTextureResource(Core::GUID guid, Image::Image<Image::COLOR_R8G8B8A8_UINT>* image) noexcept -> void;
 		auto registerTextureResource(char const* filepath) noexcept -> Core::GUID;
+		auto registerTextureResourceCubemap(Core::GUID guid, std::array<char const*, 6> images) noexcept -> void;
+		auto registerTextureResourceCubemap(Core::GUID guid, std::array<Image::Image<Image::COLOR_R8G8B8A8_UINT>*, 6> images) noexcept -> void;
 		/** create / register online sampler resource */
 		auto registerSamplerResource(Core::GUID guid, RHI::SamplerDescriptor const& desc) noexcept -> void;
 		/** create / register online shader resource */
 		auto registerShaderModuleResource(Core::GUID guid, RHI::ShaderModuleDescriptor const& desc) noexcept -> void;
 		auto registerShaderModuleResource(Core::GUID guid, char const* filepath, RHI::ShaderModuleDescriptor const& desc) noexcept -> void;
+		auto registerShaderModuleResource(char const* filepath, RHI::ShaderModuleDescriptor const& desc) noexcept -> Core::GUID;
 		// ofline resource request
 		/** request offline texture resource */
 		auto requestOfflineTextureResource(Core::ORID orid) noexcept -> Core::GUID;
@@ -815,6 +834,30 @@ namespace SIByL::GFX
 				tex_proxy.data = nullptr;
 			}
 		}
+		// only serialize if has orid
+		if (orid != Core::ORID_NONE && resourcePathArray.has_value() && resourcePathArray.value().size() > 1) {
+			std::filesystem::path metadata_path = "./bin/" + std::to_string(orid) + ".meta";
+			// handle metadata
+			{	YAML::Emitter out;
+				out << YAML::BeginMap;
+				// output type
+				out << YAML::Key << "ResourceType" << YAML::Value << "Texture";
+				out << YAML::Key << "Name" << YAML::Value << getName();
+				out << YAML::Key << "ORID" << YAML::Value << orid;
+				out << YAML::Key << "path" << YAML::Value << "USE_PATH_ARRAY";
+				out << YAML::Key << "pathArray" << YAML::Value << YAML::BeginSeq;
+				for (int i = 0; i < resourcePathArray.value().size(); i++)
+					out << resourcePathArray.value()[i];
+				out << YAML::EndSeq;
+				out << YAML::Key << "End" << YAML::Value << "TRUE";
+				out << YAML::EndMap;
+				Core::Buffer tex_proxy;
+				tex_proxy.data = (void*)out.c_str();
+				tex_proxy.size = out.size();
+				Core::syncWriteFile(metadata_path, tex_proxy);
+				tex_proxy.data = nullptr;
+			}
+		}
 	}
 
 	inline auto Texture::deserialize(RHI::Device* device, Core::ORID ORID) noexcept -> void {
@@ -830,6 +873,28 @@ namespace SIByL::GFX
 		}
 		name = data["Name"].as<std::string>();
 		resourcePath = data["path"].as<std::string>();
+		if (resourcePath == "USE_PATH_ARRAY") {
+			std::vector<std::string> pathArray = {};
+			for (auto child : data["pathArray"])
+				pathArray.push_back(child.as<std::string>());
+			resourcePathArray = pathArray;
+		}
+	}
+
+	auto Texture::getUAV(uint32_t mipLevel, uint32_t firstArraySlice, uint32_t arraySize) noexcept -> RHI::TextureView* {
+		return nullptr;
+	}
+
+	auto Texture::getRTV(uint32_t mipLevel, uint32_t firstArraySlice, uint32_t arraySize) noexcept -> RHI::TextureView* {
+		return nullptr;
+	}
+
+	auto Texture::getDSV(uint32_t mipLevel, uint32_t firstArraySlice, uint32_t arraySize) noexcept -> RHI::TextureView* {
+		return nullptr;
+	}
+
+	auto Texture::getSRV(uint32_t mostDetailedMip, uint32_t mipCount, uint32_t firstArraySlice, uint32_t arraySize) noexcept -> RHI::TextureView* {
+		return nullptr;
 	}
 
 #pragma endregion
@@ -1101,6 +1166,10 @@ namespace SIByL::GFX
 			emitter << YAML::Value << YAML::BeginMap;
 			emitter << YAML::Key << "Type" << YAML::Value << uint32_t(lightComponent->type);
 			emitter << YAML::Key << "Intensity" << YAML::Value << lightComponent->intensity;
+			if (lightComponent->texture) {
+				emitter << YAML::Key << "Texture" << YAML::Value << lightComponent->texture->orid;
+			}
+			emitter << YAML::Key << "Texture" << YAML::Value << Core::ORID_NONE;
 			emitter << YAML::EndMap;
 		}
 	}
@@ -1113,6 +1182,14 @@ namespace SIByL::GFX
 			LightComponent* lightComponent = entity.addComponent<LightComponent>();
 			lightComponent->type = LightType(lightComponentAoS["Type"].as<uint32_t>());
 			lightComponent->intensity = lightComponentAoS["Intensity"].as<Math::vec3>();
+			Core::ORID orid = lightComponentAoS["Texture"].as<uint64_t>();
+			if (orid != Core::ORID_NONE) {
+				Core::GUID guid = GFX::GFXManager::get()->requestOfflineTextureResource(orid);
+				lightComponent->texture = Core::ResourceManager::get()->getResource<GFX::Texture>(guid);
+			}
+			else {
+				lightComponent->texture = nullptr;
+			}
 		}
 	}
 
@@ -1220,6 +1297,105 @@ namespace SIByL::GFX
 		Core::ResourceManager::get()->addResource(guid, std::move(textureResource));
 	}
 
+	auto GFXManager::registerTextureResourceCubemap(Core::GUID guid, std::array<char const*, 6> images) noexcept -> void {
+		std::array<std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>>, 6> imageLoaded;
+		std::array<Image::Image<Image::COLOR_R8G8B8A8_UINT>*, 6> imageLoadedArray;
+		std::vector<std::string> pathArray;
+		for (uint32_t i = 0; i < 6; ++i) {
+			std::filesystem::path path(images[i]);
+			std::filesystem::path current_path = std::filesystem::current_path();
+			std::filesystem::path relative_path = std::filesystem::relative(path, current_path);
+			imageLoaded[i] = ImageLoader::load_rgba8(std::filesystem::path(images[i]));
+			imageLoadedArray[i] = imageLoaded[i].get();
+			pathArray.push_back(relative_path.string());
+		}
+		Core::GUID img_guid = guid;
+		Core::ORID img_orid = Core::requestORID();
+		Core::ResourceManager::get()->database.registerResource(img_orid, img_guid);
+		GFX::GFXManager::get()->registerTextureResourceCubemap(img_guid, imageLoadedArray);
+		GFX::Texture* texture = Core::ResourceManager::get()->getResource<GFX::Texture>(img_guid);
+		texture->orid = img_orid;
+		texture->guid = img_guid;
+		texture->resourcePathArray = pathArray;
+		texture->serialize();
+	}
+
+	auto GFXManager::registerTextureResourceCubemap(Core::GUID guid, std::array<Image::Image<Image::COLOR_R8G8B8A8_UINT>*, 6> images) noexcept -> void {
+		GFX::Texture textureResource = {};
+		RHI::BufferDescriptor stagingBufferDescriptor;
+		stagingBufferDescriptor.size = images[0]->data.size * 6;
+		stagingBufferDescriptor.usage = (uint32_t)RHI::BufferUsage::COPY_SRC;
+		stagingBufferDescriptor.memoryProperties = (uint32_t)RHI::MemoryProperty::HOST_VISIBLE_BIT
+			| (uint32_t)RHI::MemoryProperty::HOST_COHERENT_BIT;
+		stagingBufferDescriptor.mappedAtCreation = true;
+		std::unique_ptr<RHI::Buffer> stagingBuffer = rhiLayer->getDevice()->createBuffer(stagingBufferDescriptor);
+		std::future<bool> mapped = stagingBuffer->mapAsync(0, 0, stagingBufferDescriptor.size);
+		if (mapped.get()) {
+			char* mapdata = (char*)stagingBuffer->getMappedRange(0, stagingBufferDescriptor.size);
+			uint32_t offset = 0;
+			memcpy((void*)&(mapdata[offset]), images[0]->data.data, (size_t)images[0]->data.size);offset += images[0]->data.size;
+			memcpy((void*)&(mapdata[offset]), images[1]->data.data, (size_t)images[1]->data.size);	offset += images[1]->data.size;
+			memcpy((void*)&(mapdata[offset]), images[2]->data.data, (size_t)images[2]->data.size);	offset += images[2]->data.size;
+			memcpy((void*)&(mapdata[offset]), images[3]->data.data, (size_t)images[3]->data.size);	offset += images[3]->data.size;
+			memcpy((void*)&(mapdata[offset]), images[4]->data.data, (size_t)images[4]->data.size);	offset += images[4]->data.size;
+			memcpy((void*)&(mapdata[offset]), images[5]->data.data, (size_t)images[5]->data.size);	offset += images[5]->data.size;
+			stagingBuffer->unmap();
+		}
+		std::unique_ptr<RHI::CommandEncoder> commandEncoder = rhiLayer->getDevice()->createCommandEncoder({ nullptr });
+		// create texture image
+		textureResource.texture = rhiLayer->getDevice()->createTexture(RHI::TextureDescriptor{
+			{(uint32_t)images[0]->width,(uint32_t)images[0]->height, 6},
+			1,1,RHI::TextureDimension::TEX2D,
+			RHI::TextureFormat::RGBA8_UNORM,
+			(uint32_t)RHI::TextureUsage::COPY_DST | (uint32_t)RHI::TextureUsage::TEXTURE_BINDING,
+			{ RHI::TextureFormat::RGBA8_UNORM },
+			RHI::TextureFlags::CUBE_COMPATIBLE,
+			});
+
+		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+			(uint32_t)RHI::PipelineStages::TOP_OF_PIPE_BIT,
+			(uint32_t)RHI::PipelineStages::TRANSFER_BIT,
+			(uint32_t)RHI::DependencyType::NONE,
+			{}, {},
+			{ RHI::TextureMemoryBarrierDescriptor{
+				textureResource.texture.get(), RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,6},
+				(uint32_t)RHI::AccessFlagBits::NONE,
+				(uint32_t)RHI::AccessFlagBits::TRANSFER_WRITE_BIT,
+				RHI::TextureLayout::UNDEFINED,
+				RHI::TextureLayout::TRANSFER_DST_OPTIMAL
+			}}
+			});
+
+		commandEncoder->copyBufferToTexture(
+			{ 0, 0, 0, stagingBuffer.get() },
+			{ textureResource.texture.get(), 0, {}, (uint32_t)RHI::TextureAspect::COLOR_BIT },
+			{ textureResource.texture->width(), textureResource.texture->height(), 6 });
+
+		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+			(uint32_t)RHI::PipelineStages::TRANSFER_BIT,
+			(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
+			(uint32_t)RHI::DependencyType::NONE,
+			{}, {},
+			{ RHI::TextureMemoryBarrierDescriptor{
+				textureResource.texture.get(), RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
+				(uint32_t)RHI::AccessFlagBits::TRANSFER_WRITE_BIT,
+				(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
+				RHI::TextureLayout::TRANSFER_DST_OPTIMAL,
+				RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL
+			}}
+			});
+
+		rhiLayer->getDevice()->getGraphicsQueue()->submit({ commandEncoder->finish({}) });
+		rhiLayer->getDevice()->getGraphicsQueue()->waitIdle();
+		textureResource.originalView = textureResource.texture->createView(RHI::TextureViewDescriptor{
+			RHI::TextureFormat::RGBA8_UNORM,
+			RHI::TextureViewDimension::CUBE,
+			(uint32_t)RHI::TextureAspect::COLOR_BIT,
+			0, 1, 0, 6});
+		textureResource.guid = guid;
+		Core::ResourceManager::get()->addResource(guid, std::move(textureResource));
+	}
+
 	auto GFXManager::registerTextureResource(Core::GUID guid, RHI::TextureDescriptor const& desc) noexcept -> void {
 		GFX::Texture textureResource = {};
 		// create texture image
@@ -1258,7 +1434,7 @@ namespace SIByL::GFX
 			(uint32_t)RHI::DependencyType::NONE,
 			{}, {},
 			{ RHI::TextureMemoryBarrierDescriptor{
-				textureResource.texture.get(), RHI::ImageSubresourceRange{aspectMask, 0,1,0,uint32_t((hasBit(desc.flags, RHI::TextureFlags::CUBE_COMPATIBLE)) ? 6 : 1)},
+				textureResource.texture.get(), RHI::ImageSubresourceRange{aspectMask, 0,1,0,uint32_t(desc.size.depthOrArrayLayers)},
 				(uint32_t)RHI::AccessFlagBits::NONE,
 				targetAccessFlags,
 				RHI::TextureLayout::UNDEFINED,
@@ -1273,7 +1449,19 @@ namespace SIByL::GFX
 		viewDesc.arrayLayerCount = 1;
 		viewDesc.dimension = RHI::TextureViewDimension::TEX2D;
 		if (!hasBit(desc.flags, RHI::TextureFlags::CUBE_COMPATIBLE)) // if host visible we do not create view
-			textureResource.originalView = textureResource.texture->createView(viewDesc);
+			if (desc.size.depthOrArrayLayers != 1) {
+				textureResource.viewArrays.resize(6);
+				for (int i = 0; i < desc.size.depthOrArrayLayers; ++i) {
+					viewDesc.baseArrayLayer = i;
+					textureResource.viewArrays[i] = textureResource.texture->createView(viewDesc);
+				}
+				viewDesc.dimension = RHI::TextureViewDimension::TEX2D_ARRAY;
+				viewDesc.baseArrayLayer = 0;
+				viewDesc.arrayLayerCount = desc.size.depthOrArrayLayers;
+				textureResource.originalView = textureResource.texture->createView(viewDesc);
+			}
+			else
+				textureResource.originalView = textureResource.texture->createView(viewDesc);
 		else {
 			textureResource.viewArrays.resize(6);
 			for (int i = 0; i < 6; ++i) {
@@ -1329,6 +1517,12 @@ namespace SIByL::GFX
 		Core::ResourceManager::get()->addResource(guid, std::move(shaderModuleResource));
 	}
 
+	auto GFXManager::registerShaderModuleResource(char const* filepath, RHI::ShaderModuleDescriptor const& desc) noexcept -> Core::GUID {
+		Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();;
+		registerShaderModuleResource(guid, filepath, desc);
+		return guid;
+	}
+
 	auto GFXManager::requestOfflineTextureResource(Core::ORID orid) noexcept -> Core::GUID {
 		Core::GUID guid = Core::ResourceManager::get()->database.findResource(orid);
 		// if not loaded
@@ -1336,12 +1530,27 @@ namespace SIByL::GFX
 			guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
 			GFX::Texture texture;
 			texture.deserialize(rhiLayer->getDevice(), orid);
-			std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> img = ImageLoader::load_rgba8(std::filesystem::path(texture.resourcePath.value()));
-			GFX::GFXManager::get()->registerTextureResource(guid, img.get());
+			if (texture.resourcePath.value() == "USE_PATH_ARRAY") {
+				GFX::GFXManager::get()->registerTextureResourceCubemap(guid, std::array<char const*, 6>{
+					texture.resourcePathArray.value()[0].c_str(),
+					texture.resourcePathArray.value()[1].c_str(),
+					texture.resourcePathArray.value()[2].c_str(),
+					texture.resourcePathArray.value()[3].c_str(),
+					texture.resourcePathArray.value()[4].c_str(),
+					texture.resourcePathArray.value()[5].c_str()
+					});
+			}
+			else {
+				std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> img = ImageLoader::load_rgba8(std::filesystem::path(texture.resourcePath.value()));
+				GFX::GFXManager::get()->registerTextureResource(guid, img.get());
+			}
 			Core::ResourceManager::get()->database.registerResource(orid, guid);
 			GFX::Texture* texture_ptr = Core::ResourceManager::get()->getResource<GFX::Texture>(guid);
 			texture_ptr->orid = orid;
+			texture_ptr->texture->setName(texture.name);
 			texture_ptr->resourcePath = texture.resourcePath.value();
+			texture_ptr->resourcePathArray = texture.resourcePathArray;
+			texture_ptr->name = texture.name;
 		}
 		return guid;
 	}

@@ -25,7 +25,9 @@ void main()
     const vec3  center = (o2w * vec4(0,0,0,1)).xyz;
     const float r = length((o2w * vec4(1,0,0,1)).xyz - center);
     
-    if (distance_squared(cSamplePdfQuery.ref_point, center) < r * r) {
+    bool validRef = validRefPoint(cSamplePdfQuery.ref_point);
+
+    if (!validRef || distance_squared(cSamplePdfQuery.ref_point, center) < r * r) {
         // If the reference point is inside the sphere, just sample the whole sphere uniformly
         cSamplePdfQuery.pdf = 1. / surface_area_sphere(r);
         return;

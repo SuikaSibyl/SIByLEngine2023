@@ -2,6 +2,7 @@
 #define _MATH_HEADER_
 
 const float k_inf = 1.0 / 0.0;
+const float k_nan = 0.0 / 0.0;
 
 /** float value of PI */
 const float k_pi = 3.14159265;
@@ -17,6 +18,10 @@ float atan2(in float y, in float x) {
     return x == 0.0 ? sign(y)*k_pi/2 : atan(y, x);
 }
 
+float length_square(in vec3 v) {
+    return dot(v, v);
+}
+
 float distance_squared(in vec3 v0, in vec3 v1) {
     return dot(v0-v1, v0-v1);
 }
@@ -25,6 +30,10 @@ float pow5(in float x) {
     float x2 = x * x;
     return x2 * x2 * x;
 };
+
+float abs_dot(in const vec3 v0, in const vec3 v1) {
+    return abs(dot(v0, v1));
+}
 
 /**
 * Numerically stable quadratic equation solver at^2 + bt + c = 0

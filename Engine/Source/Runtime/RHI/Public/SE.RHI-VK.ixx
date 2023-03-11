@@ -729,6 +729,9 @@ namespace SIByL::RHI
 		if (ext & (ContextExtensionsFlags)ContextExtension::SHADER_NON_SEMANTIC_INFO) {
 			context->getDeviceExtensions().emplace_back(VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME);
 		}
+		if (ext & (ContextExtensionsFlags)ContextExtension::ATOMIC_FLOAT) {
+			context->getDeviceExtensions().emplace_back(VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME);
+		}
 	}
 
 	auto attachWindow(Context_VK* contexVk) noexcept -> void {
@@ -1076,6 +1079,22 @@ namespace SIByL::RHI
 			features11.pNext = &asFeatures;
 			asFeatures.pNext = &rtPipelineFeatures;
 			pFeature2Tail = &(rtPipelineFeatures.pNext);;
+		}
+
+		if (context->getContextExtensionsFlags() & (ContextExtensionsFlags)ContextExtension::ATOMIC_FLOAT) {
+			VkPhysicalDeviceShaderAtomicFloatFeaturesEXT shader_atomic_float{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT };
+			shader_atomic_float.shaderBufferFloat32AtomicAdd = true; // this allows to perform atomic operations on storage buffers
+			shader_atomic_float.shaderBufferFloat32Atomics = true;
+			shader_atomic_float.pNext = nullptr;
+
+			*pFeature2Tail = &shader_atomic_float;
+			pFeature2Tail = &(shader_atomic_float.pNext);;
+
+			//if (pNextChainTail == nullptr)
+			//	*pNextChainHead = &shader_atomic_float;
+			//else
+			//	*pNextChainTail = &shader_atomic_float;
+			//pNextChainTail = &(shader_atomic_float.pNext);
 		}
 		vkGetPhysicalDeviceFeatures2(physicalDevice, &features2);
 		if (pNextChainTail == nullptr)
@@ -2615,6 +2634,7 @@ namespace SIByL::RHI
 	{
 		// color attachments
 		std::vector<VkAttachmentDescription> attachments;
+		std::vector<VkAttachmentReference> attachmentRefs;
 		for (auto const& colorAttach : desc.colorAttachments) {
 			VkAttachmentDescription colorAttachment{};
 			colorAttachment.format = getVkFormat(static_cast<TextureView_VK*>(colorAttach.view)->descriptor.format);
@@ -2626,10 +2646,13 @@ namespace SIByL::RHI
 			colorAttachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 			colorAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			attachments.emplace_back(colorAttachment);
+
+			VkAttachmentReference colorAttachmentRef{};
+			colorAttachmentRef.attachment = attachmentRefs.size();
+			colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			attachmentRefs.emplace_back(colorAttachmentRef);
 		}
-		VkAttachmentReference colorAttachmentRef{};
-		colorAttachmentRef.attachment = 0;
-		colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
 		// depth attachment
 		if (desc.depthStencilAttachment.view != nullptr) {
 			VkAttachmentDescription depthAttachment = {};
@@ -2649,8 +2672,8 @@ namespace SIByL::RHI
 		// subpass
 		VkSubpassDescription subpass{};
 		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-		subpass.colorAttachmentCount = 1;
-		subpass.pColorAttachments = &colorAttachmentRef;
+		subpass.colorAttachmentCount = desc.colorAttachments.size();
+		subpass.pColorAttachments = attachmentRefs.data();
 		subpass.pDepthStencilAttachment = (desc.depthStencilAttachment.view != nullptr) ? &depthAttachmentRef : nullptr;
 		VkRenderPassCreateInfo renderPassInfo{};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -3661,7 +3684,7 @@ namespace SIByL::RHI
 		region.imageSubresource.aspectMask = getVkImageAspectFlags(destination.aspect);
 		region.imageSubresource.mipLevel = destination.mipLevel;
 		region.imageSubresource.baseArrayLayer = 0;
-		region.imageSubresource.layerCount = 1;
+		region.imageSubresource.layerCount = copySize.depthOrArrayLayers;
 		region.imageOffset = {
 			static_cast<int>(destination.origin.x),
 			static_cast<int>(destination.origin.y),
@@ -3669,7 +3692,7 @@ namespace SIByL::RHI
 		region.imageExtent = {
 			copySize.width,
 			copySize.height,
-			copySize.depthOrArrayLayers};
+			1};
 		vkCmdCopyBufferToImage(
 			commandBuffer->commandBuffer,
 			static_cast<Buffer_VK*>(source.buffer)->getVkBuffer(),

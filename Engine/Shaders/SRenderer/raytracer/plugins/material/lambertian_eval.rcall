@@ -17,10 +17,18 @@ void main()
         // No light below the surface
         cBSDFEvalQuery.bsdf = vec3(0);
         return;
-    }   
+    }
+
+    // Sometimes the shading normal can be inconsistent with
+    // the geometry normal. We flip the shading frame in that
+    // case so that we don't produces "black fringes".
+    mat3 frame = cBSDFEvalQuery.frame;
+    if (dot(frame[2], cBSDFEvalQuery.dir_in) < 0) {
+        frame = -frame;
+    }
+
     // TODO :: MIPMAP stuff...
-    // eval(bsdf.reflectance, vertex.uv, vertex.uv_screen_size, texture_pool) / c_PI
-    cBSDFEvalQuery.bsdf = max(dot(cBSDFEvalQuery.frame[2], cBSDFEvalQuery.dir_out), 0.f) *
+    cBSDFEvalQuery.bsdf = max(dot(frame[2], cBSDFEvalQuery.dir_out), 0) *
         texture(textures[lambertian_materials[cBSDFEvalQuery.mat_id].basecolor_opacity_tex], cBSDFEvalQuery.uv).rgb / k_pi;
-        return;
+    return;
 }

@@ -17,7 +17,7 @@ void main() {
     // compute position, uv, matID
     mat4 o2w = ObjectToWorld(geometry);
     vec4 positionWorld =  o2w * vec4(vertex.position, 1);
-    gl_Position = globalUniform.proj * globalUniform.view * positionWorld;
+    gl_Position = globalUniform.cameraData.viewProjMat * positionWorld;
     uv = vertex.texCoords;
     matID = geometry.materialID;
     // compute normal, tangent

@@ -96,6 +96,7 @@ namespace SIByL::RHI
 		RAY_TRACING					= 1 << 4,
 		SHADER_NON_SEMANTIC_INFO	= 1 << 5,
 		BINDLESS_INDEXING			= 1 << 6,
+		ATOMIC_FLOAT				= 1 << 7,
 	};
 
 	export enum struct PowerPreference {

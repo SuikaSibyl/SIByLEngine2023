@@ -1,0 +1,197 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_shader_atomic_float: enable
+
+
+struct PushConstants { 
+    uvec2 resolution;
+    uint sample_batch; 
+};
+layout(push_constant) uniform PushConsts { PushConstants pushConstants; };
+
+#include "bdpt_common.h"
+#include "bdpt_descriptor_set.h"
+#include "../include/common_splat_film.h"
+
+vec3 bidirectional_path_tracing(
+    in Ray ray,
+    inout uint RNG
+) {
+    vec3 radiance = vec3(0.);
+    
+    return radiance;
+}
+
+bool insideExclusive(
+    in const ivec2 p,
+    in const ivec2 b_min,
+    in const ivec2 b_max
+) {
+    return (p.x >= b_min.x && p.x < b_max.x &&
+            p.y >= b_min.y && p.y < b_max.y);
+}
+
+bool insideExclusive(
+    in const ivec2 p,
+    in const ivec2 b_max
+) {
+    const ivec2 b_min = ivec2(0, 0);
+    return insideExclusive(p, b_min, b_max);
+}
+
+ivec2 uv2pixel(vec2 uv, ivec2 resolution) {
+    vec2 pixel_size = vec2(1./resolution.x, 1./resolution.y);
+    return ivec2((floor(uv / pixel_size) * pixel_size) * vec2(resolution)) + ivec2(0,1);
+    // * should add 1 to y, according to experiment.
+    // why? I have not idea though.
+}
+
+void oneStrategy(
+    in BDPTPath cameraSubpath,
+    in BDPTPath lightSubpath,
+    in const int s,
+    in const int t,
+    in const int nLight,
+    in const int nCamera,
+    inout vec3 L,
+    inout uint RNG,
+    in const ivec2 resolution
+) {
+    if(t>nCamera || s>nLight) return;
+
+    // Execute the  connection strategy and update L
+    vec2 newuv;
+    float misWeight = 0.f;
+    vec4 rnds = vec4(stepAndOutputRNGFloat(RNG),stepAndOutputRNGFloat(RNG),stepAndOutputRNGFloat(RNG),stepAndOutputRNGFloat(RNG));
+    vec3 Lpath = connectBDPT(lightSubpath, cameraSubpath, s, t, newuv, misWeight, rnds, resolution);
+    ivec2 newpixel = uv2pixel(newuv, resolution);
+    if (t != 1)
+        L += Lpath;
+    else
+        if(insideExclusive(newpixel, resolution))
+            addSplat(newpixel, vec4(Lpath, 1));
+
+}
+
+void main() {
+    // The resolution of the image, which is the same as the launch size:
+    const ivec2 resolution = ivec2(pushConstants.resolution);
+    const ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
+    // If the pixel is outside of the image, don't do anything:
+    if((pixel.x >= resolution.x) || (pixel.y >= resolution.y)) {
+        return;
+    }
+
+    uint RNG = uint((pushConstants.sample_batch * resolution.y + pixel.y) * resolution.x + pixel.x);
+
+    // Generate a single sample using BDPT.
+    // ******************************************
+    // 0. Config
+    const int maxDepth = 2;
+    // 1. Trace the camera and light subpaths
+    BDPTPath cameraSubpath;
+    BDPTPath lightSubpath;
+    // One more vertex than the maximum path length must be allocated
+    // to store the starting vertex on the light or camera.
+    // Camera subpaths get yet again one more vertex, which allows camera paths to randomly intersect light sources.
+    const int nCamera = generateCameraSubpath(maxDepth+2, pixel, resolution, cameraSubpath, RNG);
+    const int nLight  = generateLightSubpath(maxDepth+1, lightSubpath, RNG);
+
+    // 2. Execute all BDPT connection strategies
+    vec3 L = vec3(0.f);
+
+    // for (int t = 1; t <= nCamera; ++t) {
+    //     for (int s = 0; s <= nLight; ++s) {
+    //         int depth = t + s - 2;
+    //         if ((s == 1 && t == 1) || depth < 0 || depth > maxDepth)
+    //             continue;
+    //         // Execute the  connection strategy and update L
+    //         vec2 newuv;
+    //         float misWeight = 0.f;
+    //         vec4 rnds = vec4(stepAndOutputRNGFloat(RNG),stepAndOutputRNGFloat(RNG),stepAndOutputRNGFloat(RNG),stepAndOutputRNGFloat(RNG));
+    //         vec3 Lpath = connectBDPT(lightSubpath, cameraSubpath, s, t, newuv, misWeight, rnds, resolution);
+    //         ivec2 newpixel = uv2pixel(newuv, resolution);
+    //         if (t != 1)
+    //             L += Lpath;
+    //         else
+    //             if(insideExclusive(newpixel, resolution))
+    //                 addSplat(newpixel, vec4(Lpath, 1));
+    //     }
+    // }
+
+    oneStrategy(cameraSubpath, lightSubpath, 0, 2, nLight, nCamera, L, RNG, resolution);
+
+    oneStrategy(cameraSubpath, lightSubpath, 0, 3, nLight, nCamera, L, RNG, resolution);
+    oneStrategy(cameraSubpath, lightSubpath, 1, 2, nLight, nCamera, L, RNG, resolution);
+    oneStrategy(cameraSubpath, lightSubpath, 2, 1, nLight, nCamera, L, RNG, resolution);
+
+    oneStrategy(cameraSubpath, lightSubpath, 0, 4, nLight, nCamera, L, RNG, resolution);
+    oneStrategy(cameraSubpath, lightSubpath, 1, 3, nLight, nCamera, L, RNG, resolution);
+    oneStrategy(cameraSubpath, lightSubpath, 2, 2, nLight, nCamera, L, RNG, resolution);
+    oneStrategy(cameraSubpath, lightSubpath, 3, 1, nLight, nCamera, L, RNG, resolution);
+    // s=0; t = 2;
+    // if(t<=nCamera && s<= nLight)
+    // {
+    //     // Execute the  connection strategy and update L
+    //     vec2 newuv;
+    //     float misWeight = 0.f;
+    //     vec4 rnds = vec4(stepAndOutputRNGFloat(RNG),stepAndOutputRNGFloat(RNG),stepAndOutputRNGFloat(RNG),stepAndOutputRNGFloat(RNG));
+    //     vec3 Lpath = connectBDPT(lightSubpath, cameraSubpath, s, t, newuv, misWeight, rnds, resolution);
+    //     ivec2 newpixel = uv2pixel(newuv, resolution);
+    //     if (t != 1)
+    //         L += Lpath;
+    //     else
+    //         if(insideExclusive(newpixel, resolution))
+    //             addSplat(newpixel, vec4(Lpath, 1));
+    // }
+    // s=0; t = 3;
+    // if(t<=nCamera && s<= nLight)
+    // {
+    //     // Execute the  connection strategy and update L
+    //     vec2 newuv;
+    //     float misWeight = 0.f;
+    //     vec4 rnds = vec4(stepAndOutputRNGFloat(RNG),stepAndOutputRNGFloat(RNG),stepAndOutputRNGFloat(RNG),stepAndOutputRNGFloat(RNG));
+    //     vec3 Lpath = connectBDPT(lightSubpath, cameraSubpath, s, t, newuv, misWeight, rnds, resolution);
+    //     ivec2 newpixel = uv2pixel(newuv, resolution);
+    //     if (t != 1)
+    //         L += Lpath;
+    //     else
+    //         if(insideExclusive(newpixel, resolution))
+    //             addSplat(newpixel, vec4(Lpath, 1));
+    // }
+    // s=1; t = 2;
+    // if(t<=nCamera && s<= nLight)
+    // {
+    //     // Execute the  connection strategy and update L
+    //     vec2 newuv;
+    //     float misWeight = 0.f;
+    //     vec4 rnds = vec4(stepAndOutputRNGFloat(RNG),stepAndOutputRNGFloat(RNG),stepAndOutputRNGFloat(RNG),stepAndOutputRNGFloat(RNG));
+    //     vec3 Lpath = connectBDPT(lightSubpath, cameraSubpath, s, t, newuv, misWeight, rnds, resolution);
+    //     ivec2 newpixel = uv2pixel(newuv, resolution);
+    //     if (t != 1)
+    //         L += Lpath;
+    //     else
+    //         if(insideExclusive(newpixel, resolution))
+    //             addSplat(newpixel, vec4(Lpath, 1));
+    // }
+    // s=2; t = 1;
+    // if(t<=nCamera && s<= nLight)
+    // {
+    //     // Execute the  connection strategy and update L
+    //     vec2 newuv;
+    //     float misWeight = 0.f;
+    //     vec4 rnds = vec4(stepAndOutputRNGFloat(RNG),stepAndOutputRNGFloat(RNG),stepAndOutputRNGFloat(RNG),stepAndOutputRNGFloat(RNG));
+    //     vec3 Lpath = connectBDPT(lightSubpath, cameraSubpath, s, t, newuv, misWeight, rnds, resolution);
+    //     ivec2 newpixel = uv2pixel(newuv, resolution);
+    //     if (t != 1)
+    //         L += Lpath;
+    //     else
+    //         if(insideExclusive(newpixel, resolution))
+    //             addSplat(newpixel, vec4(Lpath, 1));
+    // }
+    // if (cameraSubpath.n >= 2) {
+    //     L = cameraSubpath.x[1].isect.geometric_normal;
+    // }
+    // L = (cameraSubpath.n >= 4) ? cameraSubpath.x[3].beta : vec3(0);
+    addSplat(pixel, vec4(L, 1));
+}

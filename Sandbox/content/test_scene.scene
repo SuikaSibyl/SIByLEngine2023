@@ -18,11 +18,11 @@ SceneNodes:
     components:
       TagComponent: Camera Object
       Transform:
-        translation: [18.856554, 6.77908564, -4.11041546]
-        eulerAngles: [-0.251369745, 21.7431755, 0]
+        translation: [7.11216927, 4.23589897, 1.83559847]
+        eulerAngles: [-0.377703458, 22.1200008, 0]
         scale: [1, 1, 1]
       CameraComponent:
-        fovy: 22
+        fovy: 60
         aspect: 1.33333337
         near: 0.100000001
         far: 1000
@@ -57,6 +57,7 @@ SceneNodes:
       LightComponent:
         Type: 0
         Intensity: [5, 5, 5]
+        Texture: 18446744073709551615
   - uid: 4
     parent: 18446744073709551615
     components:
@@ -73,4 +74,18 @@ SceneNodes:
       LightComponent:
         Type: 0
         Intensity: [1, 1, 6]
+        Texture: 18446744073709551615
+  - uid: 5
+    parent: 18446744073709551615
+    components:
+      TagComponent: EnvMap
+      Transform:
+        translation: [0, 0, 0]
+        eulerAngles: [0, 0, 0]
+        scale: [1, 1, 1]
+      LightComponent:
+        Type: 1
+        Intensity: [1, 1, 1]
+        Texture: 1662607019696307036
+        Texture: 18446744073709551615
 SceneEnd: TRUE
