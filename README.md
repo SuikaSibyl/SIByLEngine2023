@@ -31,7 +31,7 @@ By default, Nvidia GPU with Turing or higher architecture is required to correct
   - [GFX module](./docs/SIByLDocument_006_GFX.md)
     - Basic Components & Resources
     - Render Dependency Graph System (experimental).
-  - [SRenderer module](./docs/SIByLDocument_008_SRenderer.md)
+  - [SRenderer module](https://github.com/SuikaSibyl/SIByLEngine2023/wiki/SIByL-Renderer)
     - Uniform scene packing for both rasterizer & ray tracer.
     - Primitive Supported
       - Triangle mesh
@@ -41,6 +41,7 @@ By default, Nvidia GPU with Turing or higher architecture is required to correct
       - Disney principled material
     - Ray Tracer Pipeline
       - Unidirectional path tracer
+      - Bidirectional path tracer
 - Physics
   - // TODO.
 - Editor Toolchain
