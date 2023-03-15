@@ -155,7 +155,7 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
         bool bsdf_ray_intersected = intersect(bsdf_ray, bsdf_vertex);
         if(bsdf_ray_intersected) {
             // TEST(?) :: abs(-dot(dir_bsdf, bsdf_vertex.geometric_normal)) / 
-            G = max(-dot(dir_bsdf, bsdf_vertex.geometric_normal), 0) /
+            G = abs(-dot(dir_bsdf, bsdf_vertex.geometric_normal)) /
                         distance_squared(bsdf_vertex.position, bsdf_ray.origin);
         }
         else {

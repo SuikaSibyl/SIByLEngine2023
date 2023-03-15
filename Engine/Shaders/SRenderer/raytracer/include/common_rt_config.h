@@ -39,6 +39,6 @@
 #define NOT_A_LIGHT UINT_MAX
 
 const float T_MAX  = 100000;
-#define MAX_DEPTH 3
+#define MAX_DEPTH 4
 
 #endif

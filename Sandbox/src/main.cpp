@@ -120,7 +120,10 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				RHI::AddressMode::REPEAT,
 				RHI::AddressMode::REPEAT,
 			});
+		GFX::GFXManager::get()->commonSampler.clamp_nearest = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Sampler>();
+		GFX::GFXManager::get()->registerSamplerResource(GFX::GFXManager::get()->commonSampler.clamp_nearest, RHI::SamplerDescriptor{});
 		Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler->setName("DefaultSampler");
+		Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.clamp_nearest)->sampler->setName("ClampNearestSampler");
 
 		rdg = std::make_unique<GFX::RDGraph>();
 		srenderer = std::make_unique<SRenderer>();
@@ -184,7 +187,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
 			(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
-			(uint32_t)RHI::PipelineStages::COLOR_ATTACHMENT_OUTPUT_BIT,
+			(uint32_t)RHI::PipelineStages::EARLY_FRAGMENT_TESTS_BIT | (uint32_t)RHI::PipelineStages::LATE_FRAGMENT_TESTS_BIT,
 			(uint32_t)RHI::DependencyType::NONE,
 			{}, {},
 			{ RHI::TextureMemoryBarrierDescriptor{
@@ -212,38 +215,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			}}
 			});
 
-		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
-			(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
-			(uint32_t)RHI::PipelineStages::COLOR_ATTACHMENT_OUTPUT_BIT,
-			(uint32_t)RHI::DependencyType::NONE,
-			{}, {},
-			{ RHI::TextureMemoryBarrierDescriptor{
-				rdg->getTexture("AtomicRGB32")->texture->texture.get(),
-				RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,4},
-				(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
-				(uint32_t)RHI::AccessFlagBits::COLOR_ATTACHMENT_WRITE_BIT,
-				RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
-				RHI::TextureLayout::COLOR_ATTACHMENT_OPTIMAL
-			}}
-			});
-
 		rdg->execute(commandEncoder.get());
-
-
-		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
-			(uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR,
-			(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
-			(uint32_t)RHI::DependencyType::NONE,
-			{}, {},
-			{ RHI::TextureMemoryBarrierDescriptor{
-				rdg->getTexture("AtomicRGB32")->texture->texture.get(),
-				RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,4},
-				(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT | (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
-				(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
-				RHI::TextureLayout::GENERAL,
-				RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL
-			}}
-			});
 
 		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
 			(uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR,

@@ -1,0 +1,101 @@
+#version 460 core
+#extension GL_EXT_ray_tracing           : enable
+#extension GL_GOOGLE_include_directive  : enable
+
+#include "../../include/common_trace.h"
+#include "../../../include/plugins/material/lambertian_common.h"
+#include "../../../include/microfacet.h"
+#include "../../../../Utility/math.h"
+#include "../../../../Utility/geometry.h"
+#include "../../../../Utility/sampling.h"
+
+layout(location = CALLABLE_LOC_BSDF_EVAL) callableDataInEXT BSDFEvalQuery cBSDFEvalQuery;
+
+void main()
+{
+    const vec3 dir_in  = cBSDFEvalQuery.dir_in;
+    const vec3 dir_out = cBSDFEvalQuery.dir_out;
+
+    if (dot(cBSDFEvalQuery.geometric_normal, dir_in) < 0 ||
+        dot(cBSDFEvalQuery.geometric_normal, dir_out) < 0) {
+        // No light below the surface
+        cBSDFEvalQuery.bsdf = vec3(0);
+        return;
+    }
+
+    bool reflected = dot(cBSDFEvalQuery.geometric_normal, dir_in) *
+                     dot(cBSDFEvalQuery.geometric_normal, dir_out) > 0;
+    // Flip the shading frame if it is inconsistent with the geometry normal
+    mat3 frame = cBSDFEvalQuery.frame;
+    if (dot(frame[2], dir_in) < 0) {
+        frame = -frame;
+    }
+    // If we are going into the surface, then we use normal eta
+    // (internal/external), otherwise we use external/internal.
+    const float bsdf_eta = 1.2;  // TODO :: MOVE TO PARAM
+    const float eta = dot(cBSDFEvalQuery.geometric_normal, dir_in) > 0 ? bsdf_eta : 1 / bsdf_eta;
+
+    // Spectrum Ks = eval(
+    //     bsdf.specular_reflectance, vertex.uv, vertex.uv_screen_size, texture_pool);
+    // Spectrum Kt = eval(
+    //     bsdf.specular_transmittance, vertex.uv, vertex.uv_screen_size, texture_pool);
+    // Real roughness = eval(
+    //     bsdf.roughness, vertex.uv, vertex.uv_screen_size, texture_pool);
+
+    vec3 Ks = vec3(1);
+    vec3 Kt = vec3(1);
+    float roughness = 0.1;
+
+    vec3 half_vector;
+    if (reflected) {
+        half_vector = normalize(dir_in + dir_out);
+    } else {
+        // "Generalized half-vector" from Walter et al.
+        // See "Microfacet Models for Refraction through Rough Surfaces"
+        half_vector = normalize(dir_in + dir_out * eta);
+    }
+
+    // Flip half-vector if it's below surface
+    if (dot(half_vector, frame[2]) < 0) {
+        half_vector = -half_vector;
+    }
+
+    // Clamp roughness to avoid numerical issues.
+    roughness = clamp(roughness, 0.01, 1);
+
+    // Compute F / D / G
+    // Note that we use the incoming direction
+    // for evaluating the Fresnel reflection amount.
+    // We can also use outgoing direction -- then we would need to
+    // use 1/bsdf.eta and we will get the same result.
+    // However, using the incoming direction allows
+    // us to use F to decide whether to reflect or refract during sampling.
+    float h_dot_in = dot(half_vector, dir_in);
+    float F = fresnel_dielectric(h_dot_in, eta);
+    float D = GTR2(dot(frame[2], half_vector), roughness);
+    float G = smith_masking_gtr2(to_local(frame, dir_in), roughness) *
+             smith_masking_gtr2(to_local(frame, dir_out), roughness);
+
+    if (reflected) {
+        cBSDFEvalQuery.bsdf = Ks * (F * D * G) / (4 * abs(dot(frame[2], dir_in)));
+    } else {
+        // Snell-Descartes law predicts that the light will contract/expand 
+        // due to the different index of refraction. So the normal BSDF needs
+        // to scale with 1/eta^2. However, the "adjoint" of the BSDF does not have
+        // the eta term. This is due to the non-reciprocal nature of the index of refraction:
+        // f(wi -> wo) / eta_o^2 = f(wo -> wi) / eta_i^2
+        // thus f(wi -> wo) = f(wo -> wi) (eta_o / eta_i)^2
+        // The adjoint of a BSDF is defined as swapping the parameter, and
+        // this cancels out the eta term.
+        // See Chapter 5 of Eric Veach's thesis "Robust Monte Carlo Methods for Light Transport Simulation"
+        // for more details.
+        float eta_factor = (cBSDFEvalQuery.transport_type == enum_transport_to_light) ? (1 / (eta * eta)) : 1;
+        float h_dot_out = dot(half_vector, dir_out);
+        float sqrt_denom = h_dot_in + eta * h_dot_out;
+        // Very complicated BSDF. See Walter et al.'s paper for more details.
+        // "Microfacet Models for Refraction through Rough Surfaces"
+        cBSDFEvalQuery.bsdf = Kt * (eta_factor * (1 - F) * D * G * eta * eta * abs(h_dot_out * h_dot_in)) / 
+            (abs(dot(frame[2], dir_in)) * sqrt_denom * sqrt_denom);
+    }
+    return;
+}

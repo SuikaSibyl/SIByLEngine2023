@@ -1,0 +1,65 @@
+#version 460 core
+#extension GL_EXT_ray_tracing           : enable
+#extension GL_GOOGLE_include_directive  : enable
+
+#include "../../include/common_trace.h"
+#include "../../../include/plugins/material/lambertian_common.h"
+#include "../../../include/microfacet.h"
+#include "../../../../Utility/math.h"
+#include "../../../../Utility/geometry.h"
+#include "../../../../Utility/sampling.h"
+
+layout(location = CALLABLE_LOC_BSDF_PDF) callableDataInEXT BSDFSamplePDFQuery cBSDFSamplePDFQuery;
+
+void main()
+{
+    const float bsdf_eta = 1.2;  // TODO :: MOVE TO PARAM
+
+    const vec3 dir_in  = cBSDFSamplePDFQuery.dir_in;
+    const vec3 dir_out = cBSDFSamplePDFQuery.dir_out;
+
+    bool reflected = dot(cBSDFSamplePDFQuery.geometric_normal, dir_in) *
+                     dot(cBSDFSamplePDFQuery.geometric_normal, dir_out) > 0;
+    // Flip the shading frame if it is inconsistent with the geometry normal
+    mat3 frame = cBSDFSamplePDFQuery.frame;
+    if (dot(frame[2], dir_in) < 0) {
+        frame = -frame;
+    }
+    // If we are going into the surface, then we use normal eta
+    // (internal/external), otherwise we use external/internal.
+    const float eta = dot(cBSDFSamplePDFQuery.geometric_normal, dir_in) > 0 ? bsdf_eta : 1 / bsdf_eta;
+
+    vec3 half_vector;
+    if (reflected) {
+        half_vector = normalize(dir_in + dir_out);
+    } else {
+        // "Generalized half-vector" from Walter et al.
+        // See "Microfacet Models for Refraction through Rough Surfaces"
+        half_vector = normalize(dir_in + dir_out * eta);
+    }
+
+    // Flip half-vector if it's below surface
+    if (dot(half_vector, frame[2]) < 0) {
+        half_vector = -half_vector;
+    }
+
+    float roughness = 0.1;
+    // Clamp roughness to avoid numerical issues.
+    roughness = clamp(roughness, 0.01, 1);
+
+    // We sample the visible normals, also we use F to determine
+    // whether to sample reflection or refraction
+    // so PDF ~ F * D * G_in for reflection, PDF ~ (1 - F) * D * G_in for refraction.
+    float h_dot_in = dot(half_vector, dir_in);
+    float F = fresnel_dielectric(h_dot_in, eta);
+    float D = GTR2(dot(half_vector, frame[2]), roughness);
+    float G_in = smith_masking_gtr2(to_local(frame, dir_in), roughness);
+    if (reflected) {
+        cBSDFSamplePDFQuery.pdf = (F * D * G_in) / (4 * abs(dot(frame[2], dir_in)));
+    } else {
+        float h_dot_out = dot(half_vector, dir_out);
+        float sqrt_denom = h_dot_in + eta * h_dot_out;
+        float dh_dout = eta * eta * h_dot_out / (sqrt_denom * sqrt_denom);
+        cBSDFSamplePDFQuery.pdf = (1 - F) * D * G_in * abs(dh_dout * h_dot_in / dot(frame[2], dir_in));
+    }
+}

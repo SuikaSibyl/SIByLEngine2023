@@ -26,6 +26,10 @@ float stepAndOutputRNGFloat(inout uint rngState) {
     return float(word) / 4294967295.0f;
 }
 
+float UniformFloat(inout uint rngState) {
+  return stepAndOutputRNGFloat(rngState);
+}
+
 /**
 *  Non-Uniform Sampling
 */
@@ -48,6 +52,13 @@ vec2 randomGaussian(inout uint rngState) {
 vec3 randomPointInSphere(inout uint rngState) {
     const float theta = 2 * k_pi * stepAndOutputRNGFloat(rngState);   // Random in [0, 2pi]
     const float u     = 2.0 * stepAndOutputRNGFloat(rngState) - 1.0;  // Random in [-1, 1]
+    const float r     = sqrt(1.0 - u * u);
+    return vec3(r * cos(theta), r * sin(theta), u);
+}
+
+vec3 randomPointInSphere(in const vec2 rvec) {
+    const float theta = 2 * k_pi * rvec.x;   // Random in [0, 2pi]
+    const float u     = 2.0 * rvec.y - 1.0;  // Random in [-1, 1]
     const float r     = sqrt(1.0 - u * u);
     return vec3(r * cos(theta), r * sin(theta), u);
 }

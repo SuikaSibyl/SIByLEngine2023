@@ -8,6 +8,7 @@
 #include "common_callable.h"
 #include "../../include/common_descriptor_sets.h"
 #include "../../include/common_utils.h"
+#include "../../include/spectrum.h"
 
 #include "utils/ray_intersection.h"
 #include "utils/camera_model.h"

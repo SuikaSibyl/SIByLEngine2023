@@ -211,38 +211,18 @@ namespace SIByL
 						  set2_layout_rt.get() }, });
 					std::shared_ptr<RHI::RayTracingPipeline> tracingPipeline[MULTIFRAME_FLIGHTS_COUNT];
 					std::shared_ptr<RHI::ComputePipeline>	 computePipeline[MULTIFRAME_FLIGHTS_COUNT];
+
+					RHI::RayTracingPipelineDescriptor bdpt_pass_descriptor = renderer->rtCommon.getPipelineDescriptor();
+					bdpt_pass_descriptor.layout = pipelineLayout.get();
+					bdpt_pass_descriptor.sbtsDescriptor.rgenSBT = RHI::SBTsDescriptor::RayGenerationSBT{ { Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rgen)->shaderModule.get() } };
+
 					for (int i = 0; i < MULTIFRAME_FLIGHTS_COUNT; ++i) {
 						computePipeline[i] = device->createComputePipeline(RHI::ComputePipelineDescriptor{
 								pipelineLayout.get(),
 								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(computetest)->shaderModule.get(), "main"}
 							});
-						tracingPipeline[i] = device->createRayTracingPipeline(RHI::RayTracingPipelineDescriptor{
-							pipelineLayout.get(), 3, RHI::SBTsDescriptor{
-								RHI::SBTsDescriptor::RayGenerationSBT{{ Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rgen)->shaderModule.get() }},
-								RHI::SBTsDescriptor::MissSBT{{
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rmiss)->shaderModule.get()},
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(shadow_ray_rmiss)->shaderModule.get()}, }},
-								RHI::SBTsDescriptor::HitGroupSBT{{
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rchit_trimesh)->shaderModule.get()},
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rchit_sphere)->shaderModule.get(), nullptr,
-									 Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rint_sphere)->shaderModule.get(),},
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(shadow_ray_rchit)->shaderModule.get()},
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(shadow_ray_rchit)->shaderModule.get(), nullptr,
-									 Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rint_sphere)->shaderModule.get(),}, }},
-								RHI::SBTsDescriptor::CallableSBT{{
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(sphere_sampling_rcall)->shaderModule.get()},
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(sphere_sampling_pdf_rcall)->shaderModule.get()},
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(trimesh_sampling_rcall)->shaderModule.get()},
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(trimesh_sampling_pdf_rcall)->shaderModule.get()},
-									// lambertian
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lambertian_eval)->shaderModule.get()},
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lambertian_sample)->shaderModule.get()},
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lambertian_pdf)->shaderModule.get()},
-									// principled
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(principled_eval)->shaderModule.get()},
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(principled_sample)->shaderModule.get()},
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(principled_pdf)->shaderModule.get()}, }},
-							} });
+
+						tracingPipeline[i] = device->createRayTracingPipeline(bdpt_pass_descriptor);
 					}
 					RHI::RenderPassDescriptor renderPassDescriptor = {
 						{ RHI::RenderPassColorAttachment{ rdg->getTexture("AtomicRGB32")->texture->viewArrays[0].get(), nullptr, {0,0,0,1}, RHI::LoadOp::CLEAR, RHI::StoreOp::STORE},

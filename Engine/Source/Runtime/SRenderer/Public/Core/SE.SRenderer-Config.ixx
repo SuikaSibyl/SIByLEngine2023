@@ -11,6 +11,7 @@ import :Raster.Albedo;
 import :Tracer.STracer;
 import :Tracer.SMultiCubemap;
 import :Tracer.SBDPT;
+import :Tracer.MMLTPass;
 import :Raster.ClearImagePass;
 
 namespace SIByL {
@@ -52,9 +53,18 @@ namespace SIByL {
 					1, 1, RHI::TextureDimension::TEX2D,
 					RHI::TextureFormat::R32_FLOAT }
 				});
+			srenderer->textures.emplace_back(SRenderer::TextureRegisterInfo{
+				"boostrapLuminance",
+				GFX::RDGTexture::Desc{
+					{512,512,1},
+					10, 1, RHI::TextureDimension::TEX2D,
+					RHI::TextureFormat::R32_FLOAT }
+				});
  			srenderer->passes.emplace_back(std::make_unique<AlbedoOnlyPass>());
 			srenderer->passes.emplace_back(std::make_unique<ClearImagePass>());
-			srenderer->passes.emplace_back(std::make_unique<BDPathTracerPass>());
+			//srenderer->passes.emplace_back(std::make_unique<BDPathTracerPass>());
+			srenderer->passes.emplace_back(std::make_unique<MMLTPass>());
+			//srenderer->passes.emplace_back(std::make_unique<PathTracerPass>());
 		}
 	};
 }

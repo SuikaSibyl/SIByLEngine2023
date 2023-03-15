@@ -149,36 +149,17 @@ namespace SIByL
 						 | (uint32_t)RHI::ShaderStages::ANY_HIT, 0, sizeof(PushConstant)}},
 						{ renderer->commonDescData.set0_layout.get(),
 						  renderer->commonDescData.set1_layout_rt.get() }, });
+
+					RHI::RayTracingPipelineDescriptor udpt_pass_descriptor = renderer->rtCommon.getPipelineDescriptor();
+					udpt_pass_descriptor.layout = pipelineLayout.get();
+					udpt_pass_descriptor.sbtsDescriptor.rgenSBT = RHI::SBTsDescriptor::RayGenerationSBT{ { Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rgen)->shaderModule.get() } };
+
+
 					std::shared_ptr<RHI::RayTracingPipeline> tracingPipeline[MULTIFRAME_FLIGHTS_COUNT];
 					for (int i = 0; i < MULTIFRAME_FLIGHTS_COUNT; ++i) {
-						tracingPipeline[i] = device->createRayTracingPipeline(RHI::RayTracingPipelineDescriptor{
-							pipelineLayout.get(), 3, RHI::SBTsDescriptor{
-								RHI::SBTsDescriptor::RayGenerationSBT{{ Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rgen)->shaderModule.get() }},
-								RHI::SBTsDescriptor::MissSBT{{
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rmiss)->shaderModule.get()},
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(shadow_ray_rmiss)->shaderModule.get()}, }},
-								RHI::SBTsDescriptor::HitGroupSBT{{ 
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rchit_trimesh)->shaderModule.get()},
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rchit_sphere)->shaderModule.get(), nullptr,
-									 Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rint_sphere)->shaderModule.get(),},
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(shadow_ray_rchit)->shaderModule.get()},
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(shadow_ray_rchit)->shaderModule.get(), nullptr,
-									 Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rint_sphere)->shaderModule.get(),}, }},
-								RHI::SBTsDescriptor::CallableSBT{{
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(sphere_sampling_rcall)->shaderModule.get()},
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(sphere_sampling_pdf_rcall)->shaderModule.get()},
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(trimesh_sampling_rcall)->shaderModule.get()},
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(trimesh_sampling_pdf_rcall)->shaderModule.get()},
-									// lambertian
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lambertian_eval)->shaderModule.get()},
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lambertian_sample)->shaderModule.get()},
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lambertian_pdf)->shaderModule.get()},
-									// principled
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(principled_eval)->shaderModule.get()},
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(principled_sample)->shaderModule.get()},
-									{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(principled_pdf)->shaderModule.get()}, }},
-							} });
+						tracingPipeline[i] = device->createRayTracingPipeline(udpt_pass_descriptor);
 					}
+
 				std::shared_ptr<RHI::RayTracingPassEncoder> passEncoder[2] = {};
 				RHI::MultiFrameFlights* multiFrameFlights = GFX::GFXManager::get()->rhiLayer->getMultiFrameFlights();
 				// execute callback

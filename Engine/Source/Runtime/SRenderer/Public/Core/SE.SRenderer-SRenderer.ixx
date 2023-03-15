@@ -7,6 +7,7 @@ module;
 #include <unordered_map>
 #include "../../../Application/Public/SE.Application.Config.h"
 export module SE.SRenderer:SRenderer;
+import :RTCommon;
 import SE.Core.Resource;
 import SE.Core.ECS;
 import SE.Math.Geometric;
@@ -288,6 +289,8 @@ namespace SIByL
 			std::array<RHI::BindGroup*, MULTIFRAME_FLIGHTS_COUNT> set1_flights_rt_array = {};
 
 		} commonDescData;
+
+		RTCommon rtCommon;
 	};
 
 #pragma region SRENDERER_IMPL

@@ -1,0 +1,238 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_shader_atomic_float: enable
+
+#include "mmlt_descriptor_set.h"
+#include "mmlt.glsl"
+#include "../include/common_splat_film.h"
+
+struct PushConstants { 
+    uvec2 resolution;
+    uint sample_batch; 
+    uint timestamp; 
+};
+layout(push_constant) uniform PushConsts { PushConstants pushConstants; };
+
+float smallStepFloat(
+    in const float xi,
+    inout    uint RNG
+) {
+    // Sample the standard normal distribution N(0,1)
+    float normalSample = k_sqrt_2 * erfinv(2 * UniformFloat(RNG) - 1);
+    // Compute the effective standard deviation and apply perturbation to Xi
+    float effSigma = sigma; // take one mutation every step
+    float xo = xi;
+    xo += normalSample * effSigma;
+    xo -= floor(xo);
+    return xo;
+}
+
+vec4 smallStepVec4(
+    in const vec4 v,
+    inout uint RNG
+) {
+    vec4 vo;
+    vo.x = smallStepFloat(v.x, RNG);
+    vo.y = smallStepFloat(v.y, RNG);
+    vo.z = smallStepFloat(v.z, RNG);
+    vo.w = smallStepFloat(v.w, RNG);
+    return vo;
+}
+
+void mutation(
+    in const vec4 input_streams[num_states_vec4],
+    out vec4 sample_streams[num_states_vec4],
+    inout uint RNG
+) {
+    bool largeStep = UniformFloat(RNG) < large_step_probability;
+
+    if(largeStep){
+        for(int i=0; i<num_states_vec4; ++i)
+            sample_streams[i] = UniformVec4(RNG);
+    }
+    else {
+        for(int i=0; i<num_states_vec4; ++i) {
+            sample_streams[i] = smallStepVec4(input_streams[i], RNG);
+        }
+    }
+}
+
+// vec2 sampleBoostrapSample(inout uint RNG, out float pdf) {
+//     int mip_level = maximum_lod;
+//     vec2 uv = vec2(0.5, 0.5);
+//     float parent_importance = textureLod(boostrapImportMIP, uv, mip_level).x;
+    
+//     vec2 four_neighbors[4];
+//     four_neighbors[0] = vec2(-1., +1.);
+//     four_neighbors[1] = vec2(+1., +1.);
+//     four_neighbors[2] = vec2(+1., -1.);
+//     four_neighbors[3] = vec2(-1., -1.);
+
+//     float p = 1.f;
+//     float pixel_size = 1. / 2;
+    
+//     for (int i = 0; i < maximum_lod; ++i) {
+//         pixel_size /= 2;    // half pixel size
+//         mip_level--; // next mip level
+//         // sample next level
+//         float rnd = UniformFloat(RNG);
+//         float accum = 0.f;
+//         for (int j=0; j<4; ++j) {
+//             vec2 uv_offset = four_neighbors[j] * pixel_size;
+//             if(j==3) {
+//                 uv = uv + uv_offset;
+//                 p = p * (1 - accum);
+//                 break;
+//             }
+//             float importance = textureLod(boostrapImportMIP, uv + uv_offset, mip_level).x;
+//             float nimportance = importance / parent_importance;
+//             accum += nimportance;
+//             if(rnd < accum) {
+//                 uv = uv + uv_offset;
+//                 p = p * nimportance;
+//                 parent_importance = importance;
+//                 break;
+//             }
+//         }
+//     }
+//     return uv;
+// }
+
+ivec2 sampleBoostrapSample(inout uint RNG, out float pdf) {
+    int mip_level = maximum_lod;
+    ivec2 xy = ivec2(0, 0);
+    float parent_importance = texelFetch(boostrapImportMIP, xy, mip_level).x;
+    
+    ivec2 four_neighbors[4];
+    four_neighbors[0] = ivec2(0, 0);
+    four_neighbors[1] = ivec2(0, 1);
+    four_neighbors[2] = ivec2(1, 0);
+    four_neighbors[3] = ivec2(1, 1);
+
+    float p = 1.f;
+    
+    for (int i = maximum_lod-1; i>=0; --i) {
+        if(i!=maximum_lod-1) {
+            xy *= 2;
+        }
+        mip_level--; // next mip level
+        const float rnd = UniformFloat(RNG);  // sample next level
+        float accum = 0.f;
+        int last_non_zero = -1;
+        float last_non_zero_imp = 0;
+        float last_non_zero_pdf = 0;
+        for (int j=0; j<4; ++j) {
+            ivec2 xy_offset = four_neighbors[j];
+            float importance = texelFetch(boostrapImportMIP, xy + xy_offset, mip_level).x;
+            float nimportance = importance / parent_importance;
+            accum += nimportance;
+            
+            if(nimportance > 0) {
+                last_non_zero = j;
+                last_non_zero_pdf = nimportance;
+                last_non_zero_imp = importance;
+            }
+
+            if(rnd < accum) {
+                xy = xy + xy_offset;
+                p = p * nimportance;
+                parent_importance = importance;
+                break;
+            }
+            else if(j==3 && last_non_zero!=-1) {
+                xy = xy + four_neighbors[last_non_zero];
+                p = p * last_non_zero_pdf;
+                parent_importance = last_non_zero_imp;
+                break;
+            }
+            else {
+                // should not happen...
+            }
+        }
+    }
+    pdf = p;
+    return xy;
+}
+
+void main() {
+    // Select initial state from the set of bootstrap samples
+    const ivec2 resolution = ivec2(pushConstants.resolution);
+    const ivec2 lid = ivec2(gl_LaunchIDEXT.xy);
+    const ivec2 grid = ivec2(gl_LaunchSizeEXT.xy);
+
+    if((lid.x >= grid.x) || (lid.y >= grid.y)) {
+        return;
+    }
+
+    uint RNG = uint((pushConstants.sample_batch * grid.y + lid.y) * grid.x + lid.x);
+    uint cRNG = uint((lid.y) * grid.x + lid.x);
+    // return when boostrap is not finished
+    if(pushConstants.sample_batch < possible_depth_num) return;
+    // if it's first time to sample from boostrap
+    // else if(pushConstants.sample_batch == possible_depth_num) {
+    else if(pushConstants.sample_batch == possible_depth_num) {
+        float pdf;
+        ivec2 boostrap_xy = sampleBoostrapSample(RNG, pdf);
+
+        int depth = boostrap_xy.x % possible_depth_num; // TODO :: Check whether uv is inversed
+        int boostrap_x = boostrap_xy.x / possible_depth_num;
+        uint RNG_REC = uint((depth * boostrap_grid_height + boostrap_xy.y) * boostrap_grid_width + boostrap_x);
+
+        vec4 sample_streams[num_states_vec4];
+        UniformSampleStream(sample_streams, RNG_REC);   // HERE::RNG_REC
+        for(int i=0; i<num_states_vec4; ++i)
+            sampleStreams[lid.x][lid.y][i] = sample_streams[i];
+
+        vec2 pCurrent;
+        vec3 LCurrent = L(depth, resolution, pCurrent, sample_streams);
+
+        SampleInfo sampleInfo;
+        sampleInfo.pCurrent = pCurrent;
+        sampleInfo.LCurrent = LCurrent;
+        sampleInfo.depth = depth;
+        sampleInfos[lid.x][lid.y] = sampleInfo;
+    }
+    // if it's following passes that load from previous records
+    else {
+        // load sample stream
+        vec4 leaded_streams[num_states_vec4];
+        for(int i=0; i<num_states_vec4; ++i)
+            leaded_streams[i] = sampleStreams[lid.x][lid.y][i];
+        // load sample info
+        SampleInfo sampleInfo = sampleInfos[lid.x][lid.y];
+        vec2 pCurrent = sampleInfo.pCurrent;
+        vec3 LCurrent = sampleInfo.LCurrent;
+        int  depth    = sampleInfo.depth;
+        // create mutated sample stream by mutation
+        vec4 sample_streams[num_states_vec4];
+        // mutation(leaded_streams, sample_streams, RNG);
+        mutation_v0(leaded_streams, sample_streams, resolution, RNG);
+        
+        // sample
+        vec2 pProposed;
+        vec3 LProposed = L(depth, resolution, pProposed, sample_streams);
+        // Compute acceptance probability for proposed sample
+        float y_LProposed   = luminance(LProposed);
+        float y_LCurrent    = luminance(LCurrent);
+        float accept  = min(1., y_LProposed / y_LCurrent);
+        // Splat both current and proposed samples to film
+        if (accept > 0)
+            if(insideExclusive(ivec2(pProposed), resolution))    
+                addSplat(pProposed, vec4(LProposed * accept / y_LProposed, 1));
+        if(insideExclusive(ivec2(pCurrent), resolution))    
+            addSplat(pCurrent, vec4(LCurrent * (1 - accept) / y_LCurrent, 1));
+
+        // Accept or reject the proposal
+        if (UniformFloat(RNG) < accept) {
+            // accept
+            sampleInfo.pCurrent = pProposed;
+            sampleInfo.LCurrent = LProposed;
+            sampleInfos[lid.x][lid.y] = sampleInfo;
+            for(int i=0; i<num_states_vec4; ++i)
+                sampleStreams[lid.x][lid.y][i]  = sample_streams[i];
+        } else {
+            // reject
+            // do nothing
+        }
+    }
+}

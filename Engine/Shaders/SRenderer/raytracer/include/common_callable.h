@@ -33,6 +33,7 @@ struct BSDFEvalQuery {
     vec3    dir_in;
     uint    mat_id;
     vec3    dir_out;
+    uint    transport_type;     // 0: path tracing // 1: light tracing
     vec3    geometric_normal;
     mat3    frame;
     vec2    uv;
@@ -40,6 +41,9 @@ struct BSDFEvalQuery {
     // output
     vec3    bsdf;
 };
+
+const uint enum_transport_to_light = 0;
+const uint enum_transport_to_view  = 1;
 
 struct BSDFSampleQuery {
     // input

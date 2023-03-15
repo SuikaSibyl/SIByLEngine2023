@@ -5,9 +5,9 @@
 #include "../include/common_rgen.h"
 
 #define MIN_PATH_LENGTH 3 // avoid sampling direct illumination
-#define MAX_PATH_LENGTH 6
+#define MAX_PATH_LENGTH 4
 
-#define MAX_EVENTS (MAX_PATH_LENGTH + 1)
+#define MAX_EVENTS 5
 
 /**
 * @param beta: contains the product of the BSDF or phase function values, transmittances, and cosine terms
@@ -34,8 +34,8 @@ const uint enum_vertex_type_surface = 2;
 const uint enum_vertex_type_medium  = 3;
 
 struct BDPTPath {
-    BDPTVert x[MAX_EVENTS];
-    int n;      // number of path vertices
+    BDPTVert x[MAX_EVENTS]; // vertices in the path
+    int n;                  // number of path vertices
 };
 
 void initialize(inout BDPTPath path) {
@@ -340,7 +340,7 @@ int pathRandomWalk(
             bsdf_uv,
             stepAndOutputRNGFloat(RNG));
 
-        vec3 bsdf = bsdf_eval(path.x[path.n].isect, dir_bsdf);
+        vec3 bsdf = bsdf_eval(path.x[path.n].isect, dir_bsdf, isImportance?enum_transport_to_view:enum_transport_to_light);
         pdfFwd = bsdf_pdf(path.x[path.n].isect, dir_bsdf);
         pdfRev = bsdf_pdf(path.x[path.n].isect, dir_bsdf, path.x[path.n].isect.wo);
         // Compute reverse area density at preceding vertex
@@ -453,10 +453,11 @@ int generateLightSubpath(
 /**  Evaluates the portion of the measurement equation associated with a vertex. */
 vec3 f(
     in const BDPTVert start,
-    in const BDPTVert next
+    in const BDPTVert next,
+    in const uint transport_type
 ) {
     const vec3 wi = normalize(next.isect.position - start.isect.position);
-    return bsdf_eval(start.isect, wi);
+    return bsdf_eval(start.isect, wi, transport_type);
 }
 
 /** Compute the generalized geometry term */
@@ -490,8 +491,8 @@ vec3 connectBDPT(
     in const int t,         // num of camera path
     out vec2    newpixel,    // new pixel is selected if t=1 happens
     out float   out_misWeight,
-    in const vec4 rnds,
-    in const ivec2 resolution
+    in const vec4   rnds,
+    in const ivec2  resolution
 ) {
     vec3 L = vec3(0.);
     BDPTVert sampled;
@@ -536,7 +537,7 @@ vec3 connectBDPT(
                 sampled.type = enum_vertex_type_camera;
 
                 L = lightPath.x[s - 1].beta
-                    * bsdf_eval(lightPath.x[s - 1].isect, wi)
+                    * bsdf_eval(lightPath.x[s - 1].isect, wi, enum_transport_to_view)
                     * correctShadingNormal_right(lightPath.x[s - 1].isect, wi)
                     * we / pdf
                     * visible;
@@ -582,14 +583,14 @@ vec3 connectBDPT(
         // Handle all other bidirectional connection cases
         vec3 wi = normalize(cameraPath.x[t - 1].isect.position - lightPath.x[s - 1].isect.position);
         L = lightPath.x[s - 1].beta
-          * f(lightPath.x[s - 1], cameraPath.x[t - 1])
-          * f(cameraPath.x[t - 1], lightPath.x[s - 1])
+          * f(lightPath.x[s - 1], cameraPath.x[t - 1], enum_transport_to_view)
+          * f(cameraPath.x[t - 1], lightPath.x[s - 1], enum_transport_to_light)
           * correctShadingNormal_right(lightPath.x[s - 1].isect, wi)
           * cameraPath.x[t - 1].beta;
         if (!isBlack(L))
             L *= G(lightPath.x[s - 1], cameraPath.x[t - 1]);
     }
-
+    
     // Compute MIS weight for connection strategy
     // float misWeight = (s+t==2) ? 1 : 1./3;
     float misWeight = isBlack(L) ? 0.f : MISWeight(lightPath, cameraPath, sampled, s, t);

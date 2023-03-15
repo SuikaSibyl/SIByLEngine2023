@@ -1,0 +1,49 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_shader_atomic_float: enable
+
+#include "mmlt_descriptor_set.h"
+#include "mmlt.glsl"
+#include "../include/common_splat_film.h"
+
+struct PushConstants { 
+    uvec2 resolution;
+    uint sample_batch;
+    uint timestamp; 
+};
+layout(push_constant) uniform PushConsts { PushConstants pushConstants; };
+
+// Generate bootstrap samples and compute normalization constant
+void main() {
+    // The resolution of the image, which is the same as the launch size:
+    const ivec2 resolution = ivec2(pushConstants.resolution);
+    const ivec2 lid  = ivec2(gl_LaunchIDEXT.xy);
+    const ivec2 grid = ivec2(gl_LaunchSizeEXT.xy);
+
+    // If the pixel is outside of the image, don't do anything:
+    if((lid.x >= grid.x) || (lid.y >= grid.y)) {
+        return;
+    }
+
+    if(pushConstants.sample_batch >= possible_depth_num) return;
+    
+    float per_depth_luminance;
+
+    // uint RNG = uint((pushConstants.sample_batch * resolution.y + pixel.y) * resolution.x + pixel.x);
+    uint RNG = uint((pushConstants.sample_batch * grid.y + lid.y) * grid.x + lid.x);
+
+    // // Generate ith bootstrap sample
+    int depth = int(pushConstants.sample_batch);
+    vec4 sample_streams[num_states_vec4];
+    UniformSampleStream(sample_streams, RNG);
+
+    ivec2 pRaster;
+    vec3 radiance = L(depth, resolution, pRaster, sample_streams);
+
+    per_depth_luminance = luminance(radiance);
+
+    imageStore(
+        boostrapLuminance, 
+        ivec2(lid.x*possible_depth_num + depth, lid.y),
+        vec4(per_depth_luminance));
+}

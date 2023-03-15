@@ -1565,6 +1565,10 @@ namespace SIByL::RHI
 		virtual auto getTexture() noexcept -> Texture* { return texture; }
 		/** set debug name */
 		virtual auto setName(std::string const& name) -> void override;
+		/** get width */
+		virtual auto getWidth() noexcept -> uint32_t override;
+		/** get height */
+		virtual auto getHeight() noexcept -> uint32_t override;
 		/** Vulkan texture view */
 		VkImageView imageView;
 		/** Texture view descriptor */
@@ -1573,6 +1577,10 @@ namespace SIByL::RHI
 		Texture_VK* texture = nullptr;
 		/** The device that the pointed texture is created on */
 		Device_VK* device = nullptr;
+		/** width of the view */
+		uint32_t width;
+		/** height of the view */
+		uint32_t height;
 	};
 
 #pragma region VK_TEXTURE_IMPL
@@ -1809,6 +1817,14 @@ namespace SIByL::RHI
 		device->getAdapterVk()->getContext()->vkSetDebugUtilsObjectNameEXT(device->getVkDevice(), &objectNameInfo);
 	}
 
+	auto TextureView_VK::getWidth() noexcept -> uint32_t {
+		return width;
+	}
+	
+	auto TextureView_VK::getHeight() noexcept -> uint32_t {
+		return height;
+	}
+
 	auto Device_VK::createTexture(TextureDescriptor const& desc) noexcept -> std::unique_ptr<Texture> {
 		return std::make_unique<Texture_VK>(this, desc);
 	}
@@ -1905,6 +1921,14 @@ namespace SIByL::RHI
 		createInfo.subresourceRange.levelCount = descriptor.mipLevelCount;
 		createInfo.subresourceRange.baseArrayLayer = descriptor.baseArrayLayer;
 		createInfo.subresourceRange.layerCount = descriptor.arrayLayerCount;
+
+		width = texture->width();
+		height = texture->height();
+		for (int i = 0; i < descriptor.baseMipLevel; ++i) {
+			width /= 2;
+			height /= 2;
+		}
+
 		if (vkCreateImageView(device->getVkDevice(), &createInfo, nullptr, &imageView) != VK_SUCCESS) {
 			Core::LogManager::Error("VULKAN :: failed to create image views!");
 		}
@@ -1913,6 +1937,7 @@ namespace SIByL::RHI
 	TextureView_VK::TextureView_VK(TextureView_VK&& view)
 		: imageView(view.imageView), descriptor(view.descriptor)
 		, texture(view.texture), device(view.device)
+		, width(view.width), height(width)
 	{
 		view.imageView = nullptr;
 	}
@@ -2004,7 +2029,7 @@ namespace SIByL::RHI
 		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 		samplerInfo.mipLodBias = 0.0f;
 		samplerInfo.minLod = 0.0f;
-		samplerInfo.maxLod = 0.0f;
+		samplerInfo.maxLod = desc.maxLod;
 		if (vkCreateSampler(device->getVkDevice(), &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS) {
 			Core::LogManager::Error("VULKAN :: failed to create texture sampler!");
 		}
@@ -2222,6 +2247,7 @@ namespace SIByL::RHI
 			default: return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 			}
 		}
+		if (entry.sampler.has_value() && entry.texture.has_value()) return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		if (entry.sampler.has_value()) return VK_DESCRIPTOR_TYPE_SAMPLER;
 		if (entry.texture.has_value()) return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 		if (entry.storageTexture.has_value()) return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
@@ -3624,6 +3650,8 @@ namespace SIByL::RHI
 			imb.newLayout = getVkImageLayout(descriptor.newLayout);
 			imb.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 			imb.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			imb.srcAccessMask = getVkAccessFlags(descriptor.srcAccessMask);
+			imb.dstAccessMask = getVkAccessFlags(descriptor.dstAccessMask);
 			imb.image = static_cast<Texture_VK*>(descriptor.texture)->getVkImage();
 			imb.subresourceRange.aspectMask = getVkImageAspectFlags(descriptor.subresourceRange.aspectMask);
 			imb.subresourceRange.baseMipLevel = descriptor.subresourceRange.baseMipLevel;
@@ -3928,9 +3956,9 @@ namespace SIByL::RHI
 		framebufferInfo.attachmentCount = attachments.size();
 		framebufferInfo.pAttachments = attachments.data();
 		framebufferInfo.width = (desc.colorAttachments.size() > 0) ?
-			desc.colorAttachments[0].view->getTexture()->width() : desc.depthStencilAttachment.view->getTexture()->width();
+			desc.colorAttachments[0].view->getWidth() : desc.depthStencilAttachment.view->getWidth();
 		framebufferInfo.height = (desc.colorAttachments.size() > 0) ?
-			desc.colorAttachments[0].view->getTexture()->height() : desc.depthStencilAttachment.view->getTexture()->height();
+			desc.colorAttachments[0].view->getHeight() : desc.depthStencilAttachment.view->getHeight();
 		_width = framebufferInfo.width;
 		_height = framebufferInfo.height;
 		framebufferInfo.layers = 1;
@@ -5063,6 +5091,23 @@ namespace SIByL::RHI
 				descriptorWrite.descriptorCount = 1;
 				descriptorWrite.pBufferInfo = &bufferInfo;
 				descriptorWrite.pImageInfo = nullptr;
+				descriptorWrite.pTexelBufferView = nullptr;
+			}
+			else if (entry.resource.sampler && entry.resource.textureView) {
+				VkDescriptorImageInfo& imageInfo = imageInfos[imageIndex++];
+				imageInfo.imageView = static_cast<TextureView_VK*>(entry.resource.textureView)->imageView;
+				imageInfo.sampler = static_cast<Sampler_VK*>(entry.resource.sampler)->textureSampler;
+				imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				descriptorWrites.push_back(VkWriteDescriptorSet{});
+				VkWriteDescriptorSet& descriptorWrite = descriptorWrites.back();
+				descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrite.dstSet = set;
+				descriptorWrite.dstBinding = entry.binding;
+				descriptorWrite.dstArrayElement = 0;
+				descriptorWrite.descriptorType = getVkDecriptorType(layout->getBindGroupLayoutDescriptor().entries[entry.binding]);
+				descriptorWrite.descriptorCount = 1;
+				descriptorWrite.pBufferInfo = nullptr;
+				descriptorWrite.pImageInfo = &imageInfo;
 				descriptorWrite.pTexelBufferView = nullptr;
 			}
 			else if (entry.resource.textureView) {

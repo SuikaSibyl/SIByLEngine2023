@@ -585,6 +585,17 @@ namespace SIByL::RHI
 		virtual auto getTexture() noexcept -> Texture* = 0;
 		/** set debug name */
 		virtual auto setName(std::string const& name) -> void = 0;
+		/** get width */
+		virtual auto getWidth() noexcept -> uint32_t = 0;
+		/** get height */
+		virtual auto getHeight() noexcept -> uint32_t = 0;
+	};
+
+	export enum struct TextureViewType :uint32_t {
+		SRV,
+		UAV,
+		RTV,
+		DSV,
 	};
 
 	export struct TextureViewDescriptor {
@@ -662,6 +673,7 @@ namespace SIByL::RHI
 		float lodMapClamp = 32.f;
 		CompareFunction compare = CompareFunction::ALWAYS;
 		uint16_t maxAnisotropy = 1;
+		float maxLod = 0.f;
 	};
 
 	// Samplers Interface
@@ -787,6 +799,8 @@ namespace SIByL::RHI
 			: binding(binding), visibility(visibility), sampler(sampler) {}
 		BindGroupLayoutEntry(uint32_t binding, ShaderStagesFlags visibility, TextureBindingLayout const& texture)
 			: binding(binding), visibility(visibility), texture(texture) {}
+		BindGroupLayoutEntry(uint32_t binding, ShaderStagesFlags visibility, TextureBindingLayout const& texture, SamplerBindingLayout const& sampler)
+			: binding(binding), visibility(visibility), texture(texture), sampler(sampler) {}
 		BindGroupLayoutEntry(uint32_t binding, ShaderStagesFlags visibility, StorageTextureBindingLayout const& storageTexture)
 			: binding(binding), visibility(visibility), storageTexture(storageTexture) {}
 		BindGroupLayoutEntry(uint32_t binding, ShaderStagesFlags visibility, ExternalTextureBindingLayout const& externalTexture)
@@ -834,7 +848,7 @@ namespace SIByL::RHI
 	};
 
 	export struct BindingResource {
-		BindingResource(Sampler* sampler) : type(BindingResourceType::SAMPLER), sampler(sampler) {}
+		BindingResource(TextureView* view, Sampler* sampler) : type(BindingResourceType::SAMPLER), textureView(view), sampler(sampler) {}
 		BindingResource(TextureView* view) : type(BindingResourceType::TEXTURE_VIEW), textureView(view) {}
 		BindingResource(BufferBinding const& buffer) : type(BindingResourceType::BUFFER_BINDING), bufferBinding(buffer) {}
 		BindingResource(std::vector<TextureView*> const& bindlessTextures, Sampler* sampler)

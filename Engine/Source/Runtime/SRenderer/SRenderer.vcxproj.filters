@@ -42,5 +42,14 @@
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRendere-Raster.ClearImage.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Passes\SE.SRendere-Tracer.MMLT.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-FullScreen.CreateSumUpMip.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Utils\SE.SRenderer-RTCommon.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

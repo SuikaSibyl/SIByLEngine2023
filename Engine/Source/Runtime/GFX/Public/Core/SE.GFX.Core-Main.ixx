@@ -29,6 +29,36 @@ import SE.Image;
 import SE.RHI;
 import SE.Utility;
 
+namespace SIByL::GFX {
+	struct ViewIndex {
+		RHI::TextureViewType type;
+		uint32_t mostDetailedMip;
+		uint32_t mipCount;
+		uint32_t firstArraySlice;
+		uint32_t arraySize;
+		bool operator== (ViewIndex const& p) const {
+			return type == p.type
+				&& mostDetailedMip == p.mostDetailedMip
+				&& mipCount == p.mipCount
+				&& firstArraySlice == p.firstArraySlice
+				&& arraySize == p.arraySize;
+		}
+	};
+}
+
+namespace std {
+	template<>
+	struct hash<SIByL::GFX::ViewIndex> {
+		size_t operator() (const SIByL::GFX::ViewIndex& s) const noexcept {
+			return  hash<uint32_t>()((uint32_t)s.type) +
+					hash<uint32_t>()(s.mostDetailedMip) +
+					hash<uint32_t>()(s.mipCount) +
+					hash<uint32_t>()(s.firstArraySlice) +
+					hash<uint32_t>()(s.arraySize);
+		}
+	};
+}
+
 namespace SIByL::GFX 
 {
 	struct Buffer;
@@ -156,6 +186,9 @@ namespace SIByL::GFX
 		auto getDSV(uint32_t mipLevel, uint32_t firstArraySlice, uint32_t arraySize) noexcept -> RHI::TextureView*;
 		/** Get the SRV of the texture */
 		auto getSRV(uint32_t mostDetailedMip, uint32_t mipCount, uint32_t firstArraySlice, uint32_t arraySize) noexcept -> RHI::TextureView*;
+	
+	private:
+		std::unordered_map<ViewIndex, std::unique_ptr<RHI::TextureView>> viewPool;
 	};
 
 	export struct Sampler :public Core::Resource {
@@ -463,6 +496,7 @@ namespace SIByL::GFX
 		/** common samplers */
 		struct CommonSampler {
 			Core::GUID defaultSampler;
+			Core::GUID clamp_nearest;
 		} commonSampler;
 		/** config singleton */
 		GFXConfig config = {};
@@ -882,19 +916,111 @@ namespace SIByL::GFX
 	}
 
 	auto Texture::getUAV(uint32_t mipLevel, uint32_t firstArraySlice, uint32_t arraySize) noexcept -> RHI::TextureView* {
-		return nullptr;
+		ViewIndex idx = {
+			RHI::TextureViewType::UAV,
+			mipLevel,
+			0,
+			firstArraySlice,
+			arraySize
+		};
+		RHI::TextureViewDimension dimension = (arraySize > 1)
+			? RHI::TextureViewDimension::TEX2D_ARRAY
+			: RHI::TextureViewDimension::TEX2D;
+
+		auto find = viewPool.find(idx);
+		if (find == viewPool.end()) {
+			viewPool[idx] = texture->createView(RHI::TextureViewDescriptor{
+				texture->format(),
+				dimension,
+				(uint32_t)RHI::TextureAspect::COLOR_BIT,
+				mipLevel,
+				1,
+				firstArraySlice,
+				arraySize});
+			find = viewPool.find(idx);
+		}
+		return find->second.get();
 	}
 
 	auto Texture::getRTV(uint32_t mipLevel, uint32_t firstArraySlice, uint32_t arraySize) noexcept -> RHI::TextureView* {
-		return nullptr;
+		ViewIndex idx = {
+			RHI::TextureViewType::RTV,
+			mipLevel,
+			0,
+			firstArraySlice,
+			arraySize
+		};
+		RHI::TextureViewDimension dimension = (arraySize > 1)
+			? RHI::TextureViewDimension::TEX2D_ARRAY
+			: RHI::TextureViewDimension::TEX2D;
+
+		auto find = viewPool.find(idx);
+		if (find == viewPool.end()) {
+			viewPool[idx] = texture->createView(RHI::TextureViewDescriptor{
+				texture->format(),
+				dimension,
+				(uint32_t)RHI::TextureAspect::COLOR_BIT,
+				mipLevel,
+				1,
+				firstArraySlice,
+				arraySize });
+			find = viewPool.find(idx);
+		}
+		return find->second.get();
 	}
 
 	auto Texture::getDSV(uint32_t mipLevel, uint32_t firstArraySlice, uint32_t arraySize) noexcept -> RHI::TextureView* {
-		return nullptr;
+		ViewIndex idx = {
+			RHI::TextureViewType::DSV,
+			mipLevel,
+			0,
+			firstArraySlice,
+			arraySize
+		};
+		RHI::TextureViewDimension dimension = (arraySize > 1)
+			? RHI::TextureViewDimension::TEX2D_ARRAY
+			: RHI::TextureViewDimension::TEX2D;
+
+		auto find = viewPool.find(idx);
+		if (find == viewPool.end()) {
+			viewPool[idx] = texture->createView(RHI::TextureViewDescriptor{
+				texture->format(),
+				dimension,
+				(uint32_t)RHI::TextureAspect::DEPTH_BIT,
+				mipLevel,
+				1,
+				firstArraySlice,
+				arraySize });
+			find = viewPool.find(idx);
+		}
+		return find->second.get();
 	}
 
 	auto Texture::getSRV(uint32_t mostDetailedMip, uint32_t mipCount, uint32_t firstArraySlice, uint32_t arraySize) noexcept -> RHI::TextureView* {
-		return nullptr;
+		ViewIndex idx = {
+			RHI::TextureViewType::RTV,
+			mostDetailedMip,
+			mipCount,
+			firstArraySlice,
+			arraySize
+		};
+		RHI::TextureViewDimension dimension = (arraySize > 1)
+			? RHI::TextureViewDimension::TEX2D_ARRAY
+			: RHI::TextureViewDimension::TEX2D;
+
+		auto find = viewPool.find(idx);
+		if (find == viewPool.end()) {
+			viewPool[idx] = texture->createView(RHI::TextureViewDescriptor{
+				texture->format(),
+				dimension,
+				(uint32_t)RHI::TextureAspect::COLOR_BIT,
+				mostDetailedMip,
+				mipCount,
+				firstArraySlice,
+				arraySize });
+			find = viewPool.find(idx);
+		}
+		return find->second.get();
 	}
 
 #pragma endregion
@@ -1430,11 +1556,11 @@ namespace SIByL::GFX
 		std::unique_ptr<RHI::CommandEncoder> commandEncoder = rhiLayer->getDevice()->createCommandEncoder({ nullptr });
 		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
 			(uint32_t)RHI::PipelineStages::TOP_OF_PIPE_BIT,
-			(uint32_t)RHI::PipelineStages::TRANSFER_BIT,
+			(uint32_t)RHI::PipelineStages::ALL_COMMANDS_BIT,
 			(uint32_t)RHI::DependencyType::NONE,
 			{}, {},
 			{ RHI::TextureMemoryBarrierDescriptor{
-				textureResource.texture.get(), RHI::ImageSubresourceRange{aspectMask, 0,1,0,uint32_t(desc.size.depthOrArrayLayers)},
+				textureResource.texture.get(), RHI::ImageSubresourceRange{aspectMask, 0,desc.mipLevelCount,0,uint32_t(desc.size.depthOrArrayLayers)},
 				(uint32_t)RHI::AccessFlagBits::NONE,
 				targetAccessFlags,
 				RHI::TextureLayout::UNDEFINED,

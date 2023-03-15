@@ -102,7 +102,8 @@ vec3 bsdf_sample(
 
 vec3 bsdf_eval(
     in const SurfaceIntersection vertex,
-    in const vec3 dir_out
+    in const vec3 dir_out,
+    in const uint transport_type
 ) {
     uint bsdf_type = materials[vertex.matID].bsdf_type;
 
@@ -113,12 +114,20 @@ vec3 bsdf_eval(
     cBSDFEvalQuery.uv = vertex.uv;
     cBSDFEvalQuery.frame = vertex.shading_frame;
     cBSDFEvalQuery.hitFrontface = vertex.hitFrontface;
+    cBSDFEvalQuery.transport_type = transport_type;
     
     // TODO :: Enable other bsdfs..
     // executeCallableEXT(BSDF_EVAL_IDX(bsdf_type), CALLABLE_LOC_BSDF_EVAL);
     executeCallableEXT(BSDF_EVAL_IDX(0), CALLABLE_LOC_BSDF_EVAL);
 
     return cBSDFEvalQuery.bsdf;
+}
+
+vec3 bsdf_eval(
+    in const SurfaceIntersection vertex,
+    in const vec3 dir_out
+) {
+    return bsdf_eval(vertex, dir_out, enum_transport_to_light);
 }
 
 float bsdf_pdf(
@@ -236,6 +245,20 @@ vec3 emission(in uint lightID,
     if (dot(point_on_light.normal, view_dir) <= 0)
         return vec3(0.f);
     return lights[lightID].intensity;
+}
+
+ivec2 uv2pixel(vec2 uv, ivec2 resolution) {
+    vec2 pixel_size = vec2(1./resolution.x, 1./resolution.y);
+    return ivec2((floor(uv / pixel_size) * pixel_size) * vec2(resolution)) + ivec2(0,1);
+    // * should add 1 to y, according to experiment.
+    // why? I have not idea though.
+}
+
+ivec2 uv2pixel_fix(vec2 uv, ivec2 resolution) {
+    vec2 pixel_size = vec2(1./resolution.x, 1./resolution.y);
+    return ivec2((floor(uv / pixel_size) * pixel_size) * vec2(resolution));
+    // * should add 1 to y, according to experiment.
+    // why? I have not idea though.
 }
 
 #endif
