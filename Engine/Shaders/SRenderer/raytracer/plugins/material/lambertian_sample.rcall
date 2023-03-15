@@ -12,11 +12,6 @@ layout(location = CALLABLE_LOC_BSDF_SAMPLE) callableDataInEXT BSDFSampleQuery cB
 
 void main()
 {
-    if (dot(cBSDFSampleQuery.geometric_normal, cBSDFSampleQuery.dir_in) < 0) {
-        // Incoming direction is below the surface.
-        return;
-    }
-
     // Sometimes the shading normal can be inconsistent with
     // the geometry normal. We flip the shading frame in that
     // case so that we don't produces "black fringes".
@@ -24,7 +19,7 @@ void main()
     if (dot(frame[2], cBSDFSampleQuery.dir_in) < 0) {
         frame = -frame;
     }
-    frame = createFrame(cBSDFSampleQuery.geometric_normal);
+
     cBSDFSampleQuery.dir_out = frame * cosineSampleHemisphere(cBSDFSampleQuery.rnd_uv);
     return;
 }

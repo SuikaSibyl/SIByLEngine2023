@@ -340,7 +340,7 @@ int pathRandomWalk(
             bsdf_uv,
             stepAndOutputRNGFloat(RNG));
 
-        vec3 bsdf = bsdf_eval(path.x[path.n].isect, dir_bsdf, isImportance?enum_transport_to_view:enum_transport_to_light);
+        vec3 bsdf = bsdf_eval(path.x[path.n].isect, dir_bsdf, isImportance?enum_transport_importance:enum_transport_radiance);
         pdfFwd = bsdf_pdf(path.x[path.n].isect, dir_bsdf);
         pdfRev = bsdf_pdf(path.x[path.n].isect, dir_bsdf, path.x[path.n].isect.wo);
         // Compute reverse area density at preceding vertex
@@ -454,10 +454,10 @@ int generateLightSubpath(
 vec3 f(
     in const BDPTVert start,
     in const BDPTVert next,
-    in const uint transport_type
+    in const uint transport_mode
 ) {
     const vec3 wi = normalize(next.isect.position - start.isect.position);
-    return bsdf_eval(start.isect, wi, transport_type);
+    return bsdf_eval(start.isect, wi, transport_mode);
 }
 
 /** Compute the generalized geometry term */
@@ -537,7 +537,7 @@ vec3 connectBDPT(
                 sampled.type = enum_vertex_type_camera;
 
                 L = lightPath.x[s - 1].beta
-                    * bsdf_eval(lightPath.x[s - 1].isect, wi, enum_transport_to_view)
+                    * bsdf_eval(lightPath.x[s - 1].isect, wi, enum_transport_importance)
                     * correctShadingNormal_right(lightPath.x[s - 1].isect, wi)
                     * we / pdf
                     * visible;
@@ -583,8 +583,8 @@ vec3 connectBDPT(
         // Handle all other bidirectional connection cases
         vec3 wi = normalize(cameraPath.x[t - 1].isect.position - lightPath.x[s - 1].isect.position);
         L = lightPath.x[s - 1].beta
-          * f(lightPath.x[s - 1], cameraPath.x[t - 1], enum_transport_to_view)
-          * f(cameraPath.x[t - 1], lightPath.x[s - 1], enum_transport_to_light)
+          * f(lightPath.x[s - 1], cameraPath.x[t - 1], enum_transport_importance)
+          * f(cameraPath.x[t - 1], lightPath.x[s - 1], enum_transport_radiance)
           * correctShadingNormal_right(lightPath.x[s - 1].isect, wi)
           * cameraPath.x[t - 1].beta;
         if (!isBlack(L))

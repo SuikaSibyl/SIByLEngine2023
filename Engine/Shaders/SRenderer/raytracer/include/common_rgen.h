@@ -103,7 +103,7 @@ vec3 bsdf_sample(
 vec3 bsdf_eval(
     in const SurfaceIntersection vertex,
     in const vec3 dir_out,
-    in const uint transport_type
+    in const uint transport_mode
 ) {
     uint bsdf_type = materials[vertex.matID].bsdf_type;
 
@@ -114,7 +114,7 @@ vec3 bsdf_eval(
     cBSDFEvalQuery.uv = vertex.uv;
     cBSDFEvalQuery.frame = vertex.shading_frame;
     cBSDFEvalQuery.hitFrontface = vertex.hitFrontface;
-    cBSDFEvalQuery.transport_type = transport_type;
+    cBSDFEvalQuery.transport_mode = transport_mode;
     
     // TODO :: Enable other bsdfs..
     // executeCallableEXT(BSDF_EVAL_IDX(bsdf_type), CALLABLE_LOC_BSDF_EVAL);
@@ -127,7 +127,7 @@ vec3 bsdf_eval(
     in const SurfaceIntersection vertex,
     in const vec3 dir_out
 ) {
-    return bsdf_eval(vertex, dir_out, enum_transport_to_light);
+    return bsdf_eval(vertex, dir_out, enum_transport_radiance);
 }
 
 float bsdf_pdf(

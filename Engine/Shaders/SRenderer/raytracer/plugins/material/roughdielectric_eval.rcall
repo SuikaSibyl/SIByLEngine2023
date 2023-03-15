@@ -89,7 +89,7 @@ void main()
         // this cancels out the eta term.
         // See Chapter 5 of Eric Veach's thesis "Robust Monte Carlo Methods for Light Transport Simulation"
         // for more details.
-        float eta_factor = (cBSDFEvalQuery.transport_type == enum_transport_to_light) ? (1 / (eta * eta)) : 1;
+        float eta_factor = (cBSDFEvalQuery.transport_mode == enum_transport_radiance) ? (1 / (eta * eta)) : 1;
         float h_dot_out = dot(half_vector, dir_out);
         float sqrt_denom = h_dot_in + eta * h_dot_out;
         // Very complicated BSDF. See Walter et al.'s paper for more details.

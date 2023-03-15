@@ -18,8 +18,8 @@ SceneNodes:
     components:
       TagComponent: Camera Object
       Transform:
-        translation: [6.20367241, 1.87945831, 1.62335324]
-        eulerAngles: [-0.147938669, 22.2239513, 0]
+        translation: [5.93722248, 3.02059841, 0.279648542]
+        eulerAngles: [-0.443762422, 22.098238, 0]
         scale: [1, 1, 1]
       CameraComponent:
         fovy: 60
@@ -48,7 +48,7 @@ SceneNodes:
       Transform:
         translation: [0.699999988, 20.7000008, -0.200000003]
         eulerAngles: [0, 0, 0]
-        scale: [1, 1, 1]
+        scale: [15, 15, 15]
       MeshReference:
         ORID: 1658456763119287132
         CPF: 1
@@ -56,9 +56,26 @@ SceneNodes:
         - ORID: 1658390946990111580
       LightComponent:
         Type: 0
-        Intensity: [500, 500, 500]
+        Intensity: [3, 3, 3]
         Texture: 18446744073709551615
   - uid: 4
+    parent: 18446744073709551615
+    components:
+      TagComponent: plane.obj
+      Transform:
+        translation: [2.5, 1.29999995, -2.0999999]
+        eulerAngles: [0, -1.29999995, -1.60000002]
+        scale: [3.29999995, 3, 1.10000002]
+      MeshReference:
+        ORID: 1659681347952819036
+        CPF: 0
+      MeshRendererComponent:
+        - ORID: 1658390946990111580
+      LightComponent:
+        Type: 0
+        Intensity: [2, 2, 10]
+        Texture: 18446744073709551615
+  - uid: 5
     parent: 18446744073709551615
     components:
       TagComponent: EnvMap
@@ -71,7 +88,7 @@ SceneNodes:
         Intensity: [1, 1, 1]
         Texture: 1662607019696307036
         Texture: 18446744073709551615
-  - uid: 5
+  - uid: 6
     parent: 18446744073709551615
     components:
       TagComponent: glass_ball

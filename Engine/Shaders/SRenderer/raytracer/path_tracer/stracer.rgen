@@ -74,12 +74,9 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
         {
             // 1.2.1 Compute C1 = G * f * L
             float G = 0;
-
-            vec3 offsetedPosition = offsetPositionAlongNormal(vertex.position, vertex.geometric_normal);
             
             if(vertex.lightID != lightSample.lightID) {
                 // cast shadow ray
-                const vec3 toLightSample = lightSample.position - offsetedPosition;
                 SurfaceIntersection lightIsect;
                 lightIsect.position = lightSample.unoffsetPosition;
                 lightIsect.geometric_normal = lightSample.normal;
@@ -91,7 +88,7 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
                 // self intersection, a "wrong" shadow ray direction could solve this.
                 // But we have to use the true direction for shading
                 G = visible.x * max(-dot(lightSample.rayDirection, lightSample.normal), 0.f) /
-                    distance_squared(lightSample.unoffsetPosition, offsetedPosition);
+                    distance_squared(lightSample.unoffsetPosition, vertex.position);
             }
             else {
                 // TODO :: envmap case
@@ -100,7 +97,7 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
             // The probability density for light sampling to sample our point is
             // just the probability of sampling a light times the probability of sampling a point
             float p1 = 1 * // TODO :: use light_pmf(scene, light_id) *
-                pdf_point_on_light(offsetedPosition, lightSample);
+                pdf_point_on_light(vertex.position, lightSample);
 
             // We don't need to continue the computation if G is 0.
             // Also sometimes there can be some numerical issue such that we generate

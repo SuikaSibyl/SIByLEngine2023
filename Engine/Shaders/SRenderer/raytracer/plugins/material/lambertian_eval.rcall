@@ -12,13 +12,6 @@ layout(location = CALLABLE_LOC_BSDF_EVAL) callableDataInEXT BSDFEvalQuery cBSDFE
 
 void main()
 {
-    if (dot(cBSDFEvalQuery.geometric_normal, cBSDFEvalQuery.dir_in) < 0 ||
-        dot(cBSDFEvalQuery.geometric_normal, cBSDFEvalQuery.dir_out) < 0) {
-        // No light below the surface
-        cBSDFEvalQuery.bsdf = vec3(0);
-        return;
-    }
-
     // Sometimes the shading normal can be inconsistent with
     // the geometry normal. We flip the shading frame in that
     // case so that we don't produces "black fringes".

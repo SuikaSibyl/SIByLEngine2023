@@ -54,9 +54,10 @@ HitGeometry getHitGeometry() {
     hit.worldPosition = hitPoint;
     hit.uv = vec2(-azimuth * k_inv_2_pi, elevation * k_inv_pi);
     const vec3 wNormal = geometric_normal;
-    const vec3 wTangent = cross(geometric_normal, vec3(0,1,0));
-    vec3 wBitangent = cross(wNormal, wTangent) * geometryInfo.oddNegativeScaling;
-    hit.TBN = mat3(wTangent, wBitangent, wNormal);
+    // const vec3 wTangent = cross(geometric_normal, vec3(0,1,0));
+    // vec3 wBitangent = cross(wNormal, wTangent) * geometryInfo.oddNegativeScaling;
+    // hit.TBN = mat3(wTangent, wBitangent, wNormal);
+    hit.TBN = createFrame(wNormal);
     hit.geometryNormalUnflipped = hit.TBN[2];
     hit.TBN[2] = faceforward(hit.TBN[2], gl_WorldRayDirectionEXT, hit.TBN[2]);
     hit.geometryNormal = hit.TBN[2]; // for sphere, geometry normal and shading normal are similar
