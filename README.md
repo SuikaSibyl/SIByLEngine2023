@@ -47,6 +47,8 @@ By default, Nvidia GPU with Turing or higher architecture is required to correct
 - Editor Toolchain
   - `Dear ImGui` based editor.
 
+![TracerDemo](https://imagehost-suikasibyl-us.oss-us-west-1.aliyuncs.com/3tracer.png)
+
 ## Dependencies
 - `glad`: [Multi-Language Vulkan/GL/GLES/EGL/GLX/WGL Loader-Generator based on the official specs.](https://github.com/Dav1dde/glad)
 - `glfw`: [A multi-platform library for OpenGL, OpenGL ES, Vulkan, window and input.](https://github.com/glfw/glfw)
