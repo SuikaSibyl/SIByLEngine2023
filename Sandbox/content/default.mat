@@ -1,4 +1,5 @@
 ResourceType: Material
+BxDF: 0
 Name: New Material
 Textures:
   - Name: normal_bump

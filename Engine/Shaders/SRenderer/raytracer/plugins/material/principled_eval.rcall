@@ -44,7 +44,7 @@ void main()
 
     // First fetch parameters
     vec3  base_color = texture(textures[lambertian_materials[cBSDFEvalQuery.mat_id].basecolor_opacity_tex], cBSDFEvalQuery.uv).rgb;
-    float specular_transmission = 0.5;
+    float specular_transmission = 0.0;
     float metallic          = 0.5;
     float subsurface        = 0.5;
     float specular          = 0.5;

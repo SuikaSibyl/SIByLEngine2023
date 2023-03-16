@@ -14,20 +14,24 @@ layout(location = CALLABLE_LOC_BSDF_PDF) callableDataInEXT BSDFSamplePDFQuery cB
 void main()
 {
     const float bsdf_eta = 1.2;  // TODO :: MOVE TO PARAM
+    float roughness = 0.1;
 
+    // Load dir in/out for simplicity
     const vec3 dir_in  = cBSDFSamplePDFQuery.dir_in;
     const vec3 dir_out = cBSDFSamplePDFQuery.dir_out;
+    const vec3 unflipped_ng = cBSDFSamplePDFQuery.geometric_normal * cBSDFSamplePDFQuery.hitFrontface;
 
-    bool reflected = dot(cBSDFSamplePDFQuery.geometric_normal, dir_in) *
-                     dot(cBSDFSamplePDFQuery.geometric_normal, dir_out) > 0;
+    bool reflected = dot(unflipped_ng, dir_in) *
+                     dot(unflipped_ng, dir_out) > 0;
+    
     // Flip the shading frame if it is inconsistent with the geometry normal
     mat3 frame = cBSDFSamplePDFQuery.frame;
-    if (dot(frame[2], dir_in) < 0) {
+    if (dot(frame[2], dir_in) * dot(unflipped_ng, dir_in) < 0) {
         frame = -frame;
     }
     // If we are going into the surface, then we use normal eta
     // (internal/external), otherwise we use external/internal.
-    const float eta = dot(cBSDFSamplePDFQuery.geometric_normal, dir_in) > 0 ? bsdf_eta : 1 / bsdf_eta;
+    const float eta = dot(unflipped_ng, dir_in) > 0 ? bsdf_eta : 1. / bsdf_eta;
 
     vec3 half_vector;
     if (reflected) {
@@ -43,7 +47,6 @@ void main()
         half_vector = -half_vector;
     }
 
-    float roughness = 0.1;
     // Clamp roughness to avoid numerical issues.
     roughness = clamp(roughness, 0.01, 1);
 

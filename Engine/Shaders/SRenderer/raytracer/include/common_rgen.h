@@ -95,7 +95,7 @@ vec3 bsdf_sample(
 
     // TODO :: ...
     // executeCallableEXT(BSDF_SAMPLE_IDX(bsdf_type), CALLABLE_LOC_BSDF_SAMPLE);
-    executeCallableEXT(BSDF_SAMPLE_IDX(0), CALLABLE_LOC_BSDF_SAMPLE);
+    executeCallableEXT(BSDF_SAMPLE_IDX(bsdf_type), CALLABLE_LOC_BSDF_SAMPLE);
 
     return normalize(cBSDFSampleQuery.dir_out);
 }
@@ -118,7 +118,7 @@ vec3 bsdf_eval(
     
     // TODO :: Enable other bsdfs..
     // executeCallableEXT(BSDF_EVAL_IDX(bsdf_type), CALLABLE_LOC_BSDF_EVAL);
-    executeCallableEXT(BSDF_EVAL_IDX(0), CALLABLE_LOC_BSDF_EVAL);
+    executeCallableEXT(BSDF_EVAL_IDX(bsdf_type), CALLABLE_LOC_BSDF_EVAL);
 
     return cBSDFEvalQuery.bsdf;
 }
@@ -146,7 +146,7 @@ float bsdf_pdf(
 
     // TODO :: ...
     // executeCallableEXT(BSDF_PDF_IDX(bsdf_type), CALLABLE_LOC_BSDF_PDF);
-    executeCallableEXT(BSDF_PDF_IDX(0), CALLABLE_LOC_BSDF_PDF);
+    executeCallableEXT(BSDF_PDF_IDX(bsdf_type), CALLABLE_LOC_BSDF_PDF);
 
     // Flip the shading frame if it is inconsistent with the geometry normal
     // For Lambertian, we importance sample the cosine hemisphere domain.
@@ -170,7 +170,7 @@ float bsdf_pdf(
 
     // TODO :: ...
     // executeCallableEXT(BSDF_PDF_IDX(bsdf_type), CALLABLE_LOC_BSDF_PDF);
-    executeCallableEXT(BSDF_PDF_IDX(0), CALLABLE_LOC_BSDF_PDF);
+    executeCallableEXT(BSDF_PDF_IDX(bsdf_type), CALLABLE_LOC_BSDF_PDF);
 
     // Flip the shading frame if it is inconsistent with the geometry normal
     // For Lambertian, we importance sample the cosine hemisphere domain.

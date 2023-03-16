@@ -14,23 +14,21 @@ layout(location = CALLABLE_LOC_BSDF_SAMPLE) callableDataInEXT BSDFSampleQuery cB
 void main()
 {
     const float bsdf_eta = 1.2;  // TODO :: MOVE TO PARAM
-
-    const vec3 dir_in  = cBSDFSampleQuery.dir_in;
-    const vec3 dir_out = cBSDFSampleQuery.dir_out;
-
-    // If we are going into the surface, then we use normal eta
-    // (internal/external), otherwise we use external/internal.
-    float eta = dot(cBSDFSampleQuery.geometric_normal, dir_in) > 0 ? bsdf_eta : 1 / bsdf_eta;
-    // Flip the shading frame if it is inconsistent with the geometry normal
-    mat3 frame = cBSDFSampleQuery.frame;
-    if (dot(frame[2], cBSDFSampleQuery.dir_in) < 0) {
-        frame = -frame;
-    }
-
     float roughness = 0.1;
 
-    // Real roughness = eval(
-    //     bsdf.roughness, vertex.uv, vertex.uv_screen_size, texture_pool);
+    // Load dir in/out for simplicity
+    const vec3 dir_in  = cBSDFSampleQuery.dir_in;
+    const vec3 dir_out = cBSDFSampleQuery.dir_out;
+    const vec3 unflipped_ng = cBSDFSampleQuery.geometric_normal * cBSDFSampleQuery.hitFrontface;
+    
+    // Flip the shading frame if it is inconsistent with the geometry normal
+    mat3 frame = cBSDFSampleQuery.frame;
+    if (dot(frame[2], dir_in) * dot(unflipped_ng, dir_in) < 0) {
+        frame = -frame;
+    }
+    // If we are going into the surface, then we use normal eta
+    // (internal/external), otherwise we use external/internal.
+    const float eta = dot(unflipped_ng, dir_in) > 0 ? bsdf_eta : 1. / bsdf_eta;
 
     // Clamp roughness to avoid numerical issues.
     roughness = clamp(roughness, 0.01, 1);

@@ -165,6 +165,7 @@ float pdf_light_origin(
 
     // Get the probability of choosing the position
     LightSample lightSample;
+    lightSample.lightID = curr.isect.lightID;
     lightSample.position = curr.isect.position;
     lightSample.normal = curr.isect.geometric_normal;
     const float pdf_light = pdf_point_on_light(vec3(k_nan), lightSample);

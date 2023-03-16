@@ -190,7 +190,7 @@ void main()
 
     // First fetch parameters
     vec3  base_color = texture(textures[principled_materials[cBSDFSampleQuery.mat_id].basecolor_opacity_tex], cBSDFSampleQuery.uv).rgb;
-    float specular_transmission = 0.5;
+    float specular_transmission = 0.0;
     float metallic          = 0.5;
     float subsurface        = 0.5;
     float specular          = 0.5;

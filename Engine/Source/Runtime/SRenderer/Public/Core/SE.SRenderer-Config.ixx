@@ -62,8 +62,8 @@ namespace SIByL {
 				});
  			srenderer->passes.emplace_back(std::make_unique<AlbedoOnlyPass>());
 			srenderer->passes.emplace_back(std::make_unique<ClearImagePass>());
-			srenderer->passes.emplace_back(std::make_unique<BDPathTracerPass>());
-			//srenderer->passes.emplace_back(std::make_unique<MMLTPass>());
+			//srenderer->passes.emplace_back(std::make_unique<BDPathTracerPass>());
+			srenderer->passes.emplace_back(std::make_unique<MMLTPass>());
 			//srenderer->passes.emplace_back(std::make_unique<PathTracerPass>());
 		}
 	};

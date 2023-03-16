@@ -806,7 +806,7 @@ namespace SIByL
 								}
 								return findTex->second;
 							};
-
+							matData.bsdf_id = mat->BxDF;
 							matData.basecolor_opacity_tex = getTexID(baseTexGUID);
 							matData.normal_bump_tex = getTexID(normTexGUID);
 							sceneDataPack.material_buffer_cpu.push_back(matData);

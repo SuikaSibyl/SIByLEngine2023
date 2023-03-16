@@ -59,7 +59,7 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
         radiance += path_throughput
                   * emission(vertex.lightID, -ray.direction, 0, vertexLight);
     }
-
+    
     // We iteratively sum up path contributions from paths with different number of vertices
     // If max_depth == -1, we rely on Russian roulette for path termination.
     for (int num_vertices = 3; MAX_DEPTH == -1 || num_vertices <= MAX_DEPTH + 1; ++num_vertices) {

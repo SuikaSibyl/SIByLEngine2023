@@ -205,6 +205,7 @@ namespace SIByL::GFX
 			return sampler->getName().c_str();
 		}
 	};
+
 	/** Material Template */
 	export struct MaterialTemplate {
 		/** add a const data entry to the template */
@@ -237,6 +238,8 @@ namespace SIByL::GFX
 		std::unordered_map<std::string, Core::GUID> textures;
 		/** ORID of the material */
 		Core::ORID ORID = Core::ORID_NONE;
+		/** BxDF ID */
+		uint32_t BxDF;
 		/** resource name */
 		std::string name = "New Material";
 		/** emission */
@@ -1094,6 +1097,7 @@ namespace SIByL::GFX
 			// output type
 			out << YAML::Key << "ResourceType" << YAML::Value << "Material";
 			out << YAML::Key << "Name" << YAML::Value << name;
+			out << YAML::Key << "BxDF" << YAML::Value << BxDF;
 			// output texture
 			out << YAML::Key << "Textures" << YAML::Value;
 			out << YAML::BeginSeq;
@@ -1148,6 +1152,7 @@ namespace SIByL::GFX
 			Core::LogManager::Error(std::format("GFX :: Material resource not found when deserializing, path: {0}", path));
 			return;
 		}
+		BxDF = data["BxDF"].as<uint32_t>();
 		auto texture_nodes = data["Textures"];
 		for (auto node : texture_nodes) {
 			std::string tex_name = node["Name"].as<std::string>();

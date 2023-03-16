@@ -13,39 +13,29 @@ layout(location = CALLABLE_LOC_BSDF_EVAL) callableDataInEXT BSDFEvalQuery cBSDFE
 
 void main()
 {
-    const vec3 dir_in  = cBSDFEvalQuery.dir_in;
-    const vec3 dir_out = cBSDFEvalQuery.dir_out;
-
-    if (dot(cBSDFEvalQuery.geometric_normal, dir_in) < 0 ||
-        dot(cBSDFEvalQuery.geometric_normal, dir_out) < 0) {
-        // No light below the surface
-        cBSDFEvalQuery.bsdf = vec3(0);
-        return;
-    }
-
-    bool reflected = dot(cBSDFEvalQuery.geometric_normal, dir_in) *
-                     dot(cBSDFEvalQuery.geometric_normal, dir_out) > 0;
-    // Flip the shading frame if it is inconsistent with the geometry normal
-    mat3 frame = cBSDFEvalQuery.frame;
-    if (dot(frame[2], dir_in) < 0) {
-        frame = -frame;
-    }
-    // If we are going into the surface, then we use normal eta
-    // (internal/external), otherwise we use external/internal.
     const float bsdf_eta = 1.2;  // TODO :: MOVE TO PARAM
-    const float eta = dot(cBSDFEvalQuery.geometric_normal, dir_in) > 0 ? bsdf_eta : 1 / bsdf_eta;
-
-    // Spectrum Ks = eval(
-    //     bsdf.specular_reflectance, vertex.uv, vertex.uv_screen_size, texture_pool);
-    // Spectrum Kt = eval(
-    //     bsdf.specular_transmittance, vertex.uv, vertex.uv_screen_size, texture_pool);
-    // Real roughness = eval(
-    //     bsdf.roughness, vertex.uv, vertex.uv_screen_size, texture_pool);
-
     vec3 Ks = vec3(1);
     vec3 Kt = vec3(1);
     float roughness = 0.1;
 
+    // Load dir in/out for simplicity
+    const vec3 dir_in  = cBSDFEvalQuery.dir_in;
+    const vec3 dir_out = cBSDFEvalQuery.dir_out;
+    const vec3 unflipped_ng = cBSDFEvalQuery.geometric_normal * cBSDFEvalQuery.hitFrontface;
+
+    bool reflected = dot(unflipped_ng, dir_in) *
+                     dot(unflipped_ng, dir_out) > 0;
+    
+    // Flip the shading frame if it is inconsistent with the geometry normal
+    mat3 frame = cBSDFEvalQuery.frame;
+    if (dot(frame[2], dir_in) * dot(unflipped_ng, dir_in) < 0) {
+        frame = -frame;
+    }
+    // If we are going into the surface, then we use normal eta
+    // (internal/external), otherwise we use external/internal.
+    const float eta = dot(unflipped_ng, dir_in) > 0 ? bsdf_eta : 1. / bsdf_eta;
+
+    // half vector
     vec3 half_vector;
     if (reflected) {
         half_vector = normalize(dir_in + dir_out);

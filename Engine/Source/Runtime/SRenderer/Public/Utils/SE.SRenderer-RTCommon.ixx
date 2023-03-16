@@ -83,6 +83,10 @@ namespace SIByL
 								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(principled_eval)->shaderModule.get()},
 								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(principled_sample)->shaderModule.get()},
 								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(principled_pdf)->shaderModule.get()}, 
+								// roughdielectric
+								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(roughdielectric_eval)->shaderModule.get()},
+								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(roughdielectric_sample)->shaderModule.get()},
+								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(roughdielectric_pdf)->shaderModule.get()},
 							}},
 						} };
 		}
@@ -137,17 +141,6 @@ namespace SIByL
 					"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/material/lambertian_pdf_rcall.spv",
 					{ nullptr, RHI::ShaderStages::CALLABLE });
 			}
-			{	// - roughdielectric
-				roughdielectric_eval = GFX::GFXManager::get()->registerShaderModuleResource(
-					"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/material/roughdielectric_eval_rcall.spv",
-					{ nullptr, RHI::ShaderStages::CALLABLE });
-				roughdielectric_sample = GFX::GFXManager::get()->registerShaderModuleResource(
-					"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/material/roughdielectric_sample_rcall.spv",
-					{ nullptr, RHI::ShaderStages::CALLABLE });
-				roughdielectric_pdf = GFX::GFXManager::get()->registerShaderModuleResource(
-					"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/material/roughdielectric_pdf_rcall.spv",
-					{ nullptr, RHI::ShaderStages::CALLABLE });
-			}
 			{	// - principled
 				principled_eval = GFX::GFXManager::get()->registerShaderModuleResource(
 					"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/material/principled_eval_rcall.spv",
@@ -157,6 +150,17 @@ namespace SIByL
 					{ nullptr, RHI::ShaderStages::CALLABLE });
 				principled_pdf = GFX::GFXManager::get()->registerShaderModuleResource(
 					"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/material/principled_pdf_rcall.spv",
+					{ nullptr, RHI::ShaderStages::CALLABLE });
+			}
+			{	// - roughdielectric
+				roughdielectric_eval = GFX::GFXManager::get()->registerShaderModuleResource(
+					"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/material/roughdielectric_eval_rcall.spv",
+					{ nullptr, RHI::ShaderStages::CALLABLE });
+				roughdielectric_sample = GFX::GFXManager::get()->registerShaderModuleResource(
+					"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/material/roughdielectric_sample_rcall.spv",
+					{ nullptr, RHI::ShaderStages::CALLABLE });
+				roughdielectric_pdf = GFX::GFXManager::get()->registerShaderModuleResource(
+					"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/material/roughdielectric_pdf_rcall.spv",
 					{ nullptr, RHI::ShaderStages::CALLABLE });
 			}
 		}

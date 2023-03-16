@@ -1,5 +1,6 @@
 ResourceType: Material
 Name: New Material
+BxDF: 0
 Textures:
   - Name: normal_bump
     ORID: 1658119028953168732
