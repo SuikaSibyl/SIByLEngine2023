@@ -38,7 +38,8 @@ void main() {
     UniformSampleStream(sample_streams, RNG);
 
     ivec2 pRaster;
-    vec3 radiance = L(depth, resolution, pRaster, sample_streams);
+    // vec3 radiance = L(depth, resolution, pRaster, sample_streams);
+    vec3 radiance = L(3, resolution, pRaster, sample_streams);
 
     per_depth_luminance = luminance(radiance);
 

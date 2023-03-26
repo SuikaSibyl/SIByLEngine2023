@@ -15,7 +15,7 @@ layout(push_constant) uniform PushConsts { PushConstants pushConstants; };
 
 layout(binding = 1, set = 1, rgba32f) uniform image2D storageImage;
 layout(binding = 1, set = 2, r32f) coherent uniform image2DArray atomicRGB;
-layout(binding = 5, set = 2) uniform sampler2D boostrapImportMIP;
+layout(binding = 6, set = 2) uniform sampler2D boostrapImportMIP;
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
@@ -31,7 +31,8 @@ void main()
     
     float b_val = texelFetch(boostrapImportMIP, ivec2(0), maximum_lod).x;
     b_val /= float(boostrap_buffer_size * boostrap_buffer_size);
-    b_val *= possible_depth_num;
+    // b_val *= possible_depth_num;
+    b_val *= 1;
 
     float r = imageLoad(atomicRGB, ivec3(pixel, 0)).x;
     float g = imageLoad(atomicRGB, ivec3(pixel, 1)).x;
@@ -43,10 +44,10 @@ void main()
     
     float mutationsPerPixel = float(accum_pass) * float(metroplis_buffer_width * metroplis_buffer_height) / float(resolution.x * resolution.y);
 
-    if(a != 0)
+    // if(a != 0)
         // pixelColor = vec3(r,g,b);
-        if(accum_pass > 0)
-            pixelColor = vec3(r,g,b) * b_val / mutationsPerPixel;
+    if(accum_pass > 0)
+        pixelColor = vec3(r,g,b) * b_val / mutationsPerPixel;
 
     imageStore(storageImage, pixel, vec4(pixelColor, 1.0));
 }

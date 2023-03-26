@@ -14,6 +14,8 @@ import SE.Core.Resource;
 import SE.RHI;
 import SE.GFX.Core;
 import SE.GFX.RDG;
+import SE.Core.IO;
+import SE.Platform.Socket;
 
 namespace SIByL
 {
@@ -30,7 +32,8 @@ namespace SIByL
 			combine_atomic_image_comp = GFX::GFXManager::get()->registerShaderModuleResource("../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/mmlt/mmlt_combine_atomic_comp.spv", { nullptr, RHI::ShaderStages::COMPUTE });
 			
 			mmlt_boostrap_rgen = GFX::GFXManager::get()->registerShaderModuleResource("../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/mmlt/mmlt_boostrap_pass_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
-			mmlt_metroplis_rgen = GFX::GFXManager::get()->registerShaderModuleResource("../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/mmlt/mmlt_metroplis_pass_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
+			mmlt_metroplis_rgen = GFX::GFXManager::get()->registerShaderModuleResource("../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/mmlt/mmlt_neural_metroplis_pass_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
+			//mmlt_metroplis_rgen = GFX::GFXManager::get()->registerShaderModuleResource("../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/mmlt/mmlt_metroplis_pass_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
 		}
 
 		Core::GUID vert_fullscreen_pass, frag_clear_atomic_image, combine_atomic_image_comp;
@@ -41,6 +44,7 @@ namespace SIByL
 		GFX::Texture* texture;
 
 		std::unique_ptr<RHI::Buffer> pss_sample_stream_buffer;
+		std::unique_ptr<RHI::Buffer> pss_neural_stream_buffer;
 		std::unique_ptr<RHI::Buffer> pss_sample_info_buffer;
 
 		std::unique_ptr<RHI::BindGroupLayout> set2_layout_rt = 0;
@@ -49,16 +53,28 @@ namespace SIByL
 
 		std::unique_ptr<RHI::Sampler> mipLodSampler;
 
+		Core::Buffer readbackPSSData;
+
+		Platform::Socket socket;
+
 		virtual auto registerPass(SRenderer* renderer) noexcept -> void override {
+			socket.bind_server(8888);
+			socket.connect();
 
 			texture_id = GFX::GFXManager::get()->registerTextureResource("./content/texture.jpg");
 			texture = Core::ResourceManager::get()->getResource<GFX::Texture>(texture_id);
 
 			RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
+			uint32_t pssDataSize = metroplis_buffer_width * metroplis_buffer_height * sizeof(float) * 4 * num_states_vec4;
 			pss_sample_stream_buffer = device->createBuffer(RHI::BufferDescriptor{
-				metroplis_buffer_width* metroplis_buffer_height * sizeof(float) * 4 * num_states_vec4,
-				(RHI::BufferUsagesFlags)RHI::BufferUsage::STORAGE
+				pssDataSize,
+				(RHI::BufferUsagesFlags)RHI::BufferUsage::STORAGE | (RHI::BufferUsagesFlags)RHI::BufferUsage::COPY_SRC
 				});
+			pss_neural_stream_buffer = device->createBuffer(RHI::BufferDescriptor{
+				pssDataSize,
+				(RHI::BufferUsagesFlags)RHI::BufferUsage::STORAGE | (RHI::BufferUsagesFlags)RHI::BufferUsage::COPY_DST
+				});
+			readbackPSSData = Core::Buffer(pssDataSize);
 			pss_sample_info_buffer = device->createBuffer(RHI::BufferDescriptor{
 				metroplis_buffer_width* metroplis_buffer_height * sizeof(float) * 8,
 				(RHI::BufferUsagesFlags)RHI::BufferUsage::STORAGE
@@ -116,8 +132,9 @@ namespace SIByL
 							RHI::BindGroupLayoutEntry{ 2, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::FRAGMENT, RHI::StorageTextureBindingLayout{}},
 							RHI::BindGroupLayoutEntry{ 3, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::FRAGMENT, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
 							RHI::BindGroupLayoutEntry{ 4, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::FRAGMENT, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
-							RHI::BindGroupLayoutEntry{ 5, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::FRAGMENT, RHI::BindlessTexturesBindingLayout{}},
+							RHI::BindGroupLayoutEntry{ 5, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::FRAGMENT, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
 							RHI::BindGroupLayoutEntry{ 6, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::FRAGMENT, RHI::BindlessTexturesBindingLayout{}},
+							RHI::BindGroupLayoutEntry{ 7, (uint32_t)RHI::ShaderStages::RAYGEN | (uint32_t)RHI::ShaderStages::COMPUTE | (uint32_t)RHI::ShaderStages::FRAGMENT, RHI::BindlessTexturesBindingLayout{}},
 							} });
 
 					for (int i = 0; i < MULTIFRAME_FLIGHTS_COUNT; ++i) {
@@ -129,11 +146,12 @@ namespace SIByL
 								{2,RHI::BindingResource{rdg->getTexture("boostrapLuminance")->texture->originalView.get()}},
 								{3,RHI::BindingResource{RHI::BufferBinding{pss_sample_stream_buffer.get(), 0, pss_sample_stream_buffer->size()}}},
 								{4,RHI::BindingResource{RHI::BufferBinding{pss_sample_info_buffer.get(), 0, pss_sample_info_buffer->size()}}},
-								{5,RHI::BindingResource(
+								{5,RHI::BindingResource{RHI::BufferBinding{pss_neural_stream_buffer.get(), 0, pss_neural_stream_buffer->size()}}},
+								{6,RHI::BindingResource(
 									std::vector<RHI::TextureView*>{rdg->getTexture("boostrapLuminance")->texture->getSRV(0,10,0,1)},
 									mipLodSampler.get())
 									},
-								{6,RHI::BindingResource(
+								{7,RHI::BindingResource(
 									std::vector<RHI::TextureView*>{texture->getSRV(0,1,0,1)},
 									Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler.get())
 									},
@@ -232,12 +250,23 @@ namespace SIByL
 						combineRenderPassDescriptor = combineRenderPassDescriptor,
 						pSumUpMipCreateSubpass = &sumUpMipCreateSubpass,
 						ppss_sample_stream_buffer = pss_sample_stream_buffer.get(),
-						ppss_sample_info_buffer = pss_sample_info_buffer.get()
+						pss_neural_stream_buffer = pss_neural_stream_buffer.get(),
+						ppss_sample_info_buffer = pss_sample_info_buffer.get(),
+						readbackPSSData = &readbackPSSData,
+						device = device,
+						socket = &socket
 				](GFX::RDGRegistry const& registry, RHI::CommandEncoder* cmdEncoder) mutable ->void {
 						uint32_t index = multiFrameFlights->getFlightIndex();
 
 						static uint32_t timestamp = 0;
 
+						if (renderer->state.batchIdx >= possible_depth_num) {
+							device->readbackDeviceLocalBuffer(ppss_sample_stream_buffer, readbackPSSData->data, readbackPSSData->size);
+							//Core::syncWriteFile("P:/GitProjects/DistributionSurvey/mlt_data/raw_" + std::to_string(renderer->state.batchIdx) + ".dat", *readbackPSSData);						
+							socket->send(*readbackPSSData);
+							socket->recv(*readbackPSSData);
+							device->writebackDeviceLocalBuffer(pss_neural_stream_buffer, readbackPSSData->data, readbackPSSData->size);
+						}
 						if (renderer->state.batchIdx == 0)
 						{	
 							cmdEncoder->pipelineBarrier(RHI::BarrierDescriptor{
@@ -371,6 +400,7 @@ namespace SIByL
 									RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL
 								}}
 								});
+
 							// barriers boostrap-pass <---> metro-pass 
 							cmdEncoder->pipelineBarrier(RHI::BarrierDescriptor{
 								(uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR,

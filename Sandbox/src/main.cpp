@@ -27,6 +27,7 @@ import SE.Math.Geometric;
 
 import SE.Platform.Window;
 import SE.Platform.Misc;
+import SE.Platform.Socket;
 import SE.Image;
 import SE.RHI;
 import SE.Parallelism;
@@ -47,7 +48,8 @@ using namespace SIByL::Core;
 using namespace SIByL::Math;
 
 
-struct SandBoxApplication :public Application::ApplicationBase {	
+struct SandBoxApplication :public Application::ApplicationBase {
+
 	/** Initialize the application */
 	virtual auto Init() noexcept -> void override {
 		// create optional layers: rhi, imgui, editor
@@ -261,7 +263,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			Editor::TextureUtils::getImGuiTexture(rdg->getTexture("TracerTarget_Color")->guid)->getTextureID(),
 			{ (float)width,(float)height },
 			{ 0,0 }, { 1, 1 });
-		if (ImGui::Button("Capture", { 200,100 })) {
+		if (ImGui::Button("Capture", { 200,100 }) || srenderer->state.batchIdx == int(2000)) {
 			captureImage(rdg->getTexture("TracerTarget_Color")->guid);
 		}
 		ImGui::End();

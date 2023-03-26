@@ -110,13 +110,13 @@ int mutation_v0(
     }
     else { // use small step mutation
         for(int i=0; i<num_states_vec4; ++i) {
-            if (i==offset_camera_subpath) { // special handling camera
-                sample_streams[i].x = perturbFloat(input_streams[i].x, rPixel, 0.1, RNG);
-                sample_streams[i].y = perturbFloat(input_streams[i].y, rPixel, 0.1, RNG);
-                sample_streams[i].z = perturbFloat(input_streams[i].z, rUnifm, 1.0 / 64.0, RNG);
-                sample_streams[i].w = perturbFloat(input_streams[i].w, rUnifm, 1.0 / 64.0, RNG);
-            }
-            else
+            // if (i==offset_camera_subpath) { // special handling camera
+            //     sample_streams[i].x = perturbFloat(input_streams[i].x, rPixel, 0.1, RNG);
+            //     sample_streams[i].y = perturbFloat(input_streams[i].y, rPixel, 0.1, RNG);
+            //     sample_streams[i].z = perturbFloat(input_streams[i].z, rUnifm, 1.0 / 64.0, RNG);
+            //     sample_streams[i].w = perturbFloat(input_streams[i].w, rUnifm, 1.0 / 64.0, RNG);
+            // }
+            // else
                 sample_streams[i] = perturbVec4(input_streams[i], rUnifm, 1.0 / 64.0, RNG);
         }
         return 0;

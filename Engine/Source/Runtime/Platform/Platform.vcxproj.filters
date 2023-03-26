@@ -42,5 +42,11 @@
     <ClCompile Include="Public\Misc\SE.Platform.Misc.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Socket\SE.Platform.Socket.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Socket\SE.Platform.Socket-Win64.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

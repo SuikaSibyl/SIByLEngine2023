@@ -18,8 +18,8 @@ SceneNodes:
     components:
       TagComponent: Camera Object
       Transform:
-        translation: [4.12009382, 3.15441155, 2.23824]
-        eulerAngles: [-0.54348135, 22.7770042, 0]
+        translation: [6.20367241, 1.87945831, 1.62335324]
+        eulerAngles: [-0.147938669, 22.2239513, 0]
         scale: [1, 1, 1]
       CameraComponent:
         fovy: 60
@@ -46,9 +46,9 @@ SceneNodes:
     components:
       TagComponent: sphere.obj
       Transform:
-        translation: [0.699999988, 7, -0.200000003]
+        translation: [0.699999988, 20.7000008, -0.200000003]
         eulerAngles: [0, 0, 0]
-        scale: [0.5, 0.5, 0.5]
+        scale: [1, 1, 1]
       MeshReference:
         ORID: 1658456763119287132
         CPF: 1
@@ -56,36 +56,32 @@ SceneNodes:
         - ORID: 1658390946990111580
       LightComponent:
         Type: 0
-        Intensity: [200, 200, 200]
+        Intensity: [500, 500, 500]
         Texture: 18446744073709551615
   - uid: 4
     parent: 18446744073709551615
     components:
-      TagComponent: plane.obj
+      TagComponent: EnvMap
       Transform:
-        translation: [2.5, 1.29999995, -2.0999999]
-        eulerAngles: [0, -1.29999995, -1.60000002]
-        scale: [3.29999995, 3, 1.10000002]
-      MeshReference:
-        ORID: 1659681347952819036
-        CPF: 0
-      MeshRendererComponent:
-        - ORID: 1658390946990111580
+        translation: [0, 0, 0]
+        eulerAngles: [0, 0, 0]
+        scale: [1, 1, 1]
       LightComponent:
-        Type: 0
-        Intensity: [2, 2, 10]
+        Type: 1
+        Intensity: [1, 1, 1]
+        Texture: 1662607019696307036
         Texture: 18446744073709551615
   - uid: 5
     parent: 18446744073709551615
     components:
-      TagComponent: bunny.obj
+      TagComponent: glass_ball
       Transform:
-        translation: [2.20000005, 0, -0.200000003]
-        eulerAngles: [0, -0.800000012, 0]
-        scale: [0.5, 0.5, 0.5]
+        translation: [2.0999999, 1, 0]
+        eulerAngles: [0, 0, 0]
+        scale: [0.800000012, 0.800000012, 0.800000012]
       MeshReference:
-        ORID: 1669759969061354332
-        CPF: 0
+        ORID: 1658456763119287132
+        CPF: 1
       MeshRendererComponent:
-        - ORID: 1668519494341999452
+        - ORID: 1658390946990111580
 SceneEnd: TRUE

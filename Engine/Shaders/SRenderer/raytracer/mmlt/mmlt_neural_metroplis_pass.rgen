@@ -57,47 +57,6 @@ void mutation(
     }
 }
 
-// vec2 sampleBoostrapSample(inout uint RNG, out float pdf) {
-//     int mip_level = maximum_lod;
-//     vec2 uv = vec2(0.5, 0.5);
-//     float parent_importance = textureLod(boostrapImportMIP, uv, mip_level).x;
-    
-//     vec2 four_neighbors[4];
-//     four_neighbors[0] = vec2(-1., +1.);
-//     four_neighbors[1] = vec2(+1., +1.);
-//     four_neighbors[2] = vec2(+1., -1.);
-//     four_neighbors[3] = vec2(-1., -1.);
-
-//     float p = 1.f;
-//     float pixel_size = 1. / 2;
-    
-//     for (int i = 0; i < maximum_lod; ++i) {
-//         pixel_size /= 2;    // half pixel size
-//         mip_level--; // next mip level
-//         // sample next level
-//         float rnd = UniformFloat(RNG);
-//         float accum = 0.f;
-//         for (int j=0; j<4; ++j) {
-//             vec2 uv_offset = four_neighbors[j] * pixel_size;
-//             if(j==3) {
-//                 uv = uv + uv_offset;
-//                 p = p * (1 - accum);
-//                 break;
-//             }
-//             float importance = textureLod(boostrapImportMIP, uv + uv_offset, mip_level).x;
-//             float nimportance = importance / parent_importance;
-//             accum += nimportance;
-//             if(rnd < accum) {
-//                 uv = uv + uv_offset;
-//                 p = p * nimportance;
-//                 parent_importance = importance;
-//                 break;
-//             }
-//         }
-//     }
-//     return uv;
-// }
-
 ivec2 sampleBoostrapSample(inout uint RNG, out float pdf) {
     int mip_level = maximum_lod;
     ivec2 xy = ivec2(0, 0);
@@ -207,9 +166,9 @@ void main() {
         int  depth    = sampleInfo.depth;
         // create mutated sample stream by mutation
         vec4 sample_streams[num_states_vec4];
-        // mutation(leaded_streams, sample_streams, RNG);
-        mutation_v0(leaded_streams, sample_streams, resolution, RNG);
-        
+        for(int i=0; i<num_states_vec4; ++i)
+            sample_streams[i] = neuralStreams[lid.x][lid.y][i];
+
         // sample
         vec2 pProposed;
         vec3 LProposed = L(depth, resolution, pProposed, sample_streams);
@@ -220,12 +179,13 @@ void main() {
         // Splat both current and proposed samples to film
         if (accept > 0)
             if(insideExclusive(ivec2(pProposed), resolution))    
-                addSplat(pProposed, vec4(LProposed * accept / y_LProposed, 1));
+                addSplat(pProposed, vec4(LProposed * accept / y_LProposed, 0));
         if(insideExclusive(ivec2(pCurrent), resolution))    
-            addSplat(pCurrent, vec4(LCurrent * (1 - accept) / y_LCurrent, 1));
-
+            addSplat(pCurrent, vec4(LCurrent * (1 - accept) / y_LCurrent, 0));
+            
         // Accept or reject the proposal
         if (UniformFloat(RNG) < accept) {
+            imageAtomicAdd(atomicRGB, ivec3(lid, 3), 1);
             // accept
             sampleInfo.pCurrent = pProposed;
             sampleInfo.LCurrent = LProposed;

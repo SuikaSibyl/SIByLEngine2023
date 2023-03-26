@@ -8,7 +8,7 @@ const int max_depth          = max_events-2;    // 2, 3, ..., max_events
 
 // mutation setting
 const float sigma = 0.02;
-const float large_step_probability = 0.3;
+const float large_step_probability = 0.0;
 
 // boostrap setting
 const int boostrap_buffer_size  = 512;

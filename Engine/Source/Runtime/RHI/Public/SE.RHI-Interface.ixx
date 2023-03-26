@@ -236,6 +236,8 @@ namespace SIByL::RHI
 		auto createDeviceLocalBuffer(void* data, uint32_t size, BufferUsagesFlags usage) noexcept -> std::unique_ptr<Buffer>;
 		/** read back device local buffer */
 		auto readbackDeviceLocalBuffer(Buffer* buffer, void* data, uint32_t size) noexcept -> void;
+		/** write back device local buffer */
+		auto writebackDeviceLocalBuffer(Buffer* buffer, void* data, uint32_t size) noexcept -> void;
 		/** read back device local texture */
 		auto readbackDeviceLocalTexture(Texture* texture, void* data, uint32_t size) noexcept -> void;
 	};
@@ -2201,6 +2203,17 @@ namespace SIByL::RHI
 		std::unique_ptr<RHI::Buffer> stagingBuffer = createBuffer(stagingBufferDescriptor);
 		// copy buffer
 		std::unique_ptr<RHI::CommandEncoder> commandEncoder = createCommandEncoder({ nullptr });
+		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+			(uint32_t)RHI::PipelineStages::ALL_COMMANDS_BIT,
+			(uint32_t)RHI::PipelineStages::TRANSFER_BIT,
+			(uint32_t)RHI::DependencyType::NONE,
+			{}, { RHI::BufferMemoryBarrierDescriptor{
+					buffer,
+					(uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
+					(uint32_t)RHI::AccessFlagBits::TRANSFER_READ_BIT,
+				}
+			}
+		});
 		commandEncoder->copyBufferToBuffer(buffer, 0, stagingBuffer.get(), 0, buffer->size());
 		getGraphicsQueue()->submit({ commandEncoder->finish({}) });
 		getGraphicsQueue()->waitIdle();
@@ -2211,6 +2224,41 @@ namespace SIByL::RHI
 			memcpy(data, mapdata, (size_t)buffer->size());
 			stagingBuffer->unmap();
 		}
+	}
+	
+	auto Device::writebackDeviceLocalBuffer(Buffer* buffer, void* data, uint32_t size) noexcept -> void {
+		// create staging buffer
+		RHI::BufferDescriptor stagingBufferDescriptor;
+		stagingBufferDescriptor.size = size;
+		stagingBufferDescriptor.usage = (uint32_t)RHI::BufferUsage::COPY_SRC;
+		stagingBufferDescriptor.memoryProperties = 
+			(uint32_t)RHI::MemoryProperty::HOST_VISIBLE_BIT
+			| (uint32_t)RHI::MemoryProperty::HOST_COHERENT_BIT;
+		stagingBufferDescriptor.mappedAtCreation = true;
+		std::unique_ptr<RHI::Buffer> stagingBuffer = createBuffer(stagingBufferDescriptor);
+		// staging buffer writeback
+		std::future<bool> mapped = stagingBuffer->mapAsync(0, 0, buffer->size());
+		if (mapped.get()) {
+			void* mapdata = stagingBuffer->getMappedRange(0, buffer->size());
+			memcpy(mapdata, data, (size_t)buffer->size());
+			stagingBuffer->unmap();
+		}
+		// copy buffer
+		std::unique_ptr<RHI::CommandEncoder> commandEncoder = createCommandEncoder({ nullptr });
+		commandEncoder->copyBufferToBuffer(stagingBuffer.get(), 0, buffer, 0, buffer->size());
+		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+			(uint32_t)RHI::PipelineStages::TRANSFER_BIT,
+			(uint32_t)RHI::PipelineStages::ALL_COMMANDS_BIT,
+			(uint32_t)RHI::DependencyType::NONE,
+			{}, { RHI::BufferMemoryBarrierDescriptor{
+					buffer,
+					(uint32_t)RHI::AccessFlagBits::TRANSFER_WRITE_BIT,
+					(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT | (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
+				}
+			}
+		});
+		getGraphicsQueue()->submit({ commandEncoder->finish({}) });
+		getGraphicsQueue()->waitIdle();
 	}
 
 	auto Device::readbackDeviceLocalTexture(Texture* texture, void* data, uint32_t size) noexcept -> void {

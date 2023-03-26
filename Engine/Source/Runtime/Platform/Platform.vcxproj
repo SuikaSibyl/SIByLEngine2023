@@ -144,6 +144,8 @@
     <ClCompile Include="Private\Window\SE.Platform.Window-Window.cpp" />
     <ClCompile Include="Public\Misc\SE.Platform.Misc.ixx" />
     <ClCompile Include="Public\Misc\SE.Platform.Misc-Func.Win64.ixx" />
+    <ClCompile Include="Public\Socket\SE.Platform.Socket-Win64.ixx" />
+    <ClCompile Include="Public\Socket\SE.Platform.Socket.ixx" />
     <ClCompile Include="Public\Window\SE.Platform.Window-GLFW.ixx" />
     <ClCompile Include="Public\Window\SE.Platform.Window-Win64.ixx" />
     <ClCompile Include="Public\Window\SE.Platform.Window-Window.ixx" />
