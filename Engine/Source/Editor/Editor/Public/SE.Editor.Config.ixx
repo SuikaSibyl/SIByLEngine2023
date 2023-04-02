@@ -17,6 +17,7 @@ namespace SIByL::Editor
 			layer->registerWidget<Editor::InspectorWidget>();
 			layer->registerWidget<Editor::ContentWidget>();
 			layer->registerWidget<Editor::LogWidget>();
+			layer->registerWidget<Editor::ViewportWidget>();
 
 			layer->getWidget<Editor::SceneWidget>()->bindScene(nullptr);
 			layer->getWidget<Editor::SceneWidget>()->inspectorWidget = layer->getWidget<Editor::InspectorWidget>();

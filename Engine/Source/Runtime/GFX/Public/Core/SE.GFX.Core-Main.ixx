@@ -17,6 +17,7 @@ module;
 export module SE.GFX.Core:Main;
 import :SerializeUtils;
 import :GFXConfig;
+import :ShaderLoader;
 import SE.Core.IO;
 import SE.Core.Log;
 import SE.Core.ECS;
@@ -91,6 +92,8 @@ namespace SIByL::GFX
 	export struct ShaderModule :public Core::Resource {
 		/** rhi shader module */
 		std::unique_ptr<RHI::ShaderModule> shaderModule = nullptr;
+		/** reflection Information of the shader module */
+		ShaderReflection reflection;
 		/** get name */
 		virtual auto getName() const noexcept -> char const* { return shaderModule->getName().c_str(); }
 	};
@@ -1635,6 +1638,7 @@ namespace SIByL::GFX
 	auto GFXManager::registerShaderModuleResource(Core::GUID guid, RHI::ShaderModuleDescriptor const& desc) noexcept -> void {
 		GFX::ShaderModule shaderModuleResource = {};
 		shaderModuleResource.shaderModule = rhiLayer->getDevice()->createShaderModule(desc);
+		shaderModuleResource.reflection = SPIRV_TO_Reflection(desc.code, desc.stage);
 		Core::ResourceManager::get()->addResource(guid, std::move(shaderModuleResource));
 	}
 
@@ -1645,6 +1649,7 @@ namespace SIByL::GFX
 		smDesc.code = &buffer;
 		GFX::ShaderModule shaderModuleResource = {};
 		shaderModuleResource.shaderModule = rhiLayer->getDevice()->createShaderModule(smDesc);
+		shaderModuleResource.reflection = SPIRV_TO_Reflection(smDesc.code, smDesc.stage);
 		Core::ResourceManager::get()->addResource(guid, std::move(shaderModuleResource));
 	}
 

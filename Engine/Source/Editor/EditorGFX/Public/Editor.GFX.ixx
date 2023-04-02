@@ -13,5 +13,6 @@ export import :ResourceViewer;
 export import :ContentWidget;
 export import :TextureFragment;
 export import :LogWidget;
+export import :Viewport;
 // Script
 export import :CameraController;

@@ -36,5 +36,8 @@
     <ClCompile Include="Public\Core\SE.GFX.Core-Main.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Core\SE.GFX.Core-Loader.ShaderLoader.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

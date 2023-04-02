@@ -33,6 +33,8 @@ namespace SIByL::Core
 		inline auto warning(std::string const& s) noexcept -> void;
 		/** predefined log type, use red color */
 		inline auto error(std::string const& s) noexcept -> void;
+		/** predefined log type, use custom color */
+		inline auto correct(std::string const& s) noexcept -> void;
 		/** stream for the logger */
 		LogStream stream;
 	};
@@ -70,6 +72,12 @@ namespace SIByL::Core
 	inline auto Logger::error(std::string const& s) noexcept -> void {
 		auto& stream = beginLog(LogStream::red);
 		stream << LogStream::red << s.c_str() << LogStream::white;
+		flushLog();
+	}
+
+	inline auto Logger::correct(std::string const& s) noexcept -> void {
+		auto& stream = beginLog(LogStream::green);
+		stream << LogStream::green << s.c_str() << LogStream::white;
 		flushLog();
 	}
 

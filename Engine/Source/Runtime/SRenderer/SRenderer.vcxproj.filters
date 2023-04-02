@@ -51,5 +51,35 @@
     <ClCompile Include="Public\Utils\SE.SRenderer-RTCommon.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Passes\RayTracingPasses\SE.SRenderer-UDPTPass.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Passes\RayTracingPasses\SE.SRenderer-MMLTPass.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-SumPoolingR32.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Utils\SE.SRenderer-FullScreenPass.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Graph\SE.SRendere-ForwardPipeline.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-AlbedoPass.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Utils\SE.SRenderer-RACommon.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-PreZPass.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Graph\SE.SRendere-MMLTPipeline.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-ACEsPass.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

@@ -57,6 +57,7 @@
     <ClCompile Include="Public\System\SE.Core.System-Layer.ixx" />
     <ClCompile Include="Public\System\SE.Core.System-Manager.ixx" />
     <ClCompile Include="Public\System\SE.Core.System.ixx" />
+    <ClCompile Include="Public\UnitTest\SE.Core.UnitTest.ixx" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\ThirdParty\yaml\yaml.vcxproj">

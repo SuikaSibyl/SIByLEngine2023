@@ -10,5 +10,6 @@ export import :PPM;
 export import :PNG;
 export import :JPEG;
 export import :HDR;
+export import :BMP;
 // Loader
 export import :Loader;

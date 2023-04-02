@@ -49,6 +49,21 @@ void oneStrategy(
 
 }
 
+void oneDepth(
+    inout BDPTPath cameraSubpath,
+    inout BDPTPath lightSubpath,
+    in const int depth,
+    in const int nLight,
+    in const int nCamera,
+    inout vec3 L,
+    inout uint RNG,
+    in const ivec2 resolution
+) {
+    for(int i=0; i<depth; ++i)
+        oneStrategy(cameraSubpath, lightSubpath, i, depth-1, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 1, depth-1, nLight, nCamera, L, RNG, resolution);
+}
+
 void main() {
     // The resolution of the image, which is the same as the launch size:
     const ivec2 resolution = ivec2(pushConstants.resolution);
@@ -76,6 +91,15 @@ void main() {
     // 2. Execute all BDPT connection strategies
     vec3 L = vec3(0.f);
 
+    // oneStrategy(cameraSubpath, lightSubpath, 0, 2, nLight, nCamera, L, RNG, resolution);
+    // oneDepth(cameraSubpath, lightSubpath, 3, nLight, nCamera, L, RNG, resolution);
+    // oneDepth(cameraSubpath, lightSubpath, 4, nLight, nCamera, L, RNG, resolution);
+    // oneDepth(cameraSubpath, lightSubpath, 5, nLight, nCamera, L, RNG, resolution);
+    // oneDepth(cameraSubpath, lightSubpath, 6, nLight, nCamera, L, RNG, resolution);
+    // oneDepth(cameraSubpath, lightSubpath, 7, nLight, nCamera, L, RNG, resolution);
+    // oneDepth(cameraSubpath, lightSubpath, 8, nLight, nCamera, L, RNG, resolution);
+    // oneDepth(cameraSubpath, lightSubpath, 9, nLight, nCamera, L, RNG, resolution);
+
     oneStrategy(cameraSubpath, lightSubpath, 0, 2, nLight, nCamera, L, RNG, resolution);
 
     oneStrategy(cameraSubpath, lightSubpath, 0, 3, nLight, nCamera, L, RNG, resolution);
@@ -87,11 +111,45 @@ void main() {
     oneStrategy(cameraSubpath, lightSubpath, 2, 2, nLight, nCamera, L, RNG, resolution);
     oneStrategy(cameraSubpath, lightSubpath, 3, 1, nLight, nCamera, L, RNG, resolution);
 
-    oneStrategy(cameraSubpath, lightSubpath, 0, 5, nLight, nCamera, L, RNG, resolution);
-    oneStrategy(cameraSubpath, lightSubpath, 1, 4, nLight, nCamera, L, RNG, resolution);
-    oneStrategy(cameraSubpath, lightSubpath, 2, 3, nLight, nCamera, L, RNG, resolution);
-    oneStrategy(cameraSubpath, lightSubpath, 3, 2, nLight, nCamera, L, RNG, resolution);
-    oneStrategy(cameraSubpath, lightSubpath, 4, 1, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 0, 5, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 1, 4, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 2, 3, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 3, 2, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 4, 1, nLight, nCamera, L, RNG, resolution);
     
+    // oneStrategy(cameraSubpath, lightSubpath, 0, 6, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 1, 5, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 2, 4, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 3, 3, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 4, 2, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 5, 1, nLight, nCamera, L, RNG, resolution);
+    
+    // oneStrategy(cameraSubpath, lightSubpath, 0, 7, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 1, 6, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 2, 5, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 3, 4, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 4, 3, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 5, 2, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 6, 1, nLight, nCamera, L, RNG, resolution);
+
+    // oneStrategy(cameraSubpath, lightSubpath, 0, 8, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 1, 7, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 2, 6, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 3, 5, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 4, 4, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 5, 3, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 6, 2, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 7, 1, nLight, nCamera, L, RNG, resolution);
+
+    // oneStrategy(cameraSubpath, lightSubpath, 0, 9, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 1, 8, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 2, 7, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 3, 6, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 4, 5, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 5, 4, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 6, 3, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 7, 2, nLight, nCamera, L, RNG, resolution);
+    // oneStrategy(cameraSubpath, lightSubpath, 8, 1, nLight, nCamera, L, RNG, resolution);
+
     addSplat(pixel, vec4(L, 1));
 }

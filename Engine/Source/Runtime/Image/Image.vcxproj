@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Public\Color\SE.Image-Color.ixx" />
+    <ClCompile Include="Public\FileFormat\SE.Image-FileFormat.BMP.ixx" />
     <ClCompile Include="Public\FileFormat\SE.Image-FileFormat.HDR.ixx" />
     <ClCompile Include="Public\FileFormat\SE.Image-FileFormat.JPEG.ixx" />
     <ClCompile Include="Public\FileFormat\SE.Image-FileFormat.PFM.ixx" />

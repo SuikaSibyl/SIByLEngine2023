@@ -73,12 +73,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\tinyobjloader;$(SolutionDir)Engine\Source\ThirdParty\tinygltf\include;$(SolutionDir)Engine\Source\ThirdParty\yaml\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\tinyobjloader;$(SolutionDir)Engine\Source\ThirdParty\tinygltf\include;$(SolutionDir)Engine\Source\ThirdParty\yaml\include;$(SolutionDir)Engine\Source\ThirdParty\spirvcross\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\tinyobjloader;$(SolutionDir)Engine\Source\ThirdParty\tinygltf\include;$(SolutionDir)Engine\Source\ThirdParty\yaml\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\tinyobjloader;$(SolutionDir)Engine\Source\ThirdParty\tinygltf\include;$(SolutionDir)Engine\Source\ThirdParty\yaml\include;$(SolutionDir)Engine\Source\ThirdParty\spirvcross\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -160,6 +160,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Public\Core\SE.GFX.Core-GFXConfig.ixx" />
+    <ClCompile Include="Public\Core\SE.GFX.Core-Loader.ShaderLoader.ixx" />
     <ClCompile Include="Public\Core\SE.GFX.Core-Main.ixx" />
     <ClCompile Include="Public\RDG\SE.GFX.RDG.ixx" />
     <ClCompile Include="Public\Core\SE.GFX.Core-Loader.MeshLoader.ixx" />

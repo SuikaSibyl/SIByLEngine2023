@@ -440,6 +440,20 @@ namespace SIByL::RHI
 		DEPTH32STENCIL8,
 	};
 
+	export inline auto hasDepthBit(TextureFormat format) noexcept -> bool {
+		return format == TextureFormat::DEPTH16_UNORM
+			|| format == TextureFormat::DEPTH24
+			|| format == TextureFormat::DEPTH24STENCIL8
+			|| format == TextureFormat::DEPTH32_FLOAT
+			|| format == TextureFormat::DEPTH32STENCIL8;
+	}
+
+	export inline auto hasStencilBit(TextureFormat format) noexcept -> bool {
+		return format == TextureFormat::STENCIL8
+			|| format == TextureFormat::DEPTH24STENCIL8
+			|| format == TextureFormat::DEPTH32STENCIL8;
+	}
+
 	/** Determine how a Texture may be used after its creation. */
 	export using TextureUsagesFlags = uint32_t;
 	/** Determine how a Texture may be used after its creation. */
@@ -1247,6 +1261,11 @@ namespace SIByL::RHI
 	*/
 	export struct CommandsMixin {};
 
+	export struct DebugUtilLabelDescriptor {
+		std::string name;
+		float color[4];
+	};
+
 	export struct CommandEncoder {
 		/** virtual descructor */
 		virtual ~CommandEncoder() = default;
@@ -1307,6 +1326,10 @@ namespace SIByL::RHI
 		virtual auto updateBLAS(BLAS* src, Buffer* vertexBuffer, Buffer* indexBuffer) noexcept -> void = 0;
 		/** Completes recording of the commands sequence and returns a corresponding GPUCommandBuffer. */
 		virtual auto finish(std::optional<CommandBufferDescriptor> const& descriptor = {}) noexcept -> CommandBuffer* = 0;
+		/** begin Debug marker region */
+		virtual auto beginDebugUtilsLabelEXT(DebugUtilLabelDescriptor const& desc) noexcept -> void = 0;
+		/** end Debug marker region */
+		virtual auto endDebugUtilsLabelEXT() noexcept -> void = 0;
 	};
 
 	export struct CommandEncoderDescriptor {

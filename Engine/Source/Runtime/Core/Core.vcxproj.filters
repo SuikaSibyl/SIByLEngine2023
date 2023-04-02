@@ -129,5 +129,8 @@
     <ClCompile Include="Public\Misc\SE.Core.Misc.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\UnitTest\SE.Core.UnitTest.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

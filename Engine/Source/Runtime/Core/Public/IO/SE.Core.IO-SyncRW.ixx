@@ -1,4 +1,5 @@
 module;
+#include <vector>
 #include <format>
 #include <filesystem>
 #include <fstream>
@@ -31,6 +32,19 @@ namespace SIByL::Core
 		std::ofstream ofs(path.string().c_str(), std::ios::out | std::ios::binary);
 		if (ofs.is_open()) {
 			ofs.write((char*)buffer.data, buffer.size);
+			ofs.close();
+		}
+		else {
+			LogManager::Error(std::format("Core.IO:SyncRW::syncWriteFile() failed, file \'{}\' open failed.", path.string().c_str()));
+		}
+		return false;
+	}
+
+	export inline auto syncWriteFile(filepath const& path, std::vector<Buffer*> const& buffers) noexcept -> bool {
+		std::ofstream ofs(path.string().c_str(), std::ios::out | std::ios::binary);
+		if (ofs.is_open()) {
+			for (auto* buffer : buffers)
+				ofs.write((char*)buffer->data, buffer->size);
 			ofs.close();
 		}
 		else {

@@ -147,6 +147,7 @@
     <ClCompile Include="Public\Editor.GFX-ResourceViewer.ixx" />
     <ClCompile Include="Public\Editor.GFX-SceneWidget.ixx" />
     <ClCompile Include="Public\Editor.GFX-TextureFragment.ixx" />
+    <ClCompile Include="Public\Editor.GFX-Viewport.ixx" />
     <ClCompile Include="Public\Editor.GFX.ixx" />
     <ClCompile Include="Public\Editor.GFX-Editor.Utils.ixx" />
   </ItemGroup>

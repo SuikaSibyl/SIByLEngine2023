@@ -15,6 +15,7 @@ import SE.Math.Misc;
 import SE.RHI;
 import SE.GFX.Core;
 import SE.GFX.RDG;
+import SE.RDG;
 
 namespace SIByL
 {
@@ -244,6 +245,8 @@ namespace SIByL
 		inline auto packScene(GFX::Scene& scene) noexcept -> void;
 		/** update main camera for the scene */
 		inline auto updateCamera(GFX::TransformComponent const& transform, GFX::CameraComponent const& camera) noexcept -> void;
+		/** update render data for the graph */
+		inline auto updateRDGData(RDG::Graph* graph) noexcept -> void;
 
 		struct {
 			uint32_t width = 800;
@@ -281,6 +284,7 @@ namespace SIByL
 		*/
 		struct CommonDescriptorData {
 			std::unique_ptr<RHI::BindGroupLayout> set0_layout = 0;
+			std::array<std::vector<RHI::BindGroupEntry>, MULTIFRAME_FLIGHTS_COUNT> set0_flights_resources = {};
 			std::array<std::unique_ptr<RHI::BindGroup>, MULTIFRAME_FLIGHTS_COUNT> set0_flights = {};
 			std::array<RHI::BindGroup*, MULTIFRAME_FLIGHTS_COUNT> set0_flights_array = {};
 			// set 1 for ray tracing
@@ -637,7 +641,6 @@ namespace SIByL
 			(uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS
 			| (uint32_t)RHI::BufferUsage::STORAGE);
 
-
 		RHI::MultiFrameFlights* multiFrameFlights = GFX::GFXManager::get()->rhiLayer->getMultiFrameFlights();
 		uint32_t fid = multiFrameFlights->getFlightIndex();
 		
@@ -647,6 +650,9 @@ namespace SIByL
 		commonDescData.set0_flights[fid]->updateBinding(std::vector<RHI::BindGroupEntry>{
 			{5, RHI::BindingResource{ {sceneDataPack.light_buffer.get(), 0, sceneDataPack.light_buffer->size()} }},
 		});
+		// TODO
+		//commonDescData.set0_flights_resources[fid][0] = { 0, RHI::BindingResource{ sceneDataPack.tlas.get() } };
+		commonDescData.set0_flights_resources[fid][5] = { 5, RHI::BindingResource{ {sceneDataPack.light_buffer.get(), 0, sceneDataPack.light_buffer->size()} } };
 		
 		rdgraph->getStructuredUniformBuffer<SceneInfoUniforms>("scene_info_buffer")->setStructure(sceneDataPack.sceneInfoUniform, fid);
 
@@ -982,9 +988,7 @@ namespace SIByL
 			rdgraph->addBehavior([&, device]()->void {
 				// rebuild all bind groups
 				for (int i = 0; i < 2; ++i) {
-					commonDescData.set0_flights[i] = device->createBindGroup(RHI::BindGroupDescriptor{
-						commonDescData.set0_layout.get(),
-						std::vector<RHI::BindGroupEntry>{
+					commonDescData.set0_flights_resources[i] = std::vector<RHI::BindGroupEntry>{
 							{0,RHI::BindingResource{rdgraph->getStructuredUniformBuffer<GlobalUniforms>("global_uniform_buffer")->getBufferBinding(i)}},
 							{1,RHI::BindingResource{{sceneDataPack.vertex_buffer.get(), 0, sceneDataPack.vertex_buffer->size()}}},
 							{2,RHI::BindingResource{{sceneDataPack.index_buffer.get(), 0, sceneDataPack.index_buffer->size()}}},
@@ -995,7 +999,10 @@ namespace SIByL
 							{7,RHI::BindingResource{rdgraph->getStructuredUniformBuffer<SceneInfoUniforms>("scene_info_buffer")->getBufferBinding(i)}},
 							{8,RHI::BindingResource{sceneDataPack.unbinded_textures,
 								Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler.get()}},
-					} });
+					};
+					commonDescData.set0_flights[i] = device->createBindGroup(RHI::BindGroupDescriptor{
+						commonDescData.set0_layout.get(),
+						commonDescData.set0_flights_resources[i] });
 					commonDescData.set0_flights_array[i] = commonDescData.set0_flights[i].get();
 				}
 				}, GFX::RDGraph::BehaviorPhase::AfterDevirtualize_BeforePassSetup);
@@ -1081,6 +1088,26 @@ namespace SIByL
 			state.batchIdx = 0;
 		globalUniRecord = globalUni;
 		rdgraph->getStructuredUniformBuffer<GlobalUniforms>("global_uniform_buffer")->setStructure(globalUni, multiFrameFlights->getFlightIndex());
+	}
+
+	inline auto SRenderer::updateRDGData(RDG::Graph* graph) noexcept -> void {
+		uint32_t flightIdx = GFX::GFXManager::get()->rhiLayer->getMultiFrameFlights()->getFlightIndex();
+		graph->renderData.setBindGroupEntries("CommonScene", &(commonDescData.set0_flights_resources[flightIdx]));
+
+		graph->renderData.setDelegate("IssueAllDrawcalls", [&, flightIdx = flightIdx](RDG::RenderData::DelegateData const& data) {
+			if (sceneDataPack.geometry_buffer_cpu.size() > 0) {
+				data.passEncoder.render->setIndexBuffer(sceneDataPack.index_buffer.get(),
+					RHI::IndexFormat::UINT32_T, 0, sceneDataPack.index_buffer->size());
+				data.passEncoder.render->setBindGroup(0, data.pipelinePass->bindgroups[0][flightIdx].get(), 0, 0);
+				uint32_t geometry_idx = 0;
+				for (auto& geometry : sceneDataPack.geometry_buffer_cpu) {
+					data.passEncoder.render->pushConstants(&geometry_idx, (uint32_t)RHI::ShaderStages::VERTEX, 0, sizeof(uint32_t));
+					data.passEncoder.render->drawIndexed(geometry.indexSize, 1, geometry.indexOffset, geometry.vertexOffset, 0);
+					geometry_idx++;
+				}
+			}
+
+			});
 	}
 
 	SRenderer::TableDist1D::TableDist1D(std::vector<float> const& f) {

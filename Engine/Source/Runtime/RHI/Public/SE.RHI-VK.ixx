@@ -684,6 +684,7 @@ namespace SIByL::RHI
 			context->vkCmdEndDebugUtilsLabelEXT = (PFN_vkCmdEndDebugUtilsLabelEXT)vkGetInstanceProcAddrStub(context->getVkInstance(), "vkCmdEndDebugUtilsLabelEXT");
 			context->vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddrStub(context->getVkInstance(), "vkSetDebugUtilsObjectNameEXT");
 			context->vkSetDebugUtilsObjectTagEXT = (PFN_vkSetDebugUtilsObjectTagEXT)vkGetInstanceProcAddrStub(context->getVkInstance(), "vkSetDebugUtilsObjectTagEXT");
+
 		}
 		if (ext & (ContextExtensionsFlags)ContextExtension::MESH_SHADER) {
 			context->vkCmdDrawMeshTasksNV = (PFN_vkCmdDrawMeshTasksNV)vkGetInstanceProcAddrStub(context->getVkInstance(), "vkCmdDrawMeshTasksNV");
@@ -1001,6 +1002,7 @@ namespace SIByL::RHI
 		// enable extesions
 		createInfo.enabledExtensionCount = static_cast<uint32_t>(getDeviceExtensions().size());
 		createInfo.ppEnabledExtensionNames = getDeviceExtensions().data();
+		createInfo.pNext = nullptr;
 		// get all physical device features chain
 		void const** pNextChainHead = &(createInfo.pNext);
 		void** pNextChainTail = nullptr;
@@ -1059,6 +1061,8 @@ namespace SIByL::RHI
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR };
 		VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures{
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR };
+		VkPhysicalDeviceShaderAtomicFloatFeaturesEXT shader_atomic_float{
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT };
 		if (context->getContextExtensionsFlags() & (ContextExtensionsFlags)ContextExtension::BINDLESS_INDEXING) {
 			if (context->getContextExtensionsFlags() & (ContextExtensionsFlags)ContextExtension::RAY_TRACING) {
 				features12.descriptorIndexing = VK_TRUE;
@@ -1080,21 +1084,13 @@ namespace SIByL::RHI
 			asFeatures.pNext = &rtPipelineFeatures;
 			pFeature2Tail = &(rtPipelineFeatures.pNext);;
 		}
-
 		if (context->getContextExtensionsFlags() & (ContextExtensionsFlags)ContextExtension::ATOMIC_FLOAT) {
-			VkPhysicalDeviceShaderAtomicFloatFeaturesEXT shader_atomic_float{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT };
 			shader_atomic_float.shaderBufferFloat32AtomicAdd = true; // this allows to perform atomic operations on storage buffers
 			shader_atomic_float.shaderBufferFloat32Atomics = true;
 			shader_atomic_float.pNext = nullptr;
 
 			*pFeature2Tail = &shader_atomic_float;
 			pFeature2Tail = &(shader_atomic_float.pNext);;
-
-			//if (pNextChainTail == nullptr)
-			//	*pNextChainHead = &shader_atomic_float;
-			//else
-			//	*pNextChainTail = &shader_atomic_float;
-			//pNextChainTail = &(shader_atomic_float.pNext);
 		}
 		vkGetPhysicalDeviceFeatures2(physicalDevice, &features2);
 		if (pNextChainTail == nullptr)
@@ -2693,7 +2689,7 @@ namespace SIByL::RHI
 			attachments.emplace_back(depthAttachment);
 		}
 		VkAttachmentReference depthAttachmentRef = {};
-		depthAttachmentRef.attachment = 1;
+		depthAttachmentRef.attachment = desc.colorAttachments.size();
 		depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 		// subpass
 		VkSubpassDescription subpass{};
@@ -3513,6 +3509,10 @@ namespace SIByL::RHI
 		virtual auto updateBLAS(BLAS* src, Buffer* vertexBuffer, Buffer* indexBuffer) noexcept -> void override;
 		/** Completes recording of the commands sequence and returns a corresponding GPUCommandBuffer. */
 		virtual auto finish(std::optional<CommandBufferDescriptor> const& descriptor = {}) noexcept -> CommandBuffer* override;
+		/** begin Debug marker region */
+		virtual auto beginDebugUtilsLabelEXT(DebugUtilLabelDescriptor const& desc) noexcept -> void override;
+		/** end Debug marker region */
+		virtual auto endDebugUtilsLabelEXT() noexcept -> void override;
 		/** underlying command buffer */
 		std::unique_ptr<CommandBuffer_VK> commandBufferOnce = nullptr;
 		/** underlying command buffer */
@@ -3786,6 +3786,19 @@ namespace SIByL::RHI
 			Core::LogManager::Error("VULKAN :: failed to record command buffer!");
 		}
 		return commandBuffer;
+	}
+
+	auto CommandEncoder_VK::beginDebugUtilsLabelEXT(DebugUtilLabelDescriptor const& desc) noexcept -> void {
+		VkDebugUtilsLabelEXT debugUtilLabel = {};
+		debugUtilLabel.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
+		debugUtilLabel.pNext = nullptr;
+		debugUtilLabel.pLabelName = desc.name.c_str();
+		memcpy(debugUtilLabel.color, &(desc.color[0]), sizeof(float) * 4);
+		commandBuffer->device->getAdapterVk()->getContext()->vkCmdBeginDebugUtilsLabelEXT(commandBuffer->commandBuffer, &debugUtilLabel);
+	}
+
+	auto CommandEncoder_VK::endDebugUtilsLabelEXT() noexcept -> void {
+		commandBuffer->device->getAdapterVk()->getContext()->vkCmdEndDebugUtilsLabelEXT(commandBuffer->commandBuffer);
 	}
 
 	auto Device_VK::createCommandEncoder(CommandEncoderDescriptor const& desc) noexcept

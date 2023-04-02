@@ -1,4 +1,5 @@
 module;
+#include <string>
 #include <vector>
 #include <memory>
 #include <typeinfo>
@@ -41,10 +42,22 @@ namespace SIByL::Editor
 			if (iter == widgets.end()) return nullptr;
 			else return static_cast<T*>(iter->second.get());
 		}
+		/** add a widget to editor */
+		template<class T>
+		auto addWidget(std::string const& name) noexcept -> void {
+			mutable_widgets[name] = std::make_unique<T>();
+		}
+		/** remove a widget from editor */
+		template<class T>
+		auto removeWidget(std::string const& name) noexcept -> void {
+			mutable_widgets.erase(name);
+		}
 	private:
 		static EditorLayer* singleton;
 		/** all the widgets registered */
 		std::unordered_map<char const*, std::unique_ptr<Widget>> widgets = {};
+		/** all the widgets registered */
+		std::unordered_map<std::string, std::unique_ptr<Widget>> mutable_widgets = {};
 	};
 	
 	EditorLayer* EditorLayer::singleton = nullptr;

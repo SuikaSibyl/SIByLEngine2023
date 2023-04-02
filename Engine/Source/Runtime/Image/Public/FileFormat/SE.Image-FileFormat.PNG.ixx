@@ -1,5 +1,7 @@
 module;
 #include <stb_image.h>
+#pragma warning(disable:4996)
+#include <stb_image_write.h>
 #include <filesystem>
 export module SE.Image:PNG;
 import :Color;
@@ -11,6 +13,8 @@ namespace SIByL::Image
 {
 	export struct PNG {
 		static auto fromPNG(std::filesystem::path const& path) noexcept -> std::unique_ptr<Image<COLOR_R8G8B8A8_UINT>>;
+
+        static auto writePNG(std::filesystem::path const& path, uint32_t width, uint32_t height, uint32_t channel, float* data) noexcept -> void;
 	};
 
     auto PNG::fromPNG(std::filesystem::path const& path) noexcept -> std::unique_ptr<Image<COLOR_R8G8B8A8_UINT>> {
@@ -25,5 +29,9 @@ namespace SIByL::Image
         memcpy(image->data.data, pixels, texWidth * texHeight * sizeof(COLOR_R8G8B8A8_UINT));
         stbi_image_free(pixels);
         return std::move(image);
+    }
+
+    auto PNG::writePNG(std::filesystem::path const& path, uint32_t width, uint32_t height, uint32_t channel, float* data) noexcept -> void {
+        stbi_write_png(path.string().c_str(), width, height, channel, data, width * channel);
     }
 }

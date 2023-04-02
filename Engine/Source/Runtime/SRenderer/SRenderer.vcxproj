@@ -139,7 +139,15 @@
   <ItemGroup>
     <ClCompile Include="Public\Core\SE.SRenderer-Config.ixx" />
     <ClCompile Include="Public\Core\SE.SRenderer-SRenderer.ixx" />
+    <ClCompile Include="Public\Graph\SE.SRendere-ForwardPipeline.ixx" />
+    <ClCompile Include="Public\Graph\SE.SRendere-MMLTPipeline.ixx" />
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRendere-Raster.ClearImage.ixx" />
+    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-ACEsPass.ixx" />
+    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-SumPoolingR32.ixx" />
+    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-AlbedoPass.ixx" />
+    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-PreZPass.ixx" />
+    <ClCompile Include="Public\Passes\RayTracingPasses\SE.SRenderer-MMLTPass.ixx" />
+    <ClCompile Include="Public\Passes\RayTracingPasses\SE.SRenderer-UDPTPass.ixx" />
     <ClCompile Include="Public\Passes\SE.SRendere-Raster.Albedo.ixx" />
     <ClCompile Include="Public\Passes\SE.SRendere-Tracer.MMLT.ixx" />
     <ClCompile Include="Public\Passes\SE.SRendere-Tracer.SBDPT.ixx" />
@@ -148,6 +156,8 @@
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-FullScreen.CreateSumUpMip.ixx" />
     <ClCompile Include="Public\SE.SRenderer.ixx" />
     <ClCompile Include="Public\Utils\SE.SRendere-Tracer.CustomPrimitive.Sphere.ixx" />
+    <ClCompile Include="Public\Utils\SE.SRenderer-FullScreenPass.ixx" />
+    <ClCompile Include="Public\Utils\SE.SRenderer-RACommon.ixx" />
     <ClCompile Include="Public\Utils\SE.SRenderer-RTCommon.ixx" />
   </ItemGroup>
   <ItemGroup>
@@ -168,6 +178,9 @@
     </ProjectReference>
     <ProjectReference Include="..\Platform\Platform.vcxproj">
       <Project>{05b6310e-59bc-496a-ad4f-ccdd23c7f04d}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\RDG\RDG.vcxproj">
+      <Project>{501f34a2-41bd-4398-beee-3398633ac471}</Project>
     </ProjectReference>
     <ProjectReference Include="..\RHI\RHI.vcxproj">
       <Project>{795eb3a2-9f78-4ab8-833f-2b02fbc175f9}</Project>
