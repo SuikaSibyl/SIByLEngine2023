@@ -45,6 +45,7 @@ import SE.Editor.Config;
 
 import SE.SRenderer;
 import SE.SRenderer.ForwardPipeline;
+import SE.SRenderer.MMLTPipeline;
 
 using namespace SIByL;
 using namespace SIByL::Core;
@@ -134,7 +135,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		srenderer = std::make_unique<SRenderer>();
 		SRendererRegister::registerSRenderer(srenderer.get());
 		srenderer->init(rdg.get(), scene);
-		graph = std::make_unique<SRP::ForwardPipeline>();
+		graph = std::make_unique<SRP::MMLTPipeline>();
 		graph->build();
 		rdg->compile();
 

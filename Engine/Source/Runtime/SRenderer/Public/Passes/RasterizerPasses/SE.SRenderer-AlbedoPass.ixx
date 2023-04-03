@@ -33,17 +33,17 @@ namespace SIByL
 				.withSize(Math::vec3(1, 1, 1))
 				.withFormat(RHI::TextureFormat::RGBA32_FLOAT)
 				.withUsages((uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT)
-				.withAttachmentLoc(0)
-				.consume({ RDG::TextureInfo::ConsumeType::ColorAttachment });
+				.consume(RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::ColorAttachment }
+					.setAttachmentLoc(0));
 
 			reflector.addInputOutput("Depth")
 				.isTexture()
 				.withSize(Math::vec3(1, 1, 1))
 				.withFormat(RHI::TextureFormat::DEPTH32_FLOAT)
 				.withUsages((uint32_t)RHI::TextureUsage::DEPTH_ATTACHMENT)
-				.withAttachmentLoc(0)
 				.consume(RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::DepthStencilAttachment }
 					.enableDepthWrite(false)
+					.setAttachmentLoc(0)
 					.setDepthCompareFn(RHI::CompareFunction::EQUAL));
 
 			return reflector;

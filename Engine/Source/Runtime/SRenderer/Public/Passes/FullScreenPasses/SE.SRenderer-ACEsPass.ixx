@@ -40,9 +40,9 @@ namespace SIByL
 				.withSize(Math::vec3(1, 1, 1))
 				.withFormat(RHI::TextureFormat::RGBA8_UNORM)
 				.withUsages((uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT)
-				.withAttachmentLoc(0)
 				.consume(RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::ColorAttachment }
 					.enableDepthWrite(false)
+					.setAttachmentLoc(0)
 					.setDepthCompareFn(RHI::CompareFunction::ALWAYS));
 
 			return reflector;

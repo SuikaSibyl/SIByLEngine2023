@@ -33,9 +33,9 @@ namespace SIByL
 				.withSize(Math::vec3(1, 1, 1))
 				.withFormat(RHI::TextureFormat::DEPTH32_FLOAT)
 				.withUsages((uint32_t)RHI::TextureUsage::DEPTH_ATTACHMENT)
-				.withAttachmentLoc(0)
 				.consume(RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::DepthStencilAttachment }
 					.enableDepthWrite(true)
+					.setAttachmentLoc(0)
 					.setDepthCompareFn(RHI::CompareFunction::LESS));
 
 			return reflector;

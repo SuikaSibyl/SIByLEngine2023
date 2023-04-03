@@ -21,8 +21,5 @@ namespace SIByL::SRenderer
 
 			return reflector;
 		}
-
-
-
 	};
 }

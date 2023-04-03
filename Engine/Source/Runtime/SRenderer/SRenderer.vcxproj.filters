@@ -81,5 +81,11 @@
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-ACEsPass.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-ClearI32RGBA.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-CombineI32RGBA.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

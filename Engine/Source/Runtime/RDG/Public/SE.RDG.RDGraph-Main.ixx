@@ -74,7 +74,6 @@ namespace SIByL::RDG
 		RHI::TextureUsagesFlags usages 		= 0;
 		RHI::TextureFlags		tflags		= RHI::TextureFlags::NONE;
 		ResourceFlags			flags		= 0;
-		uint32_t				attachLoc	= -1;
 		RHI::PipelineStageFlags stages		= 0;
 		RHI::AccessFlags		access		= 0;
 		RHI::TextureLayout		laytout		= RHI::TextureLayout::GENERAL;
@@ -98,10 +97,19 @@ namespace SIByL::RDG
 			RHI::TextureLayout		layout;
 			bool					depthWrite = false;
 			RHI::CompareFunction	depthCmp = RHI::CompareFunction::ALWAYS;
+			uint32_t				attachLoc = uint32_t(-1);
 
 			inline auto addStage(RHI::PipelineStageFlags stage) noexcept -> ConsumeEntry& { stages |= stage; return *this; }
+			inline auto setLayout(RHI::TextureLayout _layout) noexcept -> ConsumeEntry& { layout = _layout; return *this; }
 			inline auto enableDepthWrite(bool set) noexcept -> ConsumeEntry& { depthWrite = set; return *this; }
 			inline auto setDepthCompareFn(RHI::CompareFunction fn) noexcept -> ConsumeEntry& { depthCmp = fn; return *this; }
+			inline auto setSubresource(uint32_t mip_beg, uint32_t mip_end, uint32_t level_beg, uint32_t level_end) noexcept -> ConsumeEntry& {
+				this->mip_beg = mip_beg;
+				this->mip_end = mip_end;
+				this->level_beg = level_beg;
+				this->level_end = level_end;
+				return *this; }
+			inline auto setAttachmentLoc(uint32_t loc) noexcept -> ConsumeEntry& { attachLoc = loc; return *this; }
 		};
 
 		inline auto consume(ConsumeEntry const& entry) noexcept -> TextureInfo&;
@@ -115,7 +123,6 @@ namespace SIByL::RDG
 		inline auto withStages(RHI::ShaderStagesFlags flags) noexcept -> TextureInfo&;
 		inline auto withUsages(RHI::TextureUsagesFlags usages) noexcept -> TextureInfo&;
 		inline auto withFlags(ResourceFlags flags) noexcept -> TextureInfo&;
-		inline auto withAttachmentLoc(uint32_t loc) noexcept -> TextureInfo&;
 
 		inline auto getSize(Math::ivec3 ref) const noexcept -> RHI::Extend3D {
 			if (sizeDef == SizeDefine::Absolute)
@@ -129,11 +136,12 @@ namespace SIByL::RDG
 
 	export inline auto toTextureDescriptor(TextureInfo const& info, Math::ivec3 ref_size) noexcept -> RHI::TextureDescriptor {
 		RHI::Extend3D size = info.getSize(ref_size);
+		size.depthOrArrayLayers = info.layers;
 		return RHI::TextureDescriptor{
 			size,
 			info.levels,
 			info.samples,
-			(size.depthOrArrayLayers == 1) ? RHI::TextureDimension::TEX2D : RHI::TextureDimension::TEX3D,
+			RHI::TextureDimension::TEX2D,
 			info.format,
 			info.usages | (uint32_t)RHI::TextureUsage::TEXTURE_BINDING | (uint32_t)RHI::TextureUsage::COPY_SRC,
 			std::vector<RHI::TextureFormat>{info.format},
@@ -253,10 +261,26 @@ namespace SIByL::RDG
 
 		inline auto getTexture(std::string const& name) const noexcept -> GFX::Texture*;
 
+		inline auto setUVec2(std::string const& name, Math::uvec2 v) noexcept -> void { uvec2s[name] = v; }
+		inline auto getUVec2(std::string const& name) const noexcept -> Math::uvec2 {
+			auto const& iter = uvec2s.find(name);
+			if (iter == uvec2s.end()) return Math::uvec2{ 0 };
+			return iter->second;
+		}
+
+		inline auto setUInt(std::string const& name, uint32_t v) noexcept -> void { uints[name] = v; }
+		inline auto getUInt(std::string const& name) const noexcept -> uint32_t {
+			auto const& iter = uints.find(name);
+			if (iter == uints.end()) return 0;
+			return iter->second;
+		}
+
 		Graph* graph;
 		Pass* pass;
 
 		std::unordered_map<std::string, std::vector<RHI::BindGroupEntry>*> bindGroups;
+		std::unordered_map<std::string, Math::uvec2> uvec2s;
+		std::unordered_map<std::string, uint32_t> uints;
 		std::unordered_map<std::string, std::function<void(DelegateData const&)>> delegates;
 	};
 
@@ -273,6 +297,9 @@ namespace SIByL::RDG
 
 		PassReflection pReflection;
 		std::string identifier;
+
+	protected:
+		virtual auto init() noexcept -> void;
 	};
 
 	export struct PipelinePass :public Pass {
@@ -343,6 +370,20 @@ namespace SIByL::RDG
 		virtual ~ComputePass() = default;
 		std::array<std::unique_ptr<RHI::ComputePipeline>,    MULTIFRAME_FLIGHTS_COUNT>	pipelines;
 		std::array<std::unique_ptr<RHI::ComputePassEncoder>, MULTIFRAME_FLIGHTS_COUNT>	passEncoders;
+
+		inline auto beginPass(RDG::RenderContext* context) noexcept -> RHI::ComputePassEncoder* {
+			passEncoders[context->flightIdx] = context->cmdEncoder->beginComputePass(RHI::ComputePassDescriptor{});
+			passEncoders[context->flightIdx]->setPipeline(pipelines[context->flightIdx].get());
+			return passEncoders[context->flightIdx].get();
+		}
+
+	protected:
+		inline auto prepareDispatch(RDG::RenderContext* context) noexcept -> void {
+			for (size_t i = 0; i < bindgroups.size(); ++i)
+				passEncoders[context->flightIdx]->setBindGroup(i, bindgroups[i][context->flightIdx].get());
+		}
+
+		virtual auto init(GFX::ShaderModule* comp) noexcept -> void;
 	};
 
 	export struct RayTracingPass :public PipelinePass {
@@ -514,9 +555,6 @@ namespace SIByL::RDG
 	inline auto TextureInfo::withFlags(ResourceFlags _flags) noexcept -> TextureInfo& {
 		flags = _flags;
 		return *this; }
-	inline auto TextureInfo::withAttachmentLoc(uint32_t loc) noexcept -> TextureInfo& {
-		attachLoc = loc;
-		return *this; }
 
 	inline auto ResourceInfo::isBuffer()  noexcept -> BufferInfo& {
 		type = Type::Buffer;
@@ -549,7 +587,6 @@ namespace SIByL::RDG
 		for (auto& pool : pools) {
 			for (auto& pair : *pool) {
 				if (pair.second.type != ResourceInfo::Type::Texture) continue;
-				if (pair.second.info.texture.attachLoc == -1) continue;
 				if (RHI::hasDepthBit(pair.second.info.texture.format)) {
 					TextureInfo::ConsumeEntry entry;
 					for (auto const& ch : pair.second.info.texture.consumeHistories) {
@@ -575,10 +612,11 @@ namespace SIByL::RDG
 		for (auto& pool : pools) {
 			for (auto& pair : *pool) {
 				if (pair.second.type != ResourceInfo::Type::Texture) continue;
-				if (pair.second.info.texture.attachLoc == -1) continue;
 				if (!RHI::hasDepthBit(pair.second.info.texture.format)) {
-					cts.resize(pair.second.info.texture.attachLoc + 1);
-					cts[pair.second.info.texture.attachLoc] = RHI::ColorTargetState{ pair.second.info.texture.format };
+					for (auto const& history : pair.second.info.texture.consumeHistories) {
+						cts.resize(history.attachLoc + 1);
+						cts[history.attachLoc] = RHI::ColorTargetState{ pair.second.info.texture.format };
+					}
 				}
 			}
 		}
@@ -622,7 +660,12 @@ namespace SIByL::RDG
 		return renderData.getTexture(output_resource);
 	}
 
+	auto Pass::init() noexcept -> void {
+		pReflection = reflect();
+	}
+
 	auto PipelinePass::init(std::vector<GFX::ShaderModule*> shaderModules) noexcept -> void {
+		Pass::init();
 		RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
 		// create pipeline reflection
 		for (auto& sm : shaderModules)
@@ -660,7 +703,6 @@ namespace SIByL::RDG
 
 	auto RenderPass::init(GFX::ShaderModule* vertex, GFX::ShaderModule* fragment) noexcept -> void {
 		PipelinePass::init(std::vector<GFX::ShaderModule*>{vertex, fragment});
-		pReflection = reflect();
 		RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
 		for (int i = 0; i < MULTIFRAME_FLIGHTS_COUNT; ++i) {
 			pipelines[i] = device->createRenderPipeline(RHI::RenderPipelineDescriptor{
@@ -687,6 +729,117 @@ namespace SIByL::RDG
 			FullScreenPass::fullscreen_vertex = Core::ResourceManager::get()->getResource<GFX::ShaderModule>(vert);
 		}
 		RenderPass::init(FullScreenPass::fullscreen_vertex, fragment);
+	}
+	
+	auto ComputePass::init(GFX::ShaderModule* comp) noexcept -> void {
+		PipelinePass::init({ comp });
+		RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
+		for (int i = 0; i < MULTIFRAME_FLIGHTS_COUNT; ++i) {
+			pipelines[i] = device->createComputePipeline(RHI::ComputePipelineDescriptor{
+					pipelineLayout.get(),
+					{comp->shaderModule.get(), "main"}
+				});		}
+	}
+
+	auto tryMerge(RHI::ImageSubresourceRange const& x, RHI::ImageSubresourceRange const& y) noexcept -> std::optional<RHI::ImageSubresourceRange> {
+		RHI::ImageSubresourceRange range;
+		if (x.aspectMask != y.aspectMask) return std::nullopt;
+		if (x.baseArrayLayer == y.baseArrayLayer && x.layerCount == y.layerCount) {
+			if (x.baseMipLevel + x.levelCount == y.baseMipLevel) {
+				return RHI::ImageSubresourceRange{
+					x.aspectMask,
+					x.baseMipLevel,
+					x.levelCount + y.levelCount,
+					x.baseArrayLayer,
+					x.layerCount
+				};
+			}
+			else if (y.baseMipLevel + y.levelCount == x.baseMipLevel) {
+				return RHI::ImageSubresourceRange{
+					x.aspectMask,
+					y.baseMipLevel,
+					x.levelCount + y.levelCount,
+					x.baseArrayLayer,
+					x.layerCount
+				};
+			}
+			else return std::nullopt;
+		}
+		else if (x.baseMipLevel == y.baseMipLevel && x.levelCount == y.levelCount) {
+			if (x.baseArrayLayer + x.layerCount == y.baseArrayLayer) {
+				return RHI::ImageSubresourceRange{
+					x.aspectMask,
+					x.baseMipLevel,
+					x.levelCount,
+					x.baseArrayLayer,
+					x.layerCount + y.layerCount
+				};
+			}
+			else if (y.baseArrayLayer + y.layerCount == x.baseArrayLayer) {
+				return RHI::ImageSubresourceRange{
+					x.aspectMask,
+					x.baseMipLevel,
+					x.levelCount,
+					y.baseArrayLayer,
+					x.layerCount + y.layerCount
+				};
+			}
+			else return std::nullopt;
+		}
+		else return std::nullopt;
+	}
+
+	auto tryMergeBarriers(std::vector<RHI::BarrierDescriptor>& barriers) noexcept -> void {
+		// try merge macro barriers
+		while (true) {
+			bool should_continue = false;
+			for (int i = 0; i < barriers.size(); ++i) {
+				if (should_continue) break;
+				for (int j = i + 1; j < barriers.size(); ++j) {
+					if (should_continue) break;
+					if ((barriers[i].srcStageMask == barriers[j].srcStageMask)
+					 && (barriers[i].dstStageMask == barriers[j].dstStageMask)) {
+						barriers[i].memoryBarriers.insert(barriers[i].memoryBarriers.end(), barriers[j].memoryBarriers.begin(), barriers[j].memoryBarriers.end());
+						barriers[i].bufferMemoryBarriers.insert(barriers[i].bufferMemoryBarriers.end(), barriers[j].bufferMemoryBarriers.begin(), barriers[j].bufferMemoryBarriers.end());
+						barriers[i].textureMemoryBarriers.insert(barriers[i].textureMemoryBarriers.end(), barriers[j].textureMemoryBarriers.begin(), barriers[j].textureMemoryBarriers.end());
+						barriers.erase(barriers.begin() + j);
+						should_continue = true;
+					}
+				}
+			}
+			if (should_continue) continue;
+			break;
+		}
+		// try merge texture sub barriers
+		for (int k = 0; k < barriers.size(); ++k) {
+			auto& barrier = barriers[k];
+			auto& textureBarriers = barrier.textureMemoryBarriers;
+			while (true) {
+				bool should_continue = false;
+				for (int i = 0; i < textureBarriers.size(); ++i) {
+					if (should_continue) break;
+					for (int j = i + 1; j < textureBarriers.size(); ++j) {
+						if (should_continue) break;
+						if ((textureBarriers[i].texture == textureBarriers[j].texture)
+							&& (textureBarriers[i].srcAccessMask == textureBarriers[j].srcAccessMask)
+							&& (textureBarriers[i].dstAccessMask == textureBarriers[j].dstAccessMask)
+							&& (textureBarriers[i].oldLayout == textureBarriers[j].oldLayout)
+							&& (textureBarriers[i].newLayout == textureBarriers[j].newLayout)) 
+						{
+							auto merged = tryMerge(textureBarriers[i].subresourceRange, textureBarriers[j].subresourceRange);
+							if (merged.has_value()) {
+								textureBarriers[i].subresourceRange = merged.value();
+								textureBarriers.erase(textureBarriers.begin() + j);
+								should_continue = true;
+							}
+						}
+					}
+				}
+				if (should_continue) continue;
+				break;
+			}
+		}
+
 	}
 
 	auto Graph::build() noexcept -> bool {
@@ -756,6 +909,13 @@ namespace SIByL::RDG
 
 		// devirtualize all the results
 		for (auto& res : textureResources) {
+			RDG::TextureInfo::ConsumeEntry final_consume =
+				RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::TextureBinding }
+				.addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT)
+				.setLayout(RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL)
+				.setSubresource(0, res.second->desc.mipLevelCount, 0, res.second->desc.size.depthOrArrayLayers);
+			res.second->cosumeHistories.push_back({ size_t(-1), {final_consume} });
+
 			res.second->guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
 			GFX::GFXManager::get()->registerTextureResource(res.second->guid, res.second->desc);
 			res.second->texture = Core::ResourceManager::get()->getResource<GFX::Texture>(res.second->guid);
@@ -788,6 +948,12 @@ namespace SIByL::RDG
 			pass->execute(&renderContext, renderData);
 			encoder->endDebugUtilsLabelEXT();
 		}
+
+		{
+			// insert barriers
+			for (auto const& barriers : barriers[size_t(-1)])
+				renderContext.cmdEncoder->pipelineBarrier(barriers);
+		}
 	}
 
 	struct TextureResourceVirtualMachine {
@@ -810,6 +976,12 @@ namespace SIByL::RDG
 			RHI::PipelineStageFlags stageMask;
 			RHI::AccessFlags		access;
 			RHI::TextureLayout		layout;
+
+			auto operator==(TextureSubresourceState const& x) noexcept -> bool {
+				return stageMask == x.stageMask
+					&& access == x.access
+					&& layout == x.layout;
+			}
 		};
 
 		struct TextureSubresourceEntry {
@@ -854,8 +1026,7 @@ namespace SIByL::RDG
 		}
 
 		auto valid(TextureSubresourceRange const& x) noexcept -> bool {
-			if (x.level_beg < x.level_end && x.mip_beg < x.mip_end)
-				return true;
+			return (x.level_beg < x.level_end&& x.mip_beg < x.mip_end);
 		}
 
 		auto intersect(
@@ -863,7 +1034,7 @@ namespace SIByL::RDG
 			TextureSubresourceRange const& y
 		) noexcept -> std::optional<TextureSubresourceRange> {
 			TextureSubresourceRange isect;
-			isect.level_beg = std::min(x.level_beg, y.level_beg);
+			isect.level_beg = std::max(x.level_beg, y.level_beg);
 			isect.level_end = std::min(x.level_end, y.level_end);
 			isect.mip_beg = std::max(x.mip_beg, y.mip_beg);
 			isect.mip_end = std::min(x.mip_end, y.mip_end);
@@ -877,16 +1048,33 @@ namespace SIByL::RDG
 		) noexcept -> std::optional<TextureSubresourceRange> {
 			if (x.level_beg == y.level_beg && x.level_end == y.level_end) {
 				if (x.mip_beg == y.mip_end)
-					return TextureSubresourceRange{ y.mip_beg, x.mip_end, x.level_beg, x.level_end };
+					return TextureSubresourceRange{ x.level_beg, x.level_end, y.mip_beg, x.mip_end };
 				else if (x.mip_end == y.mip_beg)
-					return TextureSubresourceRange{ x.mip_beg, y.mip_end, x.level_beg, x.level_end };
+					return TextureSubresourceRange{ x.level_beg, x.level_end, x.mip_beg, y.mip_end };
 			} else if (x.mip_beg == y.mip_beg && x.mip_end == y.mip_end) {
 				if (x.level_beg == y.level_end)
-					return TextureSubresourceRange{ x.mip_beg, x.mip_end, y.level_beg, x.level_end };
+					return TextureSubresourceRange{ y.level_beg, x.level_end, x.mip_beg, x.mip_end };
 				else if (x.level_end == y.level_beg)
-					return TextureSubresourceRange{ x.mip_beg, x.mip_end, x.level_beg, y.level_end };
+					return TextureSubresourceRange{ x.level_beg, y.level_end, x.mip_beg, x.mip_end };
 			} else
 				return std::nullopt;
+		}
+
+		auto tryMerge() noexcept -> void {
+			if (states.size() <= 1) return;
+			while (true) {
+				for (size_t i = 1; i <= states.size(); ++i) {
+					if (i == states.size()) return;
+					if (states[i].state == states[i - 1].state) {
+						std::optional<TextureSubresourceRange> merged = merge(states[i - 1].range, states[i].range);
+						if (merged.has_value()) {
+							states[i - 1].range = merged.value();
+							states.erase(states.begin() + i);
+							break;
+						}
+					}
+				}
+			}
 		}
 
 		auto diff(
@@ -898,28 +1086,28 @@ namespace SIByL::RDG
 				if (x.mip_beg == y.mip_beg && x.mip_end == x.mip_end) {
 					// do nothing
 				} else if (x.mip_beg == y.mip_beg) {
-					diffs.emplace_back(TextureSubresourceRange{ y.mip_end, x.mip_end, level_beg, level_end });
+					diffs.emplace_back(TextureSubresourceRange{ level_beg, level_end, y.mip_end, x.mip_end });
 				} else if (x.mip_end == x.mip_end) {
-					diffs.emplace_back(TextureSubresourceRange{ x.mip_beg, y.mip_beg, level_beg, level_end });
+					diffs.emplace_back(TextureSubresourceRange{ level_beg, level_end, x.mip_beg, y.mip_beg });
 				} else {
-					diffs.emplace_back(TextureSubresourceRange{ x.mip_beg, y.mip_beg, level_beg, level_end });
-					diffs.emplace_back(TextureSubresourceRange{ y.mip_end, x.mip_end, level_beg, level_end });
+					diffs.emplace_back(TextureSubresourceRange{ level_beg, level_end, x.mip_beg, y.mip_beg });
+					diffs.emplace_back(TextureSubresourceRange{ level_beg, level_end, y.mip_end, x.mip_end });
 				}
 			};
 			if (x.level_beg == y.level_beg && x.level_end == y.level_end) {
-				fn_subdivide_mip(x.level_beg, y.level_beg);
+				fn_subdivide_mip(x.level_beg, x.level_end);
 			}
 			else if (x.level_beg == y.level_beg) {
-				diffs.emplace_back(TextureSubresourceRange{ x.mip_beg, x.mip_end, y.level_end, x.level_end });
+				diffs.emplace_back(TextureSubresourceRange{ y.level_end, x.level_end, x.mip_beg, x.mip_end });
 				fn_subdivide_mip(y.level_beg, y.level_end);
 			}
 			else if (x.level_end == y.level_end) {
-				diffs.emplace_back(TextureSubresourceRange{ x.mip_beg, x.mip_end, x.level_beg, y.level_beg });
+				diffs.emplace_back(TextureSubresourceRange{ x.level_beg, y.level_beg, x.mip_beg, x.mip_end });
 				fn_subdivide_mip(y.level_beg, y.level_end);
 			}
 			else {
-				diffs.emplace_back(TextureSubresourceRange{ x.mip_beg, x.mip_end, x.level_beg, y.level_beg });
-				diffs.emplace_back(TextureSubresourceRange{ x.mip_beg, x.mip_end, y.level_end, x.level_end });
+				diffs.emplace_back(TextureSubresourceRange{ x.level_beg, y.level_beg, x.mip_beg, x.mip_end });
+				diffs.emplace_back(TextureSubresourceRange{ y.level_end, x.level_end, x.mip_beg, x.mip_end });
 				fn_subdivide_mip(y.level_beg, y.level_end);
 			}
 			return diffs;
@@ -983,6 +1171,8 @@ namespace SIByL::RDG
 					iter++;
 				}
 			}
+			states.insert(states.end(), addedEntries.begin(), addedEntries.end());
+			tryMerge();
 			return barriers;
 		}
 
@@ -1014,6 +1204,10 @@ namespace SIByL::RDG
 					}
 				}
 			}
+		}
+
+		for (auto& barrier : barriers) {
+			tryMergeBarriers(barrier.second);
 		}
 	}
 

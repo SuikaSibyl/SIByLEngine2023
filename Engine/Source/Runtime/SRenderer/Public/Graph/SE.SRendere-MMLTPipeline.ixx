@@ -4,13 +4,14 @@ module;
 #include <string>
 #include <cstdint>
 export module SE.SRenderer.MMLTPipeline;
-import SE.SRenderer.AlbedoPass;
-import SE.SRenderer.PreZPass;
 import SE.Core.Resource;
 import SE.RHI;
 import SE.GFX.Core;
 import SE.GFX.RDG;
 import SE.RDG;
+
+import SE.SRenderer.ClearI32RGBA;
+import SE.SRenderer.CombineI32RGBA;
 
 namespace SIByL::SRP
 {
@@ -18,12 +19,12 @@ namespace SIByL::SRP
 
 		MMLTPipeline() {
 
-			//addPass(std::make_unique<PreZPass>(), "Pre-Z Pass");
-			//addPass(std::make_unique<AlbedoPass>(), "Albedo Pass");
+			addPass(std::make_unique<ClearI32RGBAPass>(), "Clear-I32RGBA Pass");
+			addPass(std::make_unique<CombineI32RGBAPass>(), "Combine-I32RGBA Pass");
 
-			//addEdge("Pre-Z Pass", "Depth", "Albedo Pass", "Depth");
+			addEdge("Clear-I32RGBA Pass", "I32RGBA", "Combine-I32RGBA Pass", "I32RGBA");
 
-			//markOutput("Albedo Pass", "Color");
+			markOutput("Combine-I32RGBA Pass", "HDRAccum");
 		}
 	};
 }

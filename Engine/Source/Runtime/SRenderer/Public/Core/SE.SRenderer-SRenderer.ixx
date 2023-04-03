@@ -1093,7 +1093,7 @@ namespace SIByL
 	inline auto SRenderer::updateRDGData(RDG::Graph* graph) noexcept -> void {
 		uint32_t flightIdx = GFX::GFXManager::get()->rhiLayer->getMultiFrameFlights()->getFlightIndex();
 		graph->renderData.setBindGroupEntries("CommonScene", &(commonDescData.set0_flights_resources[flightIdx]));
-
+		graph->renderData.setUInt("AccumIdx", state.batchIdx);
 		graph->renderData.setDelegate("IssueAllDrawcalls", [&, flightIdx = flightIdx](RDG::RenderData::DelegateData const& data) {
 			if (sceneDataPack.geometry_buffer_cpu.size() > 0) {
 				data.passEncoder.render->setIndexBuffer(sceneDataPack.index_buffer.get(),
