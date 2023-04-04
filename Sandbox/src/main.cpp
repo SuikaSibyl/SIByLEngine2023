@@ -33,8 +33,7 @@ import SE.Image;
 import SE.RHI;
 import SE.Parallelism;
 
-import SE.GFX.Core;
-import SE.GFX.RDG;
+import SE.GFX;
 import SE.RDG;
 
 import SE.Application;
@@ -46,6 +45,7 @@ import SE.Editor.Config;
 import SE.SRenderer;
 import SE.SRenderer.ForwardPipeline;
 import SE.SRenderer.MMLTPipeline;
+import SE.SRenderer.UDPTPipeline;
 
 using namespace SIByL;
 using namespace SIByL::Core;
@@ -131,13 +131,10 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler->setName("DefaultSampler");
 		Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.clamp_nearest)->sampler->setName("ClampNearestSampler");
 
-		rdg = std::make_unique<GFX::RDGraph>();
 		srenderer = std::make_unique<SRenderer>();
-		SRendererRegister::registerSRenderer(srenderer.get());
-		srenderer->init(rdg.get(), scene);
-		graph = std::make_unique<SRP::MMLTPipeline>();
+		srenderer->init(scene);
+		graph = std::make_unique<SRP::UDPTPipeline>();
 		graph->build();
-		rdg->compile();
 
 		cameraController.init(mainWindow.get()->getInput(), &timer);
 	};
@@ -179,83 +176,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		srenderer->invalidScene(scene);
 		srenderer->updateRDGData(graph.get());
 
-
-		//commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
-		//	(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
-		//	(uint32_t)RHI::PipelineStages::COLOR_ATTACHMENT_OUTPUT_BIT,
-		//	(uint32_t)RHI::DependencyType::NONE,
-		//	{}, {},
-		//	{ RHI::TextureMemoryBarrierDescriptor{
-		//		rdg->getTexture("RasterizerTarget_Color")->texture->texture.get(),
-		//		RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
-		//		(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
-		//		(uint32_t)RHI::AccessFlagBits::COLOR_ATTACHMENT_WRITE_BIT,
-		//		RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
-		//		RHI::TextureLayout::COLOR_ATTACHMENT_OPTIMAL
-		//	}}
-		//	});
-
-		//commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
-		//	(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
-		//	(uint32_t)RHI::PipelineStages::EARLY_FRAGMENT_TESTS_BIT | (uint32_t)RHI::PipelineStages::LATE_FRAGMENT_TESTS_BIT,
-		//	(uint32_t)RHI::DependencyType::NONE,
-		//	{}, {},
-		//	{ RHI::TextureMemoryBarrierDescriptor{
-		//		rdg->getTexture("RasterizerTarget_Depth")->texture->texture.get(),
-		//		RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::DEPTH_BIT, 0,1,0,1},
-		//		(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
-		//		(uint32_t)RHI::AccessFlagBits::DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-		//		RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
-		//		RHI::TextureLayout::DEPTH_ATTACHMENT_OPTIMAL
-		//	}}
-		//	});
-
-		//commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
-		//	(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
-		//	(uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR,
-		//	(uint32_t)RHI::DependencyType::NONE,
-		//	{}, {},
-		//	{ RHI::TextureMemoryBarrierDescriptor{
-		//		rdg->getTexture("TracerTarget_Color")->texture->texture.get(),
-		//		RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
-		//		(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
-		//		(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT | (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
-		//		RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
-		//		RHI::TextureLayout::GENERAL
-		//	}}
-		//	});
 		graph->execute(commandEncoder.get());
-		//rdg->execute(commandEncoder.get());
-
-		//commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
-		//	(uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR,
-		//	(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
-		//	(uint32_t)RHI::DependencyType::NONE,
-		//	{}, {},
-		//	{ RHI::TextureMemoryBarrierDescriptor{
-		//		rdg->getTexture("AtomicMutex")->texture->texture.get(),
-		//		RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
-		//		(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT | (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
-		//		(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
-		//		RHI::TextureLayout::GENERAL,
-		//		RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL
-		//	}}
-		//	});
-
-		////commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
-		//	//(uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR,
-		//	//(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
-		//	//(uint32_t)RHI::DependencyType::NONE,
-		//	//{}, {},
-		//	//{ RHI::TextureMemoryBarrierDescriptor{
-		//	//	rdg->getTexture("TracerTarget_Color")->texture->texture.get(),
-		//	//	RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
-		//	//	(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT | (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
-		//	//	(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
-		//	//	RHI::TextureLayout::GENERAL,
-		//	//	RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL
-		//	//}}
-		//	//});
 
 		device->getGraphicsQueue()->submit({ commandEncoder->finish({}) }, 
 			multiFrameFlights->getImageAvailableSeamaphore(),
@@ -268,26 +189,6 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		ImGui::ShowDemoWindow(&show_demo_window);
 
 		editorLayer->getWidget<Editor::ViewportWidget>()->setTarget("Main Viewport", graph->getOutput());
-		//ImGui::Begin("Ray Tracer");
-		//ImGui::Image(
-		//	Editor::TextureUtils::getImGuiTexture(rdg->getTexture("TracerTarget_Color")->guid)->getTextureID(),
-		//	{ (float)width,(float)height },
-		//	{ 0,0 }, { 1, 1 });
-		//if (ImGui::Button("Capture", { 200,100 }) || srenderer->state.batchIdx == int(2000)) {
-		//	captureImage(rdg->getTexture("TracerTarget_Color")->guid);
-		//}
-		//ImGui::End();
-
-		////ImGui::End();
-		//ImGui::Begin("Rasterizer");
-		//ImGui::Image(
-		//	Editor::TextureUtils::getImGuiTexture(rdg->getTexture("RasterizerTarget_Color")->guid)->getTextureID(),
-		//	{ (float)width,(float)height },
-		//	{ 0,0 }, { 1, 1 });
-		//if (ImGui::Button("Capture Rasterizer", { 200,100 })) {
-		//	captureImage(rdg->getTexture("RasterizerTarget_Color")->guid);
-		//}
-		//ImGui::End();
 		editorLayer->onDrawGui();
 		imguiLayer->render();
 
@@ -383,7 +284,6 @@ struct SandBoxApplication :public Application::ApplicationBase {
 	virtual auto Exit() noexcept -> void override {
 		rhiLayer->getDevice()->waitIdle();
 		srenderer = nullptr;
-		rdg = nullptr;
 		graph = nullptr;
 
 		blases.clear();
@@ -406,7 +306,6 @@ private:
 	std::unique_ptr<Editor::EditorLayer> editorLayer = nullptr;
 	std::unique_ptr<SRenderer> srenderer = nullptr;
 	
-	std::unique_ptr<GFX::RDGraph> rdg = nullptr;
 	std::unique_ptr<RDG::Graph> graph = nullptr;
 
 	std::vector<std::unique_ptr<RHI::BLAS>> blases;

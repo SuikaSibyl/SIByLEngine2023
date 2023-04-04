@@ -13,7 +13,7 @@ import SE.Editor.Core;
 import SE.Core.ECS;
 import SE.Math.Geometric;
 import SE.RHI;
-import SE.GFX.Core;
+import SE.GFX;
 
 namespace SIByL::Editor
 {

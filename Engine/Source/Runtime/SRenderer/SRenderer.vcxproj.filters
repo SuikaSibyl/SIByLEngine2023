@@ -24,9 +24,6 @@
     <ClCompile Include="Public\Core\SE.SRenderer-SRenderer.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Core\SE.SRenderer-Config.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="Public\Passes\SE.SRendere-Tracer.STracer.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -57,9 +54,6 @@
     <ClCompile Include="Public\Passes\RayTracingPasses\SE.SRenderer-MMLTPass.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-SumPoolingR32.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="Public\Utils\SE.SRenderer-FullScreenPass.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -85,6 +79,15 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-CombineI32RGBA.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-MIPAddPoolingPass.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-Blit.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Graph\SE.SRendere-UDPTPipeline.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

@@ -9,8 +9,7 @@ module;
 export module SE.SRenderer:ScreenSpacePass;
 import SE.Core.Resource;
 import SE.RHI;
-import SE.GFX.Core;
-import SE.GFX.RDG;
+import SE.GFX;
 import SE.RDG;
 
 namespace SIByL

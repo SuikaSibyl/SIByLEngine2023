@@ -4,7 +4,7 @@ module;
 #include <filesystem>
 #include <spirv_cross/spirv_glsl.hpp>
 #include <spirv_cross/spirv_cross.hpp>
-export module SE.GFX.Core:ShaderLoader;
+export module SE.GFX:ShaderLoader;
 import SE.Core.Log;
 import SE.Core.Memory;
 import SE.Core.Resource;

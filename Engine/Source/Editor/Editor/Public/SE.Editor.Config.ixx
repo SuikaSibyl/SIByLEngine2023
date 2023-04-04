@@ -4,7 +4,7 @@ module;
 #include <filesystem>
 export module SE.Editor.Config;
 import SE.Core.Resource;
-import SE.GFX.Core;
+import SE.GFX;
 import SE.Editor.Core;
 import SE.Editor.GFX;
 

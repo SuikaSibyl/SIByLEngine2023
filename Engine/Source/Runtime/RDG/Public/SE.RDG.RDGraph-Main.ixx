@@ -1,4 +1,5 @@
 module;
+#include <stack>
 #include <set>
 #include <array>
 #include <vector>
@@ -14,7 +15,7 @@ import :DAG;
 import SE.Utility;
 import SE.Math.Geometric;
 import SE.RHI;
-import SE.GFX.Core;
+import SE.GFX;
 import SE.Core.Resource;
 
 namespace SIByL::RDG
@@ -114,6 +115,7 @@ namespace SIByL::RDG
 
 		inline auto consume(ConsumeEntry const& entry) noexcept -> TextureInfo&;
 
+		inline auto setInfo(TextureInfo const& x) noexcept -> TextureInfo&;
 		inline auto withSize(Math::ivec3 absolute) noexcept -> TextureInfo&;
 		inline auto withSize(Math::vec3 relative) noexcept -> TextureInfo&;
 		inline auto withLevels(uint32_t levels) noexcept -> TextureInfo&;
@@ -291,15 +293,59 @@ namespace SIByL::RDG
 
 		virtual auto execute(RenderContext* context, RenderData const& renderData) noexcept -> void = 0;
 
-		virtual auto onBuild(RenderData const& renderData) noexcept -> void {};
-
 		virtual auto renderUI(RenderContext* context, RenderData const& data) noexcept -> void {}
 
-		PassReflection pReflection;
-		std::string identifier;
+		virtual auto generateMarker() noexcept -> void {
+			marker.name = identifier;
+			marker.color = { 0.490, 0.607, 0.003, 1.};
+		}
 
+		PassReflection pReflection;
+		RHI::DebugUtilLabelDescriptor marker;
+		std::string identifier;
+		std::vector<size_t> subgraphStack;
 	protected:
 		virtual auto init() noexcept -> void;
+	};
+
+	export struct DummyPass :public Pass {
+		virtual auto reflect() noexcept -> PassReflection = 0;
+		virtual auto execute(RenderContext* context, RenderData const& renderData) noexcept -> void override {}
+	};
+
+	export struct AliasDict {
+		struct Value {
+			std::string pass;
+			std::string resource;
+		};
+		std::unordered_map<std::string, Value> dict;
+
+		inline auto addAlias(
+			std::string const& subgraph_resource,
+			std::string const& pass,	 std::string const& pass_resource
+		) noexcept -> AliasDict& {
+			dict[subgraph_resource] = Value{ pass , pass_resource };
+			return *this;
+		}
+	};
+
+	export struct Subgraph {
+
+		virtual auto onRegister(Graph* graph) noexcept -> void = 0;
+
+		virtual auto alias() noexcept -> AliasDict = 0;
+
+		inline auto CONCAT(std::string const& name) noexcept -> std::string {
+			return identifier + "." + name;
+		}
+
+		virtual auto generateMarker() noexcept -> void {
+			marker.name = identifier;
+			marker.color = { 0.235, 0.321, 0.2, 1. };
+		}
+
+		std::string identifier;
+		RHI::DebugUtilLabelDescriptor marker;
 	};
 
 	export struct PipelinePass :public Pass {
@@ -339,6 +385,11 @@ namespace SIByL::RDG
 			data.pipelinePass = this;
 			return data;
 		}
+
+		virtual auto generateMarker() noexcept -> void {
+			marker.name = identifier;
+			marker.color = { 0.764, 0.807, 0.725, 1. };
+		}
 	protected:
 		inline auto prepareDispatch(RDG::RenderContext* context, GFX::Texture* target) noexcept -> void {
 			for (size_t i = 0; i < bindgroups.size(); ++i)
@@ -361,6 +412,11 @@ namespace SIByL::RDG
 	protected:
 		static GFX::ShaderModule* fullscreen_vertex;
 		virtual auto init(GFX::ShaderModule* fragment) noexcept -> void;
+	private:
+		virtual auto generateMarker() noexcept -> void {
+			marker.name = identifier;
+			marker.color = { 0.682, 0.764, 0.752, 1. };
+		}
 	};
 
 	GFX::ShaderModule* FullScreenPass::fullscreen_vertex;
@@ -377,6 +433,10 @@ namespace SIByL::RDG
 			return passEncoders[context->flightIdx].get();
 		}
 
+		virtual auto generateMarker() noexcept -> void {
+			marker.name = identifier;
+			marker.color = { 0.6, 0.721, 0.780, 1. };
+		}
 	protected:
 		inline auto prepareDispatch(RDG::RenderContext* context) noexcept -> void {
 			for (size_t i = 0; i < bindgroups.size(); ++i)
@@ -389,8 +449,28 @@ namespace SIByL::RDG
 	export struct RayTracingPass :public PipelinePass {
 		RayTracingPass() = default;
 		virtual ~RayTracingPass() = default;
+		RHI::RayTracingPipelineDescriptor													rtPipelineDescriptor;
 		std::array<std::unique_ptr<RHI::RayTracingPipeline>,    MULTIFRAME_FLIGHTS_COUNT>	pipelines;
 		std::array<std::unique_ptr<RHI::RayTracingPassEncoder>, MULTIFRAME_FLIGHTS_COUNT>	passEncoders;
+
+		inline auto beginPass(RDG::RenderContext* context) noexcept -> RHI::RayTracingPassEncoder* {
+			passEncoders[context->flightIdx] = context->cmdEncoder->beginRayTracingPass(RHI::RayTracingPassDescriptor{});
+			passEncoders[context->flightIdx]->setPipeline(pipelines[context->flightIdx].get());
+			prepareDispatch(context);
+			return passEncoders[context->flightIdx].get();
+		}
+
+		virtual auto generateMarker() noexcept -> void {
+			marker.name = identifier;
+			marker.color = { 0.517, 0.674, 0.807, 1. };
+		}
+	protected:
+		inline auto prepareDispatch(RDG::RenderContext* context) noexcept -> void {
+			for (size_t i = 0; i < bindgroups.size(); ++i)
+				passEncoders[context->flightIdx]->setBindGroup(i, bindgroups[i][context->flightIdx].get());
+		}
+
+		virtual auto init(GFX::SBTsDescriptor const& sbt, uint32_t max_depth) noexcept -> void;
 	};
 
 	export struct Graph {
@@ -411,6 +491,16 @@ namespace SIByL::RDG
 		*/
 		auto addPass(
 			std::unique_ptr<Pass>&& pass,
+			std::string const& identifier
+		) noexcept -> void;
+
+		/**
+		* Add a Subgraph to the RDGraph
+		* @param subgraph	: the subgraph to add
+		* @param identifier	: identifier of the pass added
+		*/
+		auto addSubgraph(
+			std::unique_ptr<Subgraph>&& subgraph,
 			std::string const& identifier
 		) noexcept -> void;
 
@@ -443,10 +533,15 @@ namespace SIByL::RDG
 		friend RenderData;
 		DAG dag;
 		size_t passID = 0;
+		size_t subgraphID = 0;
 		std::unordered_map<std::string, size_t> passNameList;
 		std::unordered_map<size_t, std::unique_ptr<Pass>> passes;
+		std::unordered_map<size_t, std::string> subgraphNameList;
+		std::unordered_map<std::string, std::unique_ptr<Subgraph>> subgraphs;
+		std::unordered_map<std::string, AliasDict> subgraphsAlias;
 		std::unordered_map<size_t, std::vector<RHI::BarrierDescriptor>> barriers;
 		std::vector<size_t> flattenedPasses;
+		std::vector<size_t> subgraphStack;
 
 		std::string output_pass;
 		std::string output_resource;
@@ -457,6 +552,8 @@ namespace SIByL::RDG
 		std::unordered_map<size_t, std::unique_ptr<TextureResource>> textureResources;
 
 		auto generateTextureBarriers() noexcept -> void;
+
+		auto decodeAlias(std::string& pass, std::string& resource) noexcept -> void;
 	};
 
 #pragma region IMPL
@@ -499,6 +596,13 @@ namespace SIByL::RDG
 		}
 		consumeHistories.emplace_back(entry);
 		return *this; }
+	inline auto TextureInfo::setInfo(TextureInfo const& x) noexcept -> TextureInfo& {
+		sizeDef = x.sizeDef;
+		if (sizeDef == SizeDefine::Absolute) size.absolute = x.size.absolute;
+		else if (sizeDef == SizeDefine::Relative) size.relative = x.size.relative;
+		format = x.format;
+		return *this;
+	}
 	inline auto TextureInfo::withSize(Math::ivec3 absolute) noexcept -> TextureInfo& {
 		sizeDef = SizeDefine::Absolute;
 		size.absolute = absolute;
@@ -614,6 +718,7 @@ namespace SIByL::RDG
 				if (pair.second.type != ResourceInfo::Type::Texture) continue;
 				if (!RHI::hasDepthBit(pair.second.info.texture.format)) {
 					for (auto const& history : pair.second.info.texture.consumeHistories) {
+						if (history.type != TextureInfo::ConsumeType::ColorAttachment) continue;
 						cts.resize(history.attachLoc + 1);
 						cts[history.attachLoc] = RHI::ColorTargetState{ pair.second.info.texture.format };
 					}
@@ -630,22 +735,59 @@ namespace SIByL::RDG
 	) noexcept -> void {
 		passNameList[identifier] = passID;
 		pass->identifier = identifier;
+		pass->subgraphStack = subgraphStack;
+		pass->generateMarker();
 		passes[passID++] = std::move(pass);
 	}
 
-	auto Graph::addEdge(
-		std::string const& src_pass, std::string const& src_resource,
-		std::string const& dst_pass, std::string const& dst_resource
+	auto Graph::addSubgraph(
+		std::unique_ptr<Subgraph>&& subgraph,
+		std::string const& identifier
 	) noexcept -> void {
+		uint32_t id = subgraphID++;
+		subgraphNameList[id] = identifier;
+		subgraph->identifier = identifier;
+		subgraphsAlias[identifier] = subgraph->alias();
+		subgraphStack.push_back(id);
+		subgraph->onRegister(this);
+		subgraphStack.pop_back();
+		subgraph->generateMarker();
+		subgraphs[identifier] = std::move(subgraph);
+	}
+
+	auto Graph::addEdge(
+		std::string const& _src_pass, std::string const& _src_resource,
+		std::string const& _dst_pass, std::string const& _dst_resource
+	) noexcept -> void {
+		std::string src_pass = _src_pass;
+		std::string dst_pass = _dst_pass;
+		std::string src_resource = _src_resource;
+		std::string dst_resource = _dst_resource;
+		decodeAlias(src_pass, src_resource);
+		decodeAlias(dst_pass, dst_resource);
+
 		dag.addEdge(passNameList[src_pass], passNameList[dst_pass]);
 		passes[passNameList[dst_pass]]->pReflection.getResourceInfo(dst_resource)->prev =
 			passes[passNameList[src_pass]]->pReflection.getResourceInfo(src_resource);
 	}
 
+	auto Graph::decodeAlias(std::string& pass, std::string& resource) noexcept -> void {
+		auto findPass = subgraphsAlias.find(pass);
+		if (findPass != subgraphsAlias.end()) {
+			auto findResource = findPass->second.dict.find(resource);
+			if (findResource != findPass->second.dict.end()) {
+				pass = findResource->second.pass;
+				resource = findResource->second.resource;
+			}
+		}
+	}
+
 	auto Graph::markOutput(
-		std::string const& pass,
-		std::string const& output
+		std::string const& _pass,
+		std::string const& _output
 	) noexcept -> void {
+		std::string pass = _pass, output = _output;
+		decodeAlias(pass, output);
 		output_pass = pass;
 		output_resource = output;
 	}
@@ -739,6 +881,32 @@ namespace SIByL::RDG
 					pipelineLayout.get(),
 					{comp->shaderModule.get(), "main"}
 				});		}
+	}
+
+	export auto collectAllShaders(GFX::SBTsDescriptor const& sbt) noexcept -> std::vector<GFX::ShaderModule*> {
+		std::vector<GFX::ShaderModule*> sms;
+		sms.push_back(sbt.rgenSBT.rgenRecord.rayGenShader);
+		for (auto const& entry : sbt.hitGroupSBT.hitGroupRecords) {
+			if(entry.anyHitShader) sms.push_back(entry.anyHitShader);
+			if(entry.closetHitShader) sms.push_back(entry.closetHitShader);
+			if(entry.intersectionShader) sms.push_back(entry.intersectionShader);
+		}
+		for (auto const& entry : sbt.missSBT.rmissRecords)
+			sms.push_back(entry.missShader);
+		for (auto const& entry : sbt.callableSBT.callableRecords)
+			sms.push_back(entry.callableShader);
+		return sms;
+	}
+
+	auto RayTracingPass::init(GFX::SBTsDescriptor const& sbt, uint32_t max_depth) noexcept -> void {
+		std::vector<GFX::ShaderModule*> shaderModules = collectAllShaders(sbt);
+		PipelinePass::init(shaderModules);
+		RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
+		for (int i = 0; i < MULTIFRAME_FLIGHTS_COUNT; ++i) {
+			pipelines[i] = device->createRayTracingPipeline(RHI::RayTracingPipelineDescriptor{
+					pipelineLayout.get(), max_depth, RHI::SBTsDescriptor(sbt)
+				});
+		}
 	}
 
 	auto tryMerge(RHI::ImageSubresourceRange const& x, RHI::ImageSubresourceRange const& y) noexcept -> std::optional<RHI::ImageSubresourceRange> {
@@ -931,6 +1099,8 @@ namespace SIByL::RDG
 		renderContext.cmdEncoder = encoder;
 		renderContext.flightIdx = GFX::GFXManager::get()->rhiLayer->getMultiFrameFlights()->getFlightIndex();
 
+		std::vector<size_t> marker_stack;
+
 		for (size_t pass_id : flattenedPasses) {
 			auto* pass = passes[pass_id].get();
 			renderData.pass = pass;
@@ -938,14 +1108,45 @@ namespace SIByL::RDG
 			for (auto const& barriers : barriers[pass_id]) {
 				renderContext.cmdEncoder->pipelineBarrier(barriers);
 			}
-			RHI::DebugUtilLabelDescriptor marker;
-			marker.color[0] = 204. / 255;
-			marker.color[1] = 237. / 255;
-			marker.color[2] = 178. / 255;
-			marker.color[3] = 1;
-			marker.name = pass->identifier;
-			encoder->beginDebugUtilsLabelEXT(marker);
+
+			{	// deal with subgroup markers
+				if (marker_stack.empty() && !pass->subgraphStack.empty()) {
+					for (auto const& subgraph_id : pass->subgraphStack) {
+						encoder->beginDebugUtilsLabelEXT(subgraphs[subgraphNameList[subgraph_id]]->marker);
+						marker_stack.push_back(subgraph_id);
+					}
+				}
+				else if (!marker_stack.empty() && pass->subgraphStack.empty()) {
+					while (marker_stack.size() > 0) {
+						marker_stack.pop_back();
+						encoder->endDebugUtilsLabelEXT();
+					}
+				}
+				else if (!marker_stack.empty() && marker_stack.back() != pass->subgraphStack.back()) {
+					size_t offset = 0;
+					while (offset < marker_stack.size()
+						&& offset < pass->subgraphStack.size()
+						&& marker_stack[offset] == pass->subgraphStack[offset]) {
+						offset++;
+					}
+					while (marker_stack.size() >= offset) {
+						marker_stack.pop_back();
+						encoder->endDebugUtilsLabelEXT();
+					}
+					for (size_t i = offset; i < pass->subgraphStack.size(); ++i) {
+						encoder->beginDebugUtilsLabelEXT(subgraphs[subgraphNameList[pass->subgraphStack[i]]]->marker);
+						marker_stack.push_back(pass->subgraphStack[i]);
+					}
+				}
+			}
+
+			encoder->beginDebugUtilsLabelEXT(pass->marker);
 			pass->execute(&renderContext, renderData);
+			encoder->endDebugUtilsLabelEXT();
+		}
+
+		while (marker_stack.size() > 0) {
+			marker_stack.pop_back();
 			encoder->endDebugUtilsLabelEXT();
 		}
 
@@ -1083,7 +1284,7 @@ namespace SIByL::RDG
 		) noexcept -> std::vector<TextureSubresourceRange> {
 			std::vector<TextureSubresourceRange> diffs;
 			auto fn_subdivide_mip = [&](uint32_t level_beg, uint32_t level_end) {
-				if (x.mip_beg == y.mip_beg && x.mip_end == x.mip_end) {
+				if (x.mip_beg == y.mip_beg && x.mip_end == y.mip_end) {
 					// do nothing
 				} else if (x.mip_beg == y.mip_beg) {
 					diffs.emplace_back(TextureSubresourceRange{ level_beg, level_end, y.mip_end, x.mip_end });

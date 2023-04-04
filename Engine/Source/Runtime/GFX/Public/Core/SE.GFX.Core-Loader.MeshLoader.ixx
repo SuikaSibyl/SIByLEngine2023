@@ -7,7 +7,7 @@ module;
 #include <filesystem>
 #include <algorithm>
 #include <unordered_map>
-export module SE.GFX.Core:MeshLoader;
+export module SE.GFX:MeshLoader;
 import :SerializeUtils;
 import :GFXConfig;
 import :Main;

@@ -10,7 +10,7 @@ export module SE.SRenderer.ClearI32RGBA;
 import SE.Math.Geometric;
 import SE.Core.Resource;
 import SE.RHI;
-import SE.GFX.Core;
+import SE.GFX;
 import SE.RDG;
 
 namespace SIByL

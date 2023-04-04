@@ -13,7 +13,7 @@ import SE.Core.Log;
 import SE.Utility;
 import SE.Math.Geometric;
 import SE.RHI;
-import SE.GFX.Core;
+import SE.GFX;
 
 namespace SIByL::RDG
 {

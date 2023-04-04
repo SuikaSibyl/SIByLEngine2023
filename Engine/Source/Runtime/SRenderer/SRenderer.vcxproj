@@ -137,15 +137,16 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Public\Core\SE.SRenderer-Config.ixx" />
     <ClCompile Include="Public\Core\SE.SRenderer-SRenderer.ixx" />
     <ClCompile Include="Public\Graph\SE.SRendere-ForwardPipeline.ixx" />
     <ClCompile Include="Public\Graph\SE.SRendere-MMLTPipeline.ixx" />
+    <ClCompile Include="Public\Graph\SE.SRendere-UDPTPipeline.ixx" />
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRendere-Raster.ClearImage.ixx" />
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-ACEsPass.ixx" />
+    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-Blit.ixx" />
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-ClearI32RGBA.ixx" />
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-CombineI32RGBA.ixx" />
-    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-SumPoolingR32.ixx" />
+    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-MIPAddPoolingPass.ixx" />
     <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-AlbedoPass.ixx" />
     <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-PreZPass.ixx" />
     <ClCompile Include="Public\Passes\RayTracingPasses\SE.SRenderer-MMLTPass.ixx" />

@@ -13,8 +13,7 @@ import SE.Core.ECS;
 import SE.Math.Geometric;
 import SE.Math.Misc;
 import SE.RHI;
-import SE.GFX.Core;
-import SE.GFX.RDG;
+import SE.GFX;
 import SE.RDG;
 
 namespace SIByL
@@ -42,7 +41,7 @@ namespace SIByL
 			Math::vec3 tangent;
 			Math::vec2 texCoords;
 		};
-		/** standard interleaved mesh data layout. 
+		/** standard interleaved mesh data layout.
 		* use this structure to query mesh load. */
 		static GFX::MeshDataLayout meshDataLayout;
 		/** standard mesh load config to mesh loading */
@@ -53,8 +52,8 @@ namespace SIByL
 		/** standard material data */
 		struct MaterialData {
 			Math::vec4 albedo_tint;
-			Math::vec2 uv_tiling	= { 1.f, 1.f };
-			Math::vec2 uv_scaling	= { 1.f, 1.f };
+			Math::vec2 uv_tiling = { 1.f, 1.f };
+			Math::vec2 uv_scaling = { 1.f, 1.f };
 			uint32_t mat_type = 0;
 			uint32_t basecolor_opacity_tex;
 			uint32_t normal_bump_tex;
@@ -167,24 +166,24 @@ namespace SIByL
 		*/
 		struct SceneDataPack {
 			// integrated geometry data
-			std::unique_ptr<RHI::Buffer> vertex_buffer			= nullptr;
-			std::unique_ptr<RHI::Buffer> position_buffer		= nullptr;
-			std::unique_ptr<RHI::Buffer> index_buffer			= nullptr;
-			std::unique_ptr<RHI::Buffer> material_buffer		= nullptr;
-			std::unique_ptr<RHI::Buffer> light_buffer			= nullptr;
-			std::unique_ptr<RHI::Buffer> back_light_buffer		= nullptr;
-			std::unique_ptr<RHI::Buffer> sample_dist_buffer		= nullptr;
-			std::unique_ptr<RHI::Buffer> back_sample_dist_buffer= nullptr;
+			std::unique_ptr<RHI::Buffer> vertex_buffer = nullptr;
+			std::unique_ptr<RHI::Buffer> position_buffer = nullptr;
+			std::unique_ptr<RHI::Buffer> index_buffer = nullptr;
+			std::unique_ptr<RHI::Buffer> material_buffer = nullptr;
+			std::unique_ptr<RHI::Buffer> light_buffer = nullptr;
+			std::unique_ptr<RHI::Buffer> back_light_buffer = nullptr;
+			std::unique_ptr<RHI::Buffer> sample_dist_buffer = nullptr;
+			std::unique_ptr<RHI::Buffer> back_sample_dist_buffer = nullptr;
 			// unbinded textures array to contain all textures
 			std::vector<RHI::TextureView*> unbinded_textures = {};
 			// cpu data
-			std::vector<float>				position_buffer_cpu		= {};		// position buffer cpu
-			std::vector<float>				vertex_buffer_cpu		= {};		// vertex buffer cpu
-			std::vector<float>				sample_dist_buffer_cpu	= {};		// sample dist buffer cpu
-			std::vector<uint32_t>			index_buffer_cpu		= {};		// index buffer cpu
-			std::vector<GeometryDrawData>	geometry_buffer_cpu		= {};		// geometries data
-			std::vector<MaterialData>		material_buffer_cpu		= {};		// material data
-			std::vector<LightData>			light_buffer_cpu		= {};		// light data
+			std::vector<float>				position_buffer_cpu = {};		// position buffer cpu
+			std::vector<float>				vertex_buffer_cpu = {};		// vertex buffer cpu
+			std::vector<float>				sample_dist_buffer_cpu = {};		// sample dist buffer cpu
+			std::vector<uint32_t>			index_buffer_cpu = {};		// index buffer cpu
+			std::vector<GeometryDrawData>	geometry_buffer_cpu = {};		// geometries data
+			std::vector<MaterialData>		material_buffer_cpu = {};		// material data
+			std::vector<LightData>			light_buffer_cpu = {};		// light data
 			RHI::TLASDescriptor				tlas_desc = {};
 			std::shared_ptr<RHI::TLAS>		tlas = {};
 			std::shared_ptr<RHI::TLAS>		back_tlas = {};
@@ -238,7 +237,7 @@ namespace SIByL
 			Core::GUID defaultTexture;
 		} defaultResources;
 		/** init non-scene resources */
-		inline auto init(GFX::RDGraph* rdg, GFX::Scene& scene) noexcept -> void;
+		inline auto init(GFX::Scene& scene) noexcept -> void;
 		/** invalid scene */
 		inline auto invalidScene(GFX::Scene& scene) noexcept -> void;
 		/** pack scene to scene data pack */
@@ -257,8 +256,6 @@ namespace SIByL
 		/**
 		* SRenderer info
 		*/
-		/** the rdgraph binded */
-		GFX::RDGraph* rdgraph = nullptr;
 		/** register passes */
 		struct Pass {
 			virtual ~Pass() = default;
@@ -267,12 +264,6 @@ namespace SIByL
 		};
 		/** passes registered */
 		std::vector<std::unique_ptr<Pass>> passes;
-		/** resources registered */
-		struct TextureRegisterInfo {
-			std::string name;
-			GFX::RDGTexture::Desc desc;
-		};
-		std::vector<TextureRegisterInfo> textures;
 		/**
 		* Common descriptor set definition.
 		* -----------------------------------------------
@@ -283,18 +274,17 @@ namespace SIByL
 		* push constant: drawcall constant
 		*/
 		struct CommonDescriptorData {
-			std::unique_ptr<RHI::BindGroupLayout> set0_layout = 0;
 			std::array<std::vector<RHI::BindGroupEntry>, MULTIFRAME_FLIGHTS_COUNT> set0_flights_resources = {};
-			std::array<std::unique_ptr<RHI::BindGroup>, MULTIFRAME_FLIGHTS_COUNT> set0_flights = {};
-			std::array<RHI::BindGroup*, MULTIFRAME_FLIGHTS_COUNT> set0_flights_array = {};
-			// set 1 for ray tracing
-			std::unique_ptr<RHI::BindGroupLayout> set1_layout_rt = 0;
-			std::array<std::unique_ptr<RHI::BindGroup>, MULTIFRAME_FLIGHTS_COUNT> set1_flights_rt = {};
-			std::array<RHI::BindGroup*, MULTIFRAME_FLIGHTS_COUNT> set1_flights_rt_array = {};
-
+			std::array<std::vector<RHI::BindGroupEntry>, MULTIFRAME_FLIGHTS_COUNT> set1_flights_resources = {};
 		} commonDescData;
 
 		RTCommon rtCommon;
+
+		struct SceneDataBuffers {
+			GFX::StructuredUniformBufferView<GlobalUniforms>					global_uniform_buffer;
+			GFX::StructuredUniformBufferView<SceneInfoUniforms>					scene_info_buffer;
+			GFX::StructuredArrayMultiStorageBufferView<GeometryDrawData>		geometry_buffer;
+		} sceneDataBuffers;
 	};
 
 #pragma region SRENDERER_IMPL
@@ -313,16 +303,12 @@ namespace SIByL
 
 	RHI::VertexBufferLayout SRenderer::vertexBufferLayout = GFX::getVertexBufferLayout(meshDataLayout);
 
-	inline auto SRenderer::init(GFX::RDGraph* rdg, GFX::Scene& scene) noexcept -> void {
+	inline auto SRenderer::init(GFX::Scene& scene) noexcept -> void {
 		RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
-		// bind rdgraph
-		rdgraph = rdg;
-		// create global uniform buffer
-		rdg->createStructuredUniformBuffer<GlobalUniforms>("global_uniform_buffer");
-		rdg->createStructuredUniformBuffer<SceneInfoUniforms>("scene_info_buffer");
+
 		// create common descriptor data
 		RHI::ShaderStagesFlags stages =
-			  (uint32_t)RHI::ShaderStages::VERTEX
+			(uint32_t)RHI::ShaderStages::VERTEX
 			| (uint32_t)RHI::ShaderStages::FRAGMENT
 			| (uint32_t)RHI::ShaderStages::RAYGEN
 			| (uint32_t)RHI::ShaderStages::CLOSEST_HIT
@@ -331,29 +317,13 @@ namespace SIByL
 			| (uint32_t)RHI::ShaderStages::CALLABLE
 			| (uint32_t)RHI::ShaderStages::ANY_HIT
 			| (uint32_t)RHI::ShaderStages::COMPUTE;
-		commonDescData.set0_layout = device->createBindGroupLayout(
-			RHI::BindGroupLayoutDescriptor{ {
-				RHI::BindGroupLayoutEntry{ 0, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::UNIFORM}},
-				RHI::BindGroupLayoutEntry{ 1, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
-				RHI::BindGroupLayoutEntry{ 2, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
-				RHI::BindGroupLayoutEntry{ 3, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
-				RHI::BindGroupLayoutEntry{ 4, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
-				RHI::BindGroupLayoutEntry{ 5, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
-				RHI::BindGroupLayoutEntry{ 6, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}},
-				RHI::BindGroupLayoutEntry{ 7, stages, RHI::BufferBindingLayout{RHI::BufferBindingType::UNIFORM}},
-				RHI::BindGroupLayoutEntry{ 8, stages, RHI::BindlessTexturesBindingLayout{}},
-				} }
-		);
-		commonDescData.set1_layout_rt = device->createBindGroupLayout(
-			RHI::BindGroupLayoutDescriptor{ {
-				RHI::BindGroupLayoutEntry{ 0, stages, RHI::AccelerationStructureBindingLayout{}},
-				RHI::BindGroupLayoutEntry{ 1, stages, RHI::StorageTextureBindingLayout{}},
-				} }
-		);
+
+		sceneDataBuffers.global_uniform_buffer = GFX::GFXManager::get()->createStructuredUniformBuffer<GlobalUniforms>();
+		sceneDataBuffers.scene_info_buffer = GFX::GFXManager::get()->createStructuredUniformBuffer<SceneInfoUniforms>();
+
 		// create default setting
-		{
-			defaultResources.defaultTexture = GFX::GFXManager::get()->registerTextureResource("../Engine/Binaries/Runtime/textures/uv_checker.png");
-		}
+		defaultResources.defaultTexture = GFX::GFXManager::get()->registerTextureResource("../Engine/Binaries/Runtime/textures/uv_checker.png");
+
 		// create custom primitive records
 		{
 			customPrimitive.sphere.customGeometry = RHI::BLASCustomGeometry{
@@ -379,28 +349,19 @@ namespace SIByL
 		}
 		// pack scene
 		packScene(scene);
-		// register textures
-		for (auto& texture : textures) {
-			rdg->createTexture(texture.name.c_str(), texture.desc);
-		}
-		// register passes
-		for (auto& pass : passes) {
-			pass->loadShaders();
-			pass->registerPass(this);
-		}
 	}
 
 	struct SceneDataPackState {
-		bool invalidVIPBuffer		= false;
-		bool invalidGeometryBuffer	= false;
-		bool dirtyGeometryBuffer	= false;
-		bool invalidLightBuffer		= false;
-		bool invalidAccumulation	= false;
+		bool invalidVIPBuffer = false;
+		bool invalidGeometryBuffer = false;
+		bool dirtyGeometryBuffer = false;
+		bool invalidLightBuffer = false;
+		bool invalidAccumulation = false;
 		bool invalidLightDistBuffer = false;
 	};
 
-	inline auto invalid_mesh_record(GFX::Mesh* mesh, SRenderer* srenderer, SceneDataPackState& state) noexcept -> 
-		std::unordered_map<GFX::Mesh*, SRenderer::SceneDataPack::MeshRecord>::iterator 
+	inline auto invalid_mesh_record(GFX::Mesh* mesh, SRenderer* srenderer, SceneDataPackState& state) noexcept ->
+		std::unordered_map<GFX::Mesh*, SRenderer::SceneDataPack::MeshRecord>::iterator
 	{
 		srenderer->sceneDataPack.mesh_record[mesh] = {};
 		auto meshRecord = srenderer->sceneDataPack.mesh_record.find(mesh);
@@ -631,8 +592,13 @@ namespace SIByL
 		for (auto go_handle : scene.gameObjects) {
 			invalid_game_object(scene.getGameObject(go_handle.first), scene, this, packstate);
 		}
-		sceneDataPack.back_tlas = sceneDataPack.tlas;
-		sceneDataPack.tlas = device->createTLAS(sceneDataPack.tlas_desc);
+		static bool inited = false;
+		if (!inited) {
+			sceneDataPack.tlas = device->createTLAS(sceneDataPack.tlas_desc);
+			inited = true;
+		}
+		//sceneDataPack.back_tlas = sceneDataPack.tlas;
+		//sceneDataPack.tlas = device->createTLAS(sceneDataPack.tlas_desc);
 
 		sceneDataPack.back_light_buffer = std::move(sceneDataPack.light_buffer);
 		sceneDataPack.light_buffer = device->createDeviceLocalBuffer(
@@ -643,18 +609,12 @@ namespace SIByL
 
 		RHI::MultiFrameFlights* multiFrameFlights = GFX::GFXManager::get()->rhiLayer->getMultiFrameFlights();
 		uint32_t fid = multiFrameFlights->getFlightIndex();
-		
-		commonDescData.set1_flights_rt[fid]->updateBinding(std::vector<RHI::BindGroupEntry>{
-			{0, RHI::BindingResource{ sceneDataPack.tlas.get() }},
-		});
-		commonDescData.set0_flights[fid]->updateBinding(std::vector<RHI::BindGroupEntry>{
-			{5, RHI::BindingResource{ {sceneDataPack.light_buffer.get(), 0, sceneDataPack.light_buffer->size()} }},
-		});
+
 		// TODO
-		//commonDescData.set0_flights_resources[fid][0] = { 0, RHI::BindingResource{ sceneDataPack.tlas.get() } };
 		commonDescData.set0_flights_resources[fid][5] = { 5, RHI::BindingResource{ {sceneDataPack.light_buffer.get(), 0, sceneDataPack.light_buffer->size()} } };
-		
-		rdgraph->getStructuredUniformBuffer<SceneInfoUniforms>("scene_info_buffer")->setStructure(sceneDataPack.sceneInfoUniform, fid);
+		commonDescData.set1_flights_resources[fid][0] = { 0, RHI::BindingResource{ sceneDataPack.tlas.get() } };
+
+		sceneDataBuffers.scene_info_buffer.setStructure(sceneDataPack.sceneInfoUniform, fid);
 
 		if (packstate.invalidLightDistBuffer) {
 			invalidSceneLightingSetting(this);
@@ -664,25 +624,19 @@ namespace SIByL
 				sceneDataPack.sample_dist_buffer_cpu.size() * sizeof(float),
 				(uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS
 				| (uint32_t)RHI::BufferUsage::STORAGE);
-			commonDescData.set0_flights[fid]->updateBinding(std::vector<RHI::BindGroupEntry>{
-				{6, RHI::BindingResource{ {sceneDataPack.sample_dist_buffer.get(), 0, sceneDataPack.sample_dist_buffer->size()} }},
-			});
 		}
 
-		commonDescData.set0_flights[fid]->updateBinding(std::vector<RHI::BindGroupEntry>{
-			{6, RHI::BindingResource{ {sceneDataPack.sample_dist_buffer.get(), 0, sceneDataPack.sample_dist_buffer->size()} }},
-		});
+		commonDescData.set0_flights_resources[fid][6] = { 6, RHI::BindingResource{ {sceneDataPack.sample_dist_buffer.get(), 0, sceneDataPack.sample_dist_buffer->size()} } };
 
 		if (packstate.invalidAccumulation) {
 			state.batchIdx = 0;
 		}
 		if (sceneDataPack.geometry_buffer_cpu.size() > 0) {
-			auto geometry_buffer = rdgraph->getStructuredArrayMultiStorageBuffer<GeometryDrawData>("geometry_buffer");
-			geometry_buffer->setStructure(sceneDataPack.geometry_buffer_cpu.data(), fid);
+			sceneDataBuffers.geometry_buffer.setStructure(sceneDataPack.geometry_buffer_cpu.data(), fid);
 		}
 	}
 
-	auto packTexture(SRenderer* srenderer, Core::GUID guid)->uint32_t {
+	auto packTexture(SRenderer* srenderer, Core::GUID guid) -> uint32_t {
 		RHI::TextureView* texView = Core::ResourceManager::get()->getResource<GFX::Texture>(guid)->originalView.get();
 		auto findTex = srenderer->sceneDataPack.textureview_record.find(texView);
 		if (findTex == srenderer->sceneDataPack.textureview_record.end()) {
@@ -695,7 +649,7 @@ namespace SIByL
 	};
 
 	inline auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
-		RHI::Device* device = GFX ::GFXManager::get()->rhiLayer->getDevice();
+		RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
 		for (auto go_handle : scene.gameObjects) {
 			auto* go = scene.getGameObject(go_handle.first);
 			GFX::MeshReference* meshref = go->getEntity().getComponent<GFX::MeshReference>();
@@ -948,13 +902,13 @@ namespace SIByL
 		if (sceneDataPack.geometryDirty) {
 			sceneDataPack.vertex_buffer = device->createDeviceLocalBuffer(
 				sceneDataPack.vertex_buffer_cpu.data(),
-				sceneDataPack.vertex_buffer_cpu.size() * sizeof(float), 
+				sceneDataPack.vertex_buffer_cpu.size() * sizeof(float),
 				(uint32_t)RHI::BufferUsage::VERTEX
 				| (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS
 				| (uint32_t)RHI::BufferUsage::STORAGE);
 			sceneDataPack.index_buffer = device->createDeviceLocalBuffer(
 				sceneDataPack.index_buffer_cpu.data(),
-				sceneDataPack.index_buffer_cpu.size() * sizeof(uint32_t), 
+				sceneDataPack.index_buffer_cpu.size() * sizeof(uint32_t),
 				(uint32_t)RHI::BufferUsage::INDEX
 				| (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS
 				| (uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY
@@ -962,7 +916,7 @@ namespace SIByL
 			sceneDataPack.material_buffer = device->createDeviceLocalBuffer(
 				sceneDataPack.material_buffer_cpu.data(),
 				sceneDataPack.material_buffer_cpu.size() * sizeof(MaterialData),
-				  (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS
+				(uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS
 				| (uint32_t)RHI::BufferUsage::STORAGE);
 			sceneDataPack.light_buffer = device->createDeviceLocalBuffer(
 				sceneDataPack.light_buffer_cpu.data(),
@@ -976,36 +930,15 @@ namespace SIByL
 				| (uint32_t)RHI::BufferUsage::STORAGE);
 			if (config.enableRayTracing) {
 				sceneDataPack.position_buffer = device->createDeviceLocalBuffer(
-					sceneDataPack.position_buffer_cpu .data(),
-					sceneDataPack.position_buffer_cpu.size() * sizeof(float), 
+					sceneDataPack.position_buffer_cpu.data(),
+					sceneDataPack.position_buffer_cpu.size() * sizeof(float),
 					(uint32_t)RHI::BufferUsage::VERTEX
 					| (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS
 					| (uint32_t)RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY
 					| (uint32_t)RHI::BufferUsage::STORAGE);
 			}
-			auto geometry_buffer = rdgraph->createStructuredArrayMultiStorageBuffer<GeometryDrawData>("geometry_buffer", sceneDataPack.geometry_buffer_cpu.size());
-
-			rdgraph->addBehavior([&, device]()->void {
-				// rebuild all bind groups
-				for (int i = 0; i < 2; ++i) {
-					commonDescData.set0_flights_resources[i] = std::vector<RHI::BindGroupEntry>{
-							{0,RHI::BindingResource{rdgraph->getStructuredUniformBuffer<GlobalUniforms>("global_uniform_buffer")->getBufferBinding(i)}},
-							{1,RHI::BindingResource{{sceneDataPack.vertex_buffer.get(), 0, sceneDataPack.vertex_buffer->size()}}},
-							{2,RHI::BindingResource{{sceneDataPack.index_buffer.get(), 0, sceneDataPack.index_buffer->size()}}},
-							{3,RHI::BindingResource{rdgraph->getStructuredArrayMultiStorageBuffer<GeometryDrawData>("geometry_buffer")->getBufferBinding(i)}},
-							{4,RHI::BindingResource{{sceneDataPack.material_buffer.get(), 0, sceneDataPack.material_buffer->size()}}},
-							{5,RHI::BindingResource{{sceneDataPack.light_buffer.get(), 0, sceneDataPack.light_buffer->size()}}},
-							{6,RHI::BindingResource{{sceneDataPack.sample_dist_buffer.get(), 0, sceneDataPack.sample_dist_buffer->size()}}},
-							{7,RHI::BindingResource{rdgraph->getStructuredUniformBuffer<SceneInfoUniforms>("scene_info_buffer")->getBufferBinding(i)}},
-							{8,RHI::BindingResource{sceneDataPack.unbinded_textures,
-								Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler.get()}},
-					};
-					commonDescData.set0_flights[i] = device->createBindGroup(RHI::BindGroupDescriptor{
-						commonDescData.set0_layout.get(),
-						commonDescData.set0_flights_resources[i] });
-					commonDescData.set0_flights_array[i] = commonDescData.set0_flights[i].get();
-				}
-				}, GFX::RDGraph::BehaviorPhase::AfterDevirtualize_BeforePassSetup);
+			sceneDataBuffers.geometry_buffer = GFX::GFXManager::get()->createStructuredArrayMultiStorageBuffer<GeometryDrawData>(
+				sceneDataPack.geometry_buffer_cpu.size());
 			// set scene data pack not dirty
 			sceneDataPack.geometryDirty = false;
 		}
@@ -1035,18 +968,49 @@ namespace SIByL
 		}
 		sceneDataPack.tlas_desc.allowRefitting = true;
 		sceneDataPack.tlas = device->createTLAS(sceneDataPack.tlas_desc);
-		rdgraph->addBehavior([&, device]()->void {
-			// rebuild all bind groups
-			for (int i = 0; i < 2; ++i) {
-				commonDescData.set1_flights_rt[i] = device->createBindGroup(RHI::BindGroupDescriptor{
-					commonDescData.set1_layout_rt.get(),
-					std::vector<RHI::BindGroupEntry>{
-						{0,RHI::BindingResource{sceneDataPack.tlas.get()}},
-						{1,RHI::BindingResource{rdgraph->getTexture("TracerTarget_Color")->texture->originalView.get()}},
-				} });
-				commonDescData.set1_flights_rt_array[i] = commonDescData.set1_flights_rt[i].get();
-			}
-			}, GFX::RDGraph::BehaviorPhase::AfterDevirtualize_BeforePassSetup);
+
+		//for (int i = 0; i < 2; ++i) {
+		//	commonDescData.set1_flights_rt[i] = device->createBindGroup(RHI::BindGroupDescriptor{
+		//		commonDescData.set1_layout_rt.get(),
+		//		std::vector<RHI::BindGroupEntry>{
+		//			{0,RHI::BindingResource{sceneDataPack.tlas.get()}},
+		//			{1,RHI::BindingResource{rdgraph->getTexture("TracerTarget_Color")->texture->originalView.get()}},
+		//	} });
+		//	commonDescData.set1_flights_rt_array[i] = commonDescData.set1_flights_rt[i].get();
+		//}
+
+
+		// rebuild all bind groups
+		for (int i = 0; i < 2; ++i) {
+			commonDescData.set0_flights_resources[i] = std::vector<RHI::BindGroupEntry>{
+							{0,RHI::BindingResource{sceneDataBuffers.global_uniform_buffer.getBufferBinding(i)}},
+							{1,RHI::BindingResource{{sceneDataPack.vertex_buffer.get(), 0, sceneDataPack.vertex_buffer->size()}}},
+							{2,RHI::BindingResource{{sceneDataPack.index_buffer.get(), 0, sceneDataPack.index_buffer->size()}}},
+							{3,RHI::BindingResource{sceneDataBuffers.geometry_buffer.getBufferBinding(i)}},
+							{4,RHI::BindingResource{{sceneDataPack.material_buffer.get(), 0, sceneDataPack.material_buffer->size()}}},
+							{5,RHI::BindingResource{{sceneDataPack.light_buffer.get(), 0, sceneDataPack.light_buffer->size()}}},
+							{6,RHI::BindingResource{{sceneDataPack.sample_dist_buffer.get(), 0, sceneDataPack.sample_dist_buffer->size()}}},
+							{7,RHI::BindingResource{sceneDataBuffers.scene_info_buffer.getBufferBinding(i)}},
+							{8,RHI::BindingResource{sceneDataPack.unbinded_textures,
+								Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler.get()}},
+			};
+
+			commonDescData.set0_flights_resources[i] = std::vector<RHI::BindGroupEntry>{
+				{0,RHI::BindingResource{sceneDataBuffers.global_uniform_buffer.getBufferBinding(i)}},
+				{1,RHI::BindingResource{{sceneDataPack.vertex_buffer.get(), 0, sceneDataPack.vertex_buffer->size()}}},
+				{2,RHI::BindingResource{{sceneDataPack.index_buffer.get(), 0, sceneDataPack.index_buffer->size()}}},
+				{3,RHI::BindingResource{sceneDataBuffers.geometry_buffer.getBufferBinding(i)}},
+				{4,RHI::BindingResource{{sceneDataPack.material_buffer.get(), 0, sceneDataPack.material_buffer->size()}}},
+				{5,RHI::BindingResource{{sceneDataPack.light_buffer.get(), 0, sceneDataPack.light_buffer->size()}}},
+				{6,RHI::BindingResource{{sceneDataPack.sample_dist_buffer.get(), 0, sceneDataPack.sample_dist_buffer->size()}}},
+				{7,RHI::BindingResource{sceneDataBuffers.scene_info_buffer.getBufferBinding(i)}},
+				{8,RHI::BindingResource{sceneDataPack.unbinded_textures,
+					Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler.get()}},
+			};
+			commonDescData.set1_flights_resources[i] = std::vector<RHI::BindGroupEntry>{
+				{0,RHI::BindingResource{sceneDataPack.tlas.get()}},
+			};
+		}
 	}
 
 	inline auto SRenderer::updateCamera(GFX::TransformComponent const& transform, GFX::CameraComponent const& camera) noexcept -> void {
@@ -1087,13 +1051,14 @@ namespace SIByL
 		if (globalUniRecord.cameraData.viewMat != globalUni.cameraData.viewMat || globalUniRecord.cameraData.projMat != globalUni.cameraData.projMat)
 			state.batchIdx = 0;
 		globalUniRecord = globalUni;
-		rdgraph->getStructuredUniformBuffer<GlobalUniforms>("global_uniform_buffer")->setStructure(globalUni, multiFrameFlights->getFlightIndex());
+		sceneDataBuffers.global_uniform_buffer.setStructure(globalUni, multiFrameFlights->getFlightIndex());
 	}
 
 	inline auto SRenderer::updateRDGData(RDG::Graph* graph) noexcept -> void {
 		uint32_t flightIdx = GFX::GFXManager::get()->rhiLayer->getMultiFrameFlights()->getFlightIndex();
 		graph->renderData.setBindGroupEntries("CommonScene", &(commonDescData.set0_flights_resources[flightIdx]));
-		graph->renderData.setUInt("AccumIdx", state.batchIdx);
+		graph->renderData.setBindGroupEntries("CommonRT", &(commonDescData.set1_flights_resources[flightIdx]));
+		graph->renderData.setUInt("AccumIdx", state.batchIdx++);
 		graph->renderData.setDelegate("IssueAllDrawcalls", [&, flightIdx = flightIdx](RDG::RenderData::DelegateData const& data) {
 			if (sceneDataPack.geometry_buffer_cpu.size() > 0) {
 				data.passEncoder.render->setIndexBuffer(sceneDataPack.index_buffer.get(),

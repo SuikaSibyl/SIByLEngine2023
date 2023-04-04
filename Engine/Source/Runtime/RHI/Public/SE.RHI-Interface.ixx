@@ -1263,7 +1263,7 @@ namespace SIByL::RHI
 
 	export struct DebugUtilLabelDescriptor {
 		std::string name;
-		float color[4];
+		Math::vec4 color;
 	};
 
 	export struct CommandEncoder {

@@ -9,12 +9,17 @@ module;
 export module SE.SRenderer:RTCommon;
 import SE.Core.Resource;
 import SE.RHI;
-import SE.GFX.Core;
-import SE.GFX.RDG;
+import SE.GFX;
 
 namespace SIByL
 {
 	export struct RTCommon {
+
+		RTCommon() {
+			singleton = this;
+		}
+
+		static auto get() noexcept -> RTCommon* { return singleton; }
 
 		Core::GUID rmiss;
 		Core::GUID shadow_ray_rchit;
@@ -45,55 +50,56 @@ namespace SIByL
 		Core::GUID principled_sample;
 		Core::GUID principled_pdf;
 
-		RHI::RayTracingPipelineDescriptor rt_pipeline;
+		GFX::SBTsDescriptor sbtDesc;
 
-		auto getPipelineDescriptor() noexcept -> RHI::RayTracingPipelineDescriptor {
+		auto getSBTDescriptor() noexcept -> GFX::SBTsDescriptor {
 			if (!initialized)
 				init();
-			return rt_pipeline;
+			return sbtDesc;
 		}
 
 	private:
+		static RTCommon* singleton;
+
 		bool initialized = false;
 		auto init() noexcept -> void {
 			loadShaders();
-			rt_pipeline = RHI::RayTracingPipelineDescriptor{
-							nullptr, 3, RHI::SBTsDescriptor{
-							RHI::SBTsDescriptor::RayGenerationSBT{{ nullptr }},
-							RHI::SBTsDescriptor::MissSBT{{
-								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rmiss)->shaderModule.get()},
-								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(shadow_ray_rmiss)->shaderModule.get()}, }},
-							RHI::SBTsDescriptor::HitGroupSBT{{
-								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rchit_trimesh)->shaderModule.get()},
-								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rchit_sphere)->shaderModule.get(), nullptr,
-								 Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rint_sphere)->shaderModule.get(),},
-								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(shadow_ray_rchit)->shaderModule.get()},
-								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(shadow_ray_rchit)->shaderModule.get(), nullptr,
-								 Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rint_sphere)->shaderModule.get(),}, }},
-							RHI::SBTsDescriptor::CallableSBT{{
-								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(sphere_sampling_rcall)->shaderModule.get()},
-								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(sphere_sampling_pdf_rcall)->shaderModule.get()},
-								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(trimesh_sampling_rcall)->shaderModule.get()},
-								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(trimesh_sampling_pdf_rcall)->shaderModule.get()},
-								// lambertian
-								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lambertian_eval)->shaderModule.get()},
-								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lambertian_sample)->shaderModule.get()},
-								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lambertian_pdf)->shaderModule.get()},
-								// principled
-								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(principled_eval)->shaderModule.get()},
-								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(principled_sample)->shaderModule.get()},
-								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(principled_pdf)->shaderModule.get()}, 
-								// roughdielectric
-								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(roughdielectric_eval)->shaderModule.get()},
-								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(roughdielectric_sample)->shaderModule.get()},
-								{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(roughdielectric_pdf)->shaderModule.get()},
-							}},
-						} };
+			sbtDesc = GFX::SBTsDescriptor{
+				GFX::SBTsDescriptor::RayGenerationSBT{{ nullptr }},
+				GFX::SBTsDescriptor::MissSBT{{
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rmiss)},
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(shadow_ray_rmiss)}, }},
+				GFX::SBTsDescriptor::HitGroupSBT{{
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rchit_trimesh)},
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rchit_sphere), nullptr,
+						Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rint_sphere),},
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(shadow_ray_rchit)},
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(shadow_ray_rchit), nullptr,
+						Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rint_sphere),}, }},
+				GFX::SBTsDescriptor::CallableSBT{{
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(sphere_sampling_rcall)},
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(sphere_sampling_pdf_rcall)},
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(trimesh_sampling_rcall)},
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(trimesh_sampling_pdf_rcall)},
+					// lambertian
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lambertian_eval)},
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lambertian_sample)},
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(lambertian_pdf)},
+					// principled
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(principled_eval)},
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(principled_sample)},
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(principled_pdf)},
+					// roughdielectric
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(roughdielectric_eval)},
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(roughdielectric_sample)},
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(roughdielectric_pdf)},
+				}},
+			};
 		}
 
 		auto loadShaders() noexcept -> void {
 
-			rmiss = GFX::GFXManager::get()->registerShaderModuleResource("../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/stracer_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
+			rmiss = GFX::GFXManager::get()->registerShaderModuleResource("../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/spt_primary_ray_rmiss.spv", { nullptr, RHI::ShaderStages::MISS });
 			shadow_ray_rchit = GFX::GFXManager::get()->registerShaderModuleResource(
 				"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/spt_shadow_ray_rchit.spv",
 				{ nullptr, RHI::ShaderStages::CLOSEST_HIT });
@@ -165,4 +171,6 @@ namespace SIByL
 			}
 		}
 	};
+
+	RTCommon* RTCommon::singleton = nullptr;
 }

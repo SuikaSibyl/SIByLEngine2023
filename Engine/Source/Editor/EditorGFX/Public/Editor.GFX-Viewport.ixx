@@ -12,7 +12,7 @@ import SE.Core.Misc;
 import SE.Core.Log;
 import SE.RHI;
 import SE.Image;
-import SE.GFX.Core;
+import SE.GFX;
 import SE.Math.Geometric;
 import SE.Platform.Window;
 

@@ -5,7 +5,7 @@ module;
 #include <set>
 #include <unordered_map>
 #include <filesystem>
-export module SE.GFX.Core:GFXConfig;
+export module SE.GFX:GFXConfig;
 import SE.RHI;
 
 namespace SIByL::GFX

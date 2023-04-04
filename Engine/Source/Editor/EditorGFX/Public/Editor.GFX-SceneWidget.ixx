@@ -14,7 +14,7 @@ export module SE.Editor.GFX:SceneWidget;
 import :InspectorWidget;
 import SE.Core.ECS;
 import SE.Editor.Core;
-import SE.GFX.Core;
+import SE.GFX;
 
 namespace SIByL::Editor
 {

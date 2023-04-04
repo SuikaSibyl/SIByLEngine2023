@@ -10,7 +10,7 @@ export module SE.Editor.GFX:TextureFragment;
 import :Utils;
 import SE.Core.Resource;
 import SE.RHI;
-import SE.GFX.Core;
+import SE.GFX;
 import SE.Editor.Core;
 
 namespace SIByL::Editor

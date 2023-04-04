@@ -12,7 +12,7 @@ export module SE.Editor.GFX:LogWidget;
 import SE.Editor.Core;
 import SE.Core.ECS;
 import SE.Core.Log;
-import SE.GFX.Core;
+import SE.GFX;
 
 namespace SIByL::Editor
 {

@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "*.rahit": "glsl",
+        "*.rgen": "glsl",
+        "*.rchit": "glsl",
+        "*.rmiss": "glsl",
+        "*.h": "glsl",
+        "*.ixx": "cpp"
+    }
+}

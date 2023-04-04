@@ -3,11 +3,10 @@ module;
 export module SE.SRenderer.MMLTPass;
 import SE.Core.Resource;
 import SE.RHI;
-import SE.GFX.Core;
-import SE.GFX.RDG;
+import SE.GFX;
 import SE.RDG;
 
-namespace SIByL::SRenderer
+namespace SIByL
 {
 	export struct MMLTPass :public RDG::Pass {
 

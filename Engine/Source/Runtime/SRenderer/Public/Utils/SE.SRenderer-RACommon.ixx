@@ -9,8 +9,7 @@ module;
 export module SE.SRenderer:RACommon;
 import SE.Core.Resource;
 import SE.RHI;
-import SE.GFX.Core;
-import SE.GFX.RDG;
+import SE.GFX;
 
 namespace SIByL
 {

@@ -1,6 +1,6 @@
 module;
 #include "yaml-cpp/yaml.h"
-export module SE.GFX.Core:SerializeUtils;
+export module SE.GFX:SerializeUtils;
 import SE.Math.Geometric;
 using namespace SIByL;
 

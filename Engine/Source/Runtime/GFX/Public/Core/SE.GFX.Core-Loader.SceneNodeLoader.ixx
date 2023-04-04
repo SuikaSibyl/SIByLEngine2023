@@ -11,7 +11,7 @@ module;
 #define JSON_NOEXCEPTION
 #include <tinygltf/tiny_gltf.h>
 #include <tiny_obj_loader.h>
-export module SE.GFX.Core:SceneNodeLoader;
+export module SE.GFX:SceneNodeLoader;
 import :SerializeUtils;
 import :GFXConfig;
 import :Main;

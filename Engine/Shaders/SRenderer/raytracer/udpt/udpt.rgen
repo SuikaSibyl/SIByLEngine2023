@@ -13,6 +13,8 @@ layout(push_constant) uniform PushConsts { PushConstants pushConstants; };
 #include "../include/common_trace.h"
 #include "../include/common_rgen.h"
 
+layout(binding = 0, set = 2, rgba32f) uniform image2D storageImage;
+
 vec3 skyColor(in vec3 rayDir) {
     const float t = 0.5 * (rayDir.y + 1.0);
     return (1.0-t)*vec3(1.0) + t*vec3(0.5, 0.7, 1.0);
@@ -48,6 +50,8 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
         // return skyColor(ray.direction);
         return vec3(0,0,0);
     }
+
+    // return radiance;
     
     // We hit a light immediately. 
     // This path has only two vertices and has contribution

@@ -5,7 +5,7 @@ import SE.Core.Log;
 import SE.Core.Memory;
 import SE.Core.ECS;
 import SE.Core.Resource;
-import SE.GFX.Core;
+import SE.GFX;
 
 namespace SIByL::Application
 {
@@ -18,7 +18,7 @@ namespace SIByL::Application
 		Core::EntityManager		gEntityManager;
 		Core::ComponentManager	gComponentManager;
 		Core::ResourceManager	gResourceManager;
-		GFX::GFXManager			gfxManager;
+		GFX::GFXManager			gGfxManager;
 	};
 
 	Root::Root() {
@@ -27,11 +27,11 @@ namespace SIByL::Application
 		gEntityManager.startUp();
 		gComponentManager.startUp();
 		gResourceManager.startUp();
-		gfxManager.startUp();
+		gGfxManager.startUp();
 	}
 
 	Root::~Root() {
-		gfxManager.shutDown();
+		gGfxManager.shutDown();
 		gResourceManager.shutDown();
 		gComponentManager.shutDown();
 		gEntityManager.shutDown();

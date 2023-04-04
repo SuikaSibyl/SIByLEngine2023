@@ -1,4 +1,4 @@
-export module SE.GFX.Core;
+export module SE.GFX;
 
 export import :SerializeUtils;
 export import :GFXConfig;

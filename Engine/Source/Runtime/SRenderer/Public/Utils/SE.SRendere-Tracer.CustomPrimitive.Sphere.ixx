@@ -10,8 +10,7 @@ export module SE.SRenderer:Tracer.STracer;
 import :SRenderer;
 import SE.Core.Resource;
 import SE.RHI;
-import SE.GFX.Core;
-import SE.GFX.RDG;
+import SE.GFX;
 
 namespace SIByL
 {

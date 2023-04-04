@@ -13,7 +13,7 @@ import :Utils;
 import :ResourceViewer;
 import SE.Editor.Core;
 import SE.Core.ECS;
-import SE.GFX.Core;
+import SE.GFX;
 
 namespace SIByL::Editor
 {

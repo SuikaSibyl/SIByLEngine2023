@@ -13,7 +13,7 @@ import :SceneWidget;
 import :ResourceViewer;
 import SE.Math.Geometric;
 import SE.RHI;
-import SE.GFX.Core;
+import SE.GFX;
 import SE.Editor.Core;
 
 namespace SIByL::Editor

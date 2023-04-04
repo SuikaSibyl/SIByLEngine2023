@@ -6,7 +6,7 @@ export module SE.Editor.RDG:RDGViewer;
 import SE.Editor.Core;
 import SE.Editor.GFX;
 import SE.RHI;
-import SE.GFX.Core;
+import SE.GFX;
 import SE.RDG;
 
 namespace SIByL::Editor

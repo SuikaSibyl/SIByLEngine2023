@@ -6,8 +6,7 @@ module;
 export module SE.SRenderer.ForwardPipeline;
 import SE.Core.Resource;
 import SE.RHI;
-import SE.GFX.Core;
-import SE.GFX.RDG;
+import SE.GFX;
 import SE.RDG;
 
 import SE.SRenderer.AlbedoPass;

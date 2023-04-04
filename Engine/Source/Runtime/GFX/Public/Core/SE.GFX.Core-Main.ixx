@@ -7,17 +7,21 @@ module;
 #include <utility>
 #include <optional>
 #include <string>
+#include <future>
 #include <typeinfo>
 #include <filesystem>
 #include <functional>
+#include <type_traits>
 #include <tuple>
 #include <unordered_map>
 #include <yaml-cpp/yaml.h>
 #include <yaml-cpp/node/node.h>
-export module SE.GFX.Core:Main;
+#include "../../../Application/Public/SE.Application.Config.h"
+export module SE.GFX:Main;
 import :SerializeUtils;
 import :GFXConfig;
 import :ShaderLoader;
+import SE.Utility;
 import SE.Core.IO;
 import SE.Core.Log;
 import SE.Core.ECS;
@@ -85,9 +89,25 @@ namespace SIByL::GFX
 		auto operator=(Buffer const& buffer)->Buffer & = delete;
 		/** the gpu vertex buffer */
 		std::unique_ptr<RHI::Buffer> buffer = nullptr;
+		/** guid of the buffer resource */
+		Core::GUID guid;
 		/** get name */
 		virtual auto getName() const noexcept -> char const* override { return buffer->getName().c_str(); }
+		/** release the resource */
+		auto release() noexcept -> void;
 	};
+
+#pragma region BUFFER_IMPL
+
+	auto Buffer::release() noexcept -> void {
+		Core::ResourceManager::get()->removeResource<GFX::Buffer>(guid);
+		guid = Core::INVALID_GUID;
+		buffer = nullptr;
+	}
+
+
+#pragma endregion
+
 
 	export struct ShaderModule :public Core::Resource {
 		/** rhi shader module */
@@ -472,11 +492,101 @@ namespace SIByL::GFX
 		default: return "Unknown Type"; }
 	}
 
+	/******************************************************************
+	* Extension to GFX::Buffer
+	*******************************************************************/
+
+	struct BufferView {
+		GFX::Buffer* buffer;
+	};
+
+	export template <class T>
+	struct StructuredUniformBufferView : public BufferView {
+		/** update use structure */
+		auto setStructure(T const& x, uint32_t idx) noexcept -> void;
+		/** get buffer binding */
+		auto getBufferBinding(uint32_t idx) noexcept -> RHI::BufferBinding;
+	};
+
+	export template <class T>
+	struct StructuredArrayUniformBufferView : public BufferView {
+		/** update use structure */
+		auto setStructure(T* x, uint32_t idx) noexcept -> void;
+		/** get buffer binding */
+		auto getBufferBinding(uint32_t idx) noexcept -> RHI::BufferBinding;
+		/** array size */
+		uint32_t size;
+	};
+
+	export template <class T>
+	struct StructuredArrayMultiStorageBufferView :public BufferView {
+		/** update use structure */
+		auto setStructure(T* x, uint32_t idx) noexcept -> void;
+		/** get buffer binding */
+		auto getBufferBinding(uint32_t idx) noexcept -> RHI::BufferBinding;
+		/** array size */
+		uint32_t size;
+	};
+
+#pragma region IMPL_EXTENDED_BUFFER
+
+
+	template <class T>
+	auto StructuredUniformBufferView<T>::setStructure(T const& x, uint32_t idx) noexcept -> void {
+		std::future<bool> mapped = buffer->buffer->mapAsync(0, 0, sizeof(T) * MULTIFRAME_FLIGHTS_COUNT);
+		if (mapped.get()) {
+			void* data = buffer->buffer->getMappedRange(sizeof(T) * idx, sizeof(T) * MULTIFRAME_FLIGHTS_COUNT);
+			memcpy(data, &x, sizeof(T));
+			buffer->buffer->unmap();
+		}
+	}
+
+	template <class T>
+	auto StructuredUniformBufferView<T>::getBufferBinding(uint32_t idx) noexcept -> RHI::BufferBinding {
+		return RHI::BufferBinding{ buffer->buffer.get(), idx * sizeof(T), sizeof(T) };
+	}
+
+	template <class T>
+	auto StructuredArrayUniformBufferView<T>::setStructure(T* x, uint32_t idx) noexcept -> void {
+		std::future<bool> mapped = buffer->buffer->mapAsync(0, 0, sizeof(T) * MULTIFRAME_FLIGHTS_COUNT * size);
+		if (mapped.get()) {
+			void* data = buffer->buffer->getMappedRange(sizeof(T) * idx * size, sizeof(T) * MULTIFRAME_FLIGHTS_COUNT * size);
+			memcpy(data, x, sizeof(T) * size);
+			buffer->buffer->unmap();
+		}
+	}
+
+	template <class T>
+	auto StructuredArrayUniformBufferView<T>::getBufferBinding(uint32_t idx) noexcept -> RHI::BufferBinding {
+		return RHI::BufferBinding{ buffer->buffer.get(), idx * sizeof(T) * size, sizeof(T) * size };
+	}
+
+	template <class T>
+	auto StructuredArrayMultiStorageBufferView<T>::setStructure(T* x, uint32_t idx) noexcept -> void {
+		std::future<bool> mapped = buffer->buffer->mapAsync(0, 0, sizeof(T) * MULTIFRAME_FLIGHTS_COUNT * size);
+		if (mapped.get()) {
+			void* data = buffer->buffer->getMappedRange(sizeof(T) * idx * size, sizeof(T) * MULTIFRAME_FLIGHTS_COUNT * size);
+			memcpy(data, x, sizeof(T) * size);
+			buffer->buffer->unmap();
+		}
+	}
+
+	template <class T>
+	auto StructuredArrayMultiStorageBufferView<T>::getBufferBinding(uint32_t idx) noexcept -> RHI::BufferBinding {
+		return RHI::BufferBinding{ buffer->buffer.get(), idx * sizeof(T) * size, sizeof(T) * size };
+	}
+
+#pragma endregion
+
+
 	/** A singleton manager manages graphic components and resources. */
 	export struct GFXManager :public Core::Manager {
 		// online resource registers
 		/** create / register online buffer resource */
 		auto registerBufferResource(Core::GUID guid, RHI::BufferDescriptor const& desc) noexcept -> void;
+		template <class T> auto createStructuredUniformBuffer() noexcept -> StructuredUniformBufferView<T>;
+		template <class T> auto createStructuredArrayUniformBuffer(uint32_t array_size) noexcept -> StructuredArrayUniformBufferView<T>;
+		template <class T> auto createStructuredArrayMultiStorageBuffer(uint32_t array_size, uint32_t additionalUsage) noexcept -> StructuredArrayMultiStorageBufferView<T>;
 		/** create / register online texture resource */
 		auto registerTextureResource(Core::GUID guid, RHI::TextureDescriptor const& desc) noexcept -> void;
 		auto registerTextureResource(Core::GUID guid, Image::Image<Image::COLOR_R8G8B8A8_UINT>* image) noexcept -> void;
@@ -517,6 +627,60 @@ namespace SIByL::GFX
 		static GFXManager* singleton;
 	};
 
+	export struct SBTsDescriptor {
+		/** @indexing: By default, traceRayEXT always uses the ray generation shader at index 0.
+		* Therefore we currently support single record slot for a ray generation SBT. */
+		struct RayGenerationSBT {
+			/** A ray generation record only has a ray generation shader. */
+			struct RayGenerationRecord { GFX::ShaderModule* rayGenShader = nullptr; };
+			/** As defaultly 0 is chosen, we only provide one record slot*/
+			RayGenerationRecord rgenRecord = {};
+		} rgenSBT;
+		/** @indexing: When a ray didn't intersect anything, traversal calls
+		* the index missIndex miss shader, specified in traceRayEXT call. */
+		struct MissSBT {
+			/** A ray miss record only has a miss shader. */
+			struct MissRecord { GFX::ShaderModule* missShader = nullptr; };
+			/** There could be multiple miss shader to be selected from */
+			std::vector<MissRecord> rmissRecords = {};
+		} missSBT;
+		/** @indexing: Traversal calls the corresponding shader from the hit record with index.
+		* instanceShaderBindingTableRecordOffset (from TLAS) + sbtRecordOffset (from traceRayEXT call)
+		* + sbtRecordStride (from traceRayEXT call)* geometryIndex (from BLAS) */
+		struct HitGroupSBT {
+			/** A hit group record includes a closest hit shader, an optional any hit shader,
+			* and an optional intersection shader (only for procedural hit groups). */
+			struct HitGroupRecord {
+				GFX::ShaderModule* closetHitShader = nullptr;
+				GFX::ShaderModule* anyHitShader = nullptr;
+				GFX::ShaderModule* intersectionShader = nullptr;
+			};
+			/** There could be hit group shader to be selected from */
+			std::vector<HitGroupRecord> hitGroupRecords = {};
+		} hitGroupSBT;
+		struct CallableSBT {
+			/** A callable record includes only a callable shader. */
+			struct CallableRecord { GFX::ShaderModule* callableShader = nullptr; };
+			/** There could be hit group shader to be selected from */
+			std::vector<CallableRecord> callableRecords = {};
+		} callableSBT;
+
+		operator RHI::SBTsDescriptor() const {
+			RHI::SBTsDescriptor sbt;
+			sbt.rgenSBT.rgenRecord.rayGenShader = rgenSBT.rgenRecord.rayGenShader->shaderModule.get();
+			for (auto const& entry : missSBT.rmissRecords)
+				sbt.missSBT.rmissRecords.push_back(RHI::SBTsDescriptor::MissSBT::MissRecord{ entry.missShader->shaderModule.get() });
+			for (auto const& entry : hitGroupSBT.hitGroupRecords)
+				sbt.hitGroupSBT.hitGroupRecords.push_back(RHI::SBTsDescriptor::HitGroupSBT::HitGroupRecord{
+				entry.closetHitShader == nullptr ? nullptr : entry.closetHitShader->shaderModule.get(),
+				entry.anyHitShader == nullptr ? nullptr : entry.anyHitShader->shaderModule.get(),
+				entry.intersectionShader == nullptr ? nullptr : entry.intersectionShader->shaderModule.get()
+			});
+			for (auto const& entry : callableSBT.callableRecords)
+				sbt.callableSBT.callableRecords.push_back(RHI::SBTsDescriptor::CallableSBT::CallableRecord{ entry.callableShader->shaderModule.get() });
+			return sbt;
+		}
+	};
 
 #pragma region SCENE_IMPL
 
@@ -1363,6 +1527,50 @@ namespace SIByL::GFX
 		GFX::Buffer bufferResource = {};
 		bufferResource.buffer = rhiLayer->getDevice()->createBuffer(desc);
 		Core::ResourceManager::get()->addResource(guid, std::move(bufferResource));
+	}
+
+	template <class T>
+	auto GFXManager::createStructuredUniformBuffer() noexcept -> StructuredUniformBufferView<T> {
+		Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
+		RHI::BufferDescriptor desc = {
+			.size = sizeof(T) * MULTIFRAME_FLIGHTS_COUNT,
+			.usage = (uint32_t)RHI::BufferUsage::UNIFORM,
+			.memoryProperties = uint32_t(RHI::MemoryProperty::HOST_VISIBLE_BIT) | uint32_t(RHI::MemoryProperty::HOST_COHERENT_BIT)
+		};
+		registerBufferResource(guid, desc);
+		StructuredUniformBufferView<T> view;
+		view.buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(guid);
+		return view;
+	}
+
+	template <class T>
+	auto GFXManager::createStructuredArrayUniformBuffer(uint32_t array_size) noexcept -> StructuredArrayUniformBufferView<T> {
+		Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
+		RHI::BufferDescriptor desc = {
+			.size = sizeof(T) * MULTIFRAME_FLIGHTS_COUNT * array_size,
+			.usage = (uint32_t)RHI::BufferUsage::UNIFORM,
+			.memoryProperties = uint32_t(RHI::MemoryProperty::HOST_VISIBLE_BIT) | uint32_t(RHI::MemoryProperty::HOST_COHERENT_BIT)
+		};
+		registerBufferResource(guid, desc);
+		StructuredArrayUniformBufferView<T> view;
+		view.buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(guid);
+		view.size = array_size;
+		return view;
+	}
+
+	template <class T>
+	auto GFXManager::createStructuredArrayMultiStorageBuffer(uint32_t array_size, uint32_t additionalUsage = 0) noexcept -> StructuredArrayMultiStorageBufferView<T> {
+		Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
+		RHI::BufferDescriptor desc = {
+			.size = sizeof(T) * MULTIFRAME_FLIGHTS_COUNT * array_size,
+			.usage = (uint32_t)RHI::BufferUsage::STORAGE | additionalUsage,
+			.memoryProperties = uint32_t(RHI::MemoryProperty::HOST_VISIBLE_BIT) | uint32_t(RHI::MemoryProperty::HOST_COHERENT_BIT)
+		};
+		registerBufferResource(guid, desc);
+		StructuredArrayMultiStorageBufferView<T> view;
+		view.buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(guid);
+		view.size = array_size;
+		return view;
 	}
 
 	auto GFXManager::registerTextureResource(Core::GUID guid, Image::Image<Image::COLOR_R8G8B8A8_UINT>* image) noexcept -> void {

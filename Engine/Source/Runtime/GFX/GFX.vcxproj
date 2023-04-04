@@ -162,7 +162,6 @@
     <ClCompile Include="Public\Core\SE.GFX.Core-GFXConfig.ixx" />
     <ClCompile Include="Public\Core\SE.GFX.Core-Loader.ShaderLoader.ixx" />
     <ClCompile Include="Public\Core\SE.GFX.Core-Main.ixx" />
-    <ClCompile Include="Public\RDG\SE.GFX.RDG.ixx" />
     <ClCompile Include="Public\Core\SE.GFX.Core-Loader.MeshLoader.ixx" />
     <ClCompile Include="Public\Core\SE.GFX.Core-Loader.SceneNodeLoader.ixx" />
     <ClCompile Include="Public\Core\SE.GFX.Core-SerializeUtils.ixx" />

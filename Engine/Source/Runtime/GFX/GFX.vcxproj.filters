@@ -21,9 +21,6 @@
     <ClCompile Include="Public\Core\SE.GFX.Core-Loader.SceneNodeLoader.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\RDG\SE.GFX.RDG.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="Public\Core\SE.GFX.Core-SerializeUtils.ixx">
       <Filter>源文件</Filter>
     </ClCompile>

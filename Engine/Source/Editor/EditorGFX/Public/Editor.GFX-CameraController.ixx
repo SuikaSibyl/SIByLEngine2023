@@ -5,7 +5,7 @@ import SE.Platform.Window;
 import SE.Core.Misc;
 import SE.Math.Geometric;
 import SE.Math.Spline;
-import SE.GFX.Core;
+import SE.GFX;
 
 namespace SIByL::Editor
 {

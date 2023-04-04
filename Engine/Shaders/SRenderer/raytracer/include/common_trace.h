@@ -14,7 +14,6 @@
 #include "utils/camera_model.h"
 
 layout(binding = 0, set = 1) uniform accelerationStructureEXT tlas;
-layout(binding = 1, set = 1, rgba32f) uniform image2D storageImage;
 
 /** Primary Payload Struct */
 struct PrimaryPayload {
