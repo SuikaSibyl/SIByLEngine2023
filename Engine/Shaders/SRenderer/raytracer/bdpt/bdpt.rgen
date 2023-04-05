@@ -111,11 +111,11 @@ void main() {
     oneStrategy(cameraSubpath, lightSubpath, 2, 2, nLight, nCamera, L, RNG, resolution);
     oneStrategy(cameraSubpath, lightSubpath, 3, 1, nLight, nCamera, L, RNG, resolution);
 
-    // oneStrategy(cameraSubpath, lightSubpath, 0, 5, nLight, nCamera, L, RNG, resolution);
-    // oneStrategy(cameraSubpath, lightSubpath, 1, 4, nLight, nCamera, L, RNG, resolution);
-    // oneStrategy(cameraSubpath, lightSubpath, 2, 3, nLight, nCamera, L, RNG, resolution);
-    // oneStrategy(cameraSubpath, lightSubpath, 3, 2, nLight, nCamera, L, RNG, resolution);
-    // oneStrategy(cameraSubpath, lightSubpath, 4, 1, nLight, nCamera, L, RNG, resolution);
+    oneStrategy(cameraSubpath, lightSubpath, 0, 5, nLight, nCamera, L, RNG, resolution);
+    oneStrategy(cameraSubpath, lightSubpath, 1, 4, nLight, nCamera, L, RNG, resolution);
+    oneStrategy(cameraSubpath, lightSubpath, 2, 3, nLight, nCamera, L, RNG, resolution);
+    oneStrategy(cameraSubpath, lightSubpath, 3, 2, nLight, nCamera, L, RNG, resolution);
+    oneStrategy(cameraSubpath, lightSubpath, 4, 1, nLight, nCamera, L, RNG, resolution);
     
     // oneStrategy(cameraSubpath, lightSubpath, 0, 6, nLight, nCamera, L, RNG, resolution);
     // oneStrategy(cameraSubpath, lightSubpath, 1, 5, nLight, nCamera, L, RNG, resolution);

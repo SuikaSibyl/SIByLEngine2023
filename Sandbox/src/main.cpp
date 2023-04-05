@@ -46,6 +46,7 @@ import SE.SRenderer;
 import SE.SRenderer.ForwardPipeline;
 import SE.SRenderer.MMLTPipeline;
 import SE.SRenderer.UDPTPipeline;
+import SE.SRenderer.BDPTPipeline;
 
 using namespace SIByL;
 using namespace SIByL::Core;
@@ -133,8 +134,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		srenderer = std::make_unique<SRenderer>();
 		srenderer->init(scene);
-		graph = std::make_unique<SRP::UDPTPipeline>();
-		graph->build();
+		pipeline = std::make_unique<SRP::UDPTPipeline>();
+		pipeline->build();
 
 		cameraController.init(mainWindow.get()->getInput(), &timer);
 	};
@@ -174,9 +175,9 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			}
 		}
 		srenderer->invalidScene(scene);
-		srenderer->updateRDGData(graph.get());
+		srenderer->updateRDGData(pipeline->getActiveGraph());
 
-		graph->execute(commandEncoder.get());
+		pipeline->execute(commandEncoder.get());
 
 		device->getGraphicsQueue()->submit({ commandEncoder->finish({}) }, 
 			multiFrameFlights->getImageAvailableSeamaphore(),
@@ -188,94 +189,13 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		bool show_demo_window = true;
 		ImGui::ShowDemoWindow(&show_demo_window);
 
-		editorLayer->getWidget<Editor::ViewportWidget>()->setTarget("Main Viewport", graph->getOutput());
+		editorLayer->getWidget<Editor::ViewportWidget>()->setTarget("Main Viewport", pipeline->getOutput());
 		editorLayer->onDrawGui();
 		imguiLayer->render();
 
 		multiFrameFlights->frameEnd();
 	};
 
-	auto captureImage(Core::GUID src) noexcept -> void {
-		//RHI::Texture* cpySrc = Core::ResourceManager::get()->getResource<GFX::Texture>(src)->texture.get();
-		//rhiLayer->getDevice()->readbackDeviceLocalTexture(cpySrc, );
-		static Core::GUID copyDst = 0;
-		if (copyDst == 0) {
-			copyDst = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
-			RHI::TextureDescriptor desc{
-				{800,600,1},
-				1, 1, RHI::TextureDimension::TEX2D,
-				RHI::TextureFormat::RGBA32_FLOAT,
-				(uint32_t)RHI::TextureUsage::COPY_DST,
-				{ RHI::TextureFormat::RGBA32_FLOAT },
-				RHI::TextureFlags::HOSTI_VISIBLE
-			};
-			GFX::GFXManager::get()->registerTextureResource(copyDst, desc);
-		}
-		rhiLayer->getDevice()->waitIdle();
-		std::unique_ptr<RHI::CommandEncoder> commandEncoder = rhiLayer->getDevice()->createCommandEncoder({});
-		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
-			(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
-			(uint32_t)RHI::PipelineStages::TRANSFER_BIT,
-			(uint32_t)RHI::DependencyType::NONE,
-			{}, {},
-			{ RHI::TextureMemoryBarrierDescriptor{
-				Core::ResourceManager::get()->getResource<GFX::Texture>(src)->texture.get(),
-				RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
-				(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT | (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
-				(uint32_t)RHI::AccessFlagBits::TRANSFER_READ_BIT,
-				RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
-				RHI::TextureLayout::TRANSFER_SRC_OPTIMAL
-			}}
-		});
-		commandEncoder->copyTextureToTexture(
-			RHI::ImageCopyTexture{
-				Core::ResourceManager::get()->getResource<GFX::Texture>(src)->texture.get()
-			},
-			RHI::ImageCopyTexture{
-				Core::ResourceManager::get()->getResource<GFX::Texture>(copyDst)->texture.get()
-			},
-			RHI::Extend3D{ 800, 600, 1 }
-		);
-		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
-			(uint32_t)RHI::PipelineStages::TRANSFER_BIT,
-			(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
-			(uint32_t)RHI::DependencyType::NONE,
-			{}, {},
-			{ RHI::TextureMemoryBarrierDescriptor{
-				Core::ResourceManager::get()->getResource<GFX::Texture>(src)->texture.get(),
-				RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
-				(uint32_t)RHI::AccessFlagBits::TRANSFER_READ_BIT,
-				(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT | (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT,
-				RHI::TextureLayout::TRANSFER_SRC_OPTIMAL,
-				RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL
-			}}
-		});
-		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
-			(uint32_t)RHI::PipelineStages::TRANSFER_BIT,
-			(uint32_t)RHI::PipelineStages::HOST_BIT,
-			(uint32_t)RHI::DependencyType::NONE,
-			{}, {},
-			{ RHI::TextureMemoryBarrierDescriptor{
-				Core::ResourceManager::get()->getResource<GFX::Texture>(copyDst)->texture.get(),
-				RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,1,0,1},
-				(uint32_t)RHI::AccessFlagBits::TRANSFER_WRITE_BIT,
-				(uint32_t)RHI::AccessFlagBits::HOST_READ_BIT,
-				RHI::TextureLayout::TRANSFER_DST_OPTIMAL,
-				RHI::TextureLayout::TRANSFER_DST_OPTIMAL
-			}}
-			});
-		rhiLayer->getDevice()->getGraphicsQueue()->submit({ commandEncoder->finish({}) });
-		rhiLayer->getDevice()->waitIdle();
-		std::future<bool> mapped = Core::ResourceManager::get()->getResource<GFX::Texture>(copyDst)->texture->mapAsync(
-			(uint32_t)RHI::MapMode::READ, 0, 800 * 600 * sizeof(vec4));
-		if (mapped.get()) {
-			void* data = Core::ResourceManager::get()->getResource<GFX::Texture>(copyDst)->texture->getMappedRange(0, 800 * 600 * sizeof(vec4));
-			std::string filepath = mainWindow->saveFile("", Core::WorldTimePoint::get().to_string() + ".hdr");
-			Image::HDR::writeHDR(filepath, 800, 600, 4, reinterpret_cast<float*>(data));
-			Core::ResourceManager::get()->getResource<GFX::Texture>(copyDst)->texture->unmap();
-		}
-	}
-	
 	/** Update the application every fixed update timestep */
 	virtual auto FixedUpdate() noexcept -> void override {
 
@@ -284,7 +204,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 	virtual auto Exit() noexcept -> void override {
 		rhiLayer->getDevice()->waitIdle();
 		srenderer = nullptr;
-		graph = nullptr;
+		pipeline = nullptr;
 
 		blases.clear();
 
@@ -306,7 +226,7 @@ private:
 	std::unique_ptr<Editor::EditorLayer> editorLayer = nullptr;
 	std::unique_ptr<SRenderer> srenderer = nullptr;
 	
-	std::unique_ptr<RDG::Graph> graph = nullptr;
+	std::unique_ptr<RDG::Pipeline> pipeline = nullptr;
 
 	std::vector<std::unique_ptr<RHI::BLAS>> blases;
 

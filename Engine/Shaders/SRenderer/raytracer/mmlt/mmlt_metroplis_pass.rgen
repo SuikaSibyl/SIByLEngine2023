@@ -2,14 +2,26 @@
 #extension GL_GOOGLE_include_directive : enable
 #extension GL_EXT_shader_atomic_float: enable
 
-#include "mmlt_descriptor_set.h"
+#include "mmlt_config.h"
 #include "mmlt.glsl"
+
+struct SampleInfo {
+    vec3    LCurrent;
+    int     depth;
+    vec2    pCurrent;
+    vec2    padding;
+};
+
+layout(binding = 0, set = 2, r32f) coherent uniform image2DArray atomicRGB;
+layout(binding = 1, set = 2) buffer _PSSSampleStreamBuffer  { vec4 sampleStreams[metroplis_buffer_width][metroplis_buffer_height][num_states_vec4]; };
+layout(binding = 2, set = 2) buffer _PSSSampleInfoBuffer    { SampleInfo sampleInfos[metroplis_buffer_width][metroplis_buffer_height]; };
+layout(binding = 3, set = 2) uniform sampler2D boostrapImportMIP;
+
 #include "../include/common_splat_film.h"
 
 struct PushConstants { 
     uvec2 resolution;
     uint sample_batch; 
-    uint timestamp; 
 };
 layout(push_constant) uniform PushConsts { PushConstants pushConstants; };
 
@@ -167,10 +179,10 @@ void main() {
     uint RNG = uint((pushConstants.sample_batch * grid.y + lid.y) * grid.x + lid.x);
     uint cRNG = uint((lid.y) * grid.x + lid.x);
     // return when boostrap is not finished
-    if(pushConstants.sample_batch < possible_depth_num) return;
+    if(pushConstants.sample_batch <= possible_depth_num) return;
     // if it's first time to sample from boostrap
     // else if(pushConstants.sample_batch == possible_depth_num) {
-    else if(pushConstants.sample_batch == possible_depth_num) {
+    else if(pushConstants.sample_batch == possible_depth_num + 1) {
         float pdf;
         ivec2 boostrap_xy = sampleBoostrapSample(RNG, pdf);
 
@@ -184,14 +196,14 @@ void main() {
             sampleStreams[lid.x][lid.y][i] = sample_streams[i];
 
         vec2 pCurrent;
-        // vec3 LCurrent = L(depth, resolution, pCurrent, sample_streams);
-        vec3 LCurrent = L(3, resolution, pCurrent, sample_streams);
+        vec3 LCurrent = L(depth, resolution, pCurrent, sample_streams);
+        // vec3 LCurrent = L(3, resolution, pCurrent, sample_streams);
 
         SampleInfo sampleInfo;
         sampleInfo.pCurrent = pCurrent;
         sampleInfo.LCurrent = LCurrent;
-        // sampleInfo.depth = depth;
-        sampleInfo.depth = 3;
+        sampleInfo.depth = depth;
+        // sampleInfo.depth = 3;
         sampleInfos[lid.x][lid.y] = sampleInfo;
     }
     // if it's following passes that load from previous records

@@ -40,6 +40,18 @@ namespace SIByL::RDG
 		inline auto withSize(uint32_t size) noexcept -> BufferInfo&;
 		inline auto withUsages(RHI::BufferUsagesFlags usages) noexcept -> BufferInfo&;
 		inline auto withFlags(ResourceFlags flags) noexcept -> BufferInfo&;
+
+		struct ConsumeEntry {
+			RHI::AccessFlags		access;
+			RHI::PipelineStageFlags stages;
+
+			inline auto addStage(RHI::PipelineStageFlags stage) noexcept -> ConsumeEntry& { stages |= stage; return *this; }
+			inline auto setAccess(uint32_t acc) noexcept -> ConsumeEntry& { access = acc; return *this; }
+		};
+
+		inline auto consume(ConsumeEntry const& entry) noexcept -> BufferInfo&;
+
+		std::vector<ConsumeEntry> consumeHistories;
 	};
 	
 	/**
@@ -80,6 +92,8 @@ namespace SIByL::RDG
 		RHI::TextureLayout		laytout		= RHI::TextureLayout::GENERAL;
 		RHI::ShaderStagesFlags  sflags		= 0;
 
+		GFX::Texture* reference = nullptr;
+
 		enum struct ConsumeType {
 			ColorAttachment,
 			DepthStencilAttachment,
@@ -111,6 +125,7 @@ namespace SIByL::RDG
 				this->level_end = level_end;
 				return *this; }
 			inline auto setAttachmentLoc(uint32_t loc) noexcept -> ConsumeEntry& { attachLoc = loc; return *this; }
+			inline auto setAccess(uint32_t acc) noexcept -> ConsumeEntry& { access = acc; return *this; }
 		};
 
 		inline auto consume(ConsumeEntry const& entry) noexcept -> TextureInfo&;
@@ -151,6 +166,13 @@ namespace SIByL::RDG
 		};
 	}
 
+	export inline auto toBufferDescriptor(BufferInfo const& info) noexcept -> RHI::BufferDescriptor {
+		return RHI::BufferDescriptor{
+			info.size,
+			info.usages
+		};
+	}
+
 	/** Information that describe a resource in RDG */
 	export struct ResourceInfo {
 		ResourceInfo()
@@ -187,6 +209,17 @@ namespace SIByL::RDG
 		struct ConsumeHistory {
 			size_t passID;
 			std::vector<TextureInfo::ConsumeEntry> entries;
+		};
+		std::vector<ConsumeHistory> cosumeHistories;
+	};
+	
+	export struct BufferResource :public Resource {
+		RHI::BufferDescriptor desc;
+		GFX::Buffer* buffer;
+
+		struct ConsumeHistory {
+			size_t passID;
+			std::vector<BufferInfo::ConsumeEntry> entries;
 		};
 		std::vector<ConsumeHistory> cosumeHistories;
 	};
@@ -262,6 +295,7 @@ namespace SIByL::RDG
 		}
 
 		inline auto getTexture(std::string const& name) const noexcept -> GFX::Texture*;
+		inline auto getBuffer(std::string const& name) const noexcept -> GFX::Buffer*;
 
 		inline auto setUVec2(std::string const& name, Math::uvec2 v) noexcept -> void { uvec2s[name] = v; }
 		inline auto getUVec2(std::string const& name) const noexcept -> Math::uvec2 {
@@ -377,6 +411,13 @@ namespace SIByL::RDG
 			prepareDispatch(context, target);
 			return passEncoders[context->flightIdx].get();
 		}
+		
+		inline auto beginPass(RDG::RenderContext* context, uint32_t width, uint32_t height) noexcept -> RHI::RenderPassEncoder* {
+			passEncoders[context->flightIdx] = context->cmdEncoder->beginRenderPass(renderPassDescriptor);
+			passEncoders[context->flightIdx]->setPipeline(pipelines[context->flightIdx].get());
+			prepareDispatch(context, width, height);
+			return passEncoders[context->flightIdx].get();
+		}
 
 		inline auto prepareDelegateData(RenderContext* context, RenderData const& renderData) noexcept -> RenderData::DelegateData {
 			RenderData::DelegateData data;
@@ -396,6 +437,12 @@ namespace SIByL::RDG
 				passEncoders[context->flightIdx]->setBindGroup(i, bindgroups[i][context->flightIdx].get());
 			passEncoders[context->flightIdx]->setViewport(0, 0, target->texture->width(), target->texture->height(), 0, 1);
 			passEncoders[context->flightIdx]->setScissorRect(0, 0, target->texture->width(), target->texture->height());
+		}
+		inline auto prepareDispatch(RDG::RenderContext* context, uint32_t width, uint32_t height) noexcept -> void {
+			for (size_t i = 0; i < bindgroups.size(); ++i)
+				passEncoders[context->flightIdx]->setBindGroup(i, bindgroups[i][context->flightIdx].get());
+			passEncoders[context->flightIdx]->setViewport(0, 0, width, height, 0, 1);
+			passEncoders[context->flightIdx]->setScissorRect(0, 0, width, height);
 		}
 
 		virtual auto init(GFX::ShaderModule* vertex, GFX::ShaderModule* fragment) noexcept -> void;
@@ -516,6 +563,22 @@ namespace SIByL::RDG
 			std::string const& dst_pass, std::string const& dst_resource
 		) noexcept -> void;
 
+		auto addEdge(
+			std::string const& src_pass,
+			std::string const& dst_pass
+		) noexcept -> void;
+
+		/**
+		* Set external resource
+		* @param pass		: the pass where the resource is in
+		* @param resource	: the resource to set
+		*/
+		auto setExternal(
+			std::string const& pass,
+			std::string const& resource,
+			GFX::Texture* tex
+		) noexcept -> void;
+
 		/**
 		* Mark the main output of the render graph.
 		* @param pass		: the pass produce the output
@@ -527,6 +590,11 @@ namespace SIByL::RDG
 		) noexcept -> void;
 		
 		inline auto getOutput() noexcept -> GFX::Texture*;
+
+		inline auto getTextureResource(
+			std::string const& pass,
+			std::string const& output
+		) noexcept -> GFX::Texture*;
 
 		RenderData renderData;
 	private:
@@ -550,10 +618,49 @@ namespace SIByL::RDG
 
 		size_t resourceID = 0;
 		std::unordered_map<size_t, std::unique_ptr<TextureResource>> textureResources;
+		std::unordered_map<size_t, std::unique_ptr<BufferResource>> bufferResources;
 
+		auto generateBufferBarriers() noexcept -> void;
 		auto generateTextureBarriers() noexcept -> void;
 
 		auto decodeAlias(std::string& pass, std::string& resource) noexcept -> void;
+	};
+
+	export struct Pipeline {
+		Pipeline() = default;
+		virtual ~Pipeline() = default;
+
+		virtual auto build() noexcept -> void = 0;
+
+		virtual auto execute(RHI::CommandEncoder* encoder) noexcept -> void = 0;
+
+		virtual auto getActiveGraph() noexcept -> Graph* = 0;
+
+		virtual auto getOutput() noexcept -> GFX::Texture* = 0;
+	};
+
+
+	export struct SingleGraphPipeline :public Pipeline {
+		SingleGraphPipeline() = default;
+		virtual ~SingleGraphPipeline() = default;
+
+		virtual auto execute(RHI::CommandEncoder* encoder) noexcept -> void {
+			pGraph->execute(encoder);
+		}
+
+		virtual auto getActiveGraph() noexcept -> Graph* {
+			return pGraph;
+		}
+
+		virtual auto getOutput() noexcept -> GFX::Texture* {
+			return pGraph->getOutput();
+		}
+
+		virtual auto build() noexcept -> void override {
+			pGraph->build();
+		}
+
+		Graph* pGraph;
 	};
 
 #pragma region IMPL
@@ -568,6 +675,10 @@ namespace SIByL::RDG
 	inline auto BufferInfo::withFlags(ResourceFlags _flags) noexcept -> BufferInfo& {
 		flags = _flags;
 		return *this; }
+	inline auto BufferInfo::consume(ConsumeEntry const& entry) noexcept -> BufferInfo& {
+		consumeHistories.emplace_back(entry);
+		return *this;
+	}
 
 	inline auto TextureInfo::consume(ConsumeEntry const& _entry) noexcept -> TextureInfo& {
 		ConsumeEntry entry = _entry;
@@ -771,6 +882,13 @@ namespace SIByL::RDG
 			passes[passNameList[src_pass]]->pReflection.getResourceInfo(src_resource);
 	}
 
+	auto Graph::addEdge(
+		std::string const& src_pass,
+		std::string const& dst_pass
+	) noexcept -> void {
+		dag.addEdge(passNameList[src_pass], passNameList[dst_pass]);
+	}
+
 	auto Graph::decodeAlias(std::string& pass, std::string& resource) noexcept -> void {
 		auto findPass = subgraphsAlias.find(pass);
 		if (findPass != subgraphsAlias.end()) {
@@ -780,6 +898,16 @@ namespace SIByL::RDG
 				resource = findResource->second.resource;
 			}
 		}
+	}
+
+	auto Graph::setExternal(
+		std::string const& _pass,
+		std::string const& _resource,
+		GFX::Texture* tex
+	) noexcept -> void {
+		std::string pass = _pass, res = _resource;
+		decodeAlias(pass, res);
+		passes[passNameList[pass]]->pReflection.getResourceInfo(res)->info.texture.reference = tex;
 	}
 
 	auto Graph::markOutput(
@@ -800,6 +928,21 @@ namespace SIByL::RDG
 		if (iter_pass == passes.end()) return nullptr;
 		renderData.pass = iter_pass->second.get();
 		return renderData.getTexture(output_resource);
+	}
+
+	inline auto Graph::getTextureResource(
+		std::string const& _pass,
+		std::string const& _output
+	) noexcept -> GFX::Texture* {
+		std::string pass = _pass, output = _output;
+		decodeAlias(pass, output);
+		auto const& iter_id = passNameList.find(pass);
+		if (iter_id == passNameList.end()) return nullptr;
+		size_t id = iter_id->second;
+		auto const& iter_pass = passes.find(id);
+		if (iter_pass == passes.end()) return nullptr;
+		renderData.pass = iter_pass->second.get();
+		return renderData.getTexture(output);
 	}
 
 	auto Pass::init() noexcept -> void {
@@ -1011,6 +1154,7 @@ namespace SIByL::RDG
 	}
 
 	auto Graph::build() noexcept -> bool {
+		renderData.graph = this;
 		// Flatten the graph
 		std::optional<std::vector<size_t>> flat = flatten_bfs(dag, passNameList[output_pass]);
 		if (!flat.has_value())
@@ -1032,6 +1176,17 @@ namespace SIByL::RDG
 					});
 					internal.second.devirtualizeID = rid;
 				}
+				else if (internal.second.type == ResourceInfo::Type::Buffer) {
+					size_t rid = resourceID++;
+					bufferResources[rid] = std::make_unique<BufferResource>();
+					Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
+					bufferResources[rid]->desc = toBufferDescriptor(internal.second.info.buffer);
+					bufferResources[rid]->cosumeHistories.push_back({
+						flattenedPasses[i],
+						internal.second.info.buffer.consumeHistories
+						});
+					internal.second.devirtualizeID = rid;
+				}
 			}
 			// devirtualize output resources
 			for (auto& internal: passes[flattenedPasses[i]]->pReflection.outputResources) {
@@ -1043,6 +1198,19 @@ namespace SIByL::RDG
 					textureResources[rid]->cosumeHistories.push_back({
 						flattenedPasses[i],
 						internal.second.info.texture.consumeHistories
+						});
+					internal.second.devirtualizeID = rid;
+					if (internal.second.info.texture.reference != nullptr)
+						textureResources[rid]->texture = internal.second.info.texture.reference;
+				}
+				else if (internal.second.type == ResourceInfo::Type::Buffer) {
+					size_t rid = resourceID++;
+					bufferResources[rid] = std::make_unique<BufferResource>();
+					Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
+					bufferResources[rid]->desc = toBufferDescriptor(internal.second.info.buffer);
+					bufferResources[rid]->cosumeHistories.push_back({
+						flattenedPasses[i],
+						internal.second.info.buffer.consumeHistories
 						});
 					internal.second.devirtualizeID = rid;
 				}
@@ -1059,6 +1227,18 @@ namespace SIByL::RDG
 						internal.second.info.texture.consumeHistories
 					});
 				}
+				else if (internal.second.type == ResourceInfo::Type::Buffer) {
+					size_t rid = internal.second.prev->devirtualizeID;
+					internal.second.devirtualizeID = rid;
+					bufferResources[rid] = std::make_unique<BufferResource>();
+					Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
+					RHI::BufferDescriptor desc = toBufferDescriptor(internal.second.info.buffer);
+					bufferResources[rid]->desc.usage |= desc.usage;
+					bufferResources[rid]->cosumeHistories.push_back({
+						flattenedPasses[i],
+						internal.second.info.buffer.consumeHistories
+						});
+				}
 			}
 			// devirtualize input-output resources
 			for (auto& internal: passes[flattenedPasses[i]]->pReflection.inputOutputResources) {
@@ -1072,6 +1252,18 @@ namespace SIByL::RDG
 						internal.second.info.texture.consumeHistories
 					});
 				}
+				else if (internal.second.type == ResourceInfo::Type::Buffer) {
+					size_t rid = internal.second.prev->devirtualizeID;
+					internal.second.devirtualizeID = rid;
+					bufferResources[rid] = std::make_unique<BufferResource>();
+					Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
+					RHI::BufferDescriptor desc = toBufferDescriptor(internal.second.info.buffer);
+					bufferResources[rid]->desc.usage |= desc.usage;
+					bufferResources[rid]->cosumeHistories.push_back({
+						flattenedPasses[i],
+						internal.second.info.buffer.consumeHistories
+						});
+				}
 			}
 		}
 
@@ -1081,16 +1273,27 @@ namespace SIByL::RDG
 				RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::TextureBinding }
 				.addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT)
 				.setLayout(RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL)
+				.setAccess(uint32_t(RHI::AccessFlagBits::SHADER_READ_BIT))
 				.setSubresource(0, res.second->desc.mipLevelCount, 0, res.second->desc.size.depthOrArrayLayers);
 			res.second->cosumeHistories.push_back({ size_t(-1), {final_consume} });
 
-			res.second->guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
-			GFX::GFXManager::get()->registerTextureResource(res.second->guid, res.second->desc);
-			res.second->texture = Core::ResourceManager::get()->getResource<GFX::Texture>(res.second->guid);
+			if (res.second->texture == nullptr) {
+				res.second->guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
+				GFX::GFXManager::get()->registerTextureResource(res.second->guid, res.second->desc);
+				res.second->texture = Core::ResourceManager::get()->getResource<GFX::Texture>(res.second->guid);
+			}
 		}
 
+		for (auto& res : bufferResources) {
+			if (res.second->buffer == nullptr) {
+				res.second->guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
+				GFX::GFXManager::get()->registerBufferResource(res.second->guid, res.second->desc);
+				res.second->buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(res.second->guid);
+			}
+		}
 		// create barriers
 		generateTextureBarriers();
+		generateBufferBarriers();
 	}
 
 	auto Graph::execute(RHI::CommandEncoder* encoder) noexcept -> void {
@@ -1252,11 +1455,13 @@ namespace SIByL::RDG
 					return TextureSubresourceRange{ x.level_beg, x.level_end, y.mip_beg, x.mip_end };
 				else if (x.mip_end == y.mip_beg)
 					return TextureSubresourceRange{ x.level_beg, x.level_end, x.mip_beg, y.mip_end };
+				else return std::nullopt;
 			} else if (x.mip_beg == y.mip_beg && x.mip_end == y.mip_end) {
 				if (x.level_beg == y.level_end)
 					return TextureSubresourceRange{ y.level_beg, x.level_end, x.mip_beg, x.mip_end };
 				else if (x.level_end == y.level_beg)
 					return TextureSubresourceRange{ x.level_beg, y.level_end, x.mip_beg, x.mip_end };
+				else return std::nullopt;
 			} else
 				return std::nullopt;
 		}
@@ -1288,7 +1493,7 @@ namespace SIByL::RDG
 					// do nothing
 				} else if (x.mip_beg == y.mip_beg) {
 					diffs.emplace_back(TextureSubresourceRange{ level_beg, level_end, y.mip_end, x.mip_end });
-				} else if (x.mip_end == x.mip_end) {
+				} else if (x.mip_end == y.mip_end) {
 					diffs.emplace_back(TextureSubresourceRange{ level_beg, level_end, x.mip_beg, y.mip_beg });
 				} else {
 					diffs.emplace_back(TextureSubresourceRange{ level_beg, level_end, x.mip_beg, y.mip_beg });
@@ -1382,6 +1587,31 @@ namespace SIByL::RDG
 		std::vector<TextureSubresourceEntry> states;
 	};
 
+	auto Graph::generateBufferBarriers() noexcept -> void {
+		for (auto& res : bufferResources) {
+			if (res.second->cosumeHistories.size() == 0) continue;
+
+			auto prev_ch = res.second->cosumeHistories.back().entries[0];
+			auto curr_ch = prev_ch;
+
+			for (auto const& hentry : res.second->cosumeHistories) {
+				curr_ch = hentry.entries[0];
+				RHI::BarrierDescriptor desc = RHI::BarrierDescriptor{
+					prev_ch.stages,
+					curr_ch.stages,
+					uint32_t(RHI::DependencyType::NONE),
+					{},{},{}
+				};
+				desc.bufferMemoryBarriers.push_back(RHI::BufferMemoryBarrierDescriptor{
+					res.second->buffer->buffer.get(),
+					prev_ch.access,
+					curr_ch.access
+				});
+				barriers[hentry.passID].emplace_back(desc);
+			}
+		}
+	}
+
 	auto Graph::generateTextureBarriers() noexcept -> void {
 
 		for (auto& res : textureResources) {
@@ -1424,6 +1654,21 @@ namespace SIByL::RDG
 		}
 		if (pass->pReflection.internalResources.find(name) != pass->pReflection.internalResources.end()) {
 			return graph->textureResources[pass->pReflection.internalResources[name].devirtualizeID]->texture;
+		}
+	}
+
+	inline auto RenderData::getBuffer(std::string const& name) const noexcept -> GFX::Buffer* {
+		if (pass->pReflection.inputResources.find(name) != pass->pReflection.inputResources.end()) {
+			return graph->bufferResources[pass->pReflection.inputResources[name].devirtualizeID]->buffer;
+		}
+		if (pass->pReflection.outputResources.find(name) != pass->pReflection.outputResources.end()) {
+			return graph->bufferResources[pass->pReflection.outputResources[name].devirtualizeID]->buffer;
+		}
+		if (pass->pReflection.inputOutputResources.find(name) != pass->pReflection.inputOutputResources.end()) {
+			return graph->bufferResources[pass->pReflection.inputOutputResources[name].devirtualizeID]->buffer;
+		}
+		if (pass->pReflection.internalResources.find(name) != pass->pReflection.internalResources.end()) {
+			return graph->bufferResources[pass->pReflection.internalResources[name].devirtualizeID]->buffer;
 		}
 	}
 

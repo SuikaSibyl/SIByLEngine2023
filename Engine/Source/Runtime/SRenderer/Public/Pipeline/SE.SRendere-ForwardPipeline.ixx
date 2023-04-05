@@ -15,9 +15,8 @@ import SE.SRenderer.ACEsPass;
 
 namespace SIByL::SRP
 {
-	export struct ForwardPipeline :public RDG::Graph {
-
-		ForwardPipeline() {
+	export struct ForwardGraph :public RDG::Graph {
+		ForwardGraph() {
 			addPass(std::make_unique<PreZPass>(), "Pre-Z Pass");
 			addPass(std::make_unique<AlbedoPass>(), "Albedo Pass");
 			addPass(std::make_unique<ACEsPass>(), "ACEs Pass");
@@ -27,6 +26,10 @@ namespace SIByL::SRP
 
 			markOutput("ACEs Pass", "LDR");
 		}
+	};
 
+	export struct ForwardPipeline :public RDG::SingleGraphPipeline {
+		ForwardPipeline() { pGraph = &graph; }
+		ForwardGraph graph;
 	};
 }

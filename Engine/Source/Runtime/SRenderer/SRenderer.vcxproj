@@ -138,10 +138,10 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Public\Core\SE.SRenderer-SRenderer.ixx" />
-    <ClCompile Include="Public\Graph\SE.SRendere-ForwardPipeline.ixx" />
-    <ClCompile Include="Public\Graph\SE.SRendere-MMLTPipeline.ixx" />
-    <ClCompile Include="Public\Graph\SE.SRendere-UDPTPipeline.ixx" />
-    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRendere-Raster.ClearImage.ixx" />
+    <ClCompile Include="Public\Pipeline\SE.SRendere-BDPTPipeline.ixx" />
+    <ClCompile Include="Public\Pipeline\SE.SRendere-ForwardPipeline.ixx" />
+    <ClCompile Include="Public\Pipeline\SE.SRendere-MMLTPipeline.ixx" />
+    <ClCompile Include="Public\Pipeline\SE.SRendere-UDPTPipeline.ixx" />
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-ACEsPass.ixx" />
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-Blit.ixx" />
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-ClearI32RGBA.ixx" />
@@ -149,19 +149,12 @@
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-MIPAddPoolingPass.ixx" />
     <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-AlbedoPass.ixx" />
     <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-PreZPass.ixx" />
+    <ClCompile Include="Public\Passes\RayTracingPasses\SE.SRenderer-BDPTPass.ixx" />
     <ClCompile Include="Public\Passes\RayTracingPasses\SE.SRenderer-MMLTPass.ixx" />
     <ClCompile Include="Public\Passes\RayTracingPasses\SE.SRenderer-UDPTPass.ixx" />
-    <ClCompile Include="Public\Passes\SE.SRendere-Raster.Albedo.ixx" />
-    <ClCompile Include="Public\Passes\SE.SRendere-Tracer.MMLT.ixx" />
-    <ClCompile Include="Public\Passes\SE.SRendere-Tracer.SBDPT.ixx" />
-    <ClCompile Include="Public\Passes\SE.SRendere-Tracer.SMultiCubemap.ixx" />
-    <ClCompile Include="Public\Passes\SE.SRendere-Tracer.STracer.ixx" />
-    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-FullScreen.CreateSumUpMip.ixx" />
     <ClCompile Include="Public\SE.SRenderer.ixx" />
-    <ClCompile Include="Public\Utils\SE.SRendere-Tracer.CustomPrimitive.Sphere.ixx" />
-    <ClCompile Include="Public\Utils\SE.SRenderer-FullScreenPass.ixx" />
-    <ClCompile Include="Public\Utils\SE.SRenderer-RACommon.ixx" />
-    <ClCompile Include="Public\Utils\SE.SRenderer-RTCommon.ixx" />
+    <ClCompile Include="Public\Core\SE.SRenderer-RACommon.ixx" />
+    <ClCompile Include="Public\Core\SE.SRenderer-RTCommon.ixx" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Core\Core.vcxproj">

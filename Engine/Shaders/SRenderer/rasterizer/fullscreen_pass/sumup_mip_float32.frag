@@ -10,7 +10,7 @@ layout(push_constant) uniform PushConsts { PushConstants pushConstants; };
 layout(binding = 0) uniform sampler2D texSampler;
 
 void main() {
-    vec2 uv = vec2(in_uv.x, 1 - in_uv.y);
+    vec2 uv = vec2(in_uv.x, in_uv.y);
     const float pixel_width = 1. / pushConstants.src_size;
     const float half_pixel = 0.5 * pixel_width;
     vec2 lu = uv + vec2(-half_pixel, +half_pixel);

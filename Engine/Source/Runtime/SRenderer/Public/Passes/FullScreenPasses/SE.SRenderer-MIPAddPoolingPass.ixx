@@ -51,20 +51,19 @@ namespace SIByL
 				RHI::RenderPassDepthStencilAttachment{},
 			};
 
-			RHI::RenderPassEncoder* encoder = beginPass(context, target);
-
-			size_t src_size = target->getRTV(mipOffset, 0, 1)->getWidth();
-			encoder->pushConstants(&src_size,
-				(uint32_t)RHI::ShaderStages::FRAGMENT,
-				0, sizeof(uint32_t));
-
-
 			getBindGroup(context, 0)->updateBinding(std::vector<RHI::BindGroupEntry>{
 				{0, RHI::BindingResource(
 					std::vector<RHI::TextureView*>{target->getSRV(mipOffset, 1, 0, 1)},
 					Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.clamp_nearest)->sampler.get())
 				}
 			});
+
+			size_t src_size = target->getRTV(mipOffset, 0, 1)->getWidth();
+
+			RHI::RenderPassEncoder* encoder = beginPass(context, src_size / 2, src_size / 2);
+			encoder->pushConstants(&src_size,
+				(uint32_t)RHI::ShaderStages::FRAGMENT,
+				0, sizeof(uint32_t));
 
 			dispatchFullScreen(context);
 

@@ -634,6 +634,8 @@ namespace SIByL
 		if (sceneDataPack.geometry_buffer_cpu.size() > 0) {
 			sceneDataBuffers.geometry_buffer.setStructure(sceneDataPack.geometry_buffer_cpu.data(), fid);
 		}
+
+		rtCommon.accumIDX = state.batchIdx;
 	}
 
 	auto packTexture(SRenderer* srenderer, Core::GUID guid) -> uint32_t {
@@ -1059,6 +1061,7 @@ namespace SIByL
 		graph->renderData.setBindGroupEntries("CommonScene", &(commonDescData.set0_flights_resources[flightIdx]));
 		graph->renderData.setBindGroupEntries("CommonRT", &(commonDescData.set1_flights_resources[flightIdx]));
 		graph->renderData.setUInt("AccumIdx", state.batchIdx++);
+		graph->renderData.setUVec2("TargetSize", { state.width , state.height });
 		graph->renderData.setDelegate("IssueAllDrawcalls", [&, flightIdx = flightIdx](RDG::RenderData::DelegateData const& data) {
 			if (sceneDataPack.geometry_buffer_cpu.size() > 0) {
 				data.passEncoder.render->setIndexBuffer(sceneDataPack.index_buffer.get(),

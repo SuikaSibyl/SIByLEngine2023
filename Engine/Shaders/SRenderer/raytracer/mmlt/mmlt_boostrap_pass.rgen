@@ -2,9 +2,10 @@
 #extension GL_GOOGLE_include_directive : enable
 #extension GL_EXT_shader_atomic_float: enable
 
-#include "mmlt_descriptor_set.h"
+#include "mmlt_config.h"
 #include "mmlt.glsl"
-#include "../include/common_splat_film.h"
+
+layout(binding = 0, set = 2, r32f) uniform image2D boostrapLuminance;
 
 struct PushConstants { 
     uvec2 resolution;
@@ -38,8 +39,7 @@ void main() {
     UniformSampleStream(sample_streams, RNG);
 
     ivec2 pRaster;
-    // vec3 radiance = L(depth, resolution, pRaster, sample_streams);
-    vec3 radiance = L(3, resolution, pRaster, sample_streams);
+    vec3 radiance = L(depth, resolution, pRaster, sample_streams);
 
     per_depth_luminance = luminance(radiance);
 

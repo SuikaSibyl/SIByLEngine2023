@@ -13,12 +13,15 @@ import SE.SRenderer.UDPTPass;
 
 namespace SIByL::SRP
 {
-	export struct UDPTPipeline :public RDG::Graph {
-
-		UDPTPipeline() {
+	export struct UDPTGraph :public RDG::Graph {
+		UDPTGraph() {
 			addPass(std::make_unique<UDPTPass>(), "UDPT Pass");
 			markOutput("UDPT Pass", "Color");
 		}
+	};
 
+	export struct UDPTPipeline :public RDG::SingleGraphPipeline {
+		UDPTPipeline() { pGraph = &graph; }
+		UDPTGraph graph;
 	};
 }

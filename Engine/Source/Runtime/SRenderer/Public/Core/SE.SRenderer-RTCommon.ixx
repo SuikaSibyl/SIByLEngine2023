@@ -52,6 +52,8 @@ namespace SIByL
 
 		GFX::SBTsDescriptor sbtDesc;
 
+		uint32_t accumIDX;
+
 		auto getSBTDescriptor() noexcept -> GFX::SBTsDescriptor {
 			if (!initialized)
 				init();

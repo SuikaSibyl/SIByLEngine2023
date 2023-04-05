@@ -31,7 +31,7 @@ namespace SIByL
 				.isTexture()
 				.withSize(Math::vec3(1, 1, 1))
 				.withFormat(RHI::TextureFormat::R32_FLOAT)
-				.withUsages((uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT)
+				.withUsages((uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT | (uint32_t)RHI::TextureUsage::STORAGE_BINDING)
 				.withLayers(4)
 				.consume(RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::ColorAttachment }
 					.setSubresource(0,1,0,1).setAttachmentLoc(0)
