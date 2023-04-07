@@ -1178,12 +1178,18 @@ namespace SIByL::GFX
 			? RHI::TextureViewDimension::TEX2D_ARRAY
 			: RHI::TextureViewDimension::TEX2D;
 
+		uint32_t aspect = (uint32_t)RHI::TextureAspect::COLOR_BIT;
+		if (RHI::hasDepthBit(texture->format()))
+			aspect = (uint32_t)RHI::TextureAspect::DEPTH_BIT;
+		if (RHI::hasStencilBit(texture->format()))
+			aspect |= (uint32_t)RHI::TextureAspect::STENCIL_BIT;
+
 		auto find = viewPool.find(idx);
 		if (find == viewPool.end()) {
 			viewPool[idx] = texture->createView(RHI::TextureViewDescriptor{
 				texture->format(),
 				dimension,
-				(uint32_t)RHI::TextureAspect::COLOR_BIT,
+				aspect,
 				mostDetailedMip,
 				mipCount,
 				firstArraySlice,

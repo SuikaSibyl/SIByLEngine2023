@@ -54,7 +54,7 @@
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-CombineI32RGBA.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-MIPAddPoolingPass.ixx">
+    <ClCompile Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPAddPoolingPass.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-Blit.ixx">
@@ -67,6 +67,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Passes\RayTracingPasses\SE.SRenderer-BDPTPass.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPMinPoolingPass.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

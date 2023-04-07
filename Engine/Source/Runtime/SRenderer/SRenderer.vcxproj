@@ -138,6 +138,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Public\Core\SE.SRenderer-SRenderer.ixx" />
+    <ClCompile Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPMinPoolingPass.ixx" />
     <ClCompile Include="Public\Pipeline\SE.SRendere-BDPTPipeline.ixx" />
     <ClCompile Include="Public\Pipeline\SE.SRendere-ForwardPipeline.ixx" />
     <ClCompile Include="Public\Pipeline\SE.SRendere-MMLTPipeline.ixx" />
@@ -146,7 +147,7 @@
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-Blit.ixx" />
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-ClearI32RGBA.ixx" />
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-CombineI32RGBA.ixx" />
-    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-MIPAddPoolingPass.ixx" />
+    <ClCompile Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPAddPoolingPass.ixx" />
     <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-AlbedoPass.ixx" />
     <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-PreZPass.ixx" />
     <ClCompile Include="Public\Passes\RayTracingPasses\SE.SRenderer-BDPTPass.ixx" />

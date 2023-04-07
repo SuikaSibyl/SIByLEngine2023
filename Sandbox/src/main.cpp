@@ -74,6 +74,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		// bind editor layer
 		editorLayer->getWidget<Editor::SceneWidget>()->bindScene(&scene);
+		editorLayer->getWidget<Editor::StatusWidget>()->timer = &timer;
 
 		RHI::Device* device = rhiLayer->getDevice();
 		RHI::SwapChain* swapchain = rhiLayer->getSwapChain();
@@ -134,7 +135,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		srenderer = std::make_unique<SRenderer>();
 		srenderer->init(scene);
-		pipeline = std::make_unique<SRP::UDPTPipeline>();
+		pipeline = std::make_unique<SRP::ForwardPipeline>();
 		pipeline->build();
 
 		cameraController.init(mainWindow.get()->getInput(), &timer);

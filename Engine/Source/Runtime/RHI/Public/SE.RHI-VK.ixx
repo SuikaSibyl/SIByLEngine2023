@@ -6,6 +6,7 @@ module;
 #include <memory>
 #include <optional>
 #include <limits>
+#include <cmath>
 #include <cstdint>
 #include <algorithm>
 #include <future>
@@ -1921,9 +1922,11 @@ namespace SIByL::RHI
 		width = texture->width();
 		height = texture->height();
 		for (int i = 0; i < descriptor.baseMipLevel; ++i) {
-			width /= 2;
-			height /= 2;
+			width >>= 1;
+			height >>= 1;
 		}
+		width = max(width, 1);
+		height = max(height, 1);
 
 		if (vkCreateImageView(device->getVkDevice(), &createInfo, nullptr, &imageView) != VK_SUCCESS) {
 			Core::LogManager::Error("VULKAN :: failed to create image views!");

@@ -12,6 +12,7 @@ import SE.RDG;
 import SE.SRenderer.AlbedoPass;
 import SE.SRenderer.PreZPass;
 import SE.SRenderer.ACEsPass;
+import SE.SRenderer.MIPMinPoolingPass;
 
 namespace SIByL::SRP
 {
@@ -21,10 +22,13 @@ namespace SIByL::SRP
 			addPass(std::make_unique<AlbedoPass>(), "Albedo Pass");
 			addPass(std::make_unique<ACEsPass>(), "ACEs Pass");
 
+			addSubgraph(std::make_unique<MIPMinPoolingPass>(1280, 720), "HiZ-Gen Pass");
+
 			addEdge("Pre-Z Pass", "Depth", "Albedo Pass", "Depth");
+			addEdge("Pre-Z Pass", "Depth", "HiZ-Gen Pass", "Input");
 			addEdge("Albedo Pass", "Color", "ACEs Pass", "HDR");
 
-			markOutput("ACEs Pass", "LDR");
+			markOutput("HiZ-Gen Pass", "Output");
 		}
 	};
 

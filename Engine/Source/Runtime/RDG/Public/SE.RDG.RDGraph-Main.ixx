@@ -5,6 +5,7 @@ module;
 #include <vector>
 #include <string>
 #include <memory>
+#include <format>
 #include <optional>
 #include <variant>
 #include <functional>
@@ -16,6 +17,7 @@ import SE.Utility;
 import SE.Math.Geometric;
 import SE.RHI;
 import SE.GFX;
+import SE.Core.Log;
 import SE.Core.Resource;
 
 namespace SIByL::RDG
@@ -66,13 +68,16 @@ namespace SIByL::RDG
 	* @param * usages;	 : usage of the texture};
 	* @param * flag		 : some flags describe the resource
 	*/
+	export inline uint32_t MaxPossible = uint32_t(-1);
+
 	export struct TextureInfo {
 		TextureInfo() = default;
 		~TextureInfo() = default;
 
 		enum struct SizeDefine {
 			Absolute,						// * define size by absolute value
-			Relative						// * define size by relative value
+			Relative,						// * define size by relative value
+			RelativeToAnotherTex,			// * define size by relative value
 		};
 		union Size {
 			Math::ivec3 absolute;			// * the absolute size
@@ -93,6 +98,7 @@ namespace SIByL::RDG
 		RHI::ShaderStagesFlags  sflags		= 0;
 
 		GFX::Texture* reference = nullptr;
+		std::string sizeRefName;
 
 		enum struct ConsumeType {
 			ColorAttachment,
@@ -133,6 +139,7 @@ namespace SIByL::RDG
 		inline auto setInfo(TextureInfo const& x) noexcept -> TextureInfo&;
 		inline auto withSize(Math::ivec3 absolute) noexcept -> TextureInfo&;
 		inline auto withSize(Math::vec3 relative) noexcept -> TextureInfo&;
+		inline auto withSizeRelative(std::string const& src, Math::vec3 relative = { 1. }) noexcept -> TextureInfo&;
 		inline auto withLevels(uint32_t levels) noexcept -> TextureInfo&;
 		inline auto withLayers(uint32_t layers) noexcept -> TextureInfo&;
 		inline auto withSamples(uint32_t samples) noexcept -> TextureInfo&;
@@ -255,6 +262,7 @@ namespace SIByL::RDG
 			} else if (internalResources.find(name) != internalResources.end()) {
 				return &internalResources[name];
 			}
+			Core::LogManager::Error(std::format("RDG::PassReflection::getResourceInfo Failed to find resource \"{0}\"", name));
 			return nullptr;
 		}
 	};
@@ -614,7 +622,7 @@ namespace SIByL::RDG
 		std::string output_pass;
 		std::string output_resource;
 
-		Math::ivec3 standardSize = { 800,600,1 };
+		Math::ivec3 standardSize = { 1280,720,1 };
 
 		size_t resourceID = 0;
 		std::unordered_map<size_t, std::unique_ptr<TextureResource>> textureResources;
@@ -712,6 +720,7 @@ namespace SIByL::RDG
 		if (sizeDef == SizeDefine::Absolute) size.absolute = x.size.absolute;
 		else if (sizeDef == SizeDefine::Relative) size.relative = x.size.relative;
 		format = x.format;
+		levels = x.levels;
 		return *this;
 	}
 	inline auto TextureInfo::withSize(Math::ivec3 absolute) noexcept -> TextureInfo& {
@@ -720,6 +729,11 @@ namespace SIByL::RDG
 		return *this; }
 	inline auto TextureInfo::withSize(Math::vec3 relative) noexcept -> TextureInfo& {
 		sizeDef = SizeDefine::Relative;
+		size.relative = relative;
+		return *this; }
+	inline auto TextureInfo::withSizeRelative(std::string const& src, Math::vec3 relative) noexcept -> TextureInfo& {
+		sizeDef = SizeDefine::RelativeToAnotherTex;
+		sizeRefName = src;
 		size.relative = relative;
 		return *this; }
 	inline auto TextureInfo::withLevels(uint32_t _levels) noexcept -> TextureInfo& {
@@ -878,8 +892,17 @@ namespace SIByL::RDG
 		decodeAlias(dst_pass, dst_resource);
 
 		dag.addEdge(passNameList[src_pass], passNameList[dst_pass]);
-		passes[passNameList[dst_pass]]->pReflection.getResourceInfo(dst_resource)->prev =
-			passes[passNameList[src_pass]]->pReflection.getResourceInfo(src_resource);
+		auto* dst_res = passes[passNameList[dst_pass]]->pReflection.getResourceInfo(dst_resource);
+		auto* src_res = passes[passNameList[src_pass]]->pReflection.getResourceInfo(src_resource);
+		if (dst_res == nullptr) {
+			Core::LogManager::Error(std::format("RDG::Graph::addEdge Failed to find dst resource \"{0}\" in pass \"{1}\"", dst_resource, dst_pass));
+			return;
+		}
+		if (src_res == nullptr) {
+			Core::LogManager::Error(std::format("RDG::Graph::addEdge Failed to find src resource \"{0}\" in pass \"{1}\"", src_resource, src_pass));
+			return;
+		}
+		dst_res->prev = src_res;
 	}
 
 	auto Graph::addEdge(
@@ -946,7 +969,7 @@ namespace SIByL::RDG
 	}
 
 	auto Pass::init() noexcept -> void {
-		pReflection = reflect();
+		pReflection = this->reflect();
 	}
 
 	auto PipelinePass::init(std::vector<GFX::ShaderModule*> shaderModules) noexcept -> void {
@@ -1188,7 +1211,6 @@ namespace SIByL::RDG
 					internal.second.devirtualizeID = rid;
 				}
 			}
-			// devirtualize output resources
 			for (auto& internal: passes[flattenedPasses[i]]->pReflection.outputResources) {
 				if (internal.second.type == ResourceInfo::Type::Texture) {
 					size_t rid = resourceID++;
@@ -1243,6 +1265,11 @@ namespace SIByL::RDG
 			// devirtualize input-output resources
 			for (auto& internal: passes[flattenedPasses[i]]->pReflection.inputOutputResources) {
 				if (internal.second.type == ResourceInfo::Type::Texture) {
+					if (internal.second.prev == nullptr) {
+						Core::LogManager::Error(std::format("RDG::Graph::build() failed, input-output resource \"{0}\" in pass \"{1}\" has no source.",
+							internal.first,
+							passes[flattenedPasses[i]]->identifier));
+					}
 					size_t rid = internal.second.prev->devirtualizeID;
 					internal.second.devirtualizeID = rid;
 					RHI::TextureDescriptor desc = toTextureDescriptor(internal.second.info.texture, standardSize);
@@ -1265,10 +1292,34 @@ namespace SIByL::RDG
 						});
 				}
 			}
+			// Deal with relative to another tex case
+			for (auto& internal: passes[flattenedPasses[i]]->pReflection.internalResources) {
+				if (internal.second.type == ResourceInfo::Type::Texture) {
+					if (internal.second.info.texture.sizeDef == TextureInfo::SizeDefine::RelativeToAnotherTex) {
+						auto const& refResourceInfo = passes[flattenedPasses[i]]->pReflection.getResourceInfo(internal.second.info.texture.sizeRefName);
+						textureResources[internal.second.devirtualizeID]->desc.size
+							= textureResources[refResourceInfo->devirtualizeID]->desc.size;
+					}
+				}
+			}
+			// devirtualize output resources
+			for (auto& internal: passes[flattenedPasses[i]]->pReflection.outputResources) {
+				if (internal.second.type == ResourceInfo::Type::Texture) {
+					if (internal.second.info.texture.sizeDef == TextureInfo::SizeDefine::RelativeToAnotherTex) {
+						auto const& refResourceInfo = passes[flattenedPasses[i]]->pReflection.getResourceInfo(internal.second.info.texture.sizeRefName);
+						textureResources[internal.second.devirtualizeID]->desc.size
+							= textureResources[refResourceInfo->devirtualizeID]->desc.size;
+					}
+				}
+			}
 		}
 
 		// devirtualize all the results
 		for (auto& res : textureResources) {
+			if (res.second->desc.mipLevelCount == uint32_t(-1)) {
+				res.second->desc.mipLevelCount = std::log2(std::max(res.second->desc.size.width, res.second->desc.size.height)) + 1;
+			}
+
 			RDG::TextureInfo::ConsumeEntry final_consume =
 				RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::TextureBinding }
 				.addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT)

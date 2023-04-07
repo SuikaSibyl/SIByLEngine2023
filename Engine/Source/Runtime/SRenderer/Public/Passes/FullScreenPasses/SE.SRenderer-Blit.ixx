@@ -18,10 +18,13 @@ namespace SIByL
 	export struct BlitPass :public RDG::FullScreenPass {
 
 		struct Descriptor {
-			RDG::TextureInfo targetInfo;
+			uint32_t src_mip;
+			uint32_t src_array;
+			uint32_t dst_mip;
+			uint32_t dst_array;
 		} desc;
 
-		BlitPass(Descriptor const desc) :desc(desc) {
+		BlitPass(Descriptor const& desc) :desc(desc) {
 			frag = GFX::GFXManager::get()->registerShaderModuleResource(
 				"../Engine/Binaries/Runtime/spirv/SRenderer/rasterizer/fullscreen_pass/blit_image_frag.spv",
 				{ nullptr, RHI::ShaderStages::FRAGMENT });
@@ -31,17 +34,18 @@ namespace SIByL
 		virtual auto reflect() noexcept -> RDG::PassReflection {
 			RDG::PassReflection reflector;
 
-			reflector.addInput("Input")
+			reflector.addInput("Source")
 				.isTexture()
 				.withUsages((uint32_t)RHI::TextureUsage::TEXTURE_BINDING)
 				.consume(RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::TextureBinding }
+					.setSubresource(desc.src_mip, desc.src_mip + 1, desc.src_array, desc.src_array + 1)
 					.addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT));
 
-			reflector.addOutput("Output")
+			reflector.addInputOutput("Target")
 				.isTexture()
-				.setInfo(desc.targetInfo)
 				.withUsages((uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT)
 				.consume(RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::ColorAttachment }
+					.setSubresource(desc.dst_mip, desc.dst_mip + 1, desc.dst_array, desc.dst_array + 1)
 					.enableDepthWrite(false)
 					.setAttachmentLoc(0)
 					.setDepthCompareFn(RHI::CompareFunction::ALWAYS));
@@ -51,8 +55,8 @@ namespace SIByL
 
 		virtual auto execute(RDG::RenderContext* context, RDG::RenderData const& renderData) noexcept -> void {
 
-			GFX::Texture* in = renderData.getTexture("Input");
-			GFX::Texture* out = renderData.getTexture("Output");
+			GFX::Texture* in = renderData.getTexture("Source");
+			GFX::Texture* out = renderData.getTexture("Target");
 
 			renderPassDescriptor = {
 				{ RHI::RenderPassColorAttachment{

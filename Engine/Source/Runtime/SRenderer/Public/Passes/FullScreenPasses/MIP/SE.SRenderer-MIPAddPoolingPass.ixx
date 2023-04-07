@@ -6,7 +6,7 @@ module;
 #include <typeinfo>
 #include <filesystem>
 #include <functional>
-#include "../../../../Application/Public/SE.Application.Config.h"
+#include "../../../../../Application/Public/SE.Application.Config.h"
 export module SE.SRenderer.MIPAddPoolingPass;
 import SE.Math.Geometric;
 import SE.Core.Resource;

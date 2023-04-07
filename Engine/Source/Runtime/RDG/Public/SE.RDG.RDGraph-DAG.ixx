@@ -21,6 +21,7 @@ namespace SIByL::RDG
 
 		auto addEdge(uint32_t src, uint32_t dst) noexcept -> void {
 			adj[src].insert(dst);
+			if (adj.find(dst) == adj.end()) adj[dst] = {};
 		}
 
 		auto reverse() const noexcept -> DAG {

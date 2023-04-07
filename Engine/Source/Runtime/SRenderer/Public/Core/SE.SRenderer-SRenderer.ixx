@@ -248,8 +248,8 @@ namespace SIByL
 		inline auto updateRDGData(RDG::Graph* graph) noexcept -> void;
 
 		struct {
-			uint32_t width = 800;
-			uint32_t height = 600;
+			uint32_t width = 1280;
+			uint32_t height = 720;
 			uint32_t batchIdx = 0;
 			uint32_t allBatch = 0;
 		} state;
@@ -597,8 +597,8 @@ namespace SIByL
 			sceneDataPack.tlas = device->createTLAS(sceneDataPack.tlas_desc);
 			inited = true;
 		}
-		//sceneDataPack.back_tlas = sceneDataPack.tlas;
-		//sceneDataPack.tlas = device->createTLAS(sceneDataPack.tlas_desc);
+		sceneDataPack.back_tlas = sceneDataPack.tlas;
+		sceneDataPack.tlas = device->createTLAS(sceneDataPack.tlas_desc);
 
 		sceneDataPack.back_light_buffer = std::move(sceneDataPack.light_buffer);
 		sceneDataPack.light_buffer = device->createDeviceLocalBuffer(

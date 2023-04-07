@@ -14,5 +14,6 @@ export import :ContentWidget;
 export import :TextureFragment;
 export import :LogWidget;
 export import :Viewport;
+export import :Status;
 // Script
 export import :CameraController;

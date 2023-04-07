@@ -1,0 +1,22 @@
+
+#version 460
+layout(location = 0) in vec2 in_uv;
+layout(location = 0) out float out_color;
+
+struct PushConstants { 
+    ivec2 src_dim;
+    ivec2 dst_dim;
+};
+layout(push_constant) uniform PushConsts { PushConstants pushConstants; };
+
+layout(binding = 0) uniform sampler2D tex;
+
+/**
+* Screen Space
+*/
+
+void main() {
+    const vec2 uv = in_uv;
+
+
+}
