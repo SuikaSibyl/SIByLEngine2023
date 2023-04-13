@@ -13,48 +13,49 @@ For now, no build tool has been set up. Just open `SIByLEngine.sln` with `Visual
 By default, Nvidia GPU with Turing or higher architecture is required to correctly run the engine, as vulkan hardware raytracing is defaultly used. In the future, better compatibility with CPU raytracing fallback might be supported.
 
 ## Features
-- Core
-  - Fully using C++ 20 `Module` modern solution.
+- Using C++ 20 `Module` for the whole engine.
+- ...
+
+## Modules
+- ### CoreModules
   - [Math module](./docs/SIByLDocument_002_Math.md) from scratch with SIMD acceleration.
   - [ECS module](./docs/SIByLDocument_003_ECS.md) from scratch (experimental).
   - [Resource module](./docs/SIByLDocument_004_Resource.md) from scratch (experimental).
-- Rendering
-  - [RHI module](./docs/SIByLDocument_004_RHI.md), with `WebGPU`-style API (only Vulkan backend supported now).
-  - [Tracer module](./docs/SIByLDocument_005_Tracer.md) (CPU/GPU implementation are not integrated yet)
-    - GPU based raytracing
-      - Realtime Denoiser
-        - Local Frequency Analysis Based Approaches [[summary](https://suikasibyl.github.io/CSE274-RealtimeDenoiser-WebPage/)]
-          - [*AAF Softshadow*](http://graphics.berkeley.edu/papers/UdayMehta-AAF-2012-12/)
-          - [*AAF Global Illumination*](https://cseweb.ucsd.edu/~ravir/filtering_GI_final.pdf)
-          - [*MAAF Combined Effects*](https://cseweb.ucsd.edu/~ravir/paper_maaf.pdf)
-    - CPU based raytracing (now only a core subset of PBRT)
-  - [GFX module](./docs/SIByLDocument_006_GFX.md)
-    - Basic Components & Resources
-    - Render Dependency Graph System (experimental).
-  - [SRenderer module](https://github.com/SuikaSibyl/SIByLEngine2023/wiki/SIByL-Renderer)
-    - Uniform scene packing for both rasterizer & ray tracer.
-    - Primitive Supported
-      - Triangle mesh
-      - Procedure sphere
-    - BSDF Supported
-      - Lambertian material
-      - Disney principled material
-    - Ray Tracer Pipeline
-      - Unidirectional path tracer
-      - Bidirectional path tracer
-- Physics
+- ### Rendering Modules
+  - [SE.RHI](https://github.com/SuikaSibyl/SIByLEngine2023/wiki/Graphics-Modules#rhi-module): Abstract layer with `WebGPU`-style API supporting `Vulkan` backend.
+  - [SE.Tracer](./docs/SIByLDocument_005_Tracer.md): `CPU ray tracing` implementation based on PBRT v3 (`GPU` implementation see `SE.SRenderer`)
+  - [SE.Image](./docs/SIByLDocument_005_Tracer.md): `Image` loader/storer for various format.
+  - [SE.Video](./docs/SIByLDocument_005_Tracer.md): `Video` loader/storer for various format, decoding via `ffmpeg`.
+  - [SE.GFX](https://github.com/SuikaSibyl/SIByLEngine2023/wiki/Graphics-Modules#gfx-module): Higher-Level infrastructure on top pf `SE.RHI`
+    - Defining `scene`, with many basic `component`s and  `resource`s.
+    - Providing `serializing` & `deserializing` via `yaml-cpp`.
+  - [SE.RDG](https://github.com/SuikaSibyl/SIByLEngine2023/wiki/Render-Dependency-Graph): `Render Dependency Graph` System (experimental).
+    - `Pass`: rhi-pipeline-level (rasterize/fullscreen/compute/raytrace) atomic node in graph, with automatic pipeline and resource binding layouts creation via `spirv-cross` reflection of SPIR-V shaders.
+    - `Graph`: a directed acyclic graph of `Pass`es, automatic resource management and barrier insertion.
+    - `Pipeline`: a interface enabling cross-frame switching between multiple  `Graph`s.
+  - [SE.SRenderer](https://github.com/SuikaSibyl/SIByLEngine2023/wiki/SIByL-Renderer): Retained mode renderer based on SE.RDG
+    - `Retained mode rendering` infrastructure for both rasterization and ray tracing
+    - Providing lots of `RDG Pass/Graph/Pipeline` implementation.
+
+- ### Physics
   - // TODO.
-- Editor Toolchain
-  - `Dear ImGui` based editor.
+- ### Editor
+  - `Editor_Core module`: ImGui-Vulkan interoperate and extensible GUI framework.
+  - `Editor_GFX module`: Provides many editor widgets for SIByL Engine. 
+  - `Editor_RDG module`: Provides DebugDraw system via RDG and RDG Viewer (no RDG editor yet).
 
 ![TracerDemo](https://imagehost-suikasibyl-us.oss-us-west-1.aliyuncs.com/3tracer.png)
 
 ## Dependencies
 - `glad`: [Multi-Language Vulkan/GL/GLES/EGL/GLX/WGL Loader-Generator based on the official specs.](https://github.com/Dav1dde/glad)
 - `glfw`: [A multi-platform library for OpenGL, OpenGL ES, Vulkan, window and input.](https://github.com/glfw/glfw)
-- `Dear ImGui`: [Bloat-free Graphical User interface for C++ with minimal dependencies](https://github.com/ocornut/imgui)
+- `dear_imgui`: [Bloat-free Graphical User interface for C++ with minimal dependencies](https://github.com/ocornut/imgui)
+- `ffmpeg`: [A complete, cross-platform solution to record, convert and stream audio and video.](https://ffmpeg.org/)
+- `slang`: [Making it easier to work with shaders.](https://github.com/shader-slang/slang)
+- `spirv-cross`: [A practical tool and library for performing reflection on SPIR-V and disassembling SPIR-V back to high level languages.](https://github.com/KhronosGroup/SPIRV-Cross)
 - `stb`: [stb single-file public domain libraries for C/C++](https://github.com/nothings/stb)
-- `tinyobjloader`: [Tiny but powerful single file wavefront obj loader](https://github.com/tinyobjloader/tinyobjloader)
 - `tinygltf`: [Header only C++11 tiny glTF 2.0 library](https://github.com/syoyo/tinygltf)
-- `vulkan`: [A low-overhead, cross-platform API, open standard for 3D graphics and computing](https://www.vulkan.org/)
+- `tinyobjloader`: [Tiny but powerful single file wavefront obj loader](https://github.com/tinyobjloader/tinyobjloader)
 - `vma`: [Easy to integrate Vulkan memory allocation library](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator)
+- `vulkan`: [A low-overhead, cross-platform API, open standard for 3D graphics and computing](https://www.vulkan.org/)
+- `yaml-cpp`: [A YAML parser and emitter in C++](https://github.com/jbeder/yaml-cpp)
