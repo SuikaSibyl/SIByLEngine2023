@@ -1,5 +1,6 @@
 module;
 #include <set>
+#include <cmath>
 #include <memory>
 #include <vector>
 #include <format>
@@ -507,7 +508,7 @@ namespace SIByL::GFX
 	*******************************************************************/
 
 	struct BufferView {
-		GFX::Buffer* buffer;
+		GFX::Buffer* buffer = nullptr;
 	};
 
 	export template <class T>
@@ -531,11 +532,11 @@ namespace SIByL::GFX
 	export template <class T>
 	struct StructuredArrayMultiStorageBufferView :public BufferView {
 		/** update use structure */
-		auto setStructure(T* x, uint32_t idx) noexcept -> void;
+		auto setStructure(T* x, uint32_t idx, int subNum = -1) noexcept -> void;
 		/** get buffer binding */
 		auto getBufferBinding(uint32_t idx) noexcept -> RHI::BufferBinding;
 		/** array size */
-		uint32_t size;
+		uint32_t size = 0;
 	};
 
 #pragma region IMPL_EXTENDED_BUFFER
@@ -572,11 +573,15 @@ namespace SIByL::GFX
 	}
 
 	template <class T>
-	auto StructuredArrayMultiStorageBufferView<T>::setStructure(T* x, uint32_t idx) noexcept -> void {
-		std::future<bool> mapped = buffer->buffer->mapAsync(0, 0, sizeof(T) * MULTIFRAME_FLIGHTS_COUNT * size);
+	auto StructuredArrayMultiStorageBufferView<T>::setStructure(T* x, uint32_t idx, int subNum) noexcept -> void {
+		if (subNum == 0) return;
+		if (subNum == -1) subNum = size;
+		subNum = std::min(uint32_t(subNum), size);
+
+		std::future<bool> mapped = buffer->buffer->mapAsync(0, 0, sizeof(T) * MULTIFRAME_FLIGHTS_COUNT * subNum);
 		if (mapped.get()) {
-			void* data = buffer->buffer->getMappedRange(sizeof(T) * idx * size, sizeof(T) * MULTIFRAME_FLIGHTS_COUNT * size);
-			memcpy(data, x, sizeof(T) * size);
+			void* data = buffer->buffer->getMappedRange(sizeof(T) * idx * size, sizeof(T) * MULTIFRAME_FLIGHTS_COUNT * subNum);
+			memcpy(data, x, sizeof(T) * subNum);
 			buffer->buffer->unmap();
 		}
 	}

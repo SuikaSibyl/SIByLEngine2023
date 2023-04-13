@@ -955,6 +955,14 @@ namespace SIByL::RDG
 		decodeAlias(pass, output);
 		output_pass = pass;
 		output_resource = output;
+
+		auto const& iter_id = passNameList.find(output_pass);
+		if (iter_id == passNameList.end()) return;
+		size_t id = iter_id->second;
+		auto const& iter_pass = passes.find(id);
+		if (iter_pass == passes.end()) return;
+		// enable color attachment for editor debug draw
+		iter_pass->second->pReflection.getResourceInfo(output_resource)->info.texture.usages |= (uint32_t)(RHI::TextureUsage::COLOR_ATTACHMENT);
 	}
 
 	inline auto Graph::getOutput() noexcept -> GFX::Texture* {

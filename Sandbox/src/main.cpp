@@ -43,6 +43,7 @@ import SE.Editor.Core;
 import SE.Editor.GFX;
 import SE.Editor.RDG;
 import SE.Editor.Config;
+import SE.Editor.DebugDraw;
 
 import SE.SRenderer;
 import SE.SRenderer.ForwardPipeline;
@@ -142,6 +143,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		pipeline = std::make_unique<SRP::UDPTPipeline>();
 		pipeline->build();
 
+		Editor::DebugDraw::Init(pipeline->getOutput());
+
 		editorLayer->getWidget<Editor::RDGViewerWidget>()->pipeline = pipeline.get();
 
 		cameraController.init(mainWindow.get()->getInput(), &timer);
@@ -155,6 +158,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		}
 		// start new frame
 		imguiLayer->startNewFrame();
+		Editor::DebugDraw::Clear();
+
 		// frame start
 		RHI::Device* device = rhiLayer->getDevice();
 		RHI::SwapChain* swapChain = rhiLayer->getSwapChain();
@@ -184,6 +189,10 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		pipeline->execute(commandEncoder.get());
 
+		Editor::DebugDraw::DrawLine2D(Math::vec2{ 0.,0. }, Math::vec2{ 1280,720 }, 5., 5.);
+
+		Editor::DebugDraw::Draw(commandEncoder.get());
+
 		device->getGraphicsQueue()->submit({ commandEncoder->finish({}) }, 
 			multiFrameFlights->getImageAvailableSeamaphore(),
 			multiFrameFlights->getRenderFinishedSeamaphore(),
@@ -207,14 +216,13 @@ struct SandBoxApplication :public Application::ApplicationBase {
 	};
 
 	virtual auto Exit() noexcept -> void override {
-
 		decoder.close();
 
 		rhiLayer->getDevice()->waitIdle();
 		srenderer = nullptr;
 		pipeline = nullptr;
 
-		blases.clear();
+		Editor::DebugDraw::Destroy();
 
 		editorLayer = nullptr;
 		imguiLayer = nullptr;
@@ -235,8 +243,6 @@ private:
 	std::unique_ptr<SRenderer> srenderer = nullptr;
 	
 	std::unique_ptr<RDG::Pipeline> pipeline = nullptr;
-
-	std::vector<std::unique_ptr<RHI::BLAS>> blases;
 
 	// the embedded scene, which should be removed in the future
 	GFX::Scene scene;

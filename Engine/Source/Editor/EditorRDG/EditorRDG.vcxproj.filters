@@ -21,5 +21,8 @@
     <ClCompile Include="Public\Editor.RDG-RDGViewer.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Editor.DebugDraw.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

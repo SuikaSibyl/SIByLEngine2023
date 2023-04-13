@@ -139,6 +139,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Public\Editor.DebugDraw.ixx" />
     <ClCompile Include="Public\Editor.RDG-RDGViewer.ixx" />
     <ClCompile Include="Public\Editor.RDG.ixx" />
   </ItemGroup>
