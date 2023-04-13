@@ -19,6 +19,7 @@ import SE.RHI;
 import SE.Image;
 import SE.GFX;
 import SE.Editor.Core;
+import SE.Video;
 
 namespace SIByL::Editor
 {
@@ -160,7 +161,7 @@ namespace SIByL::Editor
 				for (auto& [name, texture] : material->textures) {
 					ImGui::PushID(id);
 					if (ImGui::TreeNode((("Texture - " + std::to_string(id) + " - " + name).c_str()))) {
-						TextureElucidator::onDrawGui_GUID(texture);
+						TextureElucidator::onDrawGui_GUID(texture.guid);
 						ImGui::TreePop();
 					}
 					++id;
@@ -169,6 +170,30 @@ namespace SIByL::Editor
 				ImGui::TreePop();
 			}
 			ImGui::BulletText(("Emissive: " + std::to_string(material->isEmissive)).c_str());
+		}
+	};
+
+	export struct VideoClipElucidator :public ResourceElucidator {
+		/** override draw gui */
+		virtual auto onDrawGui(Core::GUID guid) noexcept -> void override {
+			onDrawGui_GUID(guid);
+		}
+
+		static auto onDrawGui_GUID(Core::GUID guid) noexcept -> void {
+			GFX::VideoClip* vc = Core::ResourceManager::get()->getResource<GFX::VideoClip>(guid);
+			onDrawGui_PTR(vc);
+		}
+
+		/** override draw gui */
+		static auto onDrawGui_PTR(GFX::VideoClip* vc) noexcept -> void {
+			ImGui::BulletText(("Name: " + vc->name).c_str());
+			ImGui::BulletText(("Path: " + vc->resourcePath.value()).c_str());
+			ImGui::BulletText(("Width: " + std::to_string(vc->decoder.width)).c_str());
+			ImGui::BulletText(("Height: " + std::to_string(vc->decoder.height)).c_str());
+			if (ImGui::TreeNode("Texture Binded:")) {
+				TextureElucidator::onDrawGui_PTR(vc->decoder.device_texture);
+				ImGui::TreePop();
+			}
 		}
 	};
 }

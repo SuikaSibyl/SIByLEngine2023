@@ -439,6 +439,11 @@ SHADERC_EXPORT void shaderc_compile_options_set_binding_base_for_stage(
     shaderc_compile_options_t options, shaderc_shader_kind shader_kind,
     shaderc_uniform_kind kind, uint32_t base);
 
+// Sets whether the compiler should preserve all bindings, even when those
+// bindings are not used.
+SHADERC_EXPORT void shaderc_compile_options_set_preserve_bindings(
+    shaderc_compile_options_t options, bool preserve_bindings);
+
 // Sets whether the compiler should automatically assign locations to
 // uniform variables that don't have explicit locations in the shader source.
 SHADERC_EXPORT void shaderc_compile_options_set_auto_map_locations(
@@ -459,6 +464,10 @@ SHADERC_EXPORT void shaderc_compile_options_set_hlsl_register_set_and_binding(
 // Sets whether the compiler should enable extension
 // SPV_GOOGLE_hlsl_functionality1.
 SHADERC_EXPORT void shaderc_compile_options_set_hlsl_functionality1(
+    shaderc_compile_options_t options, bool enable);
+
+// Sets whether 16-bit types are supported in HLSL or not.
+SHADERC_EXPORT void shaderc_compile_options_set_hlsl_16bit_types(
     shaderc_compile_options_t options, bool enable);
 
 // Sets whether the compiler should invert position.Y output in vertex shader.

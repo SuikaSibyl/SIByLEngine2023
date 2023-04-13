@@ -13,20 +13,19 @@ namespace SIByL::Editor
 {
 	export struct RDGViewerWidget :public Widget {
 
-		RDG::Graph* graph = nullptr;
+		RDG::Pipeline* pipeline = nullptr;
 
 		/** draw gui*/
 		virtual auto onDrawGui() noexcept -> void override {
-			ImGui::Begin("RenderGraph Viewer", 0, ImGuiWindowFlags_MenuBar);
-			ImGui::PushItemWidth(ImGui::GetFontSize() * -12);
-			if (ImGui::BeginMenuBar()) {
-				if (ImGui::Button("capture", { 200, 100 })) {
-					//	captureImage(rdg->getTexture("RasterizerTarget_Color")->guid);
-				}
-				ImGui::EndMenuBar();
-			}
-			ImGui::PopItemWidth();
+			ImGui::Begin("Render Graph");
 
+			RDG::Graph* graph = pipeline->getActiveGraph();
+			for (size_t i : graph->flattenedPasses) {
+				if (ImGui::TreeNode(graph->passes[i]->identifier.c_str())) {
+					graph->passes[i]->renderUI();
+					ImGui::TreePop();
+				}
+			}
 
 			ImGui::End();
 		}

@@ -311,6 +311,12 @@ class CompileOptions {
                                                        kind, base);
   }
 
+  // Sets whether the compiler should preserve all bindings, even when those
+  // bindings are not used.
+  void SetPreserveBindings(bool preserve_bindings) {
+    shaderc_compile_options_set_preserve_bindings(options_, preserve_bindings);
+  }
+
   // Sets whether the compiler automatically assigns locations to
   // uniform variables that don't have explicit locations.
   void SetAutoMapLocations(bool auto_map) {
@@ -340,6 +346,11 @@ class CompileOptions {
   // SPV_GOOGLE_hlsl_functionality1.
   void SetHlslFunctionality1(bool enable) {
     shaderc_compile_options_set_hlsl_functionality1(options_, enable);
+  }
+
+  // Sets whether 16-bit types are supported in HLSL or not.
+  void SetHlsl16BitTypes(bool enable) {
+    shaderc_compile_options_set_hlsl_16bit_types(options_, enable);
   }
 
   // Sets whether the compiler should invert position.Y output in vertex shader.

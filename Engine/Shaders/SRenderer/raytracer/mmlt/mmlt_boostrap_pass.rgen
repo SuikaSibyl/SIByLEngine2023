@@ -47,4 +47,4 @@ void main() {
         boostrapLuminance, 
         ivec2(lid.x*possible_depth_num + depth, lid.y),
         vec4(per_depth_luminance));
-}
+}+

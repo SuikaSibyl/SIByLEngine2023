@@ -337,7 +337,17 @@ namespace SIByL::Math
 	inline auto orthographic(float zNear, float zFar) noexcept -> Transform {
 		return Math::scale(1, 1, 1.f / (zFar - zNear)) * Math::translate({ 0,0,-zNear });
 	}
-	
+
+	inline auto ortho(float left, float right, float bottom, float top, float zNear, float zFar) noexcept -> Transform {
+		Math::mat4 trans = {
+			float(2) / (right - left), 0, 0, -(right + left) / (right - left),
+			0, float(2) / (top - bottom), 0, -(top + bottom) / (top - bottom),
+			0, 0, float(2) / (zFar - zNear), -2 * zNear / (zFar - zNear),
+			0, 0, 0, 1
+		};
+		return Transform(trans);
+	}
+
 	inline auto perspective(float fov, float n, float f) noexcept -> Transform {
 		// perform projective divide for perspective projection
 		mat4 persp{

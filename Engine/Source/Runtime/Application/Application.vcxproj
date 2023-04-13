@@ -151,6 +151,9 @@
     <ProjectReference Include="..\Platform\Platform.vcxproj">
       <Project>{05b6310e-59bc-496a-ad4f-ccdd23c7f04d}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\Video\Video.vcxproj">
+      <Project>{7ab5337f-8a6c-49d1-be95-d167e1e4dbf4}</Project>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Public\SE.Application.Config.h" />

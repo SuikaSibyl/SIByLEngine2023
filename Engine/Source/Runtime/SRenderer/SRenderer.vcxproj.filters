@@ -72,5 +72,14 @@
     <ClCompile Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPMinPoolingPass.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-FooPass.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-GBufferPass.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarPass.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

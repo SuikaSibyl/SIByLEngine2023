@@ -6,6 +6,7 @@ import SE.Core.Memory;
 import SE.Core.ECS;
 import SE.Core.Resource;
 import SE.GFX;
+import SE.Video;
 
 namespace SIByL::Application
 {
@@ -27,6 +28,8 @@ namespace SIByL::Application
 		gEntityManager.startUp();
 		gComponentManager.startUp();
 		gResourceManager.startUp();
+		// ext insertion
+		gGfxManager.addExt<GFX::VideExtension>(GFX::Ext::VideoClip);
 		gGfxManager.startUp();
 	}
 

@@ -3,50 +3,37 @@ SceneNodes:
   - uid: 0
     parent: 18446744073709551615
     components:
-      TagComponent: cerberus.obj
-      Transform:
-        translation: [0.600000024, 2.5999999, 0.300000012]
-        eulerAngles: [0, 0, 0]
-        scale: [0.400000006, 0.400000006, 0.400000006]
-      MeshReference:
-        ORID: 1658074404427512668
-        CPF: 0
-      MeshRendererComponent:
-        - ORID: 1658126809923959644
-  - uid: 1
-    parent: 18446744073709551615
-    components:
       TagComponent: Camera Object
       Transform:
-        translation: [4.12009382, 3.15441155, 2.23824]
-        eulerAngles: [-0.54348135, 22.7770042, 0]
+        translation: [-7.33264399, 4.32365894, 6.63778877]
+        eulerAngles: [-0.0831465721, 23.5777283, 0]
         scale: [1, 1, 1]
       CameraComponent:
         fovy: 60
-        aspect: 1.33333337
+        aspect: 1.77777779
         near: 0.100000001
         far: 1000
         ProjectType: 0
         IsPrimary: true
-  - uid: 2
+  - uid: 1
     parent: 18446744073709551615
     components:
       TagComponent: viking_room.obj
       Transform:
-        translation: [0, 0, 0]
+        translation: [-0.800000012, 0.300000012, 3.4000001]
         eulerAngles: [1.57079625, 0, 0]
         scale: [5, 5, 5]
       MeshReference:
         ORID: 1658387022916729692
         CPF: 0
       MeshRendererComponent:
-        - ORID: 1658390946990111580
-  - uid: 3
+        - ORID: 1672152927840615260
+  - uid: 2
     parent: 18446744073709551615
     components:
       TagComponent: sphere.obj
       Transform:
-        translation: [0.699999988, 7, -0.200000003]
+        translation: [0.699999988, 7.80000019, -0.200000003]
         eulerAngles: [0, 0, 0]
         scale: [0.5, 0.5, 0.5]
       MeshReference:
@@ -58,34 +45,90 @@ SceneNodes:
         Type: 0
         Intensity: [200, 200, 200]
         Texture: 18446744073709551615
-  - uid: 4
-    parent: 18446744073709551615
-    components:
-      TagComponent: plane.obj
-      Transform:
-        translation: [2.5, 1.29999995, -2.0999999]
-        eulerAngles: [0, -1.29999995, -1.60000002]
-        scale: [3.29999995, 3, 1.10000002]
-      MeshReference:
-        ORID: 1659681347952819036
-        CPF: 0
-      MeshRendererComponent:
-        - ORID: 1658390946990111580
-      LightComponent:
-        Type: 0
-        Intensity: [2, 2, 10]
-        Texture: 18446744073709551615
-  - uid: 5
+  - uid: 3
     parent: 18446744073709551615
     components:
       TagComponent: bunny.obj
       Transform:
-        translation: [2.20000005, 0, -0.200000003]
-        eulerAngles: [0, -0.800000012, 0]
-        scale: [0.5, 0.5, 0.5]
+        translation: [1.20000005, 0.300000012, 1.39999998]
+        eulerAngles: [0, 3.20000005, 0]
+        scale: [0.600000024, 0.600000024, 0.600000024]
       MeshReference:
         ORID: 1669759969061354332
         CPF: 0
       MeshRendererComponent:
         - ORID: 1668519494341999452
+  - uid: 4
+    parent: 18446744073709551615
+    components:
+      TagComponent: room.obj
+      Transform:
+        translation: [-1.39999998, 0, -1.20000005]
+        eulerAngles: [0, 0, 0]
+        scale: [0.800000012, 0.800000012, 0.800000012]
+      MeshReference:
+        ORID: 1669709816057150300
+        CPF: 0
+      MeshRendererComponent:
+        - ORID: 1658390946990111580
+  - uid: 5
+    parent: 18446744073709551615
+    components:
+      TagComponent: tv1_screen
+      Transform:
+        translation: [3.0999999, 3.70000005, -4.80000019]
+        eulerAngles: [0, 0.200000003, 0]
+        scale: [0.899999976, 0.850000024, 0.899999976]
+      MeshReference:
+        ORID: 1672177319077329756
+        CPF: 0
+      MeshRendererComponent:
+        - ORID: 1672151530801838940
+      LightComponent:
+        Type: 0
+        Intensity: [200, 200, 200]
+        Texture: 18446744073709551615
+  - uid: 6
+    parent: 18446744073709551615
+    components:
+      TagComponent: tv1_shell
+      Transform:
+        translation: [1.89999998, 3.4000001, -4.69999981]
+        eulerAngles: [0, 0.200000003, 0]
+        scale: [1, 0.899999976, 1]
+      MeshReference:
+        ORID: 1672177418062904156
+        CPF: 0
+      MeshRendererComponent:
+        - ORID: 1672150724119739228
+  - uid: 7
+    parent: 18446744073709551615
+    components:
+      TagComponent: tv3_screen.obj
+      Transform:
+        translation: [2.79999995, -0.200000003, -4.80000019]
+        eulerAngles: [0, 0.300000012, 0]
+        scale: [1, 1, 1]
+      MeshReference:
+        ORID: 1672177319077329756
+        CPF: 0
+      MeshRendererComponent:
+        - ORID: 1658126809923959644
+      LightComponent:
+        Type: 0
+        Intensity: [200, 200, 200]
+        Texture: 18446744073709551615
+  - uid: 8
+    parent: 18446744073709551615
+    components:
+      TagComponent: tv3_shell.obj
+      Transform:
+        translation: [2.79999995, -0.200000003, -4.80000019]
+        eulerAngles: [0, 0.300000012, 0]
+        scale: [1, 1, 1]
+      MeshReference:
+        ORID: 1672177323374190326
+        CPF: 0
+      MeshRendererComponent:
+        - ORID: 1672151357358979932
 SceneEnd: TRUE

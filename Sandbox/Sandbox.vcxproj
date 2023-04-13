@@ -151,6 +151,9 @@
     <ProjectReference Include="..\Engine\Source\Editor\EditorGFX\EditorGFX.vcxproj">
       <Project>{7984c6ea-a159-46eb-8645-875c00f2dba5}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\Engine\Source\Editor\EditorRDG\EditorRDG.vcxproj">
+      <Project>{ada03319-6a25-448b-8828-e52873cd92d6}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\Engine\Source\Editor\Editor\Editor.vcxproj">
       <Project>{5c249b31-dafc-4968-a25a-537dfe0524d7}</Project>
     </ProjectReference>
@@ -186,6 +189,9 @@
     </ProjectReference>
     <ProjectReference Include="..\Engine\Source\Runtime\Utility\Utility.vcxproj">
       <Project>{ca7677d2-d5fa-40c5-8d64-3c2b3c5c96bb}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\Engine\Source\Runtime\Video\Video.vcxproj">
+      <Project>{7ab5337f-8a6c-49d1-be95-d167e1e4dbf4}</Project>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>

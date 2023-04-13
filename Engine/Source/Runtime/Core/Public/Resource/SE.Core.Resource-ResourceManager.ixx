@@ -77,6 +77,9 @@ namespace SIByL::Core
 		auto getPool() const noexcept -> std::unordered_map<GUID, T> const& {
 			return resourcePool;
 		}
+		auto getPool() noexcept -> std::unordered_map<GUID, T>& {
+			return resourcePool;
+		}
 		/** get all resources */
 		virtual auto getAllGUID() const noexcept -> std::vector<GUID> const& override {
 			return GUIDs;
@@ -155,6 +158,12 @@ namespace SIByL::Core
 			}
 			return nullptr;
 		}
+		/** get resource poo; */
+		template <StructResource T>
+		auto getResourcePool() noexcept -> ResourcePool<T>* {
+			char const* typeName = typeid(T).name();
+			return static_cast<ResourcePool<T>*>(resourcePools[typeName].get());
+		}
 		/** resources registery */
 		std::unordered_map<GUID, std::unique_ptr<Resource>> registry = {};
 		/** resource database */
@@ -170,12 +179,6 @@ namespace SIByL::Core
 		std::unordered_map<char const*, uint32_t> runtimeResourceCounters = {};
 		/** next resource type */
 		ResourceType nextResourceType = 0;
-		/** get resource poo; */
-		template <StructResource T>
-		auto getResourcePool() noexcept -> ResourcePool<T>* {
-			char const* typeName = typeid(T).name();
-			return static_cast<ResourcePool<T>*>(resourcePools[typeName].get());
-		}
 	};
 
 #pragma region RESOURCE_MANAGER_IMPL

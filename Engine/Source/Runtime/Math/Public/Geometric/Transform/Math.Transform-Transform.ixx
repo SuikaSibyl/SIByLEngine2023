@@ -59,6 +59,8 @@ namespace SIByL::Math
 	export inline auto lookAt(point3 const& pos, point3 const& look, vec3 const& up) noexcept -> Transform;
 
 	export inline auto orthographic(float zNear, float zFar) noexcept -> Transform;
+	export inline auto ortho(float left, float right, float bottom, float top, float zNear, float zFar) noexcept -> Transform;
+
 	export inline auto perspective(float fov, float n, float f) noexcept -> Transform;
 	export inline auto perspective(float fov, float aspect, float n, float f) noexcept -> Transform;
 

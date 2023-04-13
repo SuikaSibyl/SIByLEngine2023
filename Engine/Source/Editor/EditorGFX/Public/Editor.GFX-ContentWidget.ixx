@@ -37,6 +37,8 @@ namespace SIByL::Editor
 			std::vector<std::string> possibleExtensions;
 			using GUIDFinderFn = std::function<Core::GUID(Core::ORID)>;
 			GUIDFinderFn guidFinder = nullptr;
+			using ResourceLoadFn = std::function<Core::GUID(char const*)>;
+			ResourceLoadFn resourceLoader = nullptr;
 			inline auto matchExtensions(std::string const& ext) const noexcept -> bool {
 				bool match = false;
 				for (auto const& e : possibleExtensions)
@@ -47,7 +49,7 @@ namespace SIByL::Editor
 		std::vector<ResourceRegistry> resourceRegistries;
 		/** register a resource type */
 		template <Core::StructResource T>
-		auto registerResource(Core::GUID icon, std::initializer_list<std::string> extensions, ResourceRegistry::GUIDFinderFn guidFinder = nullptr) noexcept -> void;
+		auto registerResource(Core::GUID icon, std::initializer_list<std::string> extensions, ResourceRegistry::GUIDFinderFn guidFinder = nullptr, ResourceRegistry::ResourceLoadFn resourceLoader = nullptr) noexcept -> void;
 		/** icon resources */
 		struct IconResource {
 			Core::GUID back;
@@ -58,6 +60,7 @@ namespace SIByL::Editor
 			Core::GUID material;
 			Core::GUID shader;
 			Core::GUID image;
+			Core::GUID video;
 		} icons;
 		/* register icon resources*/
 		auto reigsterIconResources() noexcept -> void;
@@ -70,11 +73,17 @@ namespace SIByL::Editor
 		} runtimeResourceInfo;
 		/** inspector widget to show gameobject detail */
 		InspectorWidget* inspectorWidget = nullptr;
+
+		struct modalState {
+			bool showModal = false;
+			std::string path;
+			ResourceRegistry const* entry_ptr;
+		} modal_state;
 	};
 
 	template <Core::StructResource T>
-	auto ContentWidget::registerResource(Core::GUID icon, std::initializer_list<std::string> extensions, ResourceRegistry::GUIDFinderFn guidFinder) noexcept -> void {
-		resourceRegistries.emplace_back(ResourceRegistry{ typeid(T).name(), icon, std::vector<std::string>(extensions), guidFinder });
+	auto ContentWidget::registerResource(Core::GUID icon, std::initializer_list<std::string> extensions, ResourceRegistry::GUIDFinderFn guidFinder, ResourceRegistry::ResourceLoadFn resourceLoader) noexcept -> void {
+		resourceRegistries.emplace_back(ResourceRegistry{ typeid(T).name(), icon, std::vector<std::string>(extensions), guidFinder, resourceLoader });
 	}
 
 	auto ContentWidget::onDrawGui() noexcept -> void {
@@ -82,6 +91,32 @@ namespace SIByL::Editor
             ImGui::End();
             return;
         }
+
+		if (modal_state.showModal)
+			ImGui::OpenPopup("Warning");
+		if (ImGui::BeginPopupModal("Warning")) {
+			ImGui::Text("Selected resource not registered in resource libarary!");
+			if (ImGui::Button("OK", ImVec2(120, 0))) {
+				ImGui::CloseCurrentPopup();
+				modal_state.showModal = false;
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Load", ImVec2(120, 0))) {
+				if (modal_state.entry_ptr->resourceLoader == nullptr) {
+					Core::LogManager::Error("GFXEditor :: Resource loading of this type is not supported yet!");
+				}
+				else {
+					Core::GUID guid = modal_state.entry_ptr->resourceLoader(modal_state.path.c_str());
+					inspectorWidget->setCustomDraw(std::bind(
+						&(ResourceViewer::onDrawGui),
+						&(inspectorWidget->resourceViewer),
+						modal_state.entry_ptr->resourceName.c_str(),
+						guid));
+					ImGui::CloseCurrentPopup();
+					modal_state.showModal = false;
+				}
+			}
+		}
 
 		{
 			ImGuiWindowFlags window_flags = ImGuiWindowFlags_None;
@@ -243,6 +278,11 @@ namespace SIByL::Editor
 												entry_ptr->resourceName.c_str(),
 												guid));
 										}
+										else {
+											modal_state.showModal = true;
+											modal_state.path = path.string();
+											modal_state.entry_ptr = entry_ptr;
+										}
 									}
 								}
 								ImGui::TextWrapped(filenameString.c_str());
@@ -296,6 +336,7 @@ namespace SIByL::Editor
 		icons.mesh		= GFX::GFXManager::get()->registerTextureResource("../Engine/Binaries/Runtime/icons/mesh.png");
 		icons.scene		= GFX::GFXManager::get()->registerTextureResource("../Engine/Binaries/Runtime/icons/scene.png");
 		icons.shader	= GFX::GFXManager::get()->registerTextureResource("../Engine/Binaries/Runtime/icons/shader.png");
+		icons.video		= GFX::GFXManager::get()->registerTextureResource("../Engine/Binaries/Runtime/icons/video.png");
 		Core::ResourceManager::get()->getResource<GFX::Texture>(icons.back	  )->texture->setName("editor_icon_back");
 		Core::ResourceManager::get()->getResource<GFX::Texture>(icons.folder  )->texture->setName("editor_icon_folder");
 		Core::ResourceManager::get()->getResource<GFX::Texture>(icons.file	  )->texture->setName("editor_icon_file");
@@ -304,6 +345,7 @@ namespace SIByL::Editor
 		Core::ResourceManager::get()->getResource<GFX::Texture>(icons.mesh	  )->texture->setName("editor_icon_mesh");
 		Core::ResourceManager::get()->getResource<GFX::Texture>(icons.scene	  )->texture->setName("editor_icon_scene");
 		Core::ResourceManager::get()->getResource<GFX::Texture>(icons.shader  )->texture->setName("editor_icon_shader");
+		Core::ResourceManager::get()->getResource<GFX::Texture>(icons.video	  )->texture->setName("editor_icon_videor");
 	}
 
 }

@@ -20,6 +20,10 @@ import SE.GFX;
 import SE.Core.Log;
 import SE.Core.Resource;
 
+namespace SIByL::Editor {
+	struct RDGViewerWidget;
+}
+
 namespace SIByL::RDG
 {
 	export enum struct ResourceFlag :uint32_t {
@@ -286,6 +290,7 @@ namespace SIByL::RDG
 				RHI::RayTracingPassEncoder* trace;
 			} passEncoder;
 			PipelinePass* pipelinePass;
+			void* customData;
 		};
 
 		inline auto setDelegate(std::string const& name, std::function<void(DelegateData const&)> const& fn) noexcept -> void { delegates[name] = fn; }
@@ -319,6 +324,13 @@ namespace SIByL::RDG
 			return iter->second;
 		}
 
+		inline auto setPtr(std::string const& name, void* v) noexcept -> void { ptrs[name] = v; }
+		inline auto getPtr(std::string const& name) const noexcept -> void* {
+			auto const& iter = ptrs.find(name);
+			if (iter == ptrs.end()) return 0;
+			return iter->second;
+		}
+
 		Graph* graph;
 		Pass* pass;
 
@@ -326,6 +338,7 @@ namespace SIByL::RDG
 		std::unordered_map<std::string, Math::uvec2> uvec2s;
 		std::unordered_map<std::string, uint32_t> uints;
 		std::unordered_map<std::string, std::function<void(DelegateData const&)>> delegates;
+		std::unordered_map<std::string, void*> ptrs;
 	};
 
 	export struct Pass {
@@ -335,7 +348,7 @@ namespace SIByL::RDG
 
 		virtual auto execute(RenderContext* context, RenderData const& renderData) noexcept -> void = 0;
 
-		virtual auto renderUI(RenderContext* context, RenderData const& data) noexcept -> void {}
+		virtual auto renderUI() noexcept -> void {}
 
 		virtual auto generateMarker() noexcept -> void {
 			marker.name = identifier;
@@ -607,6 +620,7 @@ namespace SIByL::RDG
 		RenderData renderData;
 	private:
 		friend RenderData;
+		friend Editor::RDGViewerWidget;
 		DAG dag;
 		size_t passID = 0;
 		size_t subgraphID = 0;
@@ -1383,7 +1397,7 @@ namespace SIByL::RDG
 						&& marker_stack[offset] == pass->subgraphStack[offset]) {
 						offset++;
 					}
-					while (marker_stack.size() >= offset) {
+					while (marker_stack.size() > offset) {
 						marker_stack.pop_back();
 						encoder->endDebugUtilsLabelEXT();
 					}
@@ -1669,6 +1683,13 @@ namespace SIByL::RDG
 			if (res.second->cosumeHistories.size() == 0) continue;
 
 			TextureResourceVirtualMachine vm(res.second->texture->texture.get(), res.second->cosumeHistories);
+			// deal with all max-possbiel notations
+			for (auto& hentry : res.second->cosumeHistories) {
+				for (auto& subentry : hentry.entries) {
+					if (subentry.mip_end == MaxPossible)
+						subentry.mip_end = res.second->texture->texture->mipLevelCount();
+				}
+			}
 			for (auto const& hentry : res.second->cosumeHistories) {
 				for (auto const& subentry : hentry.entries) {
 					std::vector<RHI::BarrierDescriptor> decses = vm.updateSubresource(

@@ -35,11 +35,13 @@ import SE.Parallelism;
 
 import SE.GFX;
 import SE.RDG;
+import SE.Video;
 
 import SE.Application;
 
 import SE.Editor.Core;
 import SE.Editor.GFX;
+import SE.Editor.RDG;
 import SE.Editor.Config;
 
 import SE.SRenderer;
@@ -54,6 +56,8 @@ using namespace SIByL::Math;
 
 
 struct SandBoxApplication :public Application::ApplicationBase {
+	
+	Video::VideoDecoder decoder;
 
 	/** Initialize the application */
 	virtual auto Init() noexcept -> void override {
@@ -135,8 +139,10 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		srenderer = std::make_unique<SRenderer>();
 		srenderer->init(scene);
-		pipeline = std::make_unique<SRP::ForwardPipeline>();
+		pipeline = std::make_unique<SRP::UDPTPipeline>();
 		pipeline->build();
+
+		editorLayer->getWidget<Editor::RDGViewerWidget>()->pipeline = pipeline.get();
 
 		cameraController.init(mainWindow.get()->getInput(), &timer);
 	};
@@ -156,20 +162,18 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		multiFrameFlights->frameStart();
 
 		std::unique_ptr<RHI::CommandEncoder> commandEncoder = device->createCommandEncoder({ multiFrameFlights->getCommandBuffer() });
-
-		RHI::RayTracingPassDescriptor rayTracingDescriptor = {};
-
-		uint32_t index = multiFrameFlights->getFlightIndex();
+		GFX::GFXManager::get()->onUpdate();
+		//decoder.readFrame();
 
 		int width, height;
 		mainWindow->getFramebufferSize(&width, &height);
-		width = 800;
-		height = 600;
+		width = 1280;
+		height = 720;
 
 		auto view = Core::ComponentManager::get()->view<GFX::CameraComponent>();
 		for (auto& [entity, camera] : view) {
 			if (camera.isPrimaryCamera) {
-				camera.aspect = 1.f * 800 / 600;
+				camera.aspect = 1.f * width / height;
 				cameraController.bindTransform(scene.getGameObject(entity)->getEntity().getComponent<GFX::TransformComponent>());
 				srenderer->updateCamera(*(scene.getGameObject(entity)->getEntity().getComponent<GFX::TransformComponent>()), camera);
 				break;
@@ -203,6 +207,9 @@ struct SandBoxApplication :public Application::ApplicationBase {
 	};
 
 	virtual auto Exit() noexcept -> void override {
+
+		decoder.close();
+
 		rhiLayer->getDevice()->waitIdle();
 		srenderer = nullptr;
 		pipeline = nullptr;

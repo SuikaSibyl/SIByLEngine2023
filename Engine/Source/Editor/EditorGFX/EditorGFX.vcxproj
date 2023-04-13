@@ -165,6 +165,9 @@
     <ProjectReference Include="..\..\Runtime\Math\Math.vcxproj">
       <Project>{0eec40c7-807a-4d99-99a6-e3d329aea25d}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\..\Runtime\Video\Video.vcxproj">
+      <Project>{7ab5337f-8a6c-49d1-be95-d167e1e4dbf4}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\EditorCore\EditorCore.vcxproj">
       <Project>{f7d1709f-e611-4c47-b878-3df3c65fb974}</Project>
     </ProjectReference>

@@ -4,7 +4,9 @@ BxDF: 0
 Textures:
   - Name: normal_bump
     ORID: 1658119028953168732
+    flags: 0
   - Name: base_color
-    ORID: 1658119031102545654
+    ORID: 1672037697777154908
+    flags: 8
 Emissive: false
 End: TRUE

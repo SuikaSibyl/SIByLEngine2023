@@ -73,10 +73,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\imgui\includes;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\imgui\includes;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -139,6 +141,9 @@
   <ItemGroup>
     <ClCompile Include="Public\Core\SE.SRenderer-SRenderer.ixx" />
     <ClCompile Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPMinPoolingPass.ixx" />
+    <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarPass.ixx" />
+    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-FooPass.ixx" />
+    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-GBufferPass.ixx" />
     <ClCompile Include="Public\Pipeline\SE.SRendere-BDPTPipeline.ixx" />
     <ClCompile Include="Public\Pipeline\SE.SRendere-ForwardPipeline.ixx" />
     <ClCompile Include="Public\Pipeline\SE.SRendere-MMLTPipeline.ixx" />
@@ -158,6 +163,9 @@
     <ClCompile Include="Public\Core\SE.SRenderer-RTCommon.ixx" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\ThirdParty\imgui\imgui.vcxproj">
+      <Project>{558eb959-b88f-4796-b989-c8ab8f43a1b7}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\Core\Core.vcxproj">
       <Project>{cadb2da2-56fd-47f9-817b-aafa42378dd9}</Project>
     </ProjectReference>

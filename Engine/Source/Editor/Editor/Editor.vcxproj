@@ -148,11 +148,17 @@
     <ProjectReference Include="..\..\Runtime\GFX\GFX.vcxproj">
       <Project>{587f5443-b048-4a7a-b773-fe5b6ba0728a}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\..\Runtime\Video\Video.vcxproj">
+      <Project>{7ab5337f-8a6c-49d1-be95-d167e1e4dbf4}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\EditorCore\EditorCore.vcxproj">
       <Project>{f7d1709f-e611-4c47-b878-3df3c65fb974}</Project>
     </ProjectReference>
     <ProjectReference Include="..\EditorGFX\EditorGFX.vcxproj">
       <Project>{7984c6ea-a159-46eb-8645-875c00f2dba5}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\EditorRDG\EditorRDG.vcxproj">
+      <Project>{ada03319-6a25-448b-8828-e52873cd92d6}</Project>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

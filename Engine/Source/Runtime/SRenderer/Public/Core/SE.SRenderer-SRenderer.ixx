@@ -285,6 +285,8 @@ namespace SIByL
 			GFX::StructuredUniformBufferView<SceneInfoUniforms>					scene_info_buffer;
 			GFX::StructuredArrayMultiStorageBufferView<GeometryDrawData>		geometry_buffer;
 		} sceneDataBuffers;
+
+		GlobalUniforms globalUniRecord;
 	};
 
 #pragma region SRENDERER_IMPL
@@ -689,7 +691,7 @@ namespace SIByL
 					// add all submeshes
 					for (auto& submesh : mesh->submeshes) {
 						GeometryDrawData geometry;
-						geometry.vertexOffset = submesh.baseVertex + vertex_offset * sizeof(float) / SRenderer::vertexBufferLayout.arrayStride;
+						geometry.vertexOffset = vertex_offset * sizeof(float) / SRenderer::vertexBufferLayout.arrayStride;
 						geometry.indexOffset = submesh.offset + index_offset;
 						geometry.materialID = 0;
 						geometry.indexSize = submesh.size;
@@ -754,8 +756,8 @@ namespace SIByL
 							uint32_t matID = sceneDataPack.material_buffer_cpu.size();
 							MaterialData matData;
 
-							Core::GUID baseTexGUID = mat->textures["base_color"];
-							Core::GUID normTexGUID = mat->textures["normal_bump"];
+							Core::GUID baseTexGUID = mat->textures["base_color"].guid;
+							Core::GUID normTexGUID = mat->textures["normal_bump"].guid;
 
 							auto getTexID = [&](Core::GUID guid)->uint32_t {
 								RHI::TextureView* normTexView = Core::ResourceManager::get()->getResource<GFX::Texture>(guid)->originalView.get();
@@ -1017,7 +1019,6 @@ namespace SIByL
 
 	inline auto SRenderer::updateCamera(GFX::TransformComponent const& transform, GFX::CameraComponent const& camera) noexcept -> void {
 		RHI::MultiFrameFlights* multiFrameFlights = GFX::GFXManager::get()->rhiLayer->getMultiFrameFlights();
-		static GlobalUniforms globalUniRecord;
 		GlobalUniforms globalUni;
 
 		{
@@ -1062,6 +1063,7 @@ namespace SIByL
 		graph->renderData.setBindGroupEntries("CommonRT", &(commonDescData.set1_flights_resources[flightIdx]));
 		graph->renderData.setUInt("AccumIdx", state.batchIdx++);
 		graph->renderData.setUVec2("TargetSize", { state.width , state.height });
+		graph->renderData.setPtr("CameraData", &(globalUniRecord.cameraData));
 		graph->renderData.setDelegate("IssueAllDrawcalls", [&, flightIdx = flightIdx](RDG::RenderData::DelegateData const& data) {
 			if (sceneDataPack.geometry_buffer_cpu.size() > 0) {
 				data.passEncoder.render->setIndexBuffer(sceneDataPack.index_buffer.get(),
@@ -1075,6 +1077,21 @@ namespace SIByL
 				}
 			}
 
+			});
+		graph->renderData.setDelegate("IssueDrawcalls_LightOnly", [&, flightIdx = flightIdx](RDG::RenderData::DelegateData const& data) {
+			if (sceneDataPack.geometry_buffer_cpu.size() > 0) {
+				data.passEncoder.render->setIndexBuffer(sceneDataPack.index_buffer.get(),
+					RHI::IndexFormat::UINT32_T, 0, sceneDataPack.index_buffer->size());
+				data.passEncoder.render->setBindGroup(0, data.pipelinePass->bindgroups[0][flightIdx].get(), 0, 0);
+				uint32_t geometry_idx = 0;
+				for (auto& geometry : sceneDataPack.geometry_buffer_cpu) {
+					if (geometry.lightID != 4294967295) {
+						data.passEncoder.render->pushConstants(&geometry_idx, (uint32_t)RHI::ShaderStages::VERTEX, 0, sizeof(uint32_t));
+						data.passEncoder.render->drawIndexed(geometry.indexSize, 1, geometry.indexOffset, geometry.vertexOffset, 0);
+					}
+					geometry_idx++;
+				}
+			}
 			});
 	}
 

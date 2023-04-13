@@ -243,10 +243,20 @@ namespace SIByL::GFX
 
 	/** Material */
 	export struct Material :public Core::Resource {
+		/** texture resource entry */
+		enum struct TexFlag {
+			Cubemap = 1 << 1,
+			NormalMap = 1 << 2,
+			VideoClip = 1 << 3,
+		};
+		struct TextureEntry {
+			Core::GUID	guid;
+			uint32_t	flags = 0;
+		};
 		/** add a const data entry to the template */
 		inline auto addConstantData(std::string const& name, RHI::DataFormat format) noexcept -> Material&;
 		/** add a texture entry to the template */
-		inline auto addTexture(std::string const& name, Core::GUID guid) noexcept -> Material&;
+		inline auto addTexture(std::string const& name, TextureEntry const& entry) noexcept -> Material&;
 		/** register from a template */
 		inline auto registerFromTemplate(MaterialTemplate const& mat_template) noexcept -> void;
 		/** get name */
@@ -258,7 +268,7 @@ namespace SIByL::GFX
 		/** load the material from path */
 		inline auto loadPath() noexcept -> void;
 		/** all textures in material */
-		std::unordered_map<std::string, Core::GUID> textures;
+		std::unordered_map<std::string, TextureEntry> textures;
 		/** ORID of the material */
 		Core::ORID ORID = Core::ORID_NONE;
 		/** BxDF ID */
@@ -578,6 +588,19 @@ namespace SIByL::GFX
 
 #pragma endregion
 
+	struct GFXManager;
+
+	export enum struct Ext {
+		VideoClip,
+	};
+
+	export struct Extension {
+		virtual auto foo(uint32_t id, void* data) noexcept -> void* { return nullptr; }
+	protected:
+		friend GFXManager;
+		virtual auto startUp() noexcept -> void = 0;
+		virtual auto onUpdate() noexcept -> void {};
+	};
 
 	/** A singleton manager manages graphic components and resources. */
 	export struct GFXManager :public Core::Manager {
@@ -620,11 +643,19 @@ namespace SIByL::GFX
 		virtual auto startUp() noexcept -> void override;
 		/** shut down the GFX manager */
 		virtual auto shutDown() noexcept -> void override;
+		/** update */
+		auto onUpdate() noexcept -> void;
 		/* get singleton */
 		static inline auto get() noexcept -> GFXManager* { return singleton; }
+		/** add extension */
+		template <class T> auto addExt(Ext name) noexcept -> void { extensions[name] = std::make_unique<T>(); }
+		/** get extension */
+		template <class T> auto getExt(Ext name) noexcept -> T* { return reinterpret_cast<T*>(extensions[name].get()); }
 	private:
 		/** singleton */
 		static GFXManager* singleton;
+		/** extensions */
+		std::unordered_map<Ext, std::unique_ptr<Extension>> extensions;
 	};
 
 	export struct SBTsDescriptor {
@@ -1222,8 +1253,8 @@ namespace SIByL::GFX
 		return *this;
 	}
 
-	inline auto Material::addTexture(std::string const& name, Core::GUID guid) noexcept -> Material& {
-		textures[name] = guid;
+	inline auto Material::addTexture(std::string const& name, TextureEntry const& entry) noexcept -> Material& {
+		textures[name] = entry;
 		return *this;
 	}
 
@@ -1232,7 +1263,7 @@ namespace SIByL::GFX
 
 		// add textures
 		for (auto const& tex : mat_template.textureEntries)
-			addTexture(tex, Core::INVALID_GUID);
+			addTexture(tex, { Core::INVALID_GUID, 0 });
 	}
 
 	inline auto Material::serialize() noexcept -> void {
@@ -1275,11 +1306,12 @@ namespace SIByL::GFX
 			out << YAML::Key << "Textures" << YAML::Value;
 			out << YAML::BeginSeq;
 			{
-				for (auto& [name, guid] : textures) {
-					GFX::Texture* texture = Core::ResourceManager::get()->getResource<GFX::Texture>(guid);
+				for (auto& [name, entry] : textures) {
+					GFX::Texture* texture = Core::ResourceManager::get()->getResource<GFX::Texture>(entry.guid);
 					out << YAML::BeginMap;
 					out << YAML::Key << "Name" << YAML::Value << name;
 					out << YAML::Key << "ORID" << YAML::Value << texture->orid;
+					out << YAML::Key << "flags" << YAML::Value << entry.flags;
 					out << YAML::EndMap;
 				}
 			}
@@ -1330,7 +1362,13 @@ namespace SIByL::GFX
 		for (auto node : texture_nodes) {
 			std::string tex_name = node["Name"].as<std::string>();
 			Core::ORID orid = node["ORID"].as<Core::ORID>();
-			textures[tex_name] = GFXManager::get()->requestOfflineTextureResource(orid);
+			uint32_t flags = node["flags"].as<uint32_t>();
+			if (flags & uint32_t(TexFlag::VideoClip)) {
+				textures[tex_name] = { *reinterpret_cast<Core::GUID*>(GFXManager::get()->getExt<Extension>(Ext::VideoClip)->foo(0, &orid)), flags};
+			}
+			else {
+				textures[tex_name] = { GFXManager::get()->requestOfflineTextureResource(orid), flags };
+			}
 		}
 		isEmissive = data["Emissive"].as<bool>();
 	}
@@ -1521,12 +1559,20 @@ namespace SIByL::GFX
 		Core::ResourceManager::get()->registerResource<GFX::ShaderModule>();
 		Core::ResourceManager::get()->registerResource<GFX::Material>();
 		Core::ResourceManager::get()->registerResource<GFX::Scene>();
+		// also startup all extensions
+		for (auto& pair : extensions)
+			pair.second->startUp();
 		// bind global config
 		GFXConfig::globalConfig = &config;
 	}
 
 	auto GFXManager::shutDown() noexcept -> void {
 		GFXConfig::globalConfig = nullptr;
+	}
+
+	auto GFXManager::onUpdate() noexcept -> void {
+		for (auto& ext : extensions)
+			ext.second->onUpdate();
 	}
 
 	auto GFXManager::registerBufferResource(Core::GUID guid, RHI::BufferDescriptor const& desc) noexcept -> void {
@@ -1933,6 +1979,7 @@ namespace SIByL::GFX
 			material.ORID = orid;
 			material.serialize();
 			Core::ResourceManager::get()->addResource(guid, std::move(material));
+			return guid;
 		}
 		else {
 			return requestOfflineMaterialResource(orid);

@@ -12,23 +12,35 @@ import SE.RDG;
 import SE.SRenderer.AlbedoPass;
 import SE.SRenderer.PreZPass;
 import SE.SRenderer.ACEsPass;
+import SE.SRenderer.GBufferPass;
 import SE.SRenderer.MIPMinPoolingPass;
+import SE.SRenderer.MIPAddPoolingPass;
+import SE.SRenderer.FooPass;
+import SE.SRenderer.BarPass;
 
 namespace SIByL::SRP
 {
 	export struct ForwardGraph :public RDG::Graph {
 		ForwardGraph() {
 			addPass(std::make_unique<PreZPass>(), "Pre-Z Pass");
-			addPass(std::make_unique<AlbedoPass>(), "Albedo Pass");
-			addPass(std::make_unique<ACEsPass>(), "ACEs Pass");
+			addPass(std::make_unique<GBufferPass>(), "GBuffer Pass");
+			addPass(std::make_unique<FooPass>(), "Foo Pass");
+			addSubgraph(std::make_unique<MIPAddPoolingPass>(512), "LuminAddPooling");
+			addPass(std::make_unique<BarPass>(), "Bar Pass");
+			addSubgraph(std::make_unique<MIPMinPoolingPass>(512, 512), "HiZ-Gen Pass");
 
-			addSubgraph(std::make_unique<MIPMinPoolingPass>(1280, 720), "HiZ-Gen Pass");
-
-			addEdge("Pre-Z Pass", "Depth", "Albedo Pass", "Depth");
 			addEdge("Pre-Z Pass", "Depth", "HiZ-Gen Pass", "Input");
-			addEdge("Albedo Pass", "Color", "ACEs Pass", "HDR");
+			addEdge("Pre-Z Pass", "Depth", "GBuffer Pass", "Depth");
+			addEdge("Foo Pass", "LightProjLumMIP", "LuminAddPooling", "Input");
 
-			markOutput("HiZ-Gen Pass", "Output");
+			addEdge("GBuffer Pass", "Color", "Bar Pass", "BaseColor");
+			addEdge("HiZ-Gen Pass", "Output", "Bar Pass", "HiZ");
+			addEdge("LuminAddPooling", "Output", "Bar Pass", "HiLumin");
+			addEdge("Foo Pass", "LightProjectionDepth", "Bar Pass", "DepthLumin");
+			addEdge("GBuffer Pass", "wNormal", "Bar Pass", "NormalWS");
+			addEdge("Foo Pass", "LightProjection", "Bar Pass", "LightProjection");
+
+			markOutput("Bar Pass", "Combined");
 		}
 	};
 

@@ -5,8 +5,10 @@ module;
 export module SE.Editor.Config;
 import SE.Core.Resource;
 import SE.GFX;
+import SE.Video;
 import SE.Editor.Core;
 import SE.Editor.GFX;
+import SE.Editor.RDG;
 
 namespace SIByL::Editor
 {
@@ -19,6 +21,7 @@ namespace SIByL::Editor
 			layer->registerWidget<Editor::LogWidget>();
 			layer->registerWidget<Editor::ViewportWidget>();
 			layer->registerWidget<Editor::StatusWidget>();
+			layer->registerWidget<Editor::RDGViewerWidget>();
 
 			layer->getWidget<Editor::SceneWidget>()->bindScene(nullptr);
 			layer->getWidget<Editor::SceneWidget>()->inspectorWidget = layer->getWidget<Editor::InspectorWidget>();
@@ -35,6 +38,7 @@ namespace SIByL::Editor
 			layer->getWidget<Editor::InspectorWidget>()->resourceViewer.registerElucidator<Editor::TextureElucidator>("struct SIByL::GFX::Texture");
 			layer->getWidget<Editor::InspectorWidget>()->resourceViewer.registerElucidator<Editor::MaterialElucidator>("struct SIByL::GFX::Material");
 			layer->getWidget<Editor::InspectorWidget>()->resourceViewer.registerElucidator<Editor::MeshElucidator>("struct SIByL::GFX::Mesh");
+			layer->getWidget<Editor::InspectorWidget>()->resourceViewer.registerElucidator<Editor::VideoClipElucidator>("struct SIByL::GFX::VideoClip");
 
 			layer->getWidget<Editor::ContentWidget>()->inspectorWidget = layer->getWidget<Editor::InspectorWidget>();
 			layer->getWidget<Editor::ContentWidget>()->reigsterIconResources();
@@ -42,9 +46,16 @@ namespace SIByL::Editor
 			Editor::ContentWidget* contentWidget = layer->getWidget<Editor::ContentWidget>();
 			contentWidget->registerResource<GFX::Scene >		(contentWidget->icons.scene, {".scene"}, nullptr);
 			contentWidget->registerResource<GFX::Mesh>			(contentWidget->icons.mesh, {".obj", ".fbx", ".gltf"}, nullptr);
-			contentWidget->registerResource<GFX::Texture>		(contentWidget->icons.image, {".jpg", ".png"},  std::bind(&GFX::GFXManager::requestOfflineTextureResource, GFX::GFXManager::get(), std::placeholders::_1));
+			contentWidget->registerResource<GFX::Texture>		(contentWidget->icons.image, {".jpg", ".png"},  
+																	std::bind(&GFX::GFXManager::requestOfflineTextureResource, GFX::GFXManager::get(), std::placeholders::_1),
+																	[](char const* path) { return GFX::GFXManager::get()->registerTextureResource(path); });
 			contentWidget->registerResource<GFX::ShaderModule>	(contentWidget->icons.shader, {".glsl", "spv"}, nullptr);
-			contentWidget->registerResource<GFX::Material>		(contentWidget->icons.material, { ".mat" }, std::bind(&GFX::GFXManager::requestOfflineMaterialResource, GFX::GFXManager::get(), std::placeholders::_1));
+			contentWidget->registerResource<GFX::Material>		(contentWidget->icons.material, { ".mat" }, 
+																	std::bind(&GFX::GFXManager::requestOfflineMaterialResource, GFX::GFXManager::get(), std::placeholders::_1),
+																	[](char const* path) { return GFX::GFXManager::get()->registerMaterialResource(path); });
+			contentWidget->registerResource<GFX::VideoClip>		(contentWidget->icons.video, { ".mkv" }, 
+																	std::bind(&GFX::VideExtension::requestOfflineVideoClipResource, GFX::GFXManager::get()->getExt<GFX::VideExtension>(GFX::Ext::VideoClip), std::placeholders::_1),
+																	std::bind(&GFX::VideExtension::registerVideoClipResource, GFX::GFXManager::get()->getExt<GFX::VideExtension>(GFX::Ext::VideoClip), std::placeholders::_1));
 		}
 	};
 }
