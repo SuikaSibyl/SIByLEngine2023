@@ -4,7 +4,7 @@
 
 Previous version could be find in: [SibylEngine2021](https://github.com/SuikaSibyl/SibylEngine2021). Version 2023 is a complete refactoring including better and more extendable structure, solution, design.
 
-![EditorDemoImg](https://imagehost-suikasibyl-us.oss-us-west-1.aliyuncs.com/SE2023_0_demo_ui.png)
+![EditorDemoImg](https://imagehost-suikasibyl-us.oss-us-west-1.aliyuncs.com/img/2023_1.png)
 
 ## Builds
 
@@ -18,11 +18,13 @@ By default, Nvidia GPU with Turing or higher architecture is required to correct
 
 ## Modules
 - ### Core Modules
-  - [Math module](./docs/SIByLDocument_002_Math.md) from scratch with SIMD acceleration.
-  - [ECS module](./docs/SIByLDocument_003_ECS.md) from scratch (experimental).
-  - [Resource module](./docs/SIByLDocument_004_Resource.md) from scratch (experimental).
+  - [SE.Core.Log](./docs/SIByLDocument_003_ECS.md): Log print system from scratch.
+  - [SE.Core.Memory](./docs/SIByLDocument_003_ECS.md): Memory management system from scratch (experimental).
+  - [SE.Core.ECS](./docs/SIByLDocument_003_ECS.md): ECS system from scratch (experimental).
+  - [SE.Core.Resource](./docs/SIByLDocument_004_Resource.md): Resource management system from scratch (experimental).
+  - [SE.Math](./docs/SIByLDocument_002_Math.md): Basic math computation library from scratch with SIMD acceleration.
 - ### Rendering Modules
-  - [SE.RHI](https://github.com/SuikaSibyl/SIByLEngine2023/wiki/Graphics-Modules#rhi-module): Abstract layer with `WebGPU`-style API supporting `Vulkan` backend.
+  - [SE.RHI Module](https://github.com/SuikaSibyl/SIByLEngine2023/wiki/Graphics-Modules#rhi-module): Abstract layer with `WebGPU`-style API supporting `Vulkan` backend.
   - [SE.Tracer](https://github.com/SuikaSibyl/SIByLEngine2023/wiki/Graphics-Modules#tracer-module): `CPU ray tracing` implementation based on PBRT v3 (`GPU` implementation see `SE.SRenderer`)
   - [SE.Image](https://github.com/SuikaSibyl/SIByLEngine2023/wiki/Graphics-Modules#image-module): `Image` loader/storer for various format.
   - [SE.Video](https://github.com/SuikaSibyl/SIByLEngine2023/wiki/Graphics-Modules#video-module): `Video` loader/storer for various format, decoding via `ffmpeg`.
@@ -35,7 +37,7 @@ By default, Nvidia GPU with Turing or higher architecture is required to correct
     - `Pipeline`: a interface enabling cross-frame switching between multiple  `Graph`s.
   - [SE.SRenderer](https://github.com/SuikaSibyl/SIByLEngine2023/wiki/SIByL-Renderer): Retained mode renderer based on SE.RDG
     - `Retained mode rendering` infrastructure for both rasterization and ray tracing
-    - Providing lots of `RDG Pass/Graph/Pipeline` implementation.
+    - Providing lots of `RDG Pass/Graph/Pipeline` [algorithm implementation](https://github.com/SuikaSibyl/SIByLEngine2023/wiki/SIByL-Renderer#algorithm-implemented).
 
 - ### Physics
   - // TODO.
@@ -43,8 +45,6 @@ By default, Nvidia GPU with Turing or higher architecture is required to correct
   - `Editor_Core module`: ImGui-Vulkan interoperate and extensible GUI framework.
   - `Editor_GFX module`: Provides many editor widgets for SIByL Engine. 
   - `Editor_RDG module`: Provides DebugDraw system via RDG and RDG Viewer (no RDG editor yet).
-
-![TracerDemo](https://imagehost-suikasibyl-us.oss-us-west-1.aliyuncs.com/3tracer.png)
 
 ## Dependencies
 - `glad`: [Multi-Language Vulkan/GL/GLES/EGL/GLX/WGL Loader-Generator based on the official specs.](https://github.com/Dav1dde/glad)
