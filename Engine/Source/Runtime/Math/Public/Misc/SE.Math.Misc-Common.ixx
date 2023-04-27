@@ -24,7 +24,7 @@ namespace SIByL::Math
 	}
     
     export inline auto log2(float x) noexcept -> float {
-        float const invLog2 = 1.442695040888963387004650940071;
+        float const invLog2 = 1.442695040888963387004650940071f;
         return std::log(x) * invLog2;
     }
 

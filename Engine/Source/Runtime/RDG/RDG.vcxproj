@@ -142,6 +142,9 @@
     <ClCompile Include="Public\SE.RDG.RDGraph.ixx" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\Editor\EditorCore\EditorCore.vcxproj">
+      <Project>{f7d1709f-e611-4c47-b878-3df3c65fb974}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\Core\Core.vcxproj">
       <Project>{cadb2da2-56fd-47f9-817b-aafa42378dd9}</Project>
     </ProjectReference>

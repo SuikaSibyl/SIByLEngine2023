@@ -11,5 +11,6 @@ export import :PNG;
 export import :JPEG;
 export import :HDR;
 export import :BMP;
+export import :DDS;
 // Loader
 export import :Loader;

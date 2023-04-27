@@ -388,6 +388,8 @@ namespace SIByL::RHI
 	};
 
 	export enum struct TextureFormat {
+		// Unknown
+		UNKOWN,
 		// 8-bit formats
 		R8_UNORM,
 		R8_SNORM,
@@ -436,8 +438,27 @@ namespace SIByL::RHI
 		DEPTH24,
 		DEPTH24STENCIL8,
 		DEPTH32_FLOAT,
+		//
+		COMPRESSION,
 		// "depth32float-stencil8" feature
 		DEPTH32STENCIL8,
+		// Compressed
+		BC1_RGB_UNORM_BLOCK,
+		BC1_RGB_SRGB_BLOCK,
+		BC1_RGBA_UNORM_BLOCK,
+		BC1_RGBA_SRGB_BLOCK,
+		BC2_UNORM_BLOCK,
+		BC2_SRGB_BLOCK,
+		BC3_UNORM_BLOCK,
+		BC3_SRGB_BLOCK,
+		BC4_UNORM_BLOCK,
+		BC4_SNORM_BLOCK,
+		BC5_UNORM_BLOCK,
+		BC5_SNORM_BLOCK,
+		BC6H_UFLOAT_BLOCK,
+		BC6H_SFLOAT_BLOCK,
+		BC7_UNORM_BLOCK,
+		BC7_SRGB_BLOCK,
 	};
 
 	export inline auto hasDepthBit(TextureFormat format) noexcept -> bool {
@@ -1479,7 +1500,7 @@ namespace SIByL::RHI
 		/** Draws primitives using parameters read from a GPUBuffer. */
 		virtual auto drawIndirect(Buffer* indirectBuffer, uint64_t indirectOffset) noexcept -> void = 0;
 		/** Draws indexed primitives using parameters read from a GPUBuffer. */
-		virtual auto drawIndexedIndirect(Buffer* indirectBuffer, uint64_t indirectOffset) noexcept -> void = 0;
+		virtual auto drawIndexedIndirect(Buffer* indirectBuffer, uint64_t offset, uint32_t drawCount, uint32_t stride) noexcept -> void = 0;
 	};
 
 	export struct RenderPassEncoder :public RenderCommandsMixin, public BindingCommandMixin {

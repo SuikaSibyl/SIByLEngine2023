@@ -109,7 +109,6 @@ namespace SIByL::GFX
 
 #pragma endregion
 
-
 	export struct ShaderModule :public Core::Resource {
 		/** rhi shader module */
 		std::unique_ptr<RHI::ShaderModule> shaderModule = nullptr;
@@ -148,7 +147,7 @@ namespace SIByL::GFX
 		DeviceHostBufferInfo positionBufferInfo;
 		DeviceHostBufferInfo indexBufferInfo;
 		/** binded ORID */
-		Core::ORID ORID = Core::ORID_NONE;
+		Core::ORID ORID = Core::INVALID_ORID;
 		/** submeshes */
 		struct Submesh {
 			uint32_t offset;
@@ -159,6 +158,8 @@ namespace SIByL::GFX
 		std::vector<Submesh> submeshes;
 		/** resource name */
 		std::string name = "New Mesh";
+		/** AABB bounding box */
+		Math::bounds3 aabb;
 		/** compute the surface area */
 		auto surfaceAreaEveryPrimitive(Math::mat4 const& transform) noexcept -> std::tuple<float, std::vector<float>>;
 		/** serialize */
@@ -185,7 +186,7 @@ namespace SIByL::GFX
 		/** resrouce GUID */
 		Core::GUID guid;
 		/** resrouce ORID */
-		Core::ORID orid = Core::ORID_NONE;
+		Core::ORID orid = Core::INVALID_ORID;
 		/** texture */
 		std::unique_ptr<RHI::Texture> texture = nullptr;
 		/** texture display view*/
@@ -240,6 +241,10 @@ namespace SIByL::GFX
 		std::unordered_map<std::string, RHI::DataFormat> constDataEntries;
 		/** texture entries */
 		std::vector<std::string> textureEntries;
+		/** bsdf id */
+		uint32_t bsdf_id;
+		/** material name */
+		std::string materialName;
 	};
 
 	/** Material */
@@ -271,7 +276,7 @@ namespace SIByL::GFX
 		/** all textures in material */
 		std::unordered_map<std::string, TextureEntry> textures;
 		/** ORID of the material */
-		Core::ORID ORID = Core::ORID_NONE;
+		Core::ORID ORID = Core::INVALID_ORID;
 		/** BxDF ID */
 		uint32_t BxDF;
 		/** resource name */
@@ -335,11 +340,11 @@ namespace SIByL::GFX
 		auto getTransform() noexcept -> Math::mat4;
 		/** get rotated forward */
 		auto getRotatedForward() const noexcept -> Math::vec3 {
-			Math::vec3 front;
-			front.x = std::cos((eulerAngles.y)) * std::cos((eulerAngles.x));
-			front.y = std::sin((eulerAngles.x));
-			front.z = std::sin((eulerAngles.y)) * std::cos((eulerAngles.x));
-			return front;
+			Math::vec4 rotated = Math::mat4::rotateZ(eulerAngles.z)
+				* Math::mat4::rotateY(eulerAngles.y)
+				* Math::mat4::rotateX(eulerAngles.x)
+				* Math::vec4(0, 0, -1, 0);
+			return Math::vec3(rotated.x, rotated.y, rotated.z);
 		}
 		/** serialize */
 		static auto serialize(void* emitter, Core::EntityHandle const& handle) -> void;
@@ -351,7 +356,9 @@ namespace SIByL::GFX
 
 	auto TransformComponent::getTransform() noexcept -> Math::mat4 {
 		return Math::mat4::translate(translation)
-			* Math::Quaternion(eulerAngles).toMat4()
+			* Math::mat4::rotateZ(eulerAngles.z)
+			* Math::mat4::rotateY(eulerAngles.y)
+			* Math::mat4::rotateX(eulerAngles.x)
 			* Math::mat4::scale(scale);
 	}
 
@@ -483,6 +490,9 @@ namespace SIByL::GFX
 			DIFFUSE_AREA_LIGHT,
 			CUBEMAP_ENV_MAP,
 			SPHERICAL_COORD_ENV_MAP,
+			DIRECTIONAL,
+			POINT,
+			SPOT,
 			MAX_ENUM,
 		} type;
 		/* light intensity to scale the light */
@@ -497,9 +507,12 @@ namespace SIByL::GFX
 
 	export inline auto to_string(LightComponent::LightType type) noexcept -> std::string {
 		switch (type) {
-		case SIByL::GFX::LightComponent::LightType::DIFFUSE_AREA_LIGHT:	return "Diffuse Area Light";
-		case SIByL::GFX::LightComponent::LightType::CUBEMAP_ENV_MAP:	return "Cubemap Env Map";
+		case SIByL::GFX::LightComponent::LightType::DIFFUSE_AREA_LIGHT:			return "Diffuse Area Light";
+		case SIByL::GFX::LightComponent::LightType::CUBEMAP_ENV_MAP:			return "Cubemap Env Map";
 		case SIByL::GFX::LightComponent::LightType::SPHERICAL_COORD_ENV_MAP:	return "Spherical Coord Env Map";
+		case SIByL::GFX::LightComponent::LightType::DIRECTIONAL:				return "Directional Light";
+		case SIByL::GFX::LightComponent::LightType::POINT:						return "Point Light";
+		case SIByL::GFX::LightComponent::LightType::SPOT:						return "Spot Light";
 		default: return "Unknown Type"; }
 	}
 
@@ -612,12 +625,14 @@ namespace SIByL::GFX
 		// online resource registers
 		/** create / register online buffer resource */
 		auto registerBufferResource(Core::GUID guid, RHI::BufferDescriptor const& desc) noexcept -> void;
+		auto registerBufferResource(Core::GUID guid, void* data, uint32_t size, RHI::BufferUsagesFlags usage) noexcept -> void;
 		template <class T> auto createStructuredUniformBuffer() noexcept -> StructuredUniformBufferView<T>;
 		template <class T> auto createStructuredArrayUniformBuffer(uint32_t array_size) noexcept -> StructuredArrayUniformBufferView<T>;
 		template <class T> auto createStructuredArrayMultiStorageBuffer(uint32_t array_size, uint32_t additionalUsage) noexcept -> StructuredArrayMultiStorageBufferView<T>;
 		/** create / register online texture resource */
 		auto registerTextureResource(Core::GUID guid, RHI::TextureDescriptor const& desc) noexcept -> void;
 		auto registerTextureResource(Core::GUID guid, Image::Image<Image::COLOR_R8G8B8A8_UINT>* image) noexcept -> void;
+		auto registerTextureResource(Core::GUID guid, Image::Texture_Host* image) noexcept -> void;
 		auto registerTextureResource(char const* filepath) noexcept -> Core::GUID;
 		auto registerTextureResourceCubemap(Core::GUID guid, std::array<char const*, 6> images) noexcept -> void;
 		auto registerTextureResourceCubemap(Core::GUID guid, std::array<Image::Image<Image::COLOR_R8G8B8A8_UINT>*, 6> images) noexcept -> void;
@@ -656,11 +671,17 @@ namespace SIByL::GFX
 		template <class T> auto addExt(Ext name) noexcept -> void { extensions[name] = std::make_unique<T>(); }
 		/** get extension */
 		template <class T> auto getExt(Ext name) noexcept -> T* { return reinterpret_cast<T*>(extensions[name].get()); }
+		/** register material template */
+		auto registerMaterialTemplate(uint32_t bsdf_id, std::string const& name) noexcept -> MaterialTemplate&;
+		/** register material template */
+		auto getMaterialTemplate(uint32_t bsdf_id) noexcept -> MaterialTemplate*;
 	private:
 		/** singleton */
 		static GFXManager* singleton;
 		/** extensions */
 		std::unordered_map<Ext, std::unique_ptr<Extension>> extensions;
+		/** material template */
+		std::unordered_map<uint32_t, MaterialTemplate> material_templates;
 	};
 
 	export struct SBTsDescriptor {
@@ -797,14 +818,14 @@ namespace SIByL::GFX
 		Core::Buffer scene_proxy;
 		scene_proxy.data = (void*)out.c_str();
 		scene_proxy.size = out.size();
-		Core::syncWriteFile(path, scene_proxy);
+		Core::syncWriteFile(path.string().c_str(), scene_proxy);
 		scene_proxy.data = nullptr;
 	}
 
 	auto Scene::deserialize(std::filesystem::path path) noexcept -> void {
 		//gameObjects.clear();
 		Core::Buffer scene_proxy;
-		Core::syncReadFile(path, scene_proxy);
+		Core::syncReadFile(path.string().c_str(), scene_proxy);
 		YAML::NodeAoS data = YAML::Load(reinterpret_cast<char*>(scene_proxy.data));
 		// check scene name
 		if (!data["SceneName"] || !data["SceneNodes"]) {
@@ -872,7 +893,7 @@ namespace SIByL::GFX
 	}
 
 	inline auto Mesh::serialize() noexcept -> void {
-		if (ORID == Core::ORID_NONE) {
+		if (ORID == Core::INVALID_ORID) {
 			ORID = Core::requestORID();
 		}
 		std::filesystem::path metadata_path = "./bin/" + std::to_string(ORID) + ".meta";
@@ -934,7 +955,7 @@ namespace SIByL::GFX
 			Core::Buffer scene_proxy;
 			scene_proxy.data = (void*)out.c_str();
 			scene_proxy.size = out.size();
-			Core::syncWriteFile(metadata_path, scene_proxy);
+			Core::syncWriteFile(metadata_path.string().c_str(), scene_proxy);
 			scene_proxy.data = nullptr;
 		}
 		// handle binary data
@@ -964,7 +985,7 @@ namespace SIByL::GFX
 			positionBuffer_device->getDevice()->readbackDeviceLocalBuffer(positionBuffer_device.get(), &(((char*)(mergedBuffer.data))[vbsize + ibsize]), pbsize);
 		}
 
-		Core::syncWriteFile(bindata_path, mergedBuffer);
+		Core::syncWriteFile(bindata_path.string().c_str(), mergedBuffer);
 	}
 
 	inline auto Mesh::deserialize(RHI::Device* device, Core::ORID orid) noexcept -> void {
@@ -974,7 +995,7 @@ namespace SIByL::GFX
 
 		//gameObjects.clear();
 		Core::Buffer metadata;
-		Core::syncReadFile(metadata_path, metadata);
+		Core::syncReadFile(metadata_path.string().c_str(), metadata);
 		YAML::NodeAoS data = YAML::Load(reinterpret_cast<char*>(metadata.data));
 		// check scene name
 		if (data["ResourceType"].as<std::string>() != "Mesh") {
@@ -1018,7 +1039,7 @@ namespace SIByL::GFX
 			submeshes.push_back(submesh);
 		}
 		Core::Buffer bindata;
-		Core::syncReadFile(bindata_path, bindata);
+		Core::syncReadFile(bindata_path.string().c_str(), bindata);
 
 		MeshLoaderConfig meshConfig = GFXConfig::globalConfig->meshLoaderConfig;
 		if (meshConfig.residentOnDevice) {
@@ -1047,6 +1068,22 @@ namespace SIByL::GFX
 			memcpy(indexBuffer_host.data, (void*)&(((uint16_t*)(&(((char*)(bindata.data))[vb_size])))[0]), ib_size);
 			memcpy(positionBuffer_host.data, (void*)&(((uint16_t*)(&(((char*)(bindata.data))[vb_size + ib_size])))[0]), pb_size);
 		}
+
+
+		auto const& find_aabb = data["AABB"];
+		if (find_aabb.Type() == YAML::NodeType::Undefined) {
+			size_t pos_num = positionBuffer_host.size / sizeof(float);
+			float* position_buffer = static_cast<float*>(positionBuffer_host.data);
+			aabb = Math::bounds3{};
+			for (size_t i = 0; i < pos_num; i += 3) {
+				Math::vec3 pos = {
+					position_buffer[i + 0],
+					position_buffer[i + 1],
+					position_buffer[i + 2]
+				};
+				aabb = Math::unionPoint<float>(aabb, pos);
+			}
+		}
 	}
 
 #pragma endregion
@@ -1055,7 +1092,7 @@ namespace SIByL::GFX
 
 	inline auto Texture::serialize() noexcept -> void {
 		// only serialize if has orid
-		if (orid != Core::ORID_NONE && resourcePath.has_value()) {
+		if (orid != Core::INVALID_ORID && resourcePath.has_value()) {
 			std::filesystem::path metadata_path = "./bin/" + std::to_string(orid) + ".meta";
 			// handle metadata
 			{	YAML::Emitter out;
@@ -1070,12 +1107,12 @@ namespace SIByL::GFX
 				Core::Buffer tex_proxy;
 				tex_proxy.data = (void*)out.c_str();
 				tex_proxy.size = out.size();
-				Core::syncWriteFile(metadata_path, tex_proxy);
+				Core::syncWriteFile(metadata_path.string().c_str(), tex_proxy);
 				tex_proxy.data = nullptr;
 			}
 		}
 		// only serialize if has orid
-		if (orid != Core::ORID_NONE && resourcePathArray.has_value() && resourcePathArray.value().size() > 1) {
+		if (orid != Core::INVALID_ORID && resourcePathArray.has_value() && resourcePathArray.value().size() > 1) {
 			std::filesystem::path metadata_path = "./bin/" + std::to_string(orid) + ".meta";
 			// handle metadata
 			{	YAML::Emitter out;
@@ -1094,7 +1131,7 @@ namespace SIByL::GFX
 				Core::Buffer tex_proxy;
 				tex_proxy.data = (void*)out.c_str();
 				tex_proxy.size = out.size();
-				Core::syncWriteFile(metadata_path, tex_proxy);
+				Core::syncWriteFile(metadata_path.string().c_str(), tex_proxy);
 				tex_proxy.data = nullptr;
 			}
 		}
@@ -1104,7 +1141,7 @@ namespace SIByL::GFX
 		orid = ORID;
 		std::filesystem::path metadata_path = "./bin/" + std::to_string(ORID) + ".meta";
 		Core::Buffer metadata;
-		Core::syncReadFile(metadata_path, metadata);
+		Core::syncReadFile(metadata_path.string().c_str(), metadata);
 		YAML::NodeAoS data = YAML::Load(reinterpret_cast<char*>(metadata.data));
 		// check scene name
 		if (data["ResourceType"].as<std::string>() != "Texture") {
@@ -1272,7 +1309,7 @@ namespace SIByL::GFX
 	}
 
 	inline auto Material::serialize() noexcept -> void {
-		if (ORID == Core::ORID_NONE) {
+		if (ORID == Core::INVALID_ORID) {
 			ORID = Core::requestORID();
 		}
 		if (path == "") {
@@ -1295,7 +1332,7 @@ namespace SIByL::GFX
 			Core::Buffer mat_proxy;
 			mat_proxy.data = (void*)out.c_str();
 			mat_proxy.size = out.size();
-			Core::syncWriteFile(metadata_path, mat_proxy);
+			Core::syncWriteFile(metadata_path.string().c_str(), mat_proxy);
 			mat_proxy.data = nullptr;
 			}
 		}
@@ -1329,7 +1366,7 @@ namespace SIByL::GFX
 			Core::Buffer mat_proxy;
 			mat_proxy.data = (void*)out.c_str();
 			mat_proxy.size = out.size();
-			Core::syncWriteFile(matdata_path, mat_proxy);
+			Core::syncWriteFile(matdata_path.string().c_str(), mat_proxy);
 			mat_proxy.data = nullptr;
 		}
 	}
@@ -1339,7 +1376,7 @@ namespace SIByL::GFX
 		std::filesystem::path metadata_path = "./bin/" + std::to_string(orid) + ".meta";
 		{
 			Core::Buffer metadata;
-			Core::syncReadFile(metadata_path, metadata);
+			Core::syncReadFile(metadata_path.string().c_str(), metadata);
 			YAML::NodeAoS data = YAML::Load(reinterpret_cast<char*>(metadata.data));
 			// check scene name
 			if (data["ResourceType"].as<std::string>() != "MaterialPtr") {
@@ -1355,7 +1392,7 @@ namespace SIByL::GFX
 	inline auto Material::loadPath() noexcept -> void {
 		// load data
 		Core::Buffer matdata;
-		Core::syncReadFile(path, matdata);
+		Core::syncReadFile(path.c_str(), matdata);
 		YAML::NodeAoS data = YAML::Load(reinterpret_cast<char*>(matdata.data));
 		// check resource type
 		if (data["ResourceType"].as<std::string>() != "Material") {
@@ -1439,7 +1476,7 @@ namespace SIByL::GFX
 		if (meshRef != nullptr) {
 			emitter << YAML::Key << "MeshReference";
 			emitter << YAML::Value << YAML::BeginMap;
-			emitter << YAML::Key << "ORID" << YAML::Value << ((meshRef->mesh == nullptr) ? Core::ORID_NONE : meshRef->mesh->ORID);
+			emitter << YAML::Key << "ORID" << YAML::Value << ((meshRef->mesh == nullptr) ? Core::INVALID_ORID : meshRef->mesh->ORID);
 			emitter << YAML::Key << "CPF" << YAML::Value << meshRef->customPrimitiveFlag;
 			emitter << YAML::EndMap;
 		}
@@ -1453,7 +1490,7 @@ namespace SIByL::GFX
 			MeshReference* meshRef = entity.addComponent<MeshReference>();
 			Core::ORID orid = meshRefComponentAoS["ORID"].as<uint64_t>();
 			Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Mesh>();
-			if (orid == Core::ORID_NONE) {
+			if (orid == Core::INVALID_ORID) {
 				meshRef->mesh = nullptr;
 			}
 			else {
@@ -1516,7 +1553,7 @@ namespace SIByL::GFX
 			if (lightComponent->texture) {
 				emitter << YAML::Key << "Texture" << YAML::Value << lightComponent->texture->orid;
 			}
-			emitter << YAML::Key << "Texture" << YAML::Value << Core::ORID_NONE;
+			emitter << YAML::Key << "Texture" << YAML::Value << Core::INVALID_ORID;
 			emitter << YAML::EndMap;
 		}
 	}
@@ -1530,7 +1567,7 @@ namespace SIByL::GFX
 			lightComponent->type = LightType(lightComponentAoS["Type"].as<uint32_t>());
 			lightComponent->intensity = lightComponentAoS["Intensity"].as<Math::vec3>();
 			Core::ORID orid = lightComponentAoS["Texture"].as<uint64_t>();
-			if (orid != Core::ORID_NONE) {
+			if (orid != Core::INVALID_ORID) {
 				Core::GUID guid = GFX::GFXManager::get()->requestOfflineTextureResource(orid);
 				lightComponent->texture = Core::ResourceManager::get()->getResource<GFX::Texture>(guid);
 			}
@@ -1580,9 +1617,28 @@ namespace SIByL::GFX
 			ext.second->onUpdate();
 	}
 
+	auto GFXManager::registerMaterialTemplate(uint32_t bsdf_id, std::string const& name) noexcept -> MaterialTemplate& {
+		auto& mat_temp = material_templates[bsdf_id];
+		mat_temp.bsdf_id = bsdf_id;
+		mat_temp.materialName = name;
+		return mat_temp;
+	}
+
+	auto GFXManager::getMaterialTemplate(uint32_t bsdf_id) noexcept -> MaterialTemplate* {
+		auto iter = material_templates.find(bsdf_id);
+		if (iter == material_templates.end()) return nullptr;
+		return &(iter->second);
+	}
+
 	auto GFXManager::registerBufferResource(Core::GUID guid, RHI::BufferDescriptor const& desc) noexcept -> void {
 		GFX::Buffer bufferResource = {};
 		bufferResource.buffer = rhiLayer->getDevice()->createBuffer(desc);
+		Core::ResourceManager::get()->addResource(guid, std::move(bufferResource));
+	}
+	
+	auto GFXManager::registerBufferResource(Core::GUID guid, void* data, uint32_t size, RHI::BufferUsagesFlags usage) noexcept -> void {
+		GFX::Buffer bufferResource = {};
+		bufferResource.buffer = rhiLayer->getDevice()->createDeviceLocalBuffer(data, size, usage);
 		Core::ResourceManager::get()->addResource(guid, std::move(bufferResource));
 	}
 
@@ -1692,6 +1748,67 @@ namespace SIByL::GFX
 		rhiLayer->getDevice()->getGraphicsQueue()->waitIdle();
 		textureResource.originalView = textureResource.texture->createView(RHI::TextureViewDescriptor{
 			RHI::TextureFormat::RGBA8_UNORM });
+		textureResource.guid = guid;
+		Core::ResourceManager::get()->addResource(guid, std::move(textureResource));
+	}
+
+	auto GFXManager::registerTextureResource(Core::GUID guid, Image::Texture_Host* image) noexcept -> void {
+		RHI::BufferDescriptor stagingBufferDescriptor;
+		stagingBufferDescriptor.size = image->data_size;
+		stagingBufferDescriptor.usage = (uint32_t)RHI::BufferUsage::COPY_SRC;
+		stagingBufferDescriptor.memoryProperties = (uint32_t)RHI::MemoryProperty::HOST_VISIBLE_BIT
+			| (uint32_t)RHI::MemoryProperty::HOST_COHERENT_BIT;
+		stagingBufferDescriptor.mappedAtCreation = true;
+		std::unique_ptr<RHI::Buffer> stagingBuffer = rhiLayer->getDevice()->createBuffer(stagingBufferDescriptor);
+		std::future<bool> mapped = stagingBuffer->mapAsync(0, 0, stagingBufferDescriptor.size);
+		if (mapped.get()) {
+			void* mapdata = stagingBuffer->getMappedRange(0, stagingBufferDescriptor.size);
+			memcpy(mapdata, image->getData(), (size_t)stagingBufferDescriptor.size);
+			stagingBuffer->unmap();
+		}
+		std::unique_ptr<RHI::CommandEncoder> commandEncoder = rhiLayer->getDevice()->createCommandEncoder({ nullptr });
+		// create texture image
+		GFX::Texture textureResource = {};
+		textureResource.texture = rhiLayer->getDevice()->createTexture(image->getDescriptor());
+
+		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+			(uint32_t)RHI::PipelineStages::TOP_OF_PIPE_BIT,
+			(uint32_t)RHI::PipelineStages::TRANSFER_BIT,
+			(uint32_t)RHI::DependencyType::NONE,
+			{}, {},
+			{ RHI::TextureMemoryBarrierDescriptor{
+				textureResource.texture.get(), RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,image->mip_levels,0,image->array_layers},
+				(uint32_t)RHI::AccessFlagBits::NONE,
+				(uint32_t)RHI::AccessFlagBits::TRANSFER_WRITE_BIT,
+				RHI::TextureLayout::UNDEFINED,
+				RHI::TextureLayout::TRANSFER_DST_OPTIMAL
+			}}
+			});
+
+		for (auto const& subresource : image->subResources) {
+			commandEncoder->copyBufferToTexture(
+				{ subresource.offset, 0, 0, stagingBuffer.get() },
+				{ textureResource.texture.get(), subresource.mip, {}, (uint32_t)RHI::TextureAspect::COLOR_BIT },
+				{ subresource.width, subresource.height, 1 });
+		}
+
+		commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+			(uint32_t)RHI::PipelineStages::TRANSFER_BIT,
+			(uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
+			(uint32_t)RHI::DependencyType::NONE,
+			{}, {},
+			{ RHI::TextureMemoryBarrierDescriptor{
+				textureResource.texture.get(), RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,image->mip_levels,0,image->array_layers},
+				(uint32_t)RHI::AccessFlagBits::TRANSFER_WRITE_BIT,
+				(uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
+				RHI::TextureLayout::TRANSFER_DST_OPTIMAL,
+				RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL
+			}}
+			});
+
+		rhiLayer->getDevice()->getGraphicsQueue()->submit({ commandEncoder->finish({}) });
+		rhiLayer->getDevice()->getGraphicsQueue()->waitIdle();
+		textureResource.originalView = textureResource.texture->createView(RHI::TextureViewDescriptor{ image->format });
 		textureResource.guid = guid;
 		Core::ResourceManager::get()->addResource(guid, std::move(textureResource));
 	}
@@ -1910,7 +2027,7 @@ namespace SIByL::GFX
 	auto GFXManager::registerShaderModuleResource(Core::GUID guid, char const* filepath, RHI::ShaderModuleDescriptor const& desc) noexcept -> void {
 		RHI::ShaderModuleDescriptor smDesc = desc;
 		Core::Buffer buffer;
-		Core::syncReadFile(std::filesystem::path(filepath), buffer);
+		Core::syncReadFile(std::filesystem::path(filepath).string().c_str(), buffer);
 		smDesc.code = &buffer;
 		GFX::ShaderModule shaderModuleResource = {};
 		shaderModuleResource.shaderModule = rhiLayer->getDevice()->createShaderModule(smDesc);
@@ -1974,7 +2091,7 @@ namespace SIByL::GFX
 		std::filesystem::path current_path = std::filesystem::current_path();
 		std::filesystem::path relative_path = std::filesystem::relative(path, current_path);
 		Core::ORID orid = Core::ResourceManager::get()->database.findResourcePath(filepath);
-		if (orid == Core::ORID_NONE) {
+		if (orid == Core::INVALID_ORID) {
 			Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Material>();
 			orid = Core::ResourceManager::get()->database.mapResourcePath(filepath);
 			Core::ResourceManager::get()->database.registerResource(orid, guid);

@@ -1,4 +1,5 @@
 module;
+#include <ctime>
 #include <string>
 #include <functional>
 #include <windows.h>
@@ -225,7 +226,7 @@ namespace SIByL::Platform
 		GetWindowRect(wndHandle, &rcWind);
 		ptDiff.x = (rcWind.right - rcWind.left) - rcClient.right;
 		ptDiff.y = (rcWind.bottom - rcWind.top) - rcClient.bottom;
-		MoveWindow(wndHandle, rcWind.left, rcWind.top, x + ptDiff.x, y + ptDiff.y, TRUE);
+		MoveWindow(wndHandle, int(rcWind.left), int(rcWind.top), int(x + ptDiff.x), int(y + ptDiff.y), TRUE);
 	}
 
 	auto Window_Win64::bindPaintingBitmapRGB8(size_t width, size_t height, char* data) noexcept -> void {
@@ -281,8 +282,8 @@ namespace SIByL::Platform
 	{
 		BITMAPINFO bminfo;
 		bminfo.bmiHeader.biSize = sizeof(bminfo.bmiHeader);
-		bminfo.bmiHeader.biWidth = width;
-		bminfo.bmiHeader.biHeight = height;
+		bminfo.bmiHeader.biWidth = LONG(width);
+		bminfo.bmiHeader.biHeight = LONG(height);
 		bminfo.bmiHeader.biPlanes = 1;
 		bminfo.bmiHeader.biBitCount = 24;
 		bminfo.bmiHeader.biCompression = BI_RGB;

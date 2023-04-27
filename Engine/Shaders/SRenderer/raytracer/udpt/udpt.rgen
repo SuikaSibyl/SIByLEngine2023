@@ -46,7 +46,7 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
 
     // primary intersection
     SurfaceIntersection vertex;
-    bool intersected = intersect(ray, vertex);   // TODO :: ray differential
+    bool intersected = intersectEX(ray, vertex, RNG);   // TODO :: ray differential
     if(!intersected) {
         // TODO:: add background / env map
         // return skyColor(ray.direction);
@@ -79,7 +79,7 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
     //         return vec3(0,0,0);
     //     }
     // }
-
+    return texture(textures[lambertian_materials[vertex.matID].basecolor_opacity_tex], vertex.uv).rgb;
     // return radiance;
     
     // We iteratively sum up path contributions from paths with different number of vertices
@@ -104,7 +104,7 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
                 lightIsect.geometric_normal = lightSample.normal;
                 lightIsect.lightNormal = lightSample.normal;
                 lightIsect.lightID = lightSample.lightID;
-                vec3 visible = transmittance(vertex, lightIsect);
+                vec3 visible = transmittanceEX(vertex, lightIsect, RNG);
                 // We use different direction for shadow ray and shading.
                 // Generally because a point on the light geometry will probabily has unwanted
                 // self intersection, a "wrong" shadow ray direction could solve this.
@@ -171,7 +171,7 @@ vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
         // Trace a ray towards bsdf_dir. 
         Ray bsdf_ray = spawnRay(vertex, dir_bsdf);
         SurfaceIntersection bsdf_vertex;
-        bool bsdf_ray_intersected = intersect(bsdf_ray, bsdf_vertex);
+        bool bsdf_ray_intersected = intersectEX(bsdf_ray, bsdf_vertex, RNG);
         if(bsdf_ray_intersected) {
             // TEST(?) :: abs(-dot(dir_bsdf, bsdf_vertex.geometric_normal)) / 
             G = abs(-dot(dir_bsdf, bsdf_vertex.geometric_normal)) /
@@ -274,9 +274,9 @@ void main() {
 
     vec3 pixelColor = unidirectional_path_tracing(primaryRay, RNG);
     
-    // if(pushConstants.sample_batch != 0) {
-    //     vec3 color = imageLoad(storageImage, ivec2(pixel)).rgb;
-    //     pixelColor = (pushConstants.sample_batch * color + pixelColor) / (pushConstants.sample_batch + 1);
-    // }
+    if(pushConstants.sample_batch != 0) {
+        vec3 color = imageLoad(storageImage, ivec2(pixel)).rgb;
+        pixelColor = (pushConstants.sample_batch * color + pixelColor) / (pushConstants.sample_batch + 1);
+    }
     imageStore(storageImage, pixel, vec4(pixelColor, 1.0));
 }

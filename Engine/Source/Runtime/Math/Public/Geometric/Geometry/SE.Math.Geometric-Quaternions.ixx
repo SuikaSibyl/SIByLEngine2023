@@ -79,12 +79,16 @@ namespace SIByL::Math
 	}
 
 	Quaternion::Quaternion(vec3 const& eulerAngle) {
-		vec3 c = Math::cos(eulerAngle * 0.5);
-		vec3 s = Math::sin(eulerAngle * 0.5);
-		this->w = c.x * c.y * c.z + s.x * s.y * s.z;
-		this->x = s.x * c.y * c.z - c.x * s.y * s.z;
-		this->y = c.x * s.y * c.z + s.x * c.y * s.z;
-		this->z = c.x * c.y * s.z - s.x * s.y * c.z;
+		Quaternion qx = Quaternion(vec3{ 1,0,0 }, eulerAngle.x);
+		Quaternion qy = Quaternion(vec3{ 0,1,0 }, eulerAngle.y);
+		Quaternion qz = Quaternion(vec3{ 0,0,1 }, eulerAngle.z);
+		*this = qz * qy * qx;
+		//vec3 c = Math::cos(eulerAngle * 0.5);
+		//vec3 s = Math::sin(eulerAngle * 0.5);
+		//this->w = c.x * c.y * c.z + s.x * s.y * s.z;
+		//this->x = s.x * c.y * c.z - c.x * s.y * s.z;
+		//this->y = c.x * s.y * c.z + s.x * c.y * s.z;
+		//this->z = c.x * c.y * s.z - s.x * s.y * c.z;
 	}
 
 	// Quaternion::toMat3()

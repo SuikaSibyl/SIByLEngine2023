@@ -27,10 +27,12 @@ struct PrimaryPayload {
     mat3    TBN;            // 48: TBN frame of hit point
     float   normalFlipping; // ....
     float   hitFrontface; // ....
+    uint    RND;
 };
 /** Primary Payload Struct */
 struct ShadowPayload {
     bool    occluded;
+    uint    RND;
 };
 
 /** Flag Definition */

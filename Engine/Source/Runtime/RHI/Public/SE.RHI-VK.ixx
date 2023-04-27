@@ -1595,48 +1595,64 @@ namespace SIByL::RHI
 	inline auto getVkFormat(TextureFormat format) noexcept -> VkFormat {
 		switch (format)
 		{
-		case SIByL::RHI::TextureFormat::DEPTH32STENCIL8:	return VK_FORMAT_D32_SFLOAT_S8_UINT; break;
-		case SIByL::RHI::TextureFormat::DEPTH32_FLOAT:		return VK_FORMAT_D32_SFLOAT; break;
-		case SIByL::RHI::TextureFormat::DEPTH24STENCIL8:	return VK_FORMAT_D24_UNORM_S8_UINT; break;
-		case SIByL::RHI::TextureFormat::DEPTH24:			return VK_FORMAT_X8_D24_UNORM_PACK32; break;
-		case SIByL::RHI::TextureFormat::DEPTH16_UNORM:		return VK_FORMAT_D16_UNORM; break;
-		case SIByL::RHI::TextureFormat::STENCIL8:			return VK_FORMAT_S8_UINT; break;
-		case SIByL::RHI::TextureFormat::RGBA32_FLOAT:		return VK_FORMAT_R32G32B32A32_SFLOAT; break;
-		case SIByL::RHI::TextureFormat::RGBA32_SINT:		return VK_FORMAT_R32G32B32A32_SINT; break;
-		case SIByL::RHI::TextureFormat::RGBA32_UINT:		return VK_FORMAT_R32G32B32A32_UINT; break;
-		case SIByL::RHI::TextureFormat::RGBA16_FLOAT:		return VK_FORMAT_R16G16B16A16_SFLOAT; break;
-		case SIByL::RHI::TextureFormat::RGBA16_SINT:		return VK_FORMAT_R16G16B16A16_SINT; break;
-		case SIByL::RHI::TextureFormat::RGBA16_UINT:		return VK_FORMAT_R16G16B16A16_UINT; break;
-		case SIByL::RHI::TextureFormat::RG32_FLOAT:			return VK_FORMAT_R32G32_SFLOAT; break;
-		case SIByL::RHI::TextureFormat::RG32_SINT:			return VK_FORMAT_R32G32_SINT; break;
-		case SIByL::RHI::TextureFormat::RG32_UINT:			return VK_FORMAT_R32G32_UINT; break;
-		case SIByL::RHI::TextureFormat::RG11B10_UFLOAT:		return VK_FORMAT_B10G11R11_UFLOAT_PACK32;  break;
-		case SIByL::RHI::TextureFormat::RGB10A2_UNORM:		return VK_FORMAT_A2R10G10B10_UNORM_PACK32; break;
-		case SIByL::RHI::TextureFormat::RGB9E5_UFLOAT:		return VK_FORMAT_E5B9G9R9_UFLOAT_PACK32; break;
-		case SIByL::RHI::TextureFormat::BGRA8_UNORM_SRGB:	return VK_FORMAT_B8G8R8A8_SRGB; break;
-		case SIByL::RHI::TextureFormat::BGRA8_UNORM:		return VK_FORMAT_B8G8R8A8_UNORM; break;
-		case SIByL::RHI::TextureFormat::RGBA8_SINT:			return VK_FORMAT_R8G8B8A8_SINT; break;
-		case SIByL::RHI::TextureFormat::RGBA8_UINT:			return VK_FORMAT_R8G8B8A8_UINT; break;
-		case SIByL::RHI::TextureFormat::RGBA8_SNORM:		return VK_FORMAT_R8G8B8A8_SNORM; break;
-		case SIByL::RHI::TextureFormat::RGBA8_UNORM_SRGB:	return VK_FORMAT_R8G8B8A8_SRGB; break;
-		case SIByL::RHI::TextureFormat::RGBA8_UNORM:		return VK_FORMAT_R8G8B8A8_UNORM; break;
-		case SIByL::RHI::TextureFormat::RG16_FLOAT:			return VK_FORMAT_R16G16_SFLOAT; break;
-		case SIByL::RHI::TextureFormat::RG16_SINT:			return VK_FORMAT_R16G16_SINT; break;
-		case SIByL::RHI::TextureFormat::RG16_UINT:			return VK_FORMAT_R16G16_UINT; break;
-		case SIByL::RHI::TextureFormat::R32_FLOAT:			return VK_FORMAT_R32_SFLOAT; break;
-		case SIByL::RHI::TextureFormat::R32_SINT:			return VK_FORMAT_R32_SINT; break;
-		case SIByL::RHI::TextureFormat::R32_UINT:			return VK_FORMAT_R32_UINT; break;
-		case SIByL::RHI::TextureFormat::RG8_SINT:			return VK_FORMAT_R8G8_SINT; break;
-		case SIByL::RHI::TextureFormat::RG8_UINT:			return VK_FORMAT_R8G8_UINT; break;
-		case SIByL::RHI::TextureFormat::RG8_SNORM:			return VK_FORMAT_R8G8_SNORM; break;
-		case SIByL::RHI::TextureFormat::RG8_UNORM:			return VK_FORMAT_R8G8_UNORM; break;
-		case SIByL::RHI::TextureFormat::R16_FLOAT:			return VK_FORMAT_R16_SFLOAT; break;
-		case SIByL::RHI::TextureFormat::R16_SINT:			return VK_FORMAT_R16_SINT; break;
-		case SIByL::RHI::TextureFormat::R16_UINT: 			return VK_FORMAT_R16_UINT; break;
-		case SIByL::RHI::TextureFormat::R8_SINT:			return VK_FORMAT_R8_SINT; break;
-		case SIByL::RHI::TextureFormat::R8_UINT:			return VK_FORMAT_R8_UINT; break;
-		case SIByL::RHI::TextureFormat::R8_SNORM:			return VK_FORMAT_R8_SNORM; break;
-		case SIByL::RHI::TextureFormat::R8_UNORM:			return VK_FORMAT_R8_UNORM; break;
+		case SIByL::RHI::TextureFormat::DEPTH32STENCIL8:		return VK_FORMAT_D32_SFLOAT_S8_UINT; break;
+		case SIByL::RHI::TextureFormat::DEPTH32_FLOAT:			return VK_FORMAT_D32_SFLOAT; break;
+		case SIByL::RHI::TextureFormat::DEPTH24STENCIL8:		return VK_FORMAT_D24_UNORM_S8_UINT; break;
+		case SIByL::RHI::TextureFormat::DEPTH24:				return VK_FORMAT_X8_D24_UNORM_PACK32; break;
+		case SIByL::RHI::TextureFormat::DEPTH16_UNORM:			return VK_FORMAT_D16_UNORM; break;
+		case SIByL::RHI::TextureFormat::STENCIL8:				return VK_FORMAT_S8_UINT; break;
+		case SIByL::RHI::TextureFormat::RGBA32_FLOAT:			return VK_FORMAT_R32G32B32A32_SFLOAT; break;
+		case SIByL::RHI::TextureFormat::RGBA32_SINT:			return VK_FORMAT_R32G32B32A32_SINT; break;
+		case SIByL::RHI::TextureFormat::RGBA32_UINT:			return VK_FORMAT_R32G32B32A32_UINT; break;
+		case SIByL::RHI::TextureFormat::RGBA16_FLOAT:			return VK_FORMAT_R16G16B16A16_SFLOAT; break;
+		case SIByL::RHI::TextureFormat::RGBA16_SINT:			return VK_FORMAT_R16G16B16A16_SINT; break;
+		case SIByL::RHI::TextureFormat::RGBA16_UINT:			return VK_FORMAT_R16G16B16A16_UINT; break;
+		case SIByL::RHI::TextureFormat::RG32_FLOAT:				return VK_FORMAT_R32G32_SFLOAT; break;
+		case SIByL::RHI::TextureFormat::RG32_SINT:				return VK_FORMAT_R32G32_SINT; break;
+		case SIByL::RHI::TextureFormat::RG32_UINT:				return VK_FORMAT_R32G32_UINT; break;
+		case SIByL::RHI::TextureFormat::RG11B10_UFLOAT:			return VK_FORMAT_B10G11R11_UFLOAT_PACK32;  break;
+		case SIByL::RHI::TextureFormat::RGB10A2_UNORM:			return VK_FORMAT_A2R10G10B10_UNORM_PACK32; break;
+		case SIByL::RHI::TextureFormat::RGB9E5_UFLOAT:			return VK_FORMAT_E5B9G9R9_UFLOAT_PACK32; break;
+		case SIByL::RHI::TextureFormat::BGRA8_UNORM_SRGB:		return VK_FORMAT_B8G8R8A8_SRGB; break;
+		case SIByL::RHI::TextureFormat::BGRA8_UNORM:			return VK_FORMAT_B8G8R8A8_UNORM; break;
+		case SIByL::RHI::TextureFormat::RGBA8_SINT:				return VK_FORMAT_R8G8B8A8_SINT; break;
+		case SIByL::RHI::TextureFormat::RGBA8_UINT:				return VK_FORMAT_R8G8B8A8_UINT; break;
+		case SIByL::RHI::TextureFormat::RGBA8_SNORM:			return VK_FORMAT_R8G8B8A8_SNORM; break;
+		case SIByL::RHI::TextureFormat::RGBA8_UNORM_SRGB:		return VK_FORMAT_R8G8B8A8_SRGB; break;
+		case SIByL::RHI::TextureFormat::RGBA8_UNORM:			return VK_FORMAT_R8G8B8A8_UNORM; break;
+		case SIByL::RHI::TextureFormat::RG16_FLOAT:				return VK_FORMAT_R16G16_SFLOAT; break;
+		case SIByL::RHI::TextureFormat::RG16_SINT:				return VK_FORMAT_R16G16_SINT; break;
+		case SIByL::RHI::TextureFormat::RG16_UINT:				return VK_FORMAT_R16G16_UINT; break;
+		case SIByL::RHI::TextureFormat::R32_FLOAT:				return VK_FORMAT_R32_SFLOAT; break;
+		case SIByL::RHI::TextureFormat::R32_SINT:				return VK_FORMAT_R32_SINT; break;
+		case SIByL::RHI::TextureFormat::R32_UINT:				return VK_FORMAT_R32_UINT; break;
+		case SIByL::RHI::TextureFormat::RG8_SINT:				return VK_FORMAT_R8G8_SINT; break;
+		case SIByL::RHI::TextureFormat::RG8_UINT:				return VK_FORMAT_R8G8_UINT; break;
+		case SIByL::RHI::TextureFormat::RG8_SNORM:				return VK_FORMAT_R8G8_SNORM; break;
+		case SIByL::RHI::TextureFormat::RG8_UNORM:				return VK_FORMAT_R8G8_UNORM; break;
+		case SIByL::RHI::TextureFormat::R16_FLOAT:				return VK_FORMAT_R16_SFLOAT; break;
+		case SIByL::RHI::TextureFormat::R16_SINT:				return VK_FORMAT_R16_SINT; break;
+		case SIByL::RHI::TextureFormat::R16_UINT: 				return VK_FORMAT_R16_UINT; break;
+		case SIByL::RHI::TextureFormat::R8_SINT:				return VK_FORMAT_R8_SINT; break;
+		case SIByL::RHI::TextureFormat::R8_UINT:				return VK_FORMAT_R8_UINT; break;
+		case SIByL::RHI::TextureFormat::R8_SNORM:				return VK_FORMAT_R8_SNORM; break;
+		case SIByL::RHI::TextureFormat::R8_UNORM:				return VK_FORMAT_R8_UNORM; break;
+		case SIByL::RHI::TextureFormat::BC1_RGB_UNORM_BLOCK:	return VK_FORMAT_BC1_RGB_UNORM_BLOCK; break;
+		case SIByL::RHI::TextureFormat::BC1_RGB_SRGB_BLOCK:		return VK_FORMAT_BC1_RGB_SRGB_BLOCK; break;
+		case SIByL::RHI::TextureFormat::BC1_RGBA_UNORM_BLOCK:	return VK_FORMAT_BC1_RGBA_UNORM_BLOCK; break;
+		case SIByL::RHI::TextureFormat::BC1_RGBA_SRGB_BLOCK:	return VK_FORMAT_BC1_RGBA_SRGB_BLOCK; break;
+		case SIByL::RHI::TextureFormat::BC2_UNORM_BLOCK:		return VK_FORMAT_BC2_UNORM_BLOCK; break;
+		case SIByL::RHI::TextureFormat::BC2_SRGB_BLOCK:			return VK_FORMAT_BC2_SRGB_BLOCK; break;
+		case SIByL::RHI::TextureFormat::BC3_UNORM_BLOCK:		return VK_FORMAT_BC3_UNORM_BLOCK; break;
+		case SIByL::RHI::TextureFormat::BC3_SRGB_BLOCK:			return VK_FORMAT_BC3_SRGB_BLOCK; break;
+		case SIByL::RHI::TextureFormat::BC4_UNORM_BLOCK:		return VK_FORMAT_BC4_UNORM_BLOCK; break;
+		case SIByL::RHI::TextureFormat::BC4_SNORM_BLOCK:		return VK_FORMAT_BC4_SNORM_BLOCK; break;
+		case SIByL::RHI::TextureFormat::BC5_UNORM_BLOCK:		return VK_FORMAT_BC5_UNORM_BLOCK; break;
+		case SIByL::RHI::TextureFormat::BC5_SNORM_BLOCK:		return VK_FORMAT_BC5_SNORM_BLOCK; break;
+		case SIByL::RHI::TextureFormat::BC6H_UFLOAT_BLOCK:		return VK_FORMAT_BC6H_UFLOAT_BLOCK; break;
+		case SIByL::RHI::TextureFormat::BC6H_SFLOAT_BLOCK:		return VK_FORMAT_BC6H_SFLOAT_BLOCK; break;
+		case SIByL::RHI::TextureFormat::BC7_UNORM_BLOCK:		return VK_FORMAT_BC7_UNORM_BLOCK; break;
+		case SIByL::RHI::TextureFormat::BC7_SRGB_BLOCK:			return VK_FORMAT_BC7_SRGB_BLOCK; break;
 		default: return VK_FORMAT_UNDEFINED; break;
 		}
 	}
@@ -1673,6 +1689,7 @@ namespace SIByL::RHI
 		imageInfo.arrayLayers = (desc.dimension == TextureDimension::TEX2D) ? desc.size.depthOrArrayLayers : 1;
 		imageInfo.format = getVkFormat(desc.format);
 		imageInfo.tiling = hasBit(desc.flags, RHI::TextureFlags::HOSTI_VISIBLE) ? VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL;
+		if (desc.format >= TextureFormat::COMPRESSION) imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 		imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		imageInfo.usage = getVkImageUsageFlagBits(desc.usage);
 		imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -4012,7 +4029,7 @@ namespace SIByL::RHI
 		/** Draws primitives using parameters read from a GPUBuffer. */
 		virtual auto drawIndirect(Buffer* indirectBuffer, uint64_t indirectOffset) noexcept -> void override;
 		/** Draws indexed primitives using parameters read from a GPUBuffer. */
-		virtual auto drawIndexedIndirect(Buffer* indirectBuffer, uint64_t indirectOffset) noexcept -> void override;
+		virtual auto drawIndexedIndirect(Buffer* indirectBuffer, uint64_t offset, uint32_t drawCount, uint32_t stride) noexcept -> void override;
 		/** Sets the viewport used during the rasterization stage to linearly map
 		* from normalized device coordinates to viewport coordinates. */
 		virtual auto setViewport(
@@ -4091,8 +4108,8 @@ namespace SIByL::RHI
 
 	}
 	
-	auto RenderPassEncoder_VK::drawIndexedIndirect(Buffer* indirectBuffer, uint64_t indirectOffset) noexcept -> void {
-
+	auto RenderPassEncoder_VK::drawIndexedIndirect(Buffer* indirectBuffer, uint64_t offset, uint32_t drawCount, uint32_t stride) noexcept -> void {
+		vkCmdDrawIndexedIndirect(commandBuffer->commandBuffer, static_cast<Buffer_VK*>(indirectBuffer)->getVkBuffer(), offset, drawCount, stride);
 	}
 	
 	auto RenderPassEncoder_VK::setViewport(

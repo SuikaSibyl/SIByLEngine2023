@@ -29,12 +29,16 @@ namespace SIByL
 		// - sphere
 		Core::GUID rchit_sphere;
 		Core::GUID rint_sphere;
+		Core::GUID rahit_sphere;
 		Core::GUID sphere_sampling_rcall;
 		Core::GUID sphere_sampling_pdf_rcall;
+		Core::GUID rahit_sphere_shadow;
 		// - trimesh
 		Core::GUID rchit_trimesh;
+		Core::GUID rahit_trimesh;
 		Core::GUID trimesh_sampling_rcall;
 		Core::GUID trimesh_sampling_pdf_rcall;
+		Core::GUID rahit_trimesh_shadow;
 
 		// Plugins: bsdfs
 		// - lambertian
@@ -73,10 +77,18 @@ namespace SIByL
 					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(shadow_ray_rmiss)}, }},
 				GFX::SBTsDescriptor::HitGroupSBT{{
 					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rchit_trimesh)},
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rchit_trimesh), 
+						Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rahit_trimesh)},
 					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rchit_sphere), nullptr,
 						Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rint_sphere),},
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rchit_sphere), 
+						Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rahit_sphere),
+						Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rint_sphere),},
 					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(shadow_ray_rchit)},
-					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(shadow_ray_rchit), nullptr,
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(shadow_ray_rchit),
+						Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rahit_trimesh_shadow)},
+					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(shadow_ray_rchit), 
+						Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rahit_sphere_shadow),
 						Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rint_sphere),}, }},
 				GFX::SBTsDescriptor::CallableSBT{{
 					{Core::ResourceManager::get()->getResource<GFX::ShaderModule>(sphere_sampling_rcall)},
@@ -118,23 +130,35 @@ namespace SIByL
 				rint_sphere = GFX::GFXManager::get()->registerShaderModuleResource(
 					"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/primitive/sphere_hint_rint.spv",
 					{ nullptr, RHI::ShaderStages::INTERSECTION });
+				rahit_sphere = GFX::GFXManager::get()->registerShaderModuleResource(
+					"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/spt_primary_ray_sphere_rahit.spv",
+					{ nullptr, RHI::ShaderStages::ANY_HIT });
 				sphere_sampling_rcall = GFX::GFXManager::get()->registerShaderModuleResource(
 					"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/primitive/sphere_sample_rcall.spv",
 					{ nullptr, RHI::ShaderStages::CALLABLE });
 				sphere_sampling_pdf_rcall = GFX::GFXManager::get()->registerShaderModuleResource(
 					"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/primitive/sphere_sample_pdf_rcall.spv",
 					{ nullptr, RHI::ShaderStages::CALLABLE });
+				rahit_sphere_shadow = GFX::GFXManager::get()->registerShaderModuleResource(
+					"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/spt_shadow_ray_sphere_rahit.spv",
+					{ nullptr, RHI::ShaderStages::ANY_HIT });
 			}
 			{	// - trimesh
 				rchit_trimesh = GFX::GFXManager::get()->registerShaderModuleResource(
 					"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/spt_primary_ray_trimesh_rchit.spv",
 					{ nullptr, RHI::ShaderStages::CLOSEST_HIT });
+				rahit_trimesh = GFX::GFXManager::get()->registerShaderModuleResource(
+					"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/spt_primary_ray_trimesh_rahit.spv",
+					{ nullptr, RHI::ShaderStages::ANY_HIT });
 				trimesh_sampling_rcall = GFX::GFXManager::get()->registerShaderModuleResource(
 					"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/primitive/trimesh_sample_rcall.spv",
 					{ nullptr, RHI::ShaderStages::CALLABLE });
 				trimesh_sampling_pdf_rcall = GFX::GFXManager::get()->registerShaderModuleResource(
 					"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/plugins/primitive/trimesh_sample_pdf_rcall.spv",
 					{ nullptr, RHI::ShaderStages::CALLABLE });
+				rahit_trimesh_shadow = GFX::GFXManager::get()->registerShaderModuleResource(
+					"../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/path_tracer/spt_shadow_ray_trimesh_rahit.spv",
+					{ nullptr, RHI::ShaderStages::ANY_HIT });
 			}
 
 			// Plugins: bsdfs

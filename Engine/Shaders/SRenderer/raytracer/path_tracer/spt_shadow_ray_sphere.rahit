@@ -1,0 +1,24 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#include "../include/common_trace.h"
+#define PRIMITIVE_TYPE PRIMITIVE_SPHERE
+#include "../include/common_hit.h"
+#include "../../../Utility/random.h"
+#include "../../include/plugins/material/lambertian_common.h"
+
+layout(location = 1) rayPayloadInEXT ShadowPayload rShadowPld;
+
+void main() {
+    HitGeometryAlphaTest hitInfo = getHitGeometryAlphaTest();
+
+    uint texID = lambertian_materials[hitInfo.matID].basecolor_opacity_tex;
+    float alpha = texture(textures[texID], hitInfo.uv).w;
+
+    uint RND = rShadowPld.RND;
+    float rnd = UniformFloat(RND);
+    rShadowPld.RND = RND;
+    
+    if(rnd > alpha) {
+        ignoreIntersectionEXT;
+    }
+}

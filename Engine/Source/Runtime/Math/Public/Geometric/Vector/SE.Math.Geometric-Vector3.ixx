@@ -28,6 +28,9 @@ namespace SIByL::Math
 		template <class U>
 		explicit operator Vector3<U>() const;
 
+		template <class T>
+		explicit operator Vector2<T>() const { return Vector2<T>{x, y}; }
+
 		operator T* () { return data; }
 		operator const T* const () { return static_cast<const T*>(data); }
 		auto operator [](size_t idx) ->T& { return data[idx]; }
@@ -36,15 +39,16 @@ namespace SIByL::Math
 		auto operator-() const->Vector3<T>;
 		auto operator*(T s) const->Vector3<T>;
 		auto operator/(T s) const->Vector3<T>;
-		auto operator/=(T s) const->Vector3<T>&;
 		auto operator+(Vector3<T> const& v) const->Vector3<T>;
 		auto operator-(Vector3<T> const& v) const->Vector3<T>;
 		auto operator*(Vector3<T> const& v) const->Vector3<T>;
+		auto operator==(Vector3<T> const& v) const -> bool;
+		auto operator!=(Vector3<T> const& v) const -> bool;
+		auto operator*=(T s)->Vector3<T>&;
+		auto operator/=(T s)->Vector3<T>&;
 		auto operator+=(Vector3<T> const& v)->Vector3<T>&;
 		auto operator-=(Vector3<T> const& v)->Vector3<T>&;
 		auto operator*=(Vector3<T> const& v)->Vector3<T>&;
-		auto operator==(Vector3<T> const& v) const -> bool;
-		auto operator!=(Vector3<T> const& v) const -> bool;
 	};
 
 	export using vec3 = Vector3<float>;
@@ -238,8 +242,15 @@ namespace SIByL::Math
 	}
 
 	template <class T>
-	auto Vector3<T>::operator/=(T s) const->Vector3<T>&
-	{
+	auto Vector3<T>::operator*=(T s)->Vector3<T>& {
+		for (size_t i = 0; i < 3; i++) {
+			data[i] *= s;
+		}
+		return *this;
+	}
+	
+	template <class T>
+	auto Vector3<T>::operator/=(T s)->Vector3<T>& {
 		float inv = 1.f / s;
 		for (size_t i = 0; i < 3; i++) {
 			data[i] *= inv;

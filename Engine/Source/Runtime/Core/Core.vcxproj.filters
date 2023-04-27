@@ -63,9 +63,6 @@
     <ClCompile Include="Public\IO\SE.Core.IO-SyncRW.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\IO\SE.Core.IO-File.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="Public\Memory\SE.Core.Memory-Buffer.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -111,18 +108,6 @@
     <ClCompile Include="Public\Resource\SE.Core.Resource.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Resource\SE.Core.Resource-GUID.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Private\Resource\SE.Core.Resource-GUID.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Resource\SE.Core.Resource-ResourceManager.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Resource\SE.Core.Resource-OfflineManage.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="Public\ECS\SE.Core.ECS.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -130,6 +115,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\UnitTest\SE.Core.UnitTest.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Resource\SE.Core.Resource.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

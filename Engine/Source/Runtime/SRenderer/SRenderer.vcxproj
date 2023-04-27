@@ -141,9 +141,15 @@
   <ItemGroup>
     <ClCompile Include="Public\Core\SE.SRenderer-SRenderer.ixx" />
     <ClCompile Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPMinPoolingPass.ixx" />
+    <ClCompile Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPSSLCPass.ixx" />
+    <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarLCPass.ixx" />
     <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarPass.ixx" />
+    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-AccumulatePass.ixx" />
+    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-CascadeShadowMapPass.ixx" />
     <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-FooPass.ixx" />
+    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-ForwardPass.ixx" />
     <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-GBufferPass.ixx" />
+    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-ShadowMapPass.ixx" />
     <ClCompile Include="Public\Pipeline\SE.SRendere-BDPTPipeline.ixx" />
     <ClCompile Include="Public\Pipeline\SE.SRendere-ForwardPipeline.ixx" />
     <ClCompile Include="Public\Pipeline\SE.SRendere-MMLTPipeline.ixx" />
@@ -163,6 +169,9 @@
     <ClCompile Include="Public\Core\SE.SRenderer-RTCommon.ixx" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\Editor\Editor\Editor.vcxproj">
+      <Project>{5c249b31-dafc-4968-a25a-537dfe0524d7}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\..\ThirdParty\imgui\imgui.vcxproj">
       <Project>{558eb959-b88f-4796-b989-c8ab8f43a1b7}</Project>
     </ProjectReference>

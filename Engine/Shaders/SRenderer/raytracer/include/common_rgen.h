@@ -35,6 +35,62 @@ bool intersect(
     return getIntersected(rPrimaryPld.flags);
 }
 
+bool intersectEX(
+    in const Ray ray,
+    out SurfaceIntersection isect,
+    inout uint RND
+) {
+    rPrimaryPld.RND = RND;
+    
+    traceRayEXT(tlas,              // Top-level acceleration structure
+            0,  // Ray flags, here saying "treat all geometry as opaque"
+            0xFF,                  // 8-bit instance mask, here saying "trace against all instances"
+            0,                     // SBT record offset
+            0,                     // SBT record stride for offset
+            0,                     // Miss index
+            ray.origin,            // Ray origin
+            ray.tMin,              // Minimum t-value
+            ray.direction,         // Ray direction
+            ray.tMax,              // Maximum t-value
+            0);                    // Location of payload
+
+    isect.wo = normalize(-ray.direction);
+    isect.position = rPrimaryPld.position;
+    isect.lightID = rPrimaryPld.lightID;
+    isect.geometric_normal = rPrimaryPld.geometryNormal;
+    isect.shading_frame = rPrimaryPld.TBN;
+    isect.uv = rPrimaryPld.uv;
+    isect.matID = rPrimaryPld.matID;
+    isect.lightNormal =  (rPrimaryPld.normalFlipping == 0)
+            ? isect.geometric_normal
+            : isect.geometric_normal * rPrimaryPld.normalFlipping;
+    isect.hitFrontface = rPrimaryPld.hitFrontface;
+    RND = rPrimaryPld.RND;
+    return getIntersected(rPrimaryPld.flags);
+}
+
+bool traceOccludeRayEX(
+    in Ray ray,
+    inout uint RND
+) {
+    rShadowPld.RND = RND;
+    rShadowPld.occluded = false;
+    traceRayEXT(tlas,           // Top-level acceleration structure
+        0,   // Ray flags, here saying "treat all geometry as opaque"
+        0xFF,                   // 8-bit instance mask, here saying "trace against all instances"
+        PRIMITIVE_TYPE_COUNT,   // SBT record offset
+        0,                      // SBT record stride for offset
+        1,                      // Miss index
+        ray.origin,             // Ray origin
+        ray.tMin,              // Minimum t-value
+        ray.direction,          // Ray direction
+        ray.tMax,               // Maximum t-value
+        1);                     // Location of payload
+
+    RND = rShadowPld.RND;
+    return rShadowPld.occluded;
+}
+
 bool traceOccludeRay(in Ray ray) {
     rShadowPld.occluded = false;
     traceRayEXT(tlas,           // Top-level acceleration structure
@@ -72,6 +128,27 @@ vec3 transmittance(
     return occluded ? vec3(0) : vec3(1);
 }
 
+vec3 transmittanceEX(
+    in SurfaceIntersection isect0,
+    in SurfaceIntersection isect1,
+    inout uint RND
+) {
+    const vec3 direction = normalize(isect1.position - isect0.position);
+
+    vec3 offsetDir0 = faceforward(isect0.geometric_normal, -direction, isect0.geometric_normal);
+    vec3 offsetDir1 = faceforward(isect1.geometric_normal, +direction, isect1.geometric_normal);
+    const vec3 offPos0 = offsetPositionAlongNormal(isect0.position, offsetDir0);
+    const vec3 offPos1 = offsetPositionAlongNormal(isect1.position, offsetDir1);
+
+    Ray shadow_ray;
+    shadow_ray.origin     = offPos0;
+    shadow_ray.tMin       = 0.000;
+    shadow_ray.direction  = direction;
+    shadow_ray.tMax       = distance(offPos0, offPos1) -0.002;
+
+    bool occluded = traceOccludeRayEX(shadow_ray, RND);
+    return occluded ? vec3(0) : vec3(1);
+}
 // ********************************************************
 //                         BSDF
 // ********************************************************

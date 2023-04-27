@@ -1,8 +1,8 @@
 module;
+#include <ctime>
 #include <string>
 #pragma warning(disable:4996)
 #include <stb_image_write.h>
-#include <filesystem>
 export module SE.Image:PPM;
 import :Color;
 import :Image;
@@ -15,7 +15,7 @@ namespace SIByL::Image
 	export struct PPM {
 		static auto toPPM(Image<COLOR_R8G8B8_UINT> const& i) noexcept -> Core::Buffer;
 
-		static auto writePPM(std::filesystem::path const& path, uint32_t width, uint32_t height, uint32_t channel, float* data) noexcept -> void;
+		static auto writePPM(char const* path, uint32_t width, uint32_t height, uint32_t channel, float* data) noexcept -> void;
 	};
 
 #pragma region IMAGE_PPM_IMPL
@@ -36,7 +36,7 @@ namespace SIByL::Image
 		return PPMBuffer;
 	}
 
-	auto PPM::writePPM(std::filesystem::path const& path, uint32_t width, uint32_t height, uint32_t channel, float* data) noexcept -> void {
+	auto PPM::writePPM(char const* path, uint32_t width, uint32_t height, uint32_t channel, float* data) noexcept -> void {
 
 		if (channel != 3) {
 			Core::LogManager::Error("Image :: PPM :: PPM does not support alpha channel.");

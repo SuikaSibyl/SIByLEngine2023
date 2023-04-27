@@ -98,11 +98,11 @@ namespace SIByL::Platform
     }
 
     auto Socket::send(Core::Buffer const& buffer) noexcept -> void {
-        ::send(mSocket, static_cast<char const*>(buffer.data), buffer.size, 0);
+        ::send(mSocket, static_cast<char const*>(buffer.data), int(buffer.size), 0);
     }
 
     auto Socket::recv(Core::Buffer& buffer) noexcept -> void {
-        ::recv(mSocket, static_cast<char*>(buffer.data), buffer.size, 0);
+        ::recv(mSocket, static_cast<char*>(buffer.data), int(buffer.size), 0);
     }
 }
 #endif

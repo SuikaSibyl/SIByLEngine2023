@@ -140,19 +140,36 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		srenderer = std::make_unique<SRenderer>();
 		srenderer->init(scene);
-		pipeline = std::make_unique<SRP::UDPTPipeline>();
+		pipeline = std::make_unique<SRP::ForwardPipeline>();
 		pipeline->build();
 
-		Editor::DebugDraw::Init(pipeline->getOutput());
+		Editor::DebugDraw::Init(pipeline->getOutput(), nullptr);
 
 		editorLayer->getWidget<Editor::RDGViewerWidget>()->pipeline = pipeline.get();
 
-		cameraController.init(mainWindow.get()->getInput(), &timer);
+		std::unique_ptr<Image::Texture_Host> dds_tex = Image::DDS::fromDDS("D:/Art/Scenes/Bistro_v5_2/Bistro_v5_2/Textures/Bollards_BaseColor.dds");
+		Core::GUID guid_dds = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
+		GFX::GFXManager::get()->registerTextureResource(guid_dds, dds_tex.get());
+
+		cameraController.init(mainWindow.get()->getInput(), &timer, editorLayer->getWidget<Editor::ViewportWidget>());
 	};
 
 	/** Update the application every loop */
 	virtual auto Update(double deltaTime) noexcept -> void override {
+		int width, height;
+		mainWindow->getFramebufferSize(&width, &height);
+		width = 1280;
+		height = 720;
 		{
+			auto view = Core::ComponentManager::get()->view<GFX::CameraComponent>();
+			for (auto& [entity, camera] : view) {
+				if (camera.isPrimaryCamera) {
+					camera.aspect = 1.f * width / height;
+					cameraController.bindTransform(scene.getGameObject(entity)->getEntity().getComponent<GFX::TransformComponent>());
+					srenderer->updateCamera(*(scene.getGameObject(entity)->getEntity().getComponent<GFX::TransformComponent>()), camera);
+					break;
+				}
+			}
 			cameraController.onUpdate();
 			//Core::LogManager::Log(std::to_string(timer.deltaTime()));
 		}
@@ -170,27 +187,19 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		GFX::GFXManager::get()->onUpdate();
 		//decoder.readFrame();
 
-		int width, height;
-		mainWindow->getFramebufferSize(&width, &height);
-		width = 1280;
-		height = 720;
 
-		auto view = Core::ComponentManager::get()->view<GFX::CameraComponent>();
-		for (auto& [entity, camera] : view) {
-			if (camera.isPrimaryCamera) {
-				camera.aspect = 1.f * width / height;
-				cameraController.bindTransform(scene.getGameObject(entity)->getEntity().getComponent<GFX::TransformComponent>());
-				srenderer->updateCamera(*(scene.getGameObject(entity)->getEntity().getComponent<GFX::TransformComponent>()), camera);
-				break;
-			}
-		}
 		srenderer->invalidScene(scene);
 		srenderer->updateRDGData(pipeline->getActiveGraph());
 
+		RDG::Graph* graph = pipeline->getActiveGraph();
+		for (size_t i : graph->getFlattenedPasses()) {
+			graph->getPass(i)->onInteraction(mainWindow.get()->getInput(), &(editorLayer->getWidget<Editor::ViewportWidget>()->info));
+		}
+
 		pipeline->execute(commandEncoder.get());
 
-		Editor::DebugDraw::DrawLine2D(Math::vec2{ 0.,0. }, Math::vec2{ 1280,720 }, 5., 5.);
-
+		//Editor::DebugDraw::DrawAABB(srenderer->statisticsData.aabb, 5., 5.);
+		srenderer->updateRDGData(Editor::DebugDraw::get()->pipeline->getActiveGraph());
 		Editor::DebugDraw::Draw(commandEncoder.get());
 
 		device->getGraphicsQueue()->submit({ commandEncoder->finish({}) }, 
@@ -261,7 +270,7 @@ int main()
 	SandBoxApplication app;
 	app.createMainWindow({
 			Platform::WindowVendor::GLFW,
-			L"SIByL Engine 2023.0",
+			L"SIByL Engine 2023.1",
 			1280, 720,
 			Platform::WindowProperties::VULKAN_CONTEX
 		});

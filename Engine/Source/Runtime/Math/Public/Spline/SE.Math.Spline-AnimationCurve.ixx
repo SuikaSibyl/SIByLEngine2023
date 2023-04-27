@@ -28,7 +28,7 @@ namespace SIByL::Math
 		WrapMode postWrapMode = WrapMode::CLAMP;
 
 	private:
-		float errorTolerence = 0.00001;
+		float errorTolerence = 0.00001f;
 		std::vector<KeyFrame> keyFrames;
 		struct Point {
 			float time;
@@ -95,7 +95,7 @@ namespace SIByL::Math
 		float t_l = 0;
 		float t_r = 1;
 		while (true) {
-			float t = 0.5 * (t_l + t_r);
+			float t = 0.5f * (t_l + t_r);
 			Point point = evaluate(keyFrames[left], keyFrames[left + 1], t);
 			float error = std::abs(point.time - time);
 			if (error < errorTolerence) return point.value;

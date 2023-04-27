@@ -153,7 +153,8 @@ namespace SIByL::Editor
 
 		/** draw gui*/
 		virtual auto onDrawGui() noexcept -> void override {
-			ImGui::Begin(name.c_str(), 0, ImGuiWindowFlags_MenuBar);
+			ImGui::Begin(name.c_str() , 0, ImGuiWindowFlags_MenuBar);
+
 			ImGui::PushItemWidth(ImGui::GetFontSize() * -12);
 			if (ImGui::BeginMenuBar()) {
 				if (ImGui::Button("capture")) {
@@ -161,10 +162,18 @@ namespace SIByL::Editor
 						captureImage(texture->guid);
 					}
 				}
-
+				//menuBarSize = ImGui::GetWindowSize();
 				ImGui::EndMenuBar();
 			}
 			ImGui::PopItemWidth();
+			commonOnDrawGui();
+			auto currPos = ImGui::GetCursorPos();
+			info.mousePos = ImGui::GetMousePos();
+			info.mousePos.x -= info.windowPos.x + currPos.x;
+			info.mousePos.y -= info.windowPos.y + currPos.y;
+			//info.contentPos = info.windowPos;
+			//info.contentPos.x += currPos.x;
+			//info.contentPos.y += currPos.y;
 
 			if (texture) {
 				ImGui::Image(

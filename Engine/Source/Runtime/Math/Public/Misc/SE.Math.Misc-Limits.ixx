@@ -10,7 +10,7 @@ namespace SIByL::Math
 	export constexpr inline float float_max = std::numeric_limits<float>::max();
 	export constexpr inline float one_minus_epsilon = 0x1.fffffep-1;
 
-	export constexpr inline float uint32_max = std::numeric_limits<uint32_t>::max();
+	export constexpr inline uint32_t uint32_max = std::numeric_limits<uint32_t>::max();
 
 	export constexpr inline float shadow_epsilon = 0.0001f;
 

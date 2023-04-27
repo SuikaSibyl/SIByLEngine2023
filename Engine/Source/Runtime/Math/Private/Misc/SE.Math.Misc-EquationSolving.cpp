@@ -15,8 +15,8 @@ namespace SIByL::Math
 		double q;
 		if (b < 0) q = -.5 * (b - rootDiscrim);
 		else       q = -.5 * (b + rootDiscrim);
-		t0 = q / a;
-		t1 = c / q;
+		t0 = static_cast<float>(q / a);
+		t1 = static_cast<float>(c / q);
 		if (t0 > t1) std::swap(t0, t1);
 		return true;
 	}
@@ -27,7 +27,7 @@ namespace SIByL::Math
 		if (discrim < 0) return false;
 		double rootDiscrim = std::sqrt(discrim);
 
-		efloat floatRootDiscrim(rootDiscrim, MachineEpsilon * rootDiscrim);
+		efloat floatRootDiscrim(static_cast<float>(rootDiscrim), static_cast<float>(MachineEpsilon * rootDiscrim));
 
 		// Compute quadratic t value
 		efloat q;

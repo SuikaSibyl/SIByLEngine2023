@@ -23,7 +23,7 @@ namespace SIByL::Editor
 				GFX::Texture* texture = Core::ResourceManager::get()->getResource<GFX::Texture>(guid);
 				pool.insert({ guid, ImGuiLayer::get()->createImGuiTexture(
 					Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler.get(),
-					texture->originalView.get(),
+					texture->getSRV(0, 1, 0, 1),
 					RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL) });
 				return pool[guid].get();
 			}

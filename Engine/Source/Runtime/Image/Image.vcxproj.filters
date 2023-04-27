@@ -45,5 +45,8 @@
     <ClCompile Include="Public\FileFormat\SE.Image-FileFormat.BMP.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\FileFormat\SE.Image-FileFormat.DDS.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

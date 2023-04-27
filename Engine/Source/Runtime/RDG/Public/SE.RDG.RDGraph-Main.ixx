@@ -13,12 +13,14 @@ module;
 #include "../../Application/Public/SE.Application.Config.h"
 export module SE.RDG:Main;
 import :DAG;
+import SE.Platform.Window;
 import SE.Utility;
 import SE.Math.Geometric;
 import SE.RHI;
 import SE.GFX;
 import SE.Core.Log;
 import SE.Core.Resource;
+import SE.Editor.Core;
 
 namespace SIByL::Editor {
 	struct RDGViewerWidget;
@@ -330,6 +332,13 @@ namespace SIByL::RDG
 			if (iter == ptrs.end()) return 0;
 			return iter->second;
 		}
+		
+		inline auto setMat4(std::string const& name, Math::mat4 m) noexcept -> void { mat4s[name] = m; }
+		inline auto getMat4(std::string const& name) const noexcept -> Math::mat4 {
+			auto const& iter = mat4s.find(name);
+			if (iter == mat4s.end()) return 0;
+			return iter->second;
+		}
 
 		Graph* graph;
 		Pass* pass;
@@ -339,6 +348,7 @@ namespace SIByL::RDG
 		std::unordered_map<std::string, uint32_t> uints;
 		std::unordered_map<std::string, std::function<void(DelegateData const&)>> delegates;
 		std::unordered_map<std::string, void*> ptrs;
+		std::unordered_map<std::string, Math::mat4> mat4s;
 	};
 
 	export struct Pass {
@@ -349,6 +359,8 @@ namespace SIByL::RDG
 		virtual auto execute(RenderContext* context, RenderData const& renderData) noexcept -> void = 0;
 
 		virtual auto renderUI() noexcept -> void {}
+
+		virtual auto onInteraction(Platform::Input* input, Editor::Widget::WidgetInfo* info) noexcept -> void {}
 
 		virtual auto generateMarker() noexcept -> void {
 			marker.name = identifier;
@@ -618,6 +630,10 @@ namespace SIByL::RDG
 		) noexcept -> GFX::Texture*;
 
 		RenderData renderData;
+
+		inline auto getFlattenedPasses() noexcept -> std::vector<size_t> const& { return flattenedPasses; }
+		inline auto getPass(size_t i) noexcept -> Pass* { return passes[i].get(); }
+
 	private:
 		friend RenderData;
 		friend Editor::RDGViewerWidget;

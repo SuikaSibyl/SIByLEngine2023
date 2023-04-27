@@ -37,7 +37,7 @@ namespace SIByL::GFX
 		/** resrouce GUID */
 		Core::GUID guid;
 		/** resrouce ORID */
-		Core::ORID orid = Core::ORID_NONE;
+		Core::ORID orid = Core::INVALID_ORID;
 		/** name */
 		std::string name;
 		/** path string */
@@ -98,7 +98,7 @@ namespace SIByL::GFX
 
 	inline auto VideoClip::serialize() noexcept -> void {
 		// only serialize if has orid
-		if (orid != Core::ORID_NONE && resourcePath.has_value()) {
+		if (orid != Core::INVALID_ORID && resourcePath.has_value()) {
 			std::filesystem::path metadata_path = "./bin/" + std::to_string(orid) + ".meta";
 			// handle metadata
 			{	YAML::Emitter out;
@@ -113,7 +113,7 @@ namespace SIByL::GFX
 			Core::Buffer vc_proxy;
 			vc_proxy.data = (void*)out.c_str();
 			vc_proxy.size = out.size();
-			Core::syncWriteFile(metadata_path, vc_proxy);
+			Core::syncWriteFile(metadata_path.string().c_str(), vc_proxy);
 			vc_proxy.data = nullptr;
 			}
 		}
@@ -123,7 +123,7 @@ namespace SIByL::GFX
 		orid = ORID;
 		std::filesystem::path metadata_path = "./bin/" + std::to_string(ORID) + ".meta";
 		Core::Buffer metadata;
-		Core::syncReadFile(metadata_path, metadata);
+		Core::syncReadFile(metadata_path.string().c_str(), metadata);
 		YAML::NodeAoS data = YAML::Load(reinterpret_cast<char*>(metadata.data));
 		// check scene name
 		if (data["ResourceType"].as<std::string>() != "VideoClip") {

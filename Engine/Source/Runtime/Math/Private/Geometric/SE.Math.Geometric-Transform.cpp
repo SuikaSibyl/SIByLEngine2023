@@ -342,7 +342,7 @@ namespace SIByL::Math
 		Math::mat4 trans = {
 			float(2) / (right - left), 0, 0, -(right + left) / (right - left),
 			0, float(2) / (top - bottom), 0, -(top + bottom) / (top - bottom),
-			0, 0, float(2) / (zFar - zNear), -2 * zNear / (zFar - zNear),
+			0, 0, float(1) / (zFar - zNear), -1 * zNear / (zFar - zNear),
 			0, 0, 0, 1
 		};
 		return Transform(trans);
@@ -366,7 +366,7 @@ namespace SIByL::Math
 		mat4 persp{
 			1.0f, 0.0f, 0.0f, 0.0f,
 			0.0f, 1.0f, 0.0f, 0.0f,
-			0.0f, 0.0f, f / (f - n), - 2 * f * n / (f - n),
+			0.0f, 0.0f, f / (f - n), - f * n / (f - n),
 			0.0f, 0.0f, 1.0f, 0.0f
 		};
 		// scale canonical perspective view to specified field of view

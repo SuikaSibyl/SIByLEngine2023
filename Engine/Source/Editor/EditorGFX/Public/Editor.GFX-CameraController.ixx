@@ -1,11 +1,13 @@
 module;
 #include <cmath>
 export module SE.Editor.GFX:CameraController;
+import :Viewport;
 import SE.Platform.Window;
 import SE.Core.Misc;
 import SE.Math.Geometric;
 import SE.Math.Spline;
 import SE.GFX;
+import SE.Editor.Core;
 
 namespace SIByL::Editor
 {
@@ -49,11 +51,13 @@ namespace SIByL::Editor
 
 	export struct SimpleCameraController {
 		SimpleCameraController() :input(nullptr), timer(nullptr) {}
-		SimpleCameraController(Platform::Input* input, Core::Timer* timer) :input(input), timer(timer) {}
+		SimpleCameraController(Platform::Input* input, Core::Timer* timer, ViewportWidget* viewport)
+			:input(input), timer(timer), viewport(viewport) {}
 
-		auto inline init(Platform::Input* input, Core::Timer* timer) {
+		auto inline init(Platform::Input* input, Core::Timer* timer, ViewportWidget* viewport) {
 			this->input = input;
 			this->timer = timer;
+			this->viewport = viewport;
 		}
 
 		float mouseSensitivityMultiplier = 0.01f;
@@ -65,6 +69,8 @@ namespace SIByL::Editor
 		Math::AnimationCurve mouseSensitivityCurve = { {0,0.5,0,5}, {1,2.5,0,0} };
 		float rotationLerpTime = 0.01f;
 		bool invertY = true;
+
+		ViewportWidget* viewport = nullptr;
 
 		auto onEnable(GFX::TransformComponent const& transform) noexcept -> void {
 			targetCameraState.setFromTransform(transform);
@@ -103,30 +109,43 @@ namespace SIByL::Editor
 		}
 
 		auto onUpdate() noexcept -> void {
+			// check the viewport is hovered
+			bool hovered = viewport->info.isHovered;
 			// rotation
 			static bool justPressedMouse = true;
 			static float last_x = 0;
 			static float last_y = 0;
+			static bool inRotationMode = false;
+
+			if (input->isMouseButtonPressed(Platform::SIByL_MOUSE_BUTTON_2)
+				&& viewport->info.isHovered && viewport->info.isFocused)
+				inRotationMode = true;
+			if (!input->isMouseButtonPressed(Platform::SIByL_MOUSE_BUTTON_2)) {
+				inRotationMode = false;
+			}
+
 			if (input->isMouseButtonPressed(Platform::SIByL_MOUSE_BUTTON_2)) {
-				input->disableCursor();
-				float x = input->getMouseX();
-				float y = input->getMouseY();
-				if (justPressedMouse) {
-					last_x = x;
-					last_y = y;
-					justPressedMouse = false;
-				}
-				else {
-					Math::vec2 mouseMovement = Math::vec2(x - last_x, y - last_y) * 0.0005f * mouseSensitivityMultiplier * mouseSensitivity;
-					if (invertY)
-						mouseMovement.y = -mouseMovement.y;
-					last_x = x;
-					last_y = y;
+				if (inRotationMode) {
+					input->disableCursor();
+					float x = input->getMouseX();
+					float y = input->getMouseY();
+					if (justPressedMouse) {
+						last_x = x;
+						last_y = y;
+						justPressedMouse = false;
+					}
+					else {
+						Math::vec2 mouseMovement = Math::vec2(x - last_x, y - last_y) * 0.0005f * mouseSensitivityMultiplier * mouseSensitivity;
+						if (invertY)
+							mouseMovement.y = -mouseMovement.y;
+						last_x = x;
+						last_y = y;
 
-					float mouseSensitivityFactor = mouseSensitivityCurve.evaluate(mouseMovement.length());
+						float mouseSensitivityFactor = mouseSensitivityCurve.evaluate(mouseMovement.length()) * 180. / 3.1415926;
 
-					targetCameraState.yaw += mouseMovement.x * mouseSensitivityFactor;
-					targetCameraState.pitch += mouseMovement.y * mouseSensitivityFactor;
+						targetCameraState.yaw += -mouseMovement.x * mouseSensitivityFactor;
+						targetCameraState.pitch += mouseMovement.y * mouseSensitivityFactor;
+					}
 				}
 			}
 			else if (!justPressedMouse) {
@@ -148,10 +167,11 @@ namespace SIByL::Editor
 			boost += y * 0.01f;
 			translation *= powf(2.0f, boost);
 
-			Math::vec3 rotatedFoward;
-			rotatedFoward.x = std::cos((targetCameraState.yaw)) * std::cos((targetCameraState.pitch));
-			rotatedFoward.y = std::sin((targetCameraState.pitch));
-			rotatedFoward.z = std::sin((targetCameraState.yaw)) * std::cos((targetCameraState.pitch));
+			Math::vec4 rotatedFoward4 = Math::mat4::rotateZ(targetCameraState.roll)
+				* Math::mat4::rotateY(targetCameraState.yaw)
+				* Math::mat4::rotateX(targetCameraState.pitch)
+				* Math::vec4(0, 0, -1, 0);
+			Math::vec3 rotatedFoward = Math::vec3(rotatedFoward4.x, rotatedFoward4.y, rotatedFoward4.z);
 			Math::vec3 up = Math::vec3(0.0f, 1.0f, 0.0f);
 			Math::vec3 cameraRight = Math::normalize(Math::cross(rotatedFoward, up));
 			Math::vec3 cameraUp = Math::cross(cameraRight, rotatedFoward);

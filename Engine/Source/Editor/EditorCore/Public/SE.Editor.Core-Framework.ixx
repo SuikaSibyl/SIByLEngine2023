@@ -2,9 +2,11 @@ module;
 #include <string>
 #include <vector>
 #include <memory>
+#include <imgui.h>
 #include <typeinfo>
 #include <unordered_map>
 export module SE.Editor.Core:Framework;
+import SE.Platform.Window;
 import SE.Core.System;
 
 namespace SIByL::Editor
@@ -14,6 +16,24 @@ namespace SIByL::Editor
 		virtual ~Widget() = default;
 		/** virtual draw gui*/
 		virtual auto onDrawGui() noexcept -> void = 0;
+		/** fetch common infomation */
+		auto commonOnDrawGui() noexcept -> void {
+			// get the screen pos
+			info.windowPos = ImGui::GetWindowPos();
+			// see whether it is hovered
+			if (ImGui::IsWindowHovered())
+				info.isHovered = true;
+			else info.isHovered = false;
+			if (ImGui::IsWindowFocused())
+				info.isFocused = true;
+			else info.isFocused = false;
+		}
+		struct WidgetInfo {
+			ImVec2 windowPos;
+			ImVec2 mousePos;
+			bool isHovered;
+			bool isFocused;
+		} info;
 	};
 
 	export struct Fragment {

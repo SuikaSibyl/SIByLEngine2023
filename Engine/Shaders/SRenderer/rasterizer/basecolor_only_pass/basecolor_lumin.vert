@@ -11,6 +11,8 @@ layout(location = 1) out uint matID;
 layout(location = 2) out vec3 normalWS;
 layout(location = 3) out vec4 tangentWS;
 layout(location = 4) out vec3 posVS;
+layout(location = 5) out vec3 posWS;
+layout(location = 6) out flat vec3 camWS;
 
 void main() {
     InterleavedVertex vertex = fetchVertex();
@@ -19,6 +21,11 @@ void main() {
     mat4 o2w = ObjectToWorld(geometry);
     vec4 positionWorld =  o2w * vec4(vertex.position, 1);
     posVS = (globalUniform.cameraData.viewMat * positionWorld).xyz;
+    
+    const vec3 camPos =  -(globalUniform.cameraData.viewMat * vec4(0,0,0,1)).xyz;
+    posWS = positionWorld.xyz;
+    camWS = normalize(camPos - positionWorld.xyz);
+
     gl_Position = globalUniform.cameraData.viewProjMat * positionWorld;
     uv = vertex.texCoords;
     matID = geometry.materialID;

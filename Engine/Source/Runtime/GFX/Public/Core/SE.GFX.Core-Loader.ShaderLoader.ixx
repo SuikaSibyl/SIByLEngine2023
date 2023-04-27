@@ -1,7 +1,6 @@
 module;
 #include <vector>
 #include <functional>
-#include <filesystem>
 #include <spirv_cross/spirv_glsl.hpp>
 #include <spirv_cross/spirv_cross.hpp>
 export module SE.GFX:ShaderLoader;
@@ -210,10 +209,14 @@ namespace SIByL::GFX
 		}
 		int this_id = 0;
 		for (int i = 0; i < reflection.pushConstant.size(); ++i) {
-			if (this_id == added.pushConstant.size())
+			// if added_pushconstants is smaller
+			if (this_id >= added.pushConstant.size())
 				added.pushConstant.push_back(reflection.pushConstant[i]);
-			else if (added.pushConstant[this_id].offset == added.pushConstant[i].offset) {
-				added.pushConstant[this_id].stages |= added.pushConstant[i].stages;
+			else if (added.pushConstant[this_id].offset == reflection.pushConstant[i].offset) {
+				added.pushConstant[this_id].stages |= reflection.pushConstant[i].stages;
+			}
+			else {
+				added.pushConstant.push_back(reflection.pushConstant[i]);
 			}
 		}
 		return added;

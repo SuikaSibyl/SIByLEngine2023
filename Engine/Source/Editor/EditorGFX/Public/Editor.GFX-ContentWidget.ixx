@@ -270,7 +270,7 @@ namespace SIByL::Editor
 									}
 									else if (entry_ptr && entry_ptr->guidFinder) {
 										Core::ORID orid = Core::ResourceManager::get()->database.findResourcePath(path.string().c_str());
-										if (orid != Core::ORID_NONE) {
+										if (orid != Core::INVALID_ORID) {
 											Core::GUID guid = entry_ptr->guidFinder(orid);
 											inspectorWidget->setCustomDraw(std::bind(
 												&(ResourceViewer::onDrawGui),

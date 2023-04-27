@@ -35,16 +35,17 @@ namespace SIByL::Math
 		auto operator-() const ->Vector2<T>;
 		auto operator*(T s) const->Vector2<T>;
 		auto operator/(T s) const->Vector2<T>;
-		auto operator*=(T s) const->Vector2<T>&;
-		auto operator/=(T s) const->Vector2<T>&;
 		auto operator+(Vector2<T> const& v) const -> Vector2<T>;
 		auto operator-(Vector2<T> const& v) const -> Vector2<T>;
 		auto operator*(Vector2<T> const& v) const -> Vector2<T>;
-		auto operator+=(Vector2<T> const& v) const->Vector2<T>&;
-		auto operator-=(Vector2<T> const& v) const->Vector2<T>&;
-		auto operator*=(Vector2<T> const& v) const->Vector2<T>&;
 		auto operator==(Vector2<T> const& v) const -> bool;
 		auto operator!=(Vector2<T> const& v) const -> bool;
+		auto operator*=(T s)->Vector2<T>&;
+		auto operator/=(T s)->Vector2<T>&;
+		auto operator+=(Vector2<T> const& v)->Vector2<T>&;
+		auto operator-=(Vector2<T> const& v)->Vector2<T>&;
+		auto operator*=(Vector2<T> const& v)->Vector2<T>&;
+		auto operator/=(Vector2<T> const& v)->Vector2<T>&;
 	};
 	
 	export using vec2 = Vector2<float>;
@@ -217,8 +218,7 @@ namespace SIByL::Math
 	}
 
 	template <class T>
-	auto Vector2<T>::operator*=(T s) const->Vector2<T>&
-	{
+	auto Vector2<T>::operator*=(T s)->Vector2<T>& {
 		for (size_t i = 0; i < 2; i++) {
 			data[i] *= s;
 		}
@@ -226,8 +226,7 @@ namespace SIByL::Math
 	}
 
 	template <class T>
-	auto Vector2<T>::operator/=(T s) const->Vector2<T>&
-	{
+	auto Vector2<T>::operator/=(T s)->Vector2<T>& {
 		float inv = 1.f / s;
 		for (size_t i = 0; i < 2; i++) {
 			data[i] *= inv;
@@ -266,8 +265,7 @@ namespace SIByL::Math
 	}
 
 	template <class T>
-	auto Vector2<T>::operator+=(Vector2<T> const& v) const->Vector2<T>&
-	{
+	auto Vector2<T>::operator+=(Vector2<T> const& v)->Vector2<T>& {
 		for (size_t i = 0; i < 2; i++) {
 			data[i] += v.data[i];
 		}
@@ -275,8 +273,7 @@ namespace SIByL::Math
 	}
 
 	template <class T>
-	auto Vector2<T>::operator-=(Vector2<T> const& v) const->Vector2<T>&
-	{
+	auto Vector2<T>::operator-=(Vector2<T> const& v)->Vector2<T>& {
 		for (size_t i = 0; i < 2; i++) {
 			data[i] -= v.data[i];
 		}
@@ -284,10 +281,17 @@ namespace SIByL::Math
 	}
 
 	template <class T>
-	auto Vector2<T>::operator*=(Vector2<T> const& v) const->Vector2<T>&
-	{
+	auto Vector2<T>::operator*=(Vector2<T> const& v)->Vector2<T>& {
 		for (size_t i = 0; i < 2; i++) {
 			data[i] *= v.data[i];
+		}
+		return *this;
+	}
+	
+	template <class T>
+	auto Vector2<T>::operator/=(Vector2<T> const& v)->Vector2<T>& {
+		for (size_t i = 0; i < 2; i++) {
+			data[i] /= v.data[i];
 		}
 		return *this;
 	}

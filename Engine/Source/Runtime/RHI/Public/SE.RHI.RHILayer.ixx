@@ -1,4 +1,5 @@
 module;
+#include <string>
 #include <Memory>
 #include "../../Application/Public/SE.Application.Config.h"
 export module SE.RHI:RHILayer;

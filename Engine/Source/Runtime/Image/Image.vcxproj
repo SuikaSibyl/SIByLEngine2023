@@ -21,6 +21,7 @@
   <ItemGroup>
     <ClCompile Include="Public\Color\SE.Image-Color.ixx" />
     <ClCompile Include="Public\FileFormat\SE.Image-FileFormat.BMP.ixx" />
+    <ClCompile Include="Public\FileFormat\SE.Image-FileFormat.DDS.ixx" />
     <ClCompile Include="Public\FileFormat\SE.Image-FileFormat.HDR.ixx" />
     <ClCompile Include="Public\FileFormat\SE.Image-FileFormat.JPEG.ixx" />
     <ClCompile Include="Public\FileFormat\SE.Image-FileFormat.PFM.ixx" />
@@ -36,6 +37,9 @@
     </ProjectReference>
     <ProjectReference Include="..\Math\Math.vcxproj">
       <Project>{0eec40c7-807a-4d99-99a6-e3d329aea25d}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\RHI\RHI.vcxproj">
+      <Project>{795eb3a2-9f78-4ab8-833f-2b02fbc175f9}</Project>
     </ProjectReference>
   </ItemGroup>
   <PropertyGroup Label="Globals">
@@ -93,12 +97,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\stb;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\stb;$(SolutionDir)Engine\Source\ThirdParty\ddspp;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\stb;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\stb;$(SolutionDir)Engine\Source\ThirdParty\ddspp;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>

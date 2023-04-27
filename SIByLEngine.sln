@@ -55,6 +55,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "EditorRDG", "Engine\Source\
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Video", "Engine\Source\Runtime\Video\Video.vcxproj", "{7AB5337F-8A6C-49D1-BE95-D167E1E4DBF4}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "openfbx", "Engine\Source\ThirdParty\openfbx\openfbx.vcxproj", "{B875CA97-DAE0-4CA4-921F-D4EBE04875D5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -223,6 +225,14 @@ Global
 		{7AB5337F-8A6C-49D1-BE95-D167E1E4DBF4}.Release|x64.Build.0 = Release|x64
 		{7AB5337F-8A6C-49D1-BE95-D167E1E4DBF4}.Release|x86.ActiveCfg = Release|Win32
 		{7AB5337F-8A6C-49D1-BE95-D167E1E4DBF4}.Release|x86.Build.0 = Release|Win32
+		{B875CA97-DAE0-4CA4-921F-D4EBE04875D5}.Debug|x64.ActiveCfg = Debug|x64
+		{B875CA97-DAE0-4CA4-921F-D4EBE04875D5}.Debug|x64.Build.0 = Debug|x64
+		{B875CA97-DAE0-4CA4-921F-D4EBE04875D5}.Debug|x86.ActiveCfg = Debug|Win32
+		{B875CA97-DAE0-4CA4-921F-D4EBE04875D5}.Debug|x86.Build.0 = Debug|Win32
+		{B875CA97-DAE0-4CA4-921F-D4EBE04875D5}.Release|x64.ActiveCfg = Release|x64
+		{B875CA97-DAE0-4CA4-921F-D4EBE04875D5}.Release|x64.Build.0 = Release|x64
+		{B875CA97-DAE0-4CA4-921F-D4EBE04875D5}.Release|x86.ActiveCfg = Release|Win32
+		{B875CA97-DAE0-4CA4-921F-D4EBE04875D5}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -250,6 +260,7 @@ Global
 		{501F34A2-41BD-4398-BEEE-3398633AC471} = {52754269-DCB3-4047-9B64-F9AE32323F4C}
 		{ADA03319-6A25-448B-8828-E52873CD92D6} = {B11F4D88-122B-4018-B091-9BA0B1CE690E}
 		{7AB5337F-8A6C-49D1-BE95-D167E1E4DBF4} = {52754269-DCB3-4047-9B64-F9AE32323F4C}
+		{B875CA97-DAE0-4CA4-921F-D4EBE04875D5} = {DF3B9BCA-178A-4E1A-9D5F-2F859354E8BB}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {6AB0EB42-EF7B-4605-9661-1D6F63E9F033}
