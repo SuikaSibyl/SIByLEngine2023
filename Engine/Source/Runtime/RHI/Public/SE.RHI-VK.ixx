@@ -2294,7 +2294,7 @@ namespace SIByL::RHI
 		for (int i = 0; i < desc.entries.size(); i++) {
 			bindings[i].binding = desc.entries[i].binding;
 			bindings[i].descriptorType = getVkDecriptorType(desc.entries[i]);
-			bindings[i].descriptorCount = bindings[i].descriptorType == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER ? 25 : 1;
+			bindings[i].descriptorCount = bindings[i].descriptorType == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER ? 200 : 1;
 			bindings[i].stageFlags = getVkShaderStageFlags(desc.entries[i].visibility);
 			bindings[i].pImmutableSamplers = nullptr;
 			bindingFlags[i] = 0;
@@ -5071,7 +5071,7 @@ namespace SIByL::RHI
 		VkDescriptorSetVariableDescriptorCountAllocateInfoEXT count_info{
 			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT
 		};
-		uint32_t max_binding = 25 - 1;
+		uint32_t max_binding = 200 - 1;
 		if (hasBindless) {
 			count_info.descriptorSetCount = 1;
 			count_info.pDescriptorCounts = &max_binding;

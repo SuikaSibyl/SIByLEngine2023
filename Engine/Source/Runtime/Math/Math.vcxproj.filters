@@ -54,9 +54,6 @@
     <ClCompile Include="Public\Geometric\Geometry\SE.Math.Geometric-Bounds3.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Geometric\Transform\Math.Transform-Transform.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="Public\Misc\SE.Math.Misc-Trigonometric.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -66,31 +63,13 @@
     <ClCompile Include="Public\Misc\SE.Math.Misc-Common.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Geometric\Transform\Math.Transform-AnimatedTransform.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Private\Geometric\SE.Math.Geometric-Transform.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Private\Geometric\SE.Math.Geometric-AnimatedTransform.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="Public\Misc\SE.Math.Misc-RNG.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Private\Misc\SE.Math.Misc-RNG.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Misc\SE.Math.Misc-RoundingError.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Private\Misc\SE.Math.Misc-RoundingError.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="Public\Misc\SE.Math.Misc-EquationSolving.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Private\Misc\SE.Math.Misc-EquationSolving.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Misc\SE.Math.Misc-SIMD.ixx">
@@ -100,12 +79,6 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Geometric\Geometry\SE.Math.Geometric-Geometric.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Deterministic\SE.Math.FixedPoint.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Private\Deterministic\SE.Math.FixedPoint.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Spline\SE.Math.Spline.ixx">
@@ -118,6 +91,12 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Misc\SE.Math.Misc.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Geometric\Geometry\SE.Math.Geometric-Transform.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Geometric\Geometry\SE.Math.Geometric-AnimatedTransform.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

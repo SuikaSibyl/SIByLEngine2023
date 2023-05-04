@@ -1,10 +1,12 @@
 module;
-#include <ofbx.h>
 #include <format>
 #include <vector>
 #include <string>
 #include <filesystem>
 #include <unordered_map>
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
 #pragma warning(disable:4996)
 #define TINYGLTF_IMPLEMENTATION
 //#define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -56,11 +58,11 @@ namespace SIByL::GFX
         const size_t stride;
     };
 
-	inline auto bindModelNodes(GFX::Scene& scene, GameObjectHandle parent, tinygltf::Model const& model, tinygltf::Node const& node, 
-        std::unordered_map<tinygltf::Mesh const*, Core::GUID>& meshMap) noexcept -> void;
+	//inline auto bindModelNodes(GFX::Scene& scene, GameObjectHandle parent, tinygltf::Model const& model, tinygltf::Node const& node, 
+ //       std::unordered_map<tinygltf::Mesh const*, Core::GUID>& meshMap) noexcept -> void;
 
-	inline auto bindMesh(GFX::Scene& scene, GameObjectHandle parent, tinygltf::Model const& model, tinygltf::Node const& node, tinygltf::Mesh const& mesh,
-        std::unordered_map<tinygltf::Mesh const*, Core::GUID>& meshMap) noexcept -> void;
+	//inline auto bindMesh(GFX::Scene& scene, GameObjectHandle parent, tinygltf::Model const& model, tinygltf::Node const& node, tinygltf::Mesh const& mesh,
+ //       std::unordered_map<tinygltf::Mesh const*, Core::GUID>& meshMap) noexcept -> void;
 
     export struct SceneNodeLoader_obj {
         /** Load obj file */
@@ -300,6 +302,274 @@ namespace SIByL::GFX
             GameObjectHandle rootNode = gfxscene.createGameObject(GFX::NULL_GO);
             gfxscene.getGameObject(rootNode)->getEntity().getComponent<TagComponent>()->name = path.filename().string();
             gfxscene.getGameObject(rootNode)->getEntity().addComponent<MeshReference>()->mesh = meshResourceRef;
+        }
+    };
+
+    export struct SceneNodeLoader_assimp {
+        
+        struct AssimpLoaderEnv {
+            std::string directory;
+            std::unordered_map<std::string, Core::GUID> textures;
+            std::unordered_map<aiMaterial*, Core::GUID> materials;
+        };
+
+        static inline auto loadMaterialTextures(
+            aiMaterial* mat,
+            aiTextureType type,
+            AssimpLoaderEnv& env
+        ) noexcept -> std::vector<Core::GUID> {
+            std::vector<Core::GUID> textures;
+            for (unsigned int i = 0; i < mat->GetTextureCount(type); i++) {
+                aiString str;
+                mat->GetTexture(type, i, &str);
+                std::string const& name = std::string(str.C_Str());
+                auto iter = env.textures.find(name);
+                if (iter != env.textures.end()) {
+                    textures.push_back(iter->second);
+                }
+                else {
+                    std::string tex_path = env.directory + "\\" + str.C_Str();
+                    Core::GUID guid = GFX::GFXManager::get()->registerTextureResource(tex_path.c_str());
+                    env.textures[name] = guid;
+                    textures.push_back(guid);
+                }
+            }
+            return textures;
+        }
+
+        static inline auto loadMaterial(
+            aiMaterial* material,
+            AssimpLoaderEnv& env
+        ) noexcept -> Core::GUID {
+
+            auto iter = env.materials.find(material);
+            if (iter != env.materials.end()) {
+                return iter->second;
+            }
+
+            std::string name = std::string(material->GetName().C_Str());
+            GFX::Material gfxmat;
+            gfxmat.path = "content/materials/" + name;
+            gfxmat.ORID = Core::ResourceManager::get()->database.mapResourcePath(gfxmat.path.c_str());
+            gfxmat.BxDF = 0;
+            
+            gfxmat.name = name;
+            // load diffuse texture
+            std::vector<Core::GUID> diffuseMaps = loadMaterialTextures(material, aiTextureType_DIFFUSE, env);
+            if (diffuseMaps.size() != 1) {
+                Core::LogManager::Error("GFX :: SceneNodeLoader_assimp :: diffuse map number is not 1.");
+            }
+            else {
+                gfxmat.textures["base_color"] = GFX::Material::TextureEntry{ diffuseMaps[0], 0 };
+            }
+
+            gfxmat.serialize();
+            Core::GUID matID = GFX::GFXManager::get()->registerMaterialResource(gfxmat.path.c_str());
+            env.materials[material] = matID;
+            return matID;
+        }
+
+        static inline auto processAssimpMesh(
+            GameObjectHandle const& gfxNode,
+            aiNode const* node,
+            aiScene const* scene,
+            AssimpLoaderEnv& env,
+            GFX::Scene& gfxscene,
+            MeshLoaderConfig meshConfig = {}
+        ) noexcept -> void {
+
+            uint32_t vertex_offset = 0;
+            std::unordered_map<uint64_t, uint32_t> uniqueVertices{};
+
+            std::vector<float>      vertexBufferV = {};
+            std::vector<float>      positionBufferV = {};
+            std::vector<uint16_t>   indexBufferV = {};
+            std::vector<uint32_t>   indexBufferWV = {};
+
+            // check whether tangent is need in mesh attributes
+            bool needTangent = false;
+            for (auto const& entry : meshConfig.layout.layout)
+                if (entry.info == MeshDataLayout::VertexInfo::TANGENT)
+                    needTangent = true;
+
+            // Loop over shapes
+            GFX::Mesh gfxmesh;
+            uint64_t global_index_offset = 0;
+            uint32_t submesh_vertex_offset = 0, submesh_index_offset = 0;
+
+            if (node->mNumMeshes == 0)
+                return;
+            for (unsigned int i = 0; i < node->mNumMeshes; i++) {
+                aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
+
+                for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
+                    // atrributes filling
+                    std::vector<float> vertex = {};
+                    std::vector<float> position = {};
+                    for (auto const& entry : meshConfig.layout.layout) {
+                        // vertex position
+                        if (entry.info == MeshDataLayout::VertexInfo::POSITION) {
+                            if (entry.format == RHI::VertexFormat::FLOAT32X3) {
+                                vertex.push_back(mesh->mVertices[i].x);
+                                vertex.push_back(mesh->mVertices[i].y);
+                                vertex.push_back(mesh->mVertices[i].z);
+                                if (meshConfig.usePositionBuffer) {
+                                    position.push_back(mesh->mVertices[i].x);
+                                    position.push_back(mesh->mVertices[i].y);
+                                    position.push_back(mesh->mVertices[i].z);
+                                }
+                            }
+                            else {
+                                Core::LogManager::Error("GFX :: SceneNodeLoader_assimp :: unwanted vertex format for POSITION attributes.");
+                                return;
+                            }
+                        }
+                        else if (entry.info == MeshDataLayout::VertexInfo::NORMAL) {
+                            vertex.push_back(mesh->mNormals[i].x);
+                            vertex.push_back(mesh->mNormals[i].y);
+                            vertex.push_back(mesh->mNormals[i].z);
+                        }
+                        else if (entry.info == MeshDataLayout::VertexInfo::UV) {
+                            if (mesh->mTextureCoords[0]) {
+                                vertex.push_back(mesh->mTextureCoords[0][i].x);
+                                vertex.push_back(mesh->mTextureCoords[0][i].y);
+                            }
+                            else {
+                                vertex.push_back(0);
+                                vertex.push_back(0);
+                            }
+                        }
+                        else if (entry.info == MeshDataLayout::VertexInfo::TANGENT) {
+                            vertex.push_back(mesh->mTangents[i].x);
+                            vertex.push_back(mesh->mTangents[i].y);
+                            vertex.push_back(mesh->mTangents[i].z);
+                        }
+                        else if (entry.info == MeshDataLayout::VertexInfo::COLOR) {
+                            // Optional: vertex colors
+                            vertex.push_back(mesh->mColors[0][i].r);
+                            vertex.push_back(mesh->mColors[0][i].g);
+                            vertex.push_back(mesh->mColors[0][i].b);
+                        }
+                        else if (entry.info == MeshDataLayout::VertexInfo::CUSTOM) {
+
+                        }
+                    }
+
+                    vertexBufferV.insert(vertexBufferV.end(), vertex.begin(), vertex.end());
+                    positionBufferV.insert(positionBufferV.end(), position.begin(), position.end());
+                    ++vertex_offset;
+                }
+
+                size_t index_offset = 0;
+                for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
+                    aiFace face = mesh->mFaces[i];
+                    for (unsigned int j = 0; j < face.mNumIndices; j++) {
+                        if (meshConfig.layout.format == RHI::IndexFormat::UINT16_t)
+                            indexBufferV.push_back(face.mIndices[j]);
+                        else if (meshConfig.layout.format == RHI::IndexFormat::UINT32_T)
+                            indexBufferWV.push_back(face.mIndices[j]);
+                        ++index_offset;
+                    }
+                }
+
+                // Loop over faces(polygon)
+                global_index_offset += index_offset;
+
+                gfxmesh.submeshes.push_back(GFX::Mesh::Submesh{
+                    submesh_index_offset, uint32_t(index_offset),
+                    submesh_vertex_offset, uint32_t(0) });
+                submesh_index_offset = global_index_offset;
+                submesh_vertex_offset += mesh->mNumVertices;
+            }
+            // create mesh resource
+            {   // register mesh
+                gfxmesh.vertexBufferLayout = getVertexBufferLayout(meshConfig.layout);
+                if (meshConfig.residentOnHost) {
+                    gfxmesh.vertexBuffer_host = Core::Buffer(sizeof(float) * vertexBufferV.size());
+                    memcpy(gfxmesh.vertexBuffer_host.data, vertexBufferV.data(), gfxmesh.vertexBuffer_host.size);
+                    gfxmesh.vertexBufferInfo.onHost = true;
+                    gfxmesh.vertexBufferInfo.size = gfxmesh.vertexBuffer_host.size;
+                    if (meshConfig.layout.format == RHI::IndexFormat::UINT16_t) {
+                        gfxmesh.indexBuffer_host = Core::Buffer(sizeof(uint16_t) * indexBufferV.size());
+                        memcpy(gfxmesh.indexBuffer_host.data, indexBufferV.data(), gfxmesh.indexBuffer_host.size);
+                        gfxmesh.indexBufferInfo.size = gfxmesh.indexBuffer_host.size;
+                        gfxmesh.indexBufferInfo.onHost = true;
+                    }
+                    else if (meshConfig.layout.format == RHI::IndexFormat::UINT32_T) {
+                        gfxmesh.indexBuffer_host = Core::Buffer(sizeof(uint32_t) * indexBufferWV.size());
+                        memcpy(gfxmesh.indexBuffer_host.data, indexBufferWV.data(), gfxmesh.indexBuffer_host.size);
+                        gfxmesh.indexBufferInfo.size = gfxmesh.indexBuffer_host.size;
+                        gfxmesh.indexBufferInfo.onHost = true;
+                    }
+                    if (meshConfig.usePositionBuffer) {
+                        gfxmesh.positionBuffer_host = Core::Buffer(sizeof(float) * positionBufferV.size());
+                        memcpy(gfxmesh.positionBuffer_host.data, positionBufferV.data(), gfxmesh.positionBuffer_host.size);
+                        gfxmesh.positionBufferInfo.onHost = true;
+                        gfxmesh.positionBufferInfo.size = gfxmesh.positionBuffer_host.size;
+                    }
+                }
+            }
+            std::string path = env.directory + std::string(node->mName.C_Str());
+            Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Mesh>();
+            Core::ORID orid = Core::ResourceManager::get()->database.mapResourcePath(path.c_str());
+            Core::ResourceManager::get()->database.registerResource(orid, guid);
+            Core::ResourceManager::get()->addResource<GFX::Mesh>(guid, std::move(gfxmesh));
+            GFX::Mesh* meshResourceRef = Core::ResourceManager::get()->getResource<GFX::Mesh>(guid);
+            meshResourceRef->ORID = orid;
+            meshResourceRef->serialize();
+            // bind scene
+            gfxscene.getGameObject(gfxNode)->getEntity().addComponent<MeshReference>()->mesh = meshResourceRef;
+            gfxscene.getGameObject(gfxNode)->getEntity().addComponent<MeshRenderer>();
+
+            MeshRenderer* meshRenderer = gfxscene.getGameObject(gfxNode)->getEntity().getComponent<MeshRenderer>();
+            //meshRenderer->materials.push_back(i)
+            for (unsigned int i = 0; i < node->mNumMeshes; i++) {
+                aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
+                if (mesh->mMaterialIndex >= 0) {
+                    aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+                    Core::GUID matID = loadMaterial(material, env);
+                    meshRenderer->materials.push_back(Core::ResourceManager::get()->getResource<GFX::Material>(matID));
+                }
+            }
+        }
+
+        static inline auto processAssimpNode(
+            GameObjectHandle const& gfxNode,
+            aiNode const* node,
+            aiScene const* scene,
+            AssimpLoaderEnv& env,
+            GFX::Scene& gfxscene, 
+            MeshLoaderConfig meshConfig = {}
+        ) noexcept -> void {
+            // process all meshes
+            processAssimpMesh(gfxNode, node, scene, env, gfxscene, meshConfig);
+            // process the meshes for all the following nodes
+            for (unsigned int i = 0; i < node->mNumChildren; i++) {
+                GameObjectHandle subNode = gfxscene.createGameObject(gfxNode);
+                gfxscene.getGameObject(subNode)->getEntity().getComponent<TagComponent>()->name = std::string(node->mChildren[i]->mName.C_Str());
+                processAssimpNode(subNode, node->mChildren[i], scene, env, gfxscene, meshConfig);
+            }
+        }
+
+        /** Load obj file */
+        static inline auto loadSceneNode(std::filesystem::path const& path, GFX::Scene& gfxscene, MeshLoaderConfig meshConfig = {}) noexcept -> void {
+            // load obj file
+            Assimp::Importer importer;
+            std::string path_str = path.string();
+            const aiScene* scene = importer.ReadFile(path_str, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
+
+            if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
+                Core::LogManager::Error("Assimp: " + std::string(importer.GetErrorString()));
+                return;
+            }
+            std::string directory = path.parent_path().string();
+
+            GameObjectHandle rootNode = gfxscene.createGameObject(GFX::NULL_GO);
+            gfxscene.getGameObject(rootNode)->getEntity().getComponent<TagComponent>()->name = path.filename().string();
+
+            AssimpLoaderEnv env;
+            env.directory = directory;
+            processAssimpNode(rootNode, scene->mRootNode, scene, env, gfxscene, meshConfig);
         }
     };
 
@@ -642,91 +912,10 @@ namespace SIByL::GFX
 			tinygltf::Scene const& scene = model.scenes[model.defaultScene];
 			for (size_t i = 0; i < scene.nodes.size(); ++i) {
 				assert((scene.nodes[i] >= 0) && (scene.nodes[i] < model.nodes.size()));
-				bindModelNodes(gfxscene, rootNode, model, model.nodes[scene.nodes[i]], meshMap);
+				//bindModelNodes(gfxscene, rootNode, model, model.nodes[scene.nodes[i]], meshMap);
 			}
 
             GFX::Mesh mesh;
 		}
 	};
-
-    export struct SceneNodeLoader_fbx {
-        /** Load fbx file*/
-        static inline auto loadSceneNode(std::filesystem::path const& path, GFX::Scene& gfxscene, MeshLoaderConfig meshConfig = {}) {
-            // Load file
-            FILE* fp = fopen(path.string().c_str(), "rb");
-            if (!fp) return false;
-            fseek(fp, 0, SEEK_END);
-            long file_size = ftell(fp);
-            fseek(fp, 0, SEEK_SET);
-            auto* content = new ofbx::u8[file_size];
-            fread(content, 1, file_size, fp);
-
-            // Ignoring certain nodes will only stop them from being processed not tokenised (i.e. they will still be in the tree)
-            ofbx::LoadFlags flags =
-                ofbx::LoadFlags::TRIANGULATE |
-                //ofbx::LoadFlags::IGNORE_MODELS |
-                ofbx::LoadFlags::IGNORE_BLEND_SHAPES |
-                ofbx::LoadFlags::IGNORE_CAMERAS |
-                ofbx::LoadFlags::IGNORE_LIGHTS |
-                //ofbx::LoadFlags::IGNORE_TEXTURES |
-                ofbx::LoadFlags::IGNORE_SKIN |
-                ofbx::LoadFlags::IGNORE_BONES |
-                ofbx::LoadFlags::IGNORE_PIVOTS |
-                //ofbx::LoadFlags::IGNORE_MATERIALS |
-                ofbx::LoadFlags::IGNORE_POSES |
-                ofbx::LoadFlags::IGNORE_VIDEOS |
-                ofbx::LoadFlags::IGNORE_LIMBS |
-                //ofbx::LoadFlags::IGNORE_MESHES |
-                ofbx::LoadFlags::IGNORE_ANIMATIONS;
-
-            ofbx::IScene* g_scene = ofbx::load((ofbx::u8*)content, file_size, (ofbx::u16)flags);
-            
-            if (!g_scene) {
-                Core::LogManager::Error("GFX::SceneLoader::Could not read scene file");
-                delete[] content;
-                fclose(fp);
-                return false;
-            }
-
-            ofbx::IElement const* root = g_scene->getRootElement();
-
-
-
-            delete[] content;
-            fclose(fp);
-        }
-    };
-
-	inline auto bindModelNodes(GFX::Scene& scene, GameObjectHandle parent, tinygltf::Model const& model, tinygltf::Node const& node,
-        std::unordered_map<tinygltf::Mesh const*, Core::GUID>& meshMap) noexcept -> void {
-		GameObjectHandle sceneNode = scene.createGameObject(parent);
-		scene.getGameObject(sceneNode)->getEntity().getComponent<TagComponent>()->name = node.name;
-        TransformComponent* transform = scene.getGameObject(sceneNode)->getEntity().getComponent<TransformComponent>();
-        if (node.matrix.size() != 0) {
-            Math::mat4 matrix = {
-                (float)node.matrix[0],  (float)node.matrix[4],  (float)node.matrix[8],  (float)node.matrix[12],
-                (float)node.matrix[1],  (float)node.matrix[5],  (float)node.matrix[9],  (float)node.matrix[13],
-                (float)node.matrix[2],  (float)node.matrix[6],  (float)node.matrix[10], (float)node.matrix[14],
-                (float)node.matrix[3],  (float)node.matrix[7],  (float)node.matrix[11], (float)node.matrix[15],
-            };
-            Math::decompose(matrix, &transform->translation, &transform->eulerAngles, &transform->scale);
-        }
-
-        // bind mesh
-        if ((node.mesh >= 0) && (node.mesh < model.meshes.size())) {
-            bindMesh(scene, sceneNode, model, node, model.meshes[node.mesh], meshMap);
-        }
-		// bind children nodes
-		for (size_t i = 0; i < node.children.size(); ++i) {
-			assert((node.children[i] >= 0) && (node.children[i] < model.nodes.size()));
-			bindModelNodes(scene, sceneNode, model, model.nodes[node.children[i]], meshMap);
-		}
-	}
-
-    inline auto bindMesh(GFX::Scene& scene, GameObjectHandle parent, tinygltf::Model const& model, tinygltf::Node const& node, tinygltf::Mesh const& mesh,
-        std::unordered_map<tinygltf::Mesh const*, Core::GUID>& meshMap) noexcept -> void {
-        scene.getGameObject(parent)->getEntity().addComponent<MeshReference>();
-        scene.getGameObject(parent)->getEntity().getComponent<MeshReference>()->mesh =
-            Core::ResourceManager::get()->getResource<GFX::Mesh>(meshMap[&mesh]);
-    }
 }

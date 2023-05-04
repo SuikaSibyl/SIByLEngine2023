@@ -139,13 +139,23 @@ namespace SIByL
 				ImGui::Combo("Mode", &debug_mode, item_names, IM_ARRAYSIZE(item_names), IM_ARRAYSIZE(item_names));
 				pConst.debug_mode = uint32_t(debug_mode);
 			}
-			if (pConst.debug_mode == 2) {
+			{	// Select an debug ray mode
+				const char* item_names[] = {
+					"HiZ", "DDA"
+				};
+				int debug_ray_mode = pConst.debug_ray_mode;
+				ImGui::Combo("ScreenSpace Ray", &debug_ray_mode, item_names, IM_ARRAYSIZE(item_names), IM_ARRAYSIZE(item_names));
+				pConst.debug_ray_mode = uint32_t(debug_ray_mode);
+			}
+			if (pConst.debug_mode == 2 || pConst.debug_mode == 7) {
 				int is_depth = pConst.is_depth;
 				ImGui::DragInt("TexIS Depth", &is_depth, 1, 0, 9);
 				pConst.is_depth = is_depth;
 				{	// Select an item type
 					const char* item_names[] = {
 						"Luminance", "Luminance + d2 (Dachi)", "Luminance + G + d2 (Dachi)",
+						"Luminance + NC", "Luminance + NC + d2 (Dachi)", "Luminance + NCP",
+						"MIS Comp Heuristic"
 					};
 					int lightcut_mode = pConst.lightcut_mode;
 					ImGui::Combo("Lightcut Mode", &lightcut_mode, item_names, IM_ARRAYSIZE(item_names), IM_ARRAYSIZE(item_names));
@@ -153,14 +163,6 @@ namespace SIByL
 				}
 			}
 			if (pConst.debug_mode >= 3 && pConst.debug_mode <= 4) {
-				{	// Select an debug ray mode
-					const char* item_names[] = {
-						"Show Depth", "Show Intersection"
-					};
-					int debug_ray_mode = pConst.debug_ray_mode;
-					ImGui::Combo("Debug Ray Vis", &debug_ray_mode, item_names, IM_ARRAYSIZE(item_names), IM_ARRAYSIZE(item_names));
-					pConst.debug_ray_mode = uint32_t(debug_ray_mode);
-				}
 				{
 					float z_min = pConst.z_min;
 					ImGui::DragFloat("Z Min", &z_min, 0.0001);
@@ -211,7 +213,7 @@ namespace SIByL
 
 		virtual auto onInteraction(Platform::Input* input, Editor::Widget::WidgetInfo* info) noexcept -> void override {
 			if (info->isFocused && info->isHovered) {
-				if (pConst.debug_mode == 3) {
+				if (pConst.debug_mode == 3 || pConst.debug_mode == 7) {
 					// If left button is pressed
 					if (input->isMouseButtonPressed(Platform::SIByL_MOUSE_BUTTON_1)) {
 						pConst.debugPos.x = std::clamp(info->mousePos.x, 0.f, 1279.f);

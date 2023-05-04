@@ -1996,19 +1996,36 @@ namespace SIByL::GFX
 
 	auto GFXManager::registerTextureResource(char const* filepath) noexcept -> Core::GUID {
 		std::filesystem::path path(filepath);
-		std::filesystem::path current_path = std::filesystem::current_path();
-		std::filesystem::path relative_path = std::filesystem::relative(path, current_path);
-		std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> img = ImageLoader::load_rgba8(std::filesystem::path(filepath));
-		Core::GUID img_guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
-		Core::ORID img_orid = Core::ResourceManager::get()->database.mapResourcePath(filepath);
-		Core::ResourceManager::get()->database.registerResource(img_orid, img_guid);
-		GFX::GFXManager::get()->registerTextureResource(img_guid, img.get());
-		GFX::Texture* texture = Core::ResourceManager::get()->getResource<GFX::Texture>(img_guid);
-		texture->orid = img_orid;
-		texture->guid = img_guid;
-		texture->resourcePath = relative_path.string();
-		texture->serialize();
-		return img_guid;
+		if (path.extension() == ".dds") {
+			std::filesystem::path current_path = std::filesystem::current_path();
+			std::filesystem::path relative_path = std::filesystem::relative(path, current_path);
+			std::unique_ptr<Image::Texture_Host> dds_tex = Image::DDS::fromDDS(path);
+			Core::GUID img_guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
+			Core::ORID img_orid = Core::ResourceManager::get()->database.mapResourcePath(filepath);
+			Core::ResourceManager::get()->database.registerResource(img_orid, img_guid);
+			GFX::GFXManager::get()->registerTextureResource(img_guid, dds_tex.get());
+			GFX::Texture* texture = Core::ResourceManager::get()->getResource<GFX::Texture>(img_guid);
+			texture->orid = img_orid;
+			texture->guid = img_guid;
+			texture->resourcePath = relative_path.string();
+			texture->serialize();
+			return img_guid;
+		}
+		else {
+			std::filesystem::path current_path = std::filesystem::current_path();
+			std::filesystem::path relative_path = std::filesystem::relative(path, current_path);
+			std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> img = ImageLoader::load_rgba8(std::filesystem::path(filepath));
+			Core::GUID img_guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
+			Core::ORID img_orid = Core::ResourceManager::get()->database.mapResourcePath(filepath);
+			Core::ResourceManager::get()->database.registerResource(img_orid, img_guid);
+			GFX::GFXManager::get()->registerTextureResource(img_guid, img.get());
+			GFX::Texture* texture = Core::ResourceManager::get()->getResource<GFX::Texture>(img_guid);
+			texture->orid = img_orid;
+			texture->guid = img_guid;
+			texture->resourcePath = relative_path.string();
+			texture->serialize();
+			return img_guid;
+		}
 	}
 
 	auto GFXManager::registerSamplerResource(Core::GUID guid, RHI::SamplerDescriptor const& desc) noexcept -> void {

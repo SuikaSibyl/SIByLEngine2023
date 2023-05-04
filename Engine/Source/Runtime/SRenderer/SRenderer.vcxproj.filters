@@ -99,5 +99,11 @@
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-AccumulatePass.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarGTPass.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-RSSGeoReconstrPass.ixx">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

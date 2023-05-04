@@ -122,9 +122,13 @@ namespace SIByL::Editor
 					std::string path = ImGuiLayer::get()->rhiLayer->getRHILayerDescriptor().windowBinded->openFile(".gltf");
 					//GFX::SceneNodeLoader_obj::loadSceneNode(path, *scene, SRenderer::meshLoadConfig);
 				}
-				if (ImGui::MenuItem("Wavefront(.obj)")) {
+				if (ImGui::MenuItem("Wavefront (.obj)")) {
 					std::string path = ImGuiLayer::get()->rhiLayer->getRHILayerDescriptor().windowBinded->openFile(".obj");
 					GFX::SceneNodeLoader_obj::loadSceneNode(path, *scene, GFX::GFXManager::get()->config.meshLoaderConfig);
+				}
+				if (ImGui::MenuItem("FBX (.fbx)")) {
+					std::string path = ImGuiLayer::get()->rhiLayer->getRHILayerDescriptor().windowBinded->openFile(".fbx");
+					GFX::SceneNodeLoader_assimp::loadSceneNode(path, *scene, GFX::GFXManager::get()->config.meshLoaderConfig);
 				}
 				ImGui::EndMenu();
 			}

@@ -137,17 +137,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Private\Deterministic\SE.Math.FixedPoint.cpp" />
-    <ClCompile Include="Private\Misc\SE.Math.Misc-RNG.cpp" />
-    <ClCompile Include="Private\Misc\SE.Math.Misc-EquationSolving.cpp" />
-    <ClCompile Include="Private\Misc\SE.Math.Misc-RoundingError.cpp" />
-    <ClCompile Include="Private\Geometric\SE.Math.Geometric-AnimatedTransform.cpp" />
-    <ClCompile Include="Private\Geometric\SE.Math.Geometric-Transform.cpp" />
+    <ClCompile Include="Public\Geometric\Geometry\SE.Math.Geometric-AnimatedTransform.ixx" />
+    <ClCompile Include="Public\Geometric\Geometry\SE.Math.Geometric-Transform.ixx" />
     <ClCompile Include="Public\Geometric\SE.Math.Geometric.ixx" />
     <ClCompile Include="Public\Misc\SE.Math.Misc.ixx" />
     <ClCompile Include="Public\Spline\SE.Math.Spline-AnimationCurve.ixx" />
     <ClCompile Include="Public\Spline\SE.Math.Spline.ixx" />
-    <ClCompile Include="Public\Deterministic\SE.Math.FixedPoint.ixx" />
     <ClCompile Include="Public\Geometric\Geometry\SE.Math.Geometric-Bounds2.ixx" />
     <ClCompile Include="Public\Geometric\Geometry\SE.Math.Geometric-Bounds3.ixx" />
     <ClCompile Include="Public\Geometric\Geometry\SE.Math.Geometric-Geometric.ixx" />
@@ -163,8 +158,6 @@
     <ClCompile Include="Public\Misc\SE.Math.Misc-RNG.ixx" />
     <ClCompile Include="Public\Misc\SE.Math.Misc-EquationSolving.ixx" />
     <ClCompile Include="Public\Misc\SE.Math.Misc-RoundingError.ixx" />
-    <ClCompile Include="Public\Geometric\Transform\Math.Transform-AnimatedTransform.ixx" />
-    <ClCompile Include="Public\Geometric\Transform\Math.Transform-Transform.ixx" />
     <ClCompile Include="Public\Misc\SE.Math.Misc-Common.ixx" />
     <ClCompile Include="Public\Misc\SE.Math.Misc-Limits.ixx" />
     <ClCompile Include="Public\Misc\SE.Math.Misc-SIMD.ixx" />

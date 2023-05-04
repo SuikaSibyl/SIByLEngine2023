@@ -114,15 +114,13 @@ namespace SIByL
 				ImGui::Combo("Mode", &debug_mode, item_names, IM_ARRAYSIZE(item_names), IM_ARRAYSIZE(item_names));
 				pConst.debug_mode = uint32_t(debug_mode);
 			}
-			if (pConst.debug_mode >= 2 && pConst.debug_mode <= 3) {
-				{	// Select an debug ray mode
-					const char* item_names[] = {
-						"Show Depth", "Show Intersection"
-					};
-					int debug_ray_mode = pConst.debug_ray_mode;
-					ImGui::Combo("Debug Ray Vis", &debug_ray_mode, item_names, IM_ARRAYSIZE(item_names), IM_ARRAYSIZE(item_names));
-					pConst.debug_ray_mode = uint32_t(debug_ray_mode);
-				}
+			{	// Select an debug ray mode
+				const char* item_names[] = {
+					"HiZ", "DDA"
+				};
+				int debug_ray_mode = pConst.debug_ray_mode;
+				ImGui::Combo("ScreenSpace Ray", &debug_ray_mode, item_names, IM_ARRAYSIZE(item_names), IM_ARRAYSIZE(item_names));
+				pConst.debug_ray_mode = uint32_t(debug_ray_mode);
 			}
 			{	int strategy = pConst.strategy;
 				ImGui::DragInt("Strategy", &strategy, 1, 0, 4);

@@ -715,9 +715,10 @@ namespace SIByL
 				objectMat = transform->getTransform() * objectMat;
 				oddScaling *= transform->scale.x * transform->scale.y * transform->scale.z;
 				scaling *= transform->scale;
-				while (go->parent != Core::NULL_ENTITY) {
-					go = scene.getGameObject(go->parent);
-					GFX::TransformComponent* transform = go->getEntity().getComponent<GFX::TransformComponent>();
+				auto* go_loop = go;
+				while (go_loop->parent != Core::NULL_ENTITY) {
+					go_loop = scene.getGameObject(go_loop->parent);
+					GFX::TransformComponent* transform = go_loop->getEntity().getComponent<GFX::TransformComponent>();
 					objectMat = transform->getTransform() * objectMat;
 					oddScaling *= transform->scale.x * transform->scale.y * transform->scale.z;
 					scaling *= transform->scale;
@@ -838,7 +839,7 @@ namespace SIByL
 							};
 							matData.bsdf_id = mat->BxDF;
 							matData.basecolor_opacity_tex = getTexID(baseTexGUID);
-							matData.normal_bump_tex = getTexID(normTexGUID);
+							matData.normal_bump_tex = 0;
 							sceneDataPack.material_buffer_cpu.push_back(matData);
 							sceneDataPack.material_record[mat] = matID;
 							findMat = sceneDataPack.material_record.find(mat);

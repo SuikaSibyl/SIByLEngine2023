@@ -5,8 +5,9 @@
         "*.rchit": "glsl",
         "*.rmiss": "glsl",
         "*.h": "glsl",
-        "array": "cpp",
-        "tuple": "cpp",
-        "utility": "cpp"
+        "chrono": "cpp",
+        "utility": "cpp",
+        "*.ixx": "cpp",
+        "memory": "cpp"
     }
 }

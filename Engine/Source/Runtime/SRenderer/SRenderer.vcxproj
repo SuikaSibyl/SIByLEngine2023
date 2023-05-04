@@ -144,6 +144,8 @@
     <ClCompile Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPSSLCPass.ixx" />
     <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarLCPass.ixx" />
     <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarPass.ixx" />
+    <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarGTPass.ixx" />
+    <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-RSSGeoReconstrPass.ixx" />
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-AccumulatePass.ixx" />
     <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-CascadeShadowMapPass.ixx" />
     <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-FooPass.ixx" />

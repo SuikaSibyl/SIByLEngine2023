@@ -67,6 +67,8 @@ namespace SIByL
 			int32_t     vertexOffset;
 			uint32_t    firstInstance;
 			uint32_t    geometryID;
+			uint32_t    padding0;
+			uint32_t    padding1;
 		};
 
 		//non indexed

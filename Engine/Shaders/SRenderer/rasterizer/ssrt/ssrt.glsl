@@ -67,15 +67,23 @@ struct SSRay {
     float minDistance;
 };
 
+struct DebugLog {
+    vec3 color;
+    bool normal_check;
+};
+
+struct SSRTConfig {
+    bool normal_check;
+};
 
 bool FindIntersection_HiZ(
     in const SSRay ss_ray,
-    out vec3 intersection
+    out vec3 intersection,
+    inout SSRTConfig config
 ) {
     const vec3 samplePosInTS = ss_ray.rayPosInTS;
     const vec3 vReflDirInTS = ss_ray.rayDirInTS;
     const float maxTraceDistance = ss_ray.maxDistance;
-
 
     const int maxLevel = pushConstants.hiz_mip_levels - 1;
 	
@@ -88,6 +96,10 @@ bool FindIntersection_HiZ(
     float maxZ = ray.z + vReflDirInTS.z * maxTraceDistance;
     float minimumZ = ray.z + vReflDirInTS.z * ss_ray.minDistance;
     float deltaZ = (maxZ - minZ);
+
+    const vec2 cellCount_0 = getCellCount(0);
+    const ivec2 startXY = ivec2(getCell(ray.xy, cellCount_0));
+    const vec3 startNormal = unpackNormal(texelFetch(ws_normal, startXY, 0).xyz);
 
     vec3 o = ray;
     vec3 d = vReflDirInTS * maxTraceDistance;
@@ -113,6 +125,7 @@ bool FindIntersection_HiZ(
         iter < pushConstants.max_iteration
     ) {
         // get the cell number of the current ray
+
         const vec2 cellCount = getCellCount(level);
         const vec2 oldCellIdx = getCell(ray.xy, cellCount);
         
@@ -131,26 +144,53 @@ bool FindIntersection_HiZ(
         bool crossed = (isBackwardRay && (cell_minZ > ray.z)) 
                     || (thickness>(pushConstants.max_thickness)) 
                     || crossedCellBoundary(oldCellIdx, newCellIdx);
-   
+        
+        ivec2 xy = ivec2(getCell(tmpRay.xy, cellCount_0));
+        float dist = length(vec2(xy.xy - startXY.xy));
+
         if(!crossed && level == 0) {
             bool larger_than_min = (ray.z*rayDir >= minimumZ*rayDir);
-            if((cell_minZ > ray.z) && larger_than_min){
-                intersection = tmpRay;
-                return true;
+
+            bool si = false;
+
+            if(!si) {
+                if((cell_minZ > ray.z) && larger_than_min){
+                    intersection = tmpRay;
+                    if(config.normal_check) {
+                        vec3 normalNow = unpackNormal(texelFetch(ws_normal, ivec2(intersection.xy * pushConstants.view_size), 0).xyz);
+                        if(dot(startNormal, normalNow) <= 0.999) {
+                            return true;
+                        }
+                    }
+                    else {
+                        return true;
+                    }
+                }
+                else {
+                    intersection.xy = vec2(getCell(ray.xy, cellCount) + vec2(0.5))/cellCount;
+                    if(config.normal_check) {
+                        vec3 normalNow = unpackNormal(texelFetch(ws_normal, ivec2(intersection.xy * pushConstants.view_size), 0).xyz);
+                        if(dot(startNormal, normalNow) <= 0.999) {
+                            return true;
+                        }
+                    }
+                    else {
+                        return true;
+                    }
+                }
             }
-            else if (larger_than_min) {
-                intersection.xy = vec2(getCell(ray.xy, cellCount) + vec2(0.5))/cellCount;
-                return true;
-            }
+            // Move the current ray to the next cell in the reflection direction to avoid ‘self-intersection’.
+            ray = intersectCellBoundary(o, d, oldCellIdx, cellCount, crossStep, crossOffset * 64);
         }
-        
-        prevRay = ray;
-        ray = crossed
-            ? intersectCellBoundary(o, d, oldCellIdx, cellCount, crossStep, crossOffset)
-            : tmpRay;
-        level = crossed 
-            ? min(maxLevel, level+1) 
-            : level-1;
+        else {
+            prevRay = ray;
+            ray = crossed
+                ? intersectCellBoundary(o, d, oldCellIdx, cellCount, crossStep, crossOffset)
+                : tmpRay;
+            level = crossed 
+                ? min(maxLevel, level+1) 
+                : level-1;
+        }
 
         ++iter;
     }
@@ -451,6 +491,8 @@ bool unpackVSInfo(
     // From the depth, compute the position in view space.
     rayStartInfo.samplePosInVS = pushConstants.InvProjMat * rayStartInfo.samplePosInCS;
     rayStartInfo.samplePosInVS /= rayStartInfo.samplePosInVS.w;
+
+    rayStartInfo.samplePosInVS.xyz += sampleNormalInVS * 0.01f;
     // Texture space
     rayStartInfo.samplePosInTS = rayStartInfo.samplePosInCS.xyz;
     rayStartInfo.samplePosInTS.xy *= vec2(0.5f, -0.5f);
@@ -550,3 +592,4 @@ SSRay PrepareSSRT(
     ray.minDistance = 0;
     return ray;
 }
+

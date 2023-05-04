@@ -1,5 +1,6 @@
 module;
 #include <cmath>
+#include <cstdint>
 #include <intrin.h>
 export module SE.Math.Misc:Common;
 

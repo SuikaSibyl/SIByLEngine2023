@@ -55,6 +55,10 @@ namespace SIByL::SRP
 
 			addSubgraph(std::make_unique<MIPMinPoolingPass>(512, 512), "HiZ-Gen Pass");
 			addSubgraph(std::make_unique<MIPSSLCPass>(512, 512), "MIPSSLC Pass");
+			addPass(std::make_unique<MISCompensationDiffPass>(), "MISC Pass");
+			addSubgraph(std::make_unique<MIPAddPoolingPass>(512), "AddPooling Pass");
+
+
 			addPass(std::make_unique<BarLCPass>(), "BarLC Pass");
 			addPass(std::make_unique<AccumulatePass>(), "Accumulate Pass");
 
@@ -73,7 +77,12 @@ namespace SIByL::SRP
 			addEdge("GBuffer Pass", "Color", "BarLC Pass", "BaseColor");
 			addEdge("HiZ-Gen Pass", "Output", "BarLC Pass", "HiZ");
 			addEdge("GBuffer Pass", "wNormal", "BarLC Pass", "NormalWS");
-			addEdge("MIPSSLC Pass", "ImportanceMIP", "BarLC Pass", "ImportanceMIP");
+
+			addEdge("MIPSSLC Pass", "ImportanceMIP", "MISC Pass", "R32");
+			addEdge("MISC Pass", "R32", "AddPooling Pass", "Input");
+
+
+			addEdge("AddPooling Pass", "Output", "BarLC Pass", "ImportanceMIP");
 			addEdge("MIPSSLC Pass", "BoundingBoxMIP", "BarLC Pass", "BoundingBoxMIP");
 			addEdge("MIPSSLC Pass", "BBNCPackMIP", "BarLC Pass", "BBNCPackMIP");
 			addEdge("MIPSSLC Pass", "NormalConeMIP", "BarLC Pass", "NormalConeMIP");

@@ -56,7 +56,7 @@ namespace SIByL
 			};
 
 			RHI::RenderPassEncoder* encoder = beginPass(context, depth);
-
+			
 			std::vector<RHI::BindGroupEntry>* set_0_entries = renderData.getBindGroupEntries("CommonScene");
 			getBindGroup(context, 0)->updateBinding(*set_0_entries);
 			RHI::Buffer* indirect_draw_buffer = RACommon::get()->structured_drawcalls.all_drawcall_device->buffer.get();
@@ -64,13 +64,14 @@ namespace SIByL
 
 			auto const& drawcall_info = RACommon::get()->structured_drawcalls.opaque_drawcall;
 
-			getBindGroup(context, 1)->updateBinding({
-				RHI::BindGroupEntry {0, RHI::BindingResource{ RHI::BufferBinding{indirect_draw_buffer, drawcall_info.offset, sizeof(RACommon::DrawIndexedIndirectEX) * drawcall_info.drawCount} }}
-			});
+			if (drawcall_info.drawCount != 0) {
+				getBindGroup(context, 1)->updateBinding({
+					RHI::BindGroupEntry {0, RHI::BindingResource{ RHI::BufferBinding{indirect_draw_buffer, drawcall_info.offset, sizeof(RACommon::DrawIndexedIndirectEX) * drawcall_info.drawCount} }}
+				});
 
-			renderData.getDelegate("PrepareDrawcalls")(prepareDelegateData(context, renderData));
-			encoder->drawIndexedIndirect(indirect_draw_buffer, drawcall_info.offset, drawcall_info.drawCount, sizeof(RACommon::DrawIndexedIndirectEX));
-
+				renderData.getDelegate("PrepareDrawcalls")(prepareDelegateData(context, renderData));
+				encoder->drawIndexedIndirect(indirect_draw_buffer, drawcall_info.offset, drawcall_info.drawCount, sizeof(RACommon::DrawIndexedIndirectEX));
+			}
 			// do not use indirect
 			//getBindGroup(context, 1)->updateBinding(RACommon::get()->);
 			//renderData.getDelegate("IssueAllDrawcalls")(prepareDelegateData(context, renderData));
@@ -130,16 +131,17 @@ namespace SIByL
 
 			auto const& drawcall_info = RACommon::get()->structured_drawcalls.alphacut_drawcall;
 
-			getBindGroup(context, 1)->updateBinding({
-				RHI::BindGroupEntry {0, RHI::BindingResource{ RHI::BufferBinding{indirect_draw_buffer, drawcall_info.offset, sizeof(RACommon::DrawIndexedIndirectEX) * drawcall_info.drawCount} }}
-				});
+			if (drawcall_info.drawCount != 0) {
+				getBindGroup(context, 1)->updateBinding({
+					RHI::BindGroupEntry {0, RHI::BindingResource{ RHI::BufferBinding{indirect_draw_buffer, drawcall_info.offset, sizeof(RACommon::DrawIndexedIndirectEX) * drawcall_info.drawCount} }}
+					});
 
-			uint32_t sample_batch = renderData.getUInt("AccumIdx");
-			encoder->pushConstants(&sample_batch, (uint32_t)RHI::ShaderStages::FRAGMENT, 0, sizeof(uint32_t));
+				uint32_t sample_batch = renderData.getUInt("AccumIdx");
+				encoder->pushConstants(&sample_batch, (uint32_t)RHI::ShaderStages::FRAGMENT, 0, sizeof(uint32_t));
 
-			renderData.getDelegate("PrepareDrawcalls")(prepareDelegateData(context, renderData));
-			encoder->drawIndexedIndirect(indirect_draw_buffer, drawcall_info.offset, drawcall_info.drawCount, sizeof(RACommon::DrawIndexedIndirectEX));
-
+				renderData.getDelegate("PrepareDrawcalls")(prepareDelegateData(context, renderData));
+				encoder->drawIndexedIndirect(indirect_draw_buffer, drawcall_info.offset, drawcall_info.drawCount, sizeof(RACommon::DrawIndexedIndirectEX));
+			}
 			// do not use indirect
 			//getBindGroup(context, 1)->updateBinding(RACommon::get()->);
 			//renderData.getDelegate("IssueAllDrawcalls")(prepareDelegateData(context, renderData));

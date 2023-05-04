@@ -50,6 +50,7 @@ import SE.SRenderer.ForwardPipeline;
 import SE.SRenderer.MMLTPipeline;
 import SE.SRenderer.UDPTPipeline;
 import SE.SRenderer.BDPTPipeline;
+import SE.SRenderer.BarGTPass;
 
 using namespace SIByL;
 using namespace SIByL::Core;
@@ -139,17 +140,24 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.clamp_nearest)->sampler->setName("ClampNearestSampler");
 
 		srenderer = std::make_unique<SRenderer>();
+
+		//GFX::SceneNodeLoader_assimp::loadSceneNode("D:/Art/Scenes/Bistro_v5_2/Bistro_v5_2/BistroExterior.fbx", scene, GFX::GFXManager::get()->config.meshLoaderConfig);
+
 		srenderer->init(scene);
-		pipeline = std::make_unique<SRP::ForwardPipeline>();
-		pipeline->build();
+		pipeline1 = std::make_unique<SRP::BarGTPipeline>();
+		pipeline2 = std::make_unique<SRP::ForwardPipeline>();
+		pipeline1->build();
+		pipeline2->build();
+
+		pipeline = pipeline2.get();
 
 		Editor::DebugDraw::Init(pipeline->getOutput(), nullptr);
 
-		editorLayer->getWidget<Editor::RDGViewerWidget>()->pipeline = pipeline.get();
+		editorLayer->getWidget<Editor::RDGViewerWidget>()->pipeline = pipeline;
 
-		std::unique_ptr<Image::Texture_Host> dds_tex = Image::DDS::fromDDS("D:/Art/Scenes/Bistro_v5_2/Bistro_v5_2/Textures/Bollards_BaseColor.dds");
-		Core::GUID guid_dds = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
-		GFX::GFXManager::get()->registerTextureResource(guid_dds, dds_tex.get());
+		//std::unique_ptr<Image::Texture_Host> dds_tex = Image::DDS::fromDDS("D:/Art/Scenes/Bistro_v5_2/Bistro_v5_2/Textures/Bollards_BaseColor.dds");
+		//Core::GUID guid_dds = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
+		//GFX::GFXManager::get()->registerTextureResource(guid_dds, dds_tex.get());
 
 		cameraController.init(mainWindow.get()->getInput(), &timer, editorLayer->getWidget<Editor::ViewportWidget>());
 	};
@@ -212,9 +220,28 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		bool show_demo_window = true;
 		ImGui::ShowDemoWindow(&show_demo_window);
 
+		ImGui::Begin("Pipeline Choose");
+		{	// Select an item type
+			const char* item_names[] = {
+				"RayTracing", "Forward",
+			};
+			static int pipeline_id = 1;
+			ImGui::Combo("Mode", &pipeline_id, item_names, IM_ARRAYSIZE(item_names), IM_ARRAYSIZE(item_names));
+			if (pipeline_id == 0) {
+				pipeline = pipeline1.get();
+				editorLayer->getWidget<Editor::RDGViewerWidget>()->pipeline = pipeline;
+			}
+			else if (pipeline_id == 1) {
+				pipeline = pipeline2.get();
+				editorLayer->getWidget<Editor::RDGViewerWidget>()->pipeline = pipeline;
+			}
+		}
+		ImGui::End();
+
 		editorLayer->getWidget<Editor::ViewportWidget>()->setTarget("Main Viewport", pipeline->getOutput());
 		editorLayer->onDrawGui();
 		imguiLayer->render();
+
 
 		multiFrameFlights->frameEnd();
 	};
@@ -229,7 +256,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		rhiLayer->getDevice()->waitIdle();
 		srenderer = nullptr;
-		pipeline = nullptr;
+		pipeline1 = nullptr;
+		pipeline2 = nullptr;
 
 		Editor::DebugDraw::Destroy();
 
@@ -251,7 +279,9 @@ private:
 	std::unique_ptr<Editor::EditorLayer> editorLayer = nullptr;
 	std::unique_ptr<SRenderer> srenderer = nullptr;
 	
-	std::unique_ptr<RDG::Pipeline> pipeline = nullptr;
+	RDG::Pipeline* pipeline = nullptr;
+	std::unique_ptr<RDG::Pipeline> pipeline1 = nullptr;
+	std::unique_ptr<RDG::Pipeline> pipeline2 = nullptr;
 
 	// the embedded scene, which should be removed in the future
 	GFX::Scene scene;

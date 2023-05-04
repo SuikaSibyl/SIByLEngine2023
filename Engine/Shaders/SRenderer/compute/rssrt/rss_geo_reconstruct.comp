@@ -1,0 +1,62 @@
+#version 460
+#extension GL_EXT_scalar_block_layout : require
+
+struct PushConstants {
+    mat4    invProjMat;
+    mat4    invViewMat;
+    uvec2   resolution;
+};
+layout(push_constant) uniform PushConsts { PushConstants pushConstants; };
+
+layout(binding = 0, set = 0) uniform sampler2D hi_z;
+layout(binding = 1, set = 0, scalar) buffer _PositionBuffer   { vec3 positions[]; };
+layout(binding = 2, set = 0, scalar) buffer _IndicesBuffer    { uint indices[]; };
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+vec3 SS2WS(in const vec2 xy, in const float z) {
+    const vec4 posInCS =  vec4((xy/pushConstants.resolution)*2-1.0f, z, 1) * vec4(1,-1,1,1);
+    vec4 posInVS = pushConstants.invProjMat * posInCS;
+    posInVS /= posInVS.w;
+    const vec4 posInWS = pushConstants.invViewMat * vec4(posInVS.xyz, 1.0);
+    return posInWS.xyz;
+}
+
+void geo_setting_1_reconstruct() {
+    // The resolution of the image, which is the same as the launch size:
+    const ivec2 resolution = ivec2(pushConstants.resolution);
+    const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    const uint gid = pixel.x + pixel.y * resolution.x;
+    // If the pixel is outside of the image, don't do anything:
+    if((pixel.x >= resolution.x) || (pixel.y >= resolution.y)) {
+        return;
+    }
+
+    // The depth value of the pixel:
+    const float z = texelFetch(hi_z, pixel, 0).r;
+    const bool is_valid = (z < 1.0) ? true : false;
+
+    // The position of the pixel in world space:
+    const vec3 posInWS_0 = is_valid ? SS2WS(pixel + vec2(0, 0), z) : vec3(0.0);
+    const vec3 posInWS_1 = is_valid ? SS2WS(pixel + vec2(0, 1), z) : vec3(0.0);
+    const vec3 posInWS_2 = is_valid ? SS2WS(pixel + vec2(1, 0), z) : vec3(0.0);
+    const vec3 posInWS_3 = is_valid ? SS2WS(pixel + vec2(1, 1), z) : vec3(0.0);
+    
+    // mapping texture space to world space
+    positions[gid * 4 + 0] = posInWS_0;
+    positions[gid * 4 + 1] = posInWS_1;
+    positions[gid * 4 + 2] = posInWS_2;
+    positions[gid * 4 + 3] = posInWS_3;
+
+    // write indices buffer
+    indices[gid * 6 + 0] = gid * 4 + 0;
+    indices[gid * 6 + 1] = gid * 4 + 1;
+    indices[gid * 6 + 2] = gid * 4 + 2;
+    indices[gid * 6 + 3] = gid * 4 + 2;
+    indices[gid * 6 + 4] = gid * 4 + 1;
+    indices[gid * 6 + 5] = gid * 4 + 3;
+}
+
+void main() {
+    geo_setting_1_reconstruct();
+}

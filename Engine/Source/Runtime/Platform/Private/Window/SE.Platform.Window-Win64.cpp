@@ -76,7 +76,7 @@ namespace SIByL::Platform
 		wc.hCursor = LoadCursor(0, IDC_ARROW);
 		wc.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
 		wc.lpszMenuName = 0;
-		wc.lpszClassName = uniName.c_str();
+		wc.lpszClassName = (uniName.c_str());
 
 		if (!RegisterClass(&wc)) {
 			MessageBox(0, L"RegisterClass Failed.", 0, 0);

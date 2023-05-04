@@ -321,4 +321,70 @@ namespace SIByL
 		size_t mipCount;
 		size_t width, height;
 	};
+
+	export struct MISCompensationDiffPass :public RDG::ComputePass {
+
+		MISCompensationDiffPass() {
+			comp = GFX::GFXManager::get()->registerShaderModuleResource(
+				"../Engine/Binaries/Runtime/spirv/SRenderer/rasterizer/fullscreen_pass/misc_diff_comp.spv",
+				{ nullptr, RHI::ShaderStages::COMPUTE });
+			RDG::ComputePass::init(Core::ResourceManager::get()->getResource<GFX::ShaderModule>(comp));
+		}
+
+		virtual auto reflect() noexcept -> RDG::PassReflection {
+			RDG::PassReflection reflector;
+
+			reflector.addInputOutput("R32")
+				.isTexture()
+				.withFormat(RHI::TextureFormat::R32_FLOAT)
+				.withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+				.consume(RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::StorageBinding }
+					.setSubresource(9, 10, 0, 1)
+					.addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT))
+				.consume(RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::StorageBinding }
+					.setSubresource(0, 1, 0, 1)
+					.addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+
+			return reflector;
+		}
+
+		struct PushConstant {
+			Math::uvec2 resolution;
+			float diffWeight = 1.f;
+		};
+		PushConstant pConst;
+
+		virtual auto renderUI() noexcept -> void override {
+			{	float weight = pConst.diffWeight;
+			ImGui::DragFloat("Diff Weight", &weight, 0.01);
+			pConst.diffWeight = weight;
+			}
+		}
+		virtual auto execute(RDG::RenderContext* context, RDG::RenderData const& renderData) noexcept -> void {
+
+			GFX::Texture* input = renderData.getTexture("R32");
+
+			getBindGroup(context, 0)->updateBinding(std::vector<RHI::BindGroupEntry>{
+				RHI::BindGroupEntry{ 0, RHI::BindingResource{ input->getUAV(0,0,1)} },
+				RHI::BindGroupEntry{ 1, RHI::BindingResource{ input->getUAV(9,0,1)} }
+			});
+
+			RHI::ComputePassEncoder* encoder = beginPass(context);
+
+			uint32_t width = input->texture->width();
+			uint32_t height = input->texture->height();
+
+			prepareDispatch(context);
+
+			pConst.resolution = Math::uvec2{ width,height };
+			encoder->pushConstants(&pConst,
+				(uint32_t)RHI::ShaderStages::COMPUTE,
+				0, sizeof(PushConstant));
+			encoder->dispatchWorkgroups((width + 15) / 16, (height + 15) / 16, 1);
+
+			encoder->end();
+		}
+
+		Core::GUID comp;
+	};
 }

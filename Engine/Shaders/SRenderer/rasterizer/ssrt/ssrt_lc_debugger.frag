@@ -44,8 +44,9 @@ layout(binding = 6, set = 0) uniform sampler2D normalcone_mip;
 layout(binding = 7, set = 0) uniform sampler2D di;
 
 
-#define DEBUG 1
+// #define DEBUG 1
 #include "ssrt.glsl"
+#include "ssrt_sampler.glsl"
 
 const int grid = 8;
 const float scale = 1.1 * float(grid-1);
@@ -98,222 +99,12 @@ vec3 specular() {
 
     vec3 intersection;
     vec3 reflectedColor = vec3(0);
+    SSRTConfig config = SSRTConfig(false);
     // int iter; vec4 u2v;
-    if(FindIntersection_HiZ(ray, intersection)) {
+    if(FindIntersection_Interface(ray, intersection, config)) {
         reflectedColor = texture(di, intersection.xy).xyz;
     }
     return reflectedColor;
-}
-
-vec2 four_neighbors[4] = vec2[](
-    vec2(-1., +1.),
-    vec2(+1., +1.),
-    vec2(+1., -1.),
-    vec2(-1., -1.)
-);
-
-ivec2 four_neighbors_pix[4] = ivec2[](
-    ivec2(0, 1),
-    ivec2(1, 1),
-    ivec2(1, 0),
-    ivec2(0, 0)
-);
-
-float min_distance(
-    in const AABB aabb,
-    in const vec3 pos
-) {
-    const vec3 d = aabb.max - aabb.min;
-    const vec3 m = (aabb.max + aabb.min) * 0.5;
-    const vec3 n = pos - m;
-    vec3 f = abs(n) - d * 0.5;
-    vec3 c = max(f, vec3(0.));
-    return length(c);
-}
-
-float max_distance(
-    in const AABB aabb,
-    in const vec3 pos
-) {
-    vec3 dis_min = abs(pos - aabb.min);
-    vec3 dis_max = abs(pos - aabb.max);
-    vec3 dis = max(dis_max, dis_min);
-    return length(dis);
-}
-
-float geometry_term(
-    in const AABB aabb,
-    in const NormalConeEx normalCone,
-    in const vec3 pos,
-    in const vec3 N
-) {
-    const vec3 m = (aabb.max + aabb.min) * 0.5;
-    const vec3 dir = normalize(m - pos);
-    float maximum_cos = 0.f;
-
-    vec3 corner[8] = vec3[](
-        vec3(aabb.min.x, aabb.min.y, aabb.min.z),
-        vec3(aabb.max.x, aabb.min.y, aabb.min.z),
-        vec3(aabb.min.x, aabb.max.y, aabb.min.z),
-        vec3(aabb.min.x, aabb.min.y, aabb.max.z),
-        vec3(aabb.max.x, aabb.max.y, aabb.min.z),
-        vec3(aabb.max.x, aabb.min.y, aabb.max.z),
-        vec3(aabb.min.x, aabb.max.y, aabb.max.z),
-        vec3(aabb.max.x, aabb.max.y, aabb.max.z)
-    );
-
-    for(int i=0; i<8; ++i) {
-        corner[i] = normalize(corner[i] - pos);
-        maximum_cos = max(maximum_cos, dot(corner[i], dir));
-    }
-
-    const float theta = acos(dot(normalCone.direction, -dir));
-
-    const float theta_u = acos(maximum_cos);
-    const float theta_i = acos(dot(N, dir));
-    const float theta_i_prim = max(theta_i - theta_u, 0);
-    const float theta_prim = max(theta - normalCone.theta_o - theta_u, 0);
-
-    if(theta_prim < normalCone.theta_e) {
-        return cos(theta_prim) * abs(cos(theta_i_prim));
-    }
-    else {
-        return 0.001;
-    }
-}
-
-vec2 sampleImportanceUV_LC_v0(
-    inout uint RNG,
-    out float probability,
-    in const RayStartInfo startInfo,
-    in const vec3 sampleNormalInVS
-) {
-    // gImportanceMIP
-    int mip_level = 9;
-    vec2 uv = vec2(0.5, 0.5);
-    ivec2 xy = ivec2(0);
-    // float parent_importance = textureLod(importance_mip, uv, mip_level).x;
-
-    float p = 1.f;
-    float pixel_size = 1. / 2;
-    
-    for (int i = 0; i < pushConstants.is_depth; ++i) {
-        pixel_size /= 2;    // half pixel size
-        mip_level--; // next mip level
-        xy *= 2; // sample next level
-
-        // sample next level
-        float rnd = UniformFloat(RNG);
-        float accum = 0.f;
-        int last_non_zero = -1;
-        float last_non_zero_imp = 0;
-        float last_non_zero_pdf = 0;
-
-        float parent_importance = 0;
-        vec4 lum_importance = vec4(0);
-        vec4 min_importance = vec4(0);
-        vec4 max_importance = vec4(0);
-
-        int singluarity = 0;
-        int singluarity_id = 0;
-        vec4 child_importance = vec4(0);
-
-        if(pushConstants.lightcut_mode == 0) {
-            for (int j=0; j<4; ++j) {
-                ivec2 xy_offset = four_neighbors_pix[j];
-                float lumin_importance = texelFetch(importance_mip, xy + xy_offset, mip_level).x;
-                child_importance[j] = lumin_importance;
-            }
-            const float sum = dot(vec4(1), child_importance);
-            child_importance /= sum;
-        }
-        else if(pushConstants.lightcut_mode == 1 || pushConstants.lightcut_mode == 2) {
-            for (int j=0; j<4; ++j) {
-                vec2 uv_offset = four_neighbors[j] * pixel_size;
-                ivec2 xy_offset = four_neighbors_pix[j];
-                float lumin_importance = texelFetch(importance_mip, xy + xy_offset, mip_level).x;
-
-                // LC Weight estimate
-                vec4 bbxy = texelFetch(boundingbox_mip, xy + xy_offset, mip_level);
-                vec4 bbnc = texelFetch(bbncpack_mip, xy + xy_offset, mip_level);
-                const vec3 conedir = unpackNormal(texelFetch(normalcone_mip, xy + xy_offset, mip_level).xyz);
-                AABB aabb = AABB(vec3(bbxy.xy, bbnc.x), vec3(bbxy.zw, bbnc.y));
-                const NormalConeEx normal_cone = NormalConeEx(conedir, bbnc.z, bbnc.w, true);
-                // geometry
-                // distance
-                float min_dist = min_distance(aabb, startInfo.samplePosInVS.xyz);
-                float max_dist = max_distance(aabb, startInfo.samplePosInVS.xyz);
-                float g_term = 1.f;
-                if(pushConstants.lightcut_mode == 2) {
-                    g_term = (min_dist == 0) // inside the aabb?
-                        ? 1.f
-                        : geometry_term(aabb, normal_cone, startInfo.samplePosInVS.xyz, sampleNormalInVS.xyz);
-                }
-                // float g_term = (min_dist == 0) // inside the aabb?
-                //     ? 1.f
-                //     : geometry_term(aabb, normal_cone, startInfo.samplePosInVS.xyz, sampleNormalInVS.xyz);
-                lumin_importance *= g_term;
-                if(min_dist == 0) {
-                    singluarity++;
-                    singluarity_id = j;
-                }
-
-                lum_importance[j] = lumin_importance;
-                min_importance[j] = lumin_importance / (min_dist * min_dist);
-                max_importance[j] = lumin_importance / (max_dist * max_dist);
-            }
-            
-            if (singluarity == 1) {
-                min_importance = vec4(0);
-                min_importance[singluarity_id] = 1;
-            }
-            else if(singluarity > 1) {
-                min_importance = lum_importance;
-            }
-            {
-                float min_parent = dot(vec4(1), min_importance);
-                float max_parent = dot(vec4(1), max_importance);
-                child_importance = 0.5 * (min_importance / min_parent + max_importance / max_parent);
-            }
-        }
-
-        for (int j=0; j<4; ++j) {
-            vec2 uv_offset = four_neighbors[j] * pixel_size;
-            ivec2 xy_offset = four_neighbors_pix[j];
-            float importance = child_importance[j];
-            float nimportance = importance;
-            accum += nimportance;
-            
-            if(nimportance > 0) {
-                last_non_zero = j;
-                last_non_zero_pdf = nimportance;
-                last_non_zero_imp = importance;
-            }
-
-            if(rnd < accum) {
-                uv = uv + uv_offset;
-                xy = xy + xy_offset;
-                p = p * nimportance;
-                break;
-            }
-            else if(j==3 && last_non_zero!=-1) {
-                uv = uv + four_neighbors[last_non_zero] * pixel_size;
-                xy = xy + four_neighbors_pix[last_non_zero];
-                p = p * last_non_zero_pdf;
-                break;
-            }
-            else {
-                // should not happen...
-            }
-        }
-        p *= 4;
-    }
-
-    vec2 uv_pertub = vec2(UniformFloat(RNG), UniformFloat(RNG)); // (0,1)
-    uv_pertub = vec2(-1, -1) + uv_pertub * 2; // (-1, 1)
-    uv += uv_pertub * pixel_size;
-    probability = p;
-    return uv;
 }
 
 vec2 sampleImportanceUV(inout uint RNG, out float probability) {
@@ -396,233 +187,52 @@ float computeJacobian_1(in const vec2 sample_uv) {
     return jacobian_0 * (dist_1 * dist_1) / cos_1;
 }
 
-vec3 texture_sample_jacobian(
-    in const vec2 sample_uv,
-    in const vec3 sampleNormalInVS,
-    in const RayStartInfo startInfo,
-    out float area_prob,
-    out float p1
-) {
-    area_prob = 0;
-    p1 = 0;
-    
-    vec3 sampleNormalInVS_End;
-    RayStartInfo endInfo;
-    bool hasIsect = unpackVSInfo(uvec2(sample_uv * pushConstants.view_size), sampleNormalInVS_End, endInfo);
-
-    if (!hasIsect) {
-        return vec3(0);
-    }
-
-    SSRay ray = PrepareSSRT(startInfo, endInfo);
-
-    vec3 reflectionDirVS = normalize((endInfo.samplePosInVS - startInfo.samplePosInVS).xyz);
-    ray.maxDistance = max(0, ray.maxDistance - 0.01);
-    ray.minDistance = 0.01;
-
-    vec3 intersection;
-    if(FindIntersection_HiZ(ray, intersection)) {
-        return vec3(0);
-    }
-    
-    vec3 pix_position = gCamera.cameraW
-                + (-0.5 + sample_uv.x) * 2 * gCamera.cameraU
-                + (-0.5 + sample_uv.y) * 2 * gCamera.cameraV;
-    vec3 pix_dir = normalize(pix_position);
-    float cos_0 = max(dot(-pix_dir, -normalize(gCamera.cameraW)), 0);
-    float r_0 = length(pix_position);
-    float area_0 = 4 * length(gCamera.cameraU) * length(gCamera.cameraV);
-    float jacobian_0 = cos_0 * area_0 / (r_0 * r_0);
-
-    float dist_1 = length(endInfo.samplePosInVS.xyz);
-    vec3 dir_1 = normalize(endInfo.samplePosInVS.xyz);
-    float cos_1 = max(dot(sampleNormalInVS_End, -dir_1), 0);
-    float jacobian_1 = jacobian_0 * (dist_1 * dist_1) / cos_1;
-
-    float cos_2 = max(dot(sampleNormalInVS_End, -reflectionDirVS), 0);
-    float dist_2 = max(length(endInfo.samplePosInVS - startInfo.samplePosInVS), 0);
-
-    vec3 sample_color = texture(di, sample_uv).xyz;
-    if (dist_2 != 0 && !isinf(dist_2) && !isnan(dist_2) && !isinf(jacobian_1)) {
-        float g = cos_2 / (dist_2 * dist_2);
-        float jacobian_2 = jacobian_1 * g;
-    
-        float cos_3 = max(dot(reflectionDirVS, sampleNormalInVS), 0);
-
-        area_prob = jacobian_1;
-        p1 = cos_3 * g / k_pi;
-
-        return sample_color * jacobian_2 * cos_3;
-    }
-}
-
 vec3 diffuse() {
     const vec2 uv = in_uv;
     const uvec2 tid = uvec2(gl_FragCoord.xy);
     const vec2 iResolution = pushConstants.view_size;
     uint RNG = InitRNG(tid, pushConstants.sample_batch);
 
-    vec3 sampleNormalInVS;
-    RayStartInfo startInfo;
-
-    bool hasIsect = unpackVSInfo(tid, sampleNormalInVS, startInfo);
+    InitStateTS startState;
+    bool hasIsect = unpackVSInfo(tid, startState);
     if(!hasIsect) {
         return vec3(0);
     }
 
     if(pushConstants.strategy == 0) {
-        vec3 vRefDirInVS = normalize(normalize(sampleNormalInVS) + randomPointInSphere(RNG));
-        SSRay ray = PrepareSSRT(startInfo, vRefDirInVS);
-        ray.minDistance = 0.01;
-        
-        vec3 intersection;
-        vec3 reflectedColor = vec3(0);
-        if(FindIntersection_HiZ(ray, intersection)) {
-            vec3 sampleNormalInVS_End;
-            RayStartInfo endInfo;
-            bool hasIsect = unpackVSInfo(ivec2(intersection.xy * pushConstants.view_size), sampleNormalInVS_End, endInfo);
-            if(!hasIsect) {
-                return vec3(0);
-            }
-            if(dot(sampleNormalInVS_End, -vRefDirInVS) < 0.) {
-                return vec3(0);
-            }
-            reflectedColor = texture(di, intersection.xy).xyz;
-        }
-        // else {
-        //     bool isBackwardRay = ray.rayDirInTS.z<0;
-        //     float rayDir = isBackwardRay ? -1 : 1;
-        //     float maxZ = ray.rayPosInTS.z + ray.rayDirInTS.z * max(0, ray.maxDistance - 0.01);
-        //     if(intersection.z*rayDir > maxZ*rayDir) {
-        //         reflectedColor = texture(di, intersection.xy).xyz;
-        //     }
-        // }
-        return reflectedColor * k_pi;
+        SampleTS sample_cos = SampleTech_CosWeight(startState, RNG);
+        return sample_cos.radiance;
     }
     else if(pushConstants.strategy == 1) {
-        float pdf;
-        vec2 sample_uv = sampleImportanceUV(RNG, pdf);
-        float area_prob, p1;
-        // return texture_sample_jacobian(sample_uv, sampleNormalInVS, startInfo, area_prob, p1) / pdf;
-        return texture_sample_jacobian(sample_uv, sampleNormalInVS, startInfo, area_prob, p1) / pdf;
+        SampleTS sample_uv = SampleTech_LightCut(startState, RNG);
+        return sample_uv.radiance;
     }
-    else {
-        float pdf;
-        vec2 sample_uv = sampleImportanceUV_LC_v0(RNG, pdf, startInfo, sampleNormalInVS);
-        float area_prob, p1;
-        // return texture_sample_jacobian(sample_uv, sampleNormalInVS, startInfo, area_prob, p1) / pdf;
-        return texture_sample_jacobian(sample_uv, sampleNormalInVS, startInfo, area_prob, p1) / pdf;
-    }
-}
+    else if(pushConstants.strategy == 2){
+        vec3 radiance = vec3(0.f);
 
-vec3 specularDDA() {
-    const vec2 uv = in_uv;
-    const uvec2 tid = uvec2(gl_FragCoord.xy);
-    const vec2 iResolution = pushConstants.view_size;
-
-    const int level = pushConstants.mip_level;
-    const vec2 cellCount = getCellCount(level);
-
-    vec3 sampleNormalInVS;
-    RayStartInfo startInfo;
-
-    bool hasIsect = unpackVSInfo(tid, sampleNormalInVS, startInfo);
-    if(!hasIsect) {
-        return vec3(0);
-    }
-
-    vec3 vCamToSampleInVS = normalize(startInfo.samplePosInVS.xyz);
-    vec3 vRefDirInVS = normalize(reflect(vCamToSampleInVS.xyz, sampleNormalInVS.xyz));
-
-    SSRay ray = PrepareSSRT(startInfo, vRefDirInVS);
-    const vec3 samplePosInTS = ray.rayPosInTS;
-    const vec3 vReflDirInTS = ray.rayDirInTS;
-    const float maxTraceDistance = ray.maxDistance;
-
-    hasIsect = false;
-    vec3 intersection;
-
-    const vec3 vReflectionEndPosInTS = samplePosInTS + vReflDirInTS * maxTraceDistance;
-    const vec2 m0 = getCellCoord(samplePosInTS.xy, cellCount);
-    const vec2 m1 = getCellCoord(vReflectionEndPosInTS.xy, cellCount);
-    vec2 q = getCellCoord(tid/iResolution, cellCount);
-
-    DebugPack debugPack;
-    debugPack.qi = ivec2(floor(q)); // gridcell
-    debugPack.celltouchesline = false;
-    debugPack.pixel = q;
-    debugPack.cd = 3e38;
-
-    {
-        DDA2D_Linear dda;
-        Trace2D_Linear tr;
-        setup(m0, m1, dda, tr);
-        ivec2 n;
-        vec3 pos_prev = samplePosInTS;
-        vec2 uv_prev = tr.ro;
-        const vec3 dir_norm = vReflDirInTS * abs(maxTraceDistance / tr.t1);
-
-        float t_prev = 0.f;
-        float z_prev = samplePosInTS.z;
-        ivec2 prev_mp = dda.mp;
-        float dir_weight = 1.f;
-        {
-            float ot = dda.t;
-            int s;
-            int iter = 0;
-            while (true) {
-                bool go = traverse(dda, tr, debugPack);
-                
-                vec3 pos = samplePosInTS + (dda.t + t_prev) * .5 * dir_norm;
-                // vec2 uv = pos.xy * .5 + pos_prev.xy * .5;
-                vec2 uv = tr.ro + tr.rd * (dda.t + t_prev) * .5;
-                // float z = minimumDepthPlane(pos.xy, level, cellCount);
-                float z = pos.z;
-                float z_prevmp = minimumDepthPlane((prev_mp) / cellCount, level, cellCount);
-
-                float z_a = (samplePosInTS + dda.t* dir_norm).z;
-                float z_b = (samplePosInTS + t_prev* dir_norm).z;
-                float alpha = (z_prevmp - z_a) / (z_b - z_a);
-                vec3 pos_isect = samplePosInTS + ((dda.t * (1 - alpha)) + t_prev*alpha)* dir_norm;
-
-                t_prev = dda.t;
-                uv_prev = uv;
-
-                prev_mp = dda.mp;
-                if(!go) break;
-
-                float thickness = z - z_prevmp;
-                if(iter>pushConstants.offset_steps
-                    && thickness > 0
-                    && thickness < pushConstants.max_thickness
-                ) {
-                    hasIsect = true;
-                    intersection = pos_isect;
-                    break;
-                }
-                // if(iter>pushConstants.offset_steps
-                //     && thickness >= 0
-                //     && thickness < pushConstants.max_thickness) {
-                //     hasIsect = true;
-                //     intersection = pos;
-                //     break;
-                // }
-
-                iter++;
-                z_prev = z;
-                s = nextIsect(dda, tr);
+        SampleTS sample_cos = SampleTech_CosWeight(startState, RNG);
+        if(sample_cos.hasIsect) {
+            const float pcos_1 = sample_cos.pdf;
+            const float pcos_2 = SampleTechPdf_LightCut(startState, sample_cos);
+            if(isnan(pcos_2)) {
+                radiance += sample_cos.radiance;
             }
-            n = ivec2(0);
-            n[s] = -tr.sd[s]; // avoid negating zeroes
+            else {
+                radiance += (pcos_1 / (pcos_1 + pcos_2)) * sample_cos.radiance;
+            }
+            // radiance += (pcos_1 / (pcos_1 + pcos_2)) * sample_cos.radiance;
+            // radiance = vec3(pcos_2 * 100, 0, 0);
         }
-    }
-
-    vec3 reflectedColor = vec3(0);
-    if(hasIsect) {
         
-        reflectedColor = texture(base_color, intersection.xy).xyz;
+        SampleTS sample_uv = SampleTech_LightCut(startState, RNG);
+        if(sample_uv.hasIsect) {
+            const float puv_1 = SampleTechPdf_CosWeight(startState, sample_uv);
+            const float puv_2 = sample_uv.pdf;
+            radiance += (puv_2 / (puv_1 + puv_2)) * sample_uv.radiance;
+        }
+
+        return radiance;
     }
-    return reflectedColor;
 }
 
 vec3 debugSpecular() {
@@ -650,8 +260,9 @@ vec3 debugSpecular() {
     float z_uv = minimumDepthPlane(uv, level, cellCount);
     vec3 c = vec3(visualizeZ(z_uv));
 
+    SSRTConfig config = SSRTConfig(false);
     // int iter; vec4 u2v;
-    if(FindIntersection_HiZ(ray, intersection)) {
+    if(FindIntersection_Interface(ray, intersection, config)) {
         vec2 start_uv = pushConstants.iDebugPos.xy / iResolution;
         float grayscale = draw_segment(uv, start_uv, intersection.xy, 0.002);
         overlay(c, vec3(0,1,0), grayscale);
@@ -676,220 +287,144 @@ vec3 debugOcclusion() {
 
     vec3 sampleNormalInVS;
     RayStartInfo startInfo;
-    bool hasIsect = unpackVSInfo(uvec2(pushConstants.iDebugPos.xy), sampleNormalInVS, startInfo);
-    if(!hasIsect) {
-        return vec3(0);
-    }
-
-    vec3 sampleNormalInVS_End;
-    RayStartInfo endInfo;
-    hasIsect = unpackVSInfo(uvec2(pushConstants.iDebugPos.zw), sampleNormalInVS_End, endInfo);
-    if(!hasIsect) {
-        return vec3(0);
-    }
-    SSRay ray = PrepareSSRT(startInfo, endInfo);
-
-    vec3 reflectionDirVS = normalize((endInfo.samplePosInVS - startInfo.samplePosInVS).xyz);
-    float cos_1 = dot(sampleNormalInVS, reflectionDirVS);
-    float cos_2 = dot(sampleNormalInVS_End, -reflectionDirVS);
-    ray.maxDistance = max(0, ray.maxDistance - 0.01);
-    ray.minDistance = 0.01;
-
-    vec3 intersection;
-    vec3 reflectedColor = vec3(0);
+    SSRTConfig config = SSRTConfig(false);
+    config.normal_check= true;
+    int debug_ray_status =  0;
+    vec3 debug_value;
+    bool hasIntersection = false;
+    vec2 intersectionPos = vec2(0);
 
     float z_uv = minimumDepthPlane(uv, level, cellCount);
     vec3 c = vec3(visualizeZ(z_uv));
-    
-    if(cos_1 < 0.01 || cos_2 < 0.01) {
-        vec3 endPoint = ray.rayPosInTS + ray.rayDirInTS * ray.maxDistance;
+
+    bool hasIsect = unpackVSInfo(uvec2(pushConstants.iDebugPos.xy), sampleNormalInVS, startInfo);
+    if(!hasIsect) {
         vec2 start_uv = pushConstants.iDebugPos.xy / iResolution;
-        float grayscale = draw_segment(uv, start_uv, endPoint.xy, 0.002);
-        overlay(c, vec3(1,0,1), grayscale);
+        vec2 end_uv = pushConstants.iDebugPos.zw / iResolution;
+        float first_seg = draw_segment(uv, start_uv, end_uv, 0.002);
+        overlay(c, vec3(0,0,0), first_seg);
+        return c;
     }
     else {
-        // int iter; vec4 u2v;
-        if(FindIntersection_HiZ(ray, intersection)) {
-            vec2 start_uv = pushConstants.iDebugPos.xy / iResolution;
-            float grayscale = draw_segment(uv, start_uv, intersection.xy, 0.002);
-            overlay(c, vec3(1,0,0), grayscale);
-        }
-        else {
-            vec3 endPoint = ray.rayPosInTS + ray.rayDirInTS * ray.maxDistance;
-            vec2 start_uv = pushConstants.iDebugPos.xy / iResolution;
-            float grayscale = draw_segment(uv, start_uv, endPoint.xy, 0.002);
-            overlay(c, vec3(0,1,0), grayscale);
-        }
-    }
-    
-    return c;
-}
-
-vec3 debugMode() {
-    const vec2 uv = in_uv;
-    const uvec2 tid = uvec2(gl_FragCoord.xy);
-
-    const vec2 iResolution = pushConstants.view_size;
-
-    const int level = pushConstants.mip_level;
-    const vec2 cellCount = getCellCount(level);
-    // const ivec2 cell = ivec2(getCellCoord(uv, cellCount));
-
-
-    // Mirror test 
-    // --------------------------------------------------------------------------------------------
-    // --------------------------------------------------------------------------------------------
-    vec3 sampleNormalInVS;
-    RayStartInfo startInfo;
-    bool hasIsect = unpackVSInfo(uvec2(pushConstants.iDebugPos.xy), sampleNormalInVS, startInfo);
-    if(!hasIsect) {
-        return vec3(0);
-    }
-
-    vec3 vRefDirInVS;
-    SSRay ray;
-    if(pushConstants.debug_mode == 2) {
-        vec3 vCamToSampleInVS = normalize(startInfo.samplePosInVS.xyz);
-        vRefDirInVS = normalize(reflect(vCamToSampleInVS.xyz, sampleNormalInVS.xyz));
-        ray = PrepareSSRT(startInfo, vRefDirInVS);
-    }
-    else if(pushConstants.debug_mode == 3) {
         vec3 sampleNormalInVS_End;
         RayStartInfo endInfo;
-        bool hasIsect = unpackVSInfo(uvec2(pushConstants.iDebugPos.zw), sampleNormalInVS_End, endInfo);
+        hasIsect = unpackVSInfo(uvec2(pushConstants.iDebugPos.zw), sampleNormalInVS_End, endInfo);
         if(!hasIsect) {
-            return vec3(0);
+            vec2 start_uv = pushConstants.iDebugPos.xy / iResolution;
+            vec2 end_uv = pushConstants.iDebugPos.zw / iResolution;
+            float first_seg = draw_segment(uv, start_uv, end_uv, 0.002);
+            overlay(c, vec3(0), first_seg);
+            return c;
         }
-        ray = PrepareSSRT(startInfo, endInfo);
-    }
 
-    const vec3 samplePosInTS = ray.rayPosInTS;
-    const vec3 vReflDirInTS = ray.rayDirInTS;
-    const float maxTraceDistance = ray.maxDistance;
-
-    const vec3 vReflectionEndPosInTS = samplePosInTS + vReflDirInTS * maxTraceDistance;
-
-    const vec2 m0 = getCellCoord(samplePosInTS.xy, cellCount);
-    const vec2 m1 = getCellCoord(vReflectionEndPosInTS.xy, cellCount);
-
-    vec2 q = getCellCoord(tid/iResolution, cellCount);
-    // vec2 m0 = getCellCoord(abs(pushConstants.iDebugPos.zw)/iResolution, cellCount);
-    // vec2 m1 = getCellCoord(pushConstants.iDebugPos.xy/iResolution, cellCount);
-
-    DebugPack debugPack;
-    debugPack.qi = ivec2(floor(q)); // gridcell
-    debugPack.celltouchesline = false;
-    debugPack.pixel = q;
-    debugPack.cd = 3e38;
-
-    float ray_z_debug = 0;
-    float ray_z_d_debug = 0;
-    // float l = ScanDDA2(m0, m1, debugPack);
-    float l = 0.f;
-    DDA2D_Linear dda;
-    Trace2D_Linear tr;
-    setup(m0, m1, dda, tr);
-    ivec2 n;
-    vec3 pos_prev = samplePosInTS;
-    vec2 uv_prev = tr.ro;
-    const vec3 dir_norm = vReflDirInTS * abs(maxTraceDistance / tr.t1);
-
-    bool hitSth = false;
-    bool badRay = false;
-    if(vReflDirInTS.z < 0 &&
-        vReflDirInTS.z > -pushConstants.z_clamper ) {
-            badRay = true;
-    }
-
-    float t_prev = 0.f;
-    float z_prev = samplePosInTS.z;
-    ivec2 prev_mp = dda.mp;
-    float dir_weight = 1.f;
-    {
-        float ot = dda.t;
-        int s;
-        int iter = 0;
-        while (true) {
-            bool go = traverse(dda, tr, debugPack);
-            
-            vec3 pos = samplePosInTS + (dda.t + t_prev) * .5 * dir_norm;
-            // vec2 uv = pos.xy * .5 + pos_prev.xy * .5;
-            vec2 uv = tr.ro + tr.rd * (dda.t + t_prev) * .5;
-            // float z = minimumDepthPlane(pos.xy, level, cellCount);
-            float z = pos.z;
-            float z_prevmp = minimumDepthPlane((prev_mp) / cellCount, level, cellCount);
-
-            float z_a = (samplePosInTS + dda.t* dir_norm).z;
-            float z_b = (samplePosInTS + t_prev* dir_norm).z;
-            // if(z_a <= z_prevmp && z_b >= z_prevmp) {
-            //     break;
-            // }
-            // float z = texelFetch(hi_z, dda.mp, 4).r;
-            // pos_prev = pos;
-            t_prev = dda.t;
-            uv_prev = uv;
-
-            if(debugPack.qi == prev_mp) {
-                ray_z_debug = z_prevmp;
-                ray_z_d_debug = z;
-            }
-            prev_mp = dda.mp;
-            if(!go) break;
-
-            // if(iter == pushConstants.offset_steps ) {
-            //     if (z <= z_prevmp) {
-            //         dir_weight = -1;
-            //         break;
-            //     }
-            // }
-            float thickness = z - z_prevmp;
-            if(iter>pushConstants.offset_steps 
-                && thickness >= 0
-                && thickness < pushConstants.max_thickness
-                && pushConstants.debug_ray_mode != 0) {
-                hitSth = true;
-                break;
-            }
-
-            iter++;
-            z_prev = z;
-            s = nextIsect(dda, tr);
+        const vec3 reflectionDirVS = normalize(endInfo.samplePosInVS.xyz - startInfo.samplePosInVS.xyz);
+        InitStateTS initState = InitStateTS(startInfo, sampleNormalInVS);
+        SampleTS isect;
+        uint result = FindIntersection(initState, reflectionDirVS, isect);
+        
+        if(result == EnumIsectResult_None) {
+            vec2 start_uv = pushConstants.iDebugPos.xy / iResolution;
+            vec2 end_uv = pushConstants.iDebugPos.zw / iResolution;
+            float first_seg = draw_segment(uv, start_uv, end_uv, 0.002);
+            overlay(c, vec3(0.1), first_seg);
+            return c;
         }
-        n = ivec2(0);
-        n[s] = -tr.sd[s]; // avoid negating zeroes
-        l = vec2(ot, dda.t).y;
-    }
+        else if(result == EnumIsectResult_True) {
+            vec2 start_uv = pushConstants.iDebugPos.xy / iResolution;
+            vec2 isect_uv = isect.uv;
+            vec2 end_uv = pushConstants.iDebugPos.zw / iResolution;
+            float first_seg = draw_segment(uv, start_uv, isect_uv, 0.002);
+            float second_seg = draw_segment(uv, isect_uv, end_uv, 0.002);
+            overlay(c, vec3(0,1,0), first_seg);
+            overlay(c, vec3(0,0,1), second_seg);
+            return c;
+        }
+        else if(result == EnumIsectResult_MismatchDir) {
+            vec2 start_uv = pushConstants.iDebugPos.xy / iResolution;
+            vec2 isect_uv = isect.uv;
+            vec2 end_uv = pushConstants.iDebugPos.zw / iResolution;
+            float first_seg = draw_segment(uv, start_uv, isect_uv, 0.002);
+            float second_seg = draw_segment(uv, isect_uv, end_uv, 0.002);
+            overlay(c, vec3(0,1,1), first_seg);
+            overlay(c, vec3(1,1,0), second_seg);
+            return c;
+        }
+        else if(result == EnumIsectResult_NegativeCos) {
+            vec2 start_uv = pushConstants.iDebugPos.xy / iResolution;
+            vec2 end_uv = pushConstants.iDebugPos.zw / iResolution;
+            float first_seg = draw_segment(uv, start_uv, end_uv, 0.002);
+            overlay(c, vec3(1,0,1), first_seg);
+            return c;
+        }
+        else if(result == EnumIsectResult_Err) {
+            vec2 start_uv = pushConstants.iDebugPos.xy / iResolution;
+            vec2 end_uv = pushConstants.iDebugPos.zw / iResolution;
+            float first_seg = draw_segment(uv, start_uv, end_uv, 0.002);
+            overlay(c, vec3(0.5,0.,0.), first_seg);
+            return c;
 
-
-    float z_uv = minimumDepthPlane(uv, level, cellCount);
-    vec3 c = vec3(visualizeZ(z_uv));
-    // vec3 c = mix(vec3(.9), vec3(1), float((debugPack.qi.x^debugPack.qi.y)&1)); // checks bg
-
-    if (debugPack.celltouchesline) {
-        // float z = minimumDepthPlane(vReflectionEndPosInTS.xy, 4, cellCount);
-        // c = vec3(visualizeZ(ray_z_debug));
-        // ray_z_d_debug
-        // ray_z_debug
-        c = vec3(visualizeZ(ray_z_d_debug));
-        if(pushConstants.debug_ray_mode == 1) {
-            if(badRay) {
-                c = vec3(1,1,0);
-            }
-            else if (hitSth) {
-                c.rb *= .8;
-                c.g = max(c.g, .5);
-            }
-            else {
-                c.gb *= .8;
-                c.r = max(c.r, .5);
-            }
         }
     }
-    overlay(c, vec3(0,.4,0), 1. - .5*iResolution.y/scale * seg(q, m0, m1)); // segment
+    //     // if(dot(sampleNormalInVS_End, -reflectionDirVS) < -0.001) {
+    //     //     debug_ray_status = 2;
+    //     //     debug_value = sampleNormalInVS_End;
+    //     // }
+    //     bool find_isect;
+    //         SSRay ray = PrepareSSRT(startInfo, reflectionDirVS);
+    //         // ray.minDistance = 0.01;
+    //         vec3 intersection;
+    //         if(FindIntersection_Interface(ray, intersection, config)) {
+    //             ivec2 offsetXY = abs(ivec2(intersection.xy * pushConstants.view_size) - ivec2(pushConstants.iDebugPos.zw));
+    //             if(offsetXY.x > 5 || offsetXY.y > 5) {
+    //                 hasIntersection = true;
+    //                 intersectionPos = intersection.xy;
+    //                 find_isect = false;
+    //             }
+    //             else {
+    //                 find_isect = true;
+    //             }
+    //         }
+        
+    //     float cos_1 = dot(sampleNormalInVS, reflectionDirVS);
+    //     float cos_2 = dot(sampleNormalInVS_End, -reflectionDirVS);
+    //     if(abs(dot(sampleNormalInVS_End, reflectionDirVS)) < 0.1 && !hasIntersection) {
+    //         debug_ray_status = 3;
+    //     }
+    // }
 
-    float dotsize = .05; //dot(iMouse, vec4(1)) == 0. ? .05 : .03;
-    float dotthick = .01;
-    overlay(c, vec3(0,0,.0), .5 - .5*iResolution.y/scale*(abs(debugPack.cd - dotsize)-dotthick)); //(.5 - cd / scale * R.y)); // closest intersection point
+    // float z_uv = minimumDepthPlane(uv, level, cellCount);
+    // vec3 c = vec3(visualizeZ(z_uv));
+    
+    // if(debug_ray_status != 0) {
+    //     vec3 ray_color = vec3(0);
+    //     if(debug_ray_status == 2) {
+    //         ray_color = debug_value;
+    //     }
+    //     else if (debug_ray_status == 3){
+    //         ray_color = vec3(1,1,0);
+    //     }
+    //     vec2 endPoint = pushConstants.iDebugPos.zw / iResolution;
+    //     vec2 start_uv = pushConstants.iDebugPos.xy / iResolution;
+    //     float first_seg = draw_segment(uv, start_uv, endPoint.xy, 0.002);
+
+    //     if(first_seg == 1) {
+    //         c = ray_color;
+    //     }
+    // }
+    // else if(hasIntersection) {
+    //     vec2 endPoint = pushConstants.iDebugPos.zw / iResolution;
+    //     vec2 start_uv = pushConstants.iDebugPos.xy / iResolution;
+    //     float first_seg = draw_segment(uv, start_uv, intersectionPos.xy, 0.002);
+    //     overlay(c, vec3(0,0,1), first_seg);
+    //     float second_seg = draw_segment(uv, intersectionPos.xy, endPoint.xy, 0.002);
+    //     overlay(c, vec3(1,0,0), second_seg);
+    // }
+    // else {
+    //     vec2 endPoint = pushConstants.iDebugPos.zw / iResolution;
+    //     vec2 start_uv = pushConstants.iDebugPos.xy / iResolution;
+    //     float first_seg = draw_segment(uv, start_uv, endPoint.xy, 0.002);
+    //     overlay(c, vec3(0,1,0), first_seg);
+    // }
     
     return c;
 }
@@ -906,84 +441,70 @@ vec3 showNormalCone() {
     return unpackNormal(texelFetch(normalcone_mip, cell, level).xyz);
 }
 
-vec3 showImportance() {
+vec3 calcShowImportance() {
     const vec2 uv = in_uv;
-    const uvec2 tid = uvec2(gl_FragCoord.xy);
-    const vec2 iResolution = pushConstants.view_size;
+    const uvec2 tid = uvec2(pushConstants.iDebugPos.xy);
 
-    const int level = pushConstants.mip_level;
-    const int higher_level = pushConstants.mip_level + 1;
-
-    const vec2 cellCount = vec2(512 >> level);
-    const ivec2 cell = ivec2(getCellCoord(uv, cellCount));
-    const ivec2 higher_level_cell = ivec2(getCellCoord(uv, vec2(512 >> higher_level)));
-    ivec2 xy = higher_level_cell;
-    xy *= 2;
-
-    // vec3 sampleNormalInVS;
-    // RayStartInfo startInfo;
-    // bool hasIsect = unpackVSInfo(uvec2(pushConstants.iDebugPos.xy), sampleNormalInVS, startInfo);
-    // if(!hasIsect) {
-    //     return vec3(0);
-    // }
-    
-    vec4 lum_importance = vec4(0);
-
-    int singluarity = 0;
-    int singluarity_id = 0;
-    int this_id = 0;
-    vec4 child_importance = vec4(0);
-    for (int j=0; j<4; ++j) {
-        ivec2 xy_offset = four_neighbors_pix[j];
-        float lumin_importance = texelFetch(importance_mip, xy + xy_offset, level).x;
-
-        if(xy + xy_offset == cell) {
-            this_id = j;
-        }
-        // // LC Weight estimate
-        // vec4 bbxy = texelFetch(boundingbox_mip, xy + xy_offset, level);
-        // vec4 bbnc = texelFetch(bbncpack_mip, xy + xy_offset, level);
-        // const vec3 conedir = unpackNormal(texelFetch(normalcone_mip, xy + xy_offset, level).xyz);
-        // AABB aabb = AABB(vec3(bbxy.xy, bbnc.x), vec3(bbxy.zw, bbnc.y));
-        // const NormalConeEx normal_cone = NormalConeEx(conedir, bbnc.z, bbnc.w, true);
-        // // geometry
-        // // distance
-        // float min_dist = min_distance(aabb, startInfo.samplePosInVS.xyz);
-        // float max_dist = max_distance(aabb, startInfo.samplePosInVS.xyz);
-        // float g_term = 1.f;
-        // // float g_term = (min_dist == 0) // inside the aabb?
-        // //     ? 1.f
-        // //     : geometry_term(aabb, normal_cone, startInfo.samplePosInVS.xyz, sampleNormalInVS.xyz);
-        // lumin_importance *= g_term;
-        // if(min_dist == 0) {
-        //     singluarity++;
-        //     singluarity_id = j;
-        // }
-
-        lum_importance[j] = lumin_importance;
-        // min_importance[j] = lumin_importance / (min_dist * min_dist);
-        // max_importance[j] = lumin_importance / (max_dist * max_dist);
+    InitStateTS startState;
+    bool hasIsect = unpackVSInfo(tid, startState);
+    if(!hasIsect) {
+        return vec3(0);
     }
 
-    float parent_lumin = dot(vec4(1), lum_importance);
-    if(parent_lumin == 0) return vec3(1,0,1);
-    return vec3(lum_importance[this_id] / parent_lumin);
+    SampleTS samplets;
+    samplets.xy = ivec2(uv * pushConstants.view_size);
+    samplets.uv = uv;
+    hasIsect = unpackVSInfo(samplets.xy, samplets.normalInVS, samplets.info);
+    if(!hasIsect) {
+        return vec3(0);
+    }
     
-    // if (singluarity == 1) {
-    //     min_importance = vec4(0);
-    //     min_importance[singluarity_id] = 1;
-    // }
-    // else if(singluarity > 1) {
-    //     min_importance = lum_importance;
-    // }
+    if(pushConstants.strategy == 0) {
+        float jacobian;
+        texture_sample_jacobian(uv, startState, jacobian);
+        const float pdf_gs = SampleTechPdf_CosWeight(startState, samplets);
+        return vec3(pdf_gs * jacobian) / pushConstants.iDebugPos.z;
+    }
+    else if(pushConstants.strategy == 1) {
+        float uv_pdf = sampleImportanceUV_pdf(
+            samplets.uv,
+            startState.info,
+            startState.normalInVS
+        );
+        if(isnan(uv_pdf)) uv_pdf = 0.f;
+        return vec3(uv_pdf) / pushConstants.iDebugPos.z;
+    }
+    else if(pushConstants.strategy == 2){
+        float uv_pdf = sampleImportanceUV_pdf(
+            samplets.uv,
+            startState.info,
+            startState.normalInVS
+        );
+        if(isnan(uv_pdf)) uv_pdf = 0.f;
+        float jacobian;
+        texture_sample_jacobian(uv, startState, jacobian);
+        const float pdf_gs = SampleTechPdf_CosWeight(startState, samplets);
+        return vec3(0.5 * (pdf_gs * jacobian + uv_pdf)) / pushConstants.iDebugPos.z;
+    }
+    else if(pushConstants.strategy == 3){
+        float jacobian;
+        vec3 radiance = texture_sample_jacobian(uv, startState, jacobian);
+        const float luminance = dot(radiance, vec3(1));
+        return vec3(luminance  / pushConstants.iDebugPos.w);
+    }
+    return vec3(0);
+}
 
-    // {
-    //     float min_parent = dot(vec4(1), min_importance);
-    //     float max_parent = dot(vec4(1), max_importance);
-    //     child_importance = 0.5 * (min_importance / min_parent + max_importance / max_parent);
-    // }
+vec3 showImportance() {
+    vec3 c = calcShowImportance();
+    if(isnan(c.x)) c = vec3(0);
 
+    const vec2 uv = in_uv * pushConstants.view_size;
+    const vec2 tid = vec2(pushConstants.iDebugPos.xy) + vec2(0.5);
+    float point = distance(uv, tid) < 2 ? 1 : 0;
+    overlay(c, vec3(0,1,0), point);
 
+    return c;
 }
 
 void main() {
@@ -1041,9 +562,5 @@ void main() {
     }
     else if (pushConstants.debug_mode == 7) {
         out_color = vec4(showImportance(), 1);
-    }
-    else {
-        out_color = vec4(debugMode(), 1);
-        return;
     }
 }

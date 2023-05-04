@@ -8,6 +8,8 @@ struct DrawIndexedIndirectEX {
     int     vertexOffset;
     uint    firstInstance;
     uint    geometryID;
+    uint    padding0;
+    uint    padding1;
 };
 
 #endif
