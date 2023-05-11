@@ -12,9 +12,12 @@ For now, no build tool has been set up. Just open `SIByLEngine.sln` with `Visual
 
 By default, Nvidia GPU with Turing or higher architecture is required to correctly run the engine, as vulkan hardware raytracing is defaultly used. In the future, better compatibility with CPU raytracing fallback might be supported.
 
-## Features
-- Using C++ 20 `Module` for the whole engine.
-- ...
+## Design Decisions
+- `NOT Use C++ 20 Module` for the all the modules. Although I had previously used it extensively and found it to be a great feature. Despite MSVC's support for the feature, compilation is not always stable, sometimes resulting in weird 'internal error' messages that force the process to be abandoned. Moreover, as the project grows, both IntelliSense and ReSharper struggle to provide proper code highlighting and intelligent code completions, which makes coding extremely painful. Also, analysising the project eat up all the memory quickly and get the IDE and compiler super slow... Given these challenges, I have opted to deprecate the feature.
+
+- `Only Support Vulkan Backend` for RHI module. It seems that there are some API logistic differences between Vulkan / OpenGL / DirectX. But the main reason is probably simply because I am too lazy to implement and test for all the backends for now. As Vulkan is supporting most of the features exists, I find no good reason to support other backends at this stage.
+
+- `Use Render Graph` to manage GPU pipeline. The main motivation is that Vulkan is too verbose about memory barriers. Render graph helps me to support automatic barrier insertion (within the graph) and resource management. It may also be a good idea to do automatic barrier insertion at a lower layer like RHI, which may be helpful to support a more flexible pipeline, but I am not sure with that for now.
 
 ## Modules
 - ### Core Modules
