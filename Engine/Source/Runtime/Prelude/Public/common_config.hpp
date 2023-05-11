@@ -4,9 +4,12 @@
 #define SE_EXPORT  
 #endif  // !_USE_MODULE_
 
+#include <string>
 #include <type_traits>
 
 namespace SIByL {
+SE_EXPORT struct SIByL_Config { static std::string version; };
+
 /** Combine two bitflags. */
 SE_EXPORT template <class T>
   requires std::is_enum_v<T>

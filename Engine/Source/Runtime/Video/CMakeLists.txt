@@ -20,7 +20,11 @@ set_target_properties(
 target_include_directories(${PROJECT_NAME}
         PUBLIC
         Public
-        ${CMAKE_SOURCE_DIR}/Engine/Binaries/ThirdParty/ffmpeg)
+        ${CMAKE_SOURCE_DIR}/Engine/Source/ThirdParty/ffmpeg)
 target_link_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/Engine/Binaries/ThirdParty/ffmpeg)
 target_link_libraries(${PROJECT_NAME} PRIVATE Prelude Core RHI GFX Image yaml
         PUBLIC avcodec.lib avdevice.lib avfilter.lib avformat.lib avutil.lib swresample.lib swscale.lib)
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${PROJECT_SOURCE_DIR}/Engine/Binaries/ThirdParty/ffmpeg/dll/"
+        "${EXECUTABLE_OUTPUT_PATH}/${CMAKE_BUILD_TYPE}")

@@ -24,8 +24,13 @@ target_include_directories(${PROJECT_NAME}
         ${CMAKE_SOURCE_DIR}/Engine/Source/ThirdParty/glad/include
         ${CMAKE_SOURCE_DIR}/Engine/Source/ThirdParty/glfw/include
         ${CMAKE_SOURCE_DIR}/Engine/Source/ThirdParty/vulkan/include)
-target_link_libraries(${PROJECT_NAME}
-        Prelude
-        Core
-        Math
-        Platform)
+target_link_directories(${PROJECT_NAME} PUBLIC
+        ${CMAKE_SOURCE_DIR}/Engine/Binaries/ThirdParty/glfw
+        ${CMAKE_SOURCE_DIR}/Engine/Binaries/ThirdParty/vulkan
+        )
+target_link_libraries(${PROJECT_NAME} PUBLIC Prelude Core Math Platform
+        PUBLIC vulkan-1.lib opengl32.lib)
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/Engine/Binaries/ThirdParty/vulkan/vulkan-1.dll"
+        "${EXECUTABLE_OUTPUT_PATH}/${CMAKE_BUILD_TYPE}/vulkan-1.dll")
