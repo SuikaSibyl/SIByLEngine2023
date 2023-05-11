@@ -8,9 +8,11 @@ Previous version could be find in: [SibylEngine2021](https://github.com/SuikaSib
 
 ## Builds
 
-For now, no build tool has been set up. Just open `SIByLEngine.sln` with `VisualStudio 2022` on Windows 10/11.
+Only support Windows platform and MSVC compiler for now.
 
-By default, Nvidia GPU with Turing or higher architecture is required to correctly run the engine, as vulkan hardware raytracing is defaultly used. In the future, better compatibility with CPU raytracing fallback might be supported.
+Either directly open `SIByLEngine.sln` with `VisualStudio 2022` on Windows, or use any CMake tools to open the CMake project (Visual Studio open Folder / vscode / CLion etc.).
+
+By default, Nvidia GPU with Turing or higher architecture is required to correctly run the engine, as vulkan hardware raytracing is defaultly used. In the future, better compatibility with CPU raytracing fallback might be supported. If no corresponding GPU exists, compilation should still be successful, but you should manually turn off ray-tracing-related features to run it without fatal error.
 
 ## Design Decisions
 - `NOT Use C++ 20 Module` for the all the modules. Although I had previously used it extensively and found it to be a great feature. Despite MSVC's support for the feature, compilation is not always stable, sometimes resulting in weird 'internal error' messages that force the process to be abandoned. Moreover, as the project grows, both IntelliSense and ReSharper struggle to provide proper code highlighting and intelligent code completions, which makes coding extremely painful. Also, analysising the project eat up all the memory quickly and get the IDE and compiler super slow... Given these challenges, I have opted to deprecate the feature.
