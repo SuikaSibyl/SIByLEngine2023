@@ -19,46 +19,30 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Private\Memory\SE.Core.Memory-Allocator.cpp" />
-    <ClCompile Include="Private\Memory\SE.Core.Memory-Buffer.cpp" />
-    <ClCompile Include="Private\Memory\SE.Core.Memory-MemoryArena.cpp" />
-    <ClCompile Include="Private\Memory\SE.Core.Memory-MemoryManager.cpp" />
-    <ClCompile Include="Private\Memory\SE.Core.Memory-StackAllocator.cpp" />
-    <ClCompile Include="Public\ECS\SE.Core.ECS-ECS.ixx" />
-    <ClCompile Include="Public\ECS\SE.Core.ECS-SparseSet.ixx" />
-    <ClCompile Include="Public\ECS\SE.Core.ECS.ixx" />
-    <ClCompile Include="Public\Event\SE.Core.Event-Event.ixx" />
-    <ClCompile Include="Public\Event\SE.Core.Event-Signal.ixx" />
-    <ClCompile Include="Public\Event\SE.Core.Event.ixx" />
-    <ClCompile Include="Public\IO\SE.Core.IO-SyncRW.ixx" />
-    <ClCompile Include="Public\IO\SE.Core.IO.ixx" />
-    <ClCompile Include="Public\Memory\SE.Core.Memory-BlockedArray.ixx" />
-    <ClCompile Include="Public\Memory\SE.Core.Memory-Buffer.ixx" />
-    <ClCompile Include="Public\Memory\SE.Core.Memory-DoubleEndedStackAllocator.ixx" />
-    <ClCompile Include="Public\Memory\SE.Core.Memory-Memory.ixx" />
-    <ClCompile Include="Public\Memory\SE.Core.Memory-MemoryArena.ixx" />
-    <ClCompile Include="Public\Memory\SE.Core.Memory-StackAllocator.ixx" />
-    <ClCompile Include="Public\Misc\SE.Core.Misc-Timer.ixx" />
-    <ClCompile Include="Public\Misc\SE.Core.Misc.ixx" />
-    <ClCompile Include="Public\Print\SE.Core.Log-Logger.ixx" />
-    <ClCompile Include="Public\Print\SE.Core.Log-LogManager.ixx" />
-    <ClCompile Include="Public\Print\SE.Core.Log-LogStream.ixx" />
-    <ClCompile Include="Public\Print\SE.Core.Log.ixx" />
-    <ClCompile Include="Public\Memory\SE.Core.Memory-Allocator.ixx" />
-    <ClCompile Include="Public\Memory\SE.Core.Memory-MemoryManager.ixx" />
-    <ClCompile Include="Public\Memory\SE.Core.Memory-SmartPtr.ixx" />
-    <ClCompile Include="Public\Memory\SE.Core.Memory.ixx" />
+    <ClCompile Include="Public\ECS\SE.Core.ECS.cpp" />
+    <ClCompile Include="Public\Misc\SE.Core.Misc.cpp" />
+    <ClCompile Include="Public\Memory\SE.Core.Memory.cpp" />
+    <ClCompile Include="Public\Print\SE.Core.Log.cpp" />
     <ClCompile Include="Public\Resource\SE.Core.Resource.cpp" />
-    <ClCompile Include="Public\Resource\SE.Core.Resource.ixx" />
-    <ClCompile Include="Public\System\SE.Core.System-Layer.ixx" />
-    <ClCompile Include="Public\System\SE.Core.System-Manager.ixx" />
-    <ClCompile Include="Public\System\SE.Core.System.ixx" />
-    <ClCompile Include="Public\UnitTest\SE.Core.UnitTest.ixx" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\ThirdParty\yaml\yaml.vcxproj">
       <Project>{50237cf2-0a0c-4c57-8a09-9eb617f025d6}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\Prelude\Prelude.vcxproj">
+      <Project>{fd3f74df-efdf-4ecc-bceb-0e423df4ba2f}</Project>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Public\ECS\SE.Core.ECS.hpp" />
+    <ClInclude Include="Public\Event\SE.Core.Event.hpp" />
+    <ClInclude Include="Public\IO\SE.Core.IO.hpp" />
+    <ClInclude Include="Public\Memory\SE.Core.Memory.hpp" />
+    <ClInclude Include="Public\Misc\SE.Core.Misc.hpp" />
+    <ClInclude Include="Public\Print\SE.Core.Log.hpp" />
+    <ClInclude Include="Public\Resource\SE.Core.Resource.hpp" />
+    <ClInclude Include="Public\SE.Core.hpp" />
+    <ClInclude Include="Public\System\SE.Core.System.hpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
@@ -122,13 +106,13 @@
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\yaml\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\yaml\include;$(SolutionDir)Engine\Source\Runtime\Core\Public;$(SolutionDir)Engine\Source\Runtime\Prelude\Public;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\yaml\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\yaml\include;$(SolutionDir)Engine\Source\Runtime\Core\Public;$(SolutionDir)Engine\Source\Runtime\Prelude\Public;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>

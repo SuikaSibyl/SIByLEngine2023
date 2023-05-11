@@ -15,13 +15,21 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Public\SE.RDG.RDGraph.ixx">
+    <ClInclude Include="Public\SE.RDG-DAG.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.RDG-Main.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.RDG.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Private\SE.RDG.RDGraph-DAG.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\SE.RDG.RDGraph-Main.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\SE.RDG.RDGraph-DAG.ixx">
+    <ClCompile Include="Private\SE.RDG-Main.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

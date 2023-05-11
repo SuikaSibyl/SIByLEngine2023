@@ -4,10 +4,9 @@ module;
 #include <functional>
 #include <windows.h>
 #include <WinUser.h>
+#include <Print/SE.Core.Log.hpp>
 module SE.Platform.Window:WindowWin64;
 import SE.Platform.Window;
-import SE.Utility;
-import SE.Core.Log;
 
 namespace SIByL::Platform
 {

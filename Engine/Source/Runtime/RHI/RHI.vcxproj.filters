@@ -18,23 +18,34 @@
     <ClCompile Include="..\..\ThirdParty\glad\src\glad.c">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\SE.RHI.ixx">
+    <ClCompile Include="Private\SE.RHI.RHILayer.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\SE.RHI-Interface.ixx">
+    <ClCompile Include="Private\SE.RHI-Interface.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\SE.RHI-VK.ixx">
+    <ClCompile Include="Private\SE.RHI-VK.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\SE.RHI-GL.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\SE.RHI.RHILayer.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\SE.RHI.Utility.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Public\SE.RHI-Interface.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.RHI-VK.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.RHI-GL.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.RHI.Utility.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.RHI.RHILayer.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.RHI.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

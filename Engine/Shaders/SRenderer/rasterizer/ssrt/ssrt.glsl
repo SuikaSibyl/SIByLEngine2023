@@ -67,11 +67,6 @@ struct SSRay {
     float minDistance;
 };
 
-struct DebugLog {
-    vec3 color;
-    bool normal_check;
-};
-
 struct SSRTConfig {
     bool normal_check;
 };
@@ -85,10 +80,10 @@ bool FindIntersection_HiZ(
     const vec3 vReflDirInTS = ss_ray.rayDirInTS;
     const float maxTraceDistance = ss_ray.maxDistance;
 
-    const int maxLevel = pushConstants.hiz_mip_levels - 1;
+    const int maxLevel = gUniform.hiz_mip_levels - 1;
 	
     vec2 crossStep = vec2(vReflDirInTS.x>=0 ? 1 : -1, vReflDirInTS.y>=0 ? 1 : -1);
-    vec2 crossOffset = crossStep / ivec2(pushConstants.view_size) / 128;
+    vec2 crossOffset = crossStep / ivec2(gUniform.view_size) / 128;
     crossStep = saturate(crossStep);
     
     vec3 ray = samplePosInTS.xyz;
@@ -122,7 +117,7 @@ bool FindIntersection_HiZ(
     while(
         level >= stopLevel && 
         ray.z*rayDir <= maxZ*rayDir && 
-        iter < pushConstants.max_iteration
+        iter < gUniform.max_iteration
     ) {
         // get the cell number of the current ray
 
@@ -142,7 +137,7 @@ bool FindIntersection_HiZ(
         
         float thickness = level == 0 ? (ray.z - cell_minZ) : 0;
         bool crossed = (isBackwardRay && (cell_minZ > ray.z)) 
-                    || (thickness>(pushConstants.max_thickness)) 
+                    || (thickness>(gUniform.max_thickness)) 
                     || crossedCellBoundary(oldCellIdx, newCellIdx);
         
         ivec2 xy = ivec2(getCell(tmpRay.xy, cellCount_0));
@@ -157,7 +152,7 @@ bool FindIntersection_HiZ(
                 if((cell_minZ > ray.z) && larger_than_min){
                     intersection = tmpRay;
                     if(config.normal_check) {
-                        vec3 normalNow = unpackNormal(texelFetch(ws_normal, ivec2(intersection.xy * pushConstants.view_size), 0).xyz);
+                        vec3 normalNow = unpackNormal(texelFetch(ws_normal, ivec2(intersection.xy * gUniform.view_size), 0).xyz);
                         if(dot(startNormal, normalNow) <= 0.999) {
                             return true;
                         }
@@ -169,7 +164,7 @@ bool FindIntersection_HiZ(
                 else {
                     intersection.xy = vec2(getCell(ray.xy, cellCount) + vec2(0.5))/cellCount;
                     if(config.normal_check) {
-                        vec3 normalNow = unpackNormal(texelFetch(ws_normal, ivec2(intersection.xy * pushConstants.view_size), 0).xyz);
+                        vec3 normalNow = unpackNormal(texelFetch(ws_normal, ivec2(intersection.xy * gUniform.view_size), 0).xyz);
                         if(dot(startNormal, normalNow) <= 0.999) {
                             return true;
                         }
@@ -389,8 +384,8 @@ bool FindIntersection_Linear(
 
     // // dp is the vector that moves the current ray to its next position by adding it to the current position of the ray.
     // vec3 dp = vReflectionEndPosInTS.xyz - samplePosInTS.xyz;
-    // ivec2 sampleScreenPos = ivec2(samplePosInTS.xy * pushConstants.view_size.xy);
-    // ivec2 endPosScreenPos = ivec2(vReflectionEndPosInTS.xy * pushConstants.view_size.xy);
+    // ivec2 sampleScreenPos = ivec2(samplePosInTS.xy * gUniform.view_size.xy);
+    // ivec2 endPosScreenPos = ivec2(vReflectionEndPosInTS.xy * gUniform.view_size.xy);
     // ivec2 dp2 = endPosScreenPos - sampleScreenPos;
     // const int max_dist = max(abs(dp2.x), abs(dp2.y));
     // dp /= max_dist;
@@ -400,7 +395,7 @@ bool FindIntersection_Linear(
 	// vec4 rayStartPos = rayPosInTS;
 
     // int hitIndex = -1;
-    // for(int i = 0;i<=max_dist && i<pushConstants.max_iteration; i += 4)  {
+    // for(int i = 0;i<=max_dist && i<gUniform.max_iteration; i += 4)  {
     //     float depth0 = 0;
     //     float depth1 = 0;
     //     float depth2 = 0;
@@ -418,27 +413,27 @@ bool FindIntersection_Linear(
 
     //     {   float thickness = rayPosInTS3.z - depth3;
     //         hitIndex = (thickness>=0 
-    //         && thickness < pushConstants.max_thickness
-    //         && abs(samplePosInTS.z - depth3)>pushConstants.min_thickness) ? (i+3) : hitIndex;
+    //         && thickness < gUniform.max_thickness
+    //         && abs(samplePosInTS.z - depth3)>gUniform.min_thickness) ? (i+3) : hitIndex;
     //     } {
     //         float thickness = rayPosInTS2.z - depth2;
     //         hitIndex = (thickness>=0 
-    //         && thickness < pushConstants.max_thickness
-    //         && abs(samplePosInTS.z - depth2)>pushConstants.min_thickness
+    //         && thickness < gUniform.max_thickness
+    //         && abs(samplePosInTS.z - depth2)>gUniform.min_thickness
     //         ) ? (i+2) : hitIndex;
     //         uv = vec4(rayPosInTS2.xyz, depth2);
     //     } {
     //         float thickness = rayPosInTS1.z - depth1;
     //         hitIndex = (thickness>=0 
-    //         && thickness < pushConstants.max_thickness
-    //         && abs(samplePosInTS.z - depth1)>pushConstants.min_thickness
+    //         && thickness < gUniform.max_thickness
+    //         && abs(samplePosInTS.z - depth1)>gUniform.min_thickness
     //         ) ? (i+1) : hitIndex;
     //         uv = vec4(rayPosInTS1.xyz, depth1);
     //     } {
     //         float thickness = rayPosInTS0.z - depth0;
     //         hitIndex = (thickness>=0 
-    //         && thickness < pushConstants.max_thickness
-    //         && abs(samplePosInTS.z - depth0)>pushConstants.min_thickness
+    //         && thickness < gUniform.max_thickness
+    //         && abs(samplePosInTS.z - depth0)>gUniform.min_thickness
     //         ) ? (i+0) : hitIndex;
     //         uv = vec4(rayPosInTS0.xyz, depth0);
     //     }
@@ -482,17 +477,47 @@ bool unpackVSInfo(
 
     // Unpack the normal from the texture.
     vec3 sampleNormalInWS = unpackNormal(texelFetch(ws_normal, ivec2(tid), 0).xyz);
-    sampleNormalInVS = normalize((pushConstants.TransInvViewMat * vec4(sampleNormalInWS, 0)).xyz);
+    sampleNormalInVS = normalize((gUniform.TransInvViewMat * vec4(sampleNormalInWS, 0)).xyz);
     sampleNormalInVS.y = -sampleNormalInVS.y;
     
     // From the depth, compute the position in clip space.
-    rayStartInfo.samplePosInCS =  vec4(((vec2(tid)+0.5)/pushConstants.view_size)*2-1.0f, sampleDepth, 1);
+    rayStartInfo.samplePosInCS =  vec4(((vec2(tid)+0.5)/gUniform.view_size)*2-1.0f, sampleDepth, 1);
     rayStartInfo.samplePosInCS.y *= -1;
     // From the depth, compute the position in view space.
-    rayStartInfo.samplePosInVS = pushConstants.InvProjMat * rayStartInfo.samplePosInCS;
+    rayStartInfo.samplePosInVS = gUniform.InvProjMat * rayStartInfo.samplePosInCS;
     rayStartInfo.samplePosInVS /= rayStartInfo.samplePosInVS.w;
 
-    rayStartInfo.samplePosInVS.xyz += sampleNormalInVS * 0.01f;
+    // rayStartInfo.samplePosInVS.xyz += sampleNormalInVS * 0.01f;
+    // Texture space
+    rayStartInfo.samplePosInTS = rayStartInfo.samplePosInCS.xyz;
+    rayStartInfo.samplePosInTS.xy *= vec2(0.5f, -0.5f);
+    rayStartInfo.samplePosInTS.xy += vec2(0.5f, 0.5f);
+    return true;
+}
+
+bool unpackVSInfo_vec(
+    in const vec2 uv,
+    out vec3 sampleNormalInVS,
+    out RayStartInfo rayStartInfo
+) {
+    // Unpack the depth from the texture.
+    ivec2 tid = ivec2(floor(uv * gUniform.view_size));
+    float sampleDepth = texelFetch(hi_z, ivec2(tid), 0).x;
+    if(sampleDepth == 1) return false;
+
+    // Unpack the normal from the texture.
+    vec3 sampleNormalInWS = unpackNormal(texelFetch(ws_normal, ivec2(tid), 0).xyz);
+    sampleNormalInVS = normalize((gUniform.TransInvViewMat * vec4(sampleNormalInWS, 0)).xyz);
+    sampleNormalInVS.y = -sampleNormalInVS.y;
+    
+    // From the depth, compute the position in clip space.
+    rayStartInfo.samplePosInCS =  vec4(uv*2-1.0f, sampleDepth, 1);
+    rayStartInfo.samplePosInCS.y *= -1;
+    // From the depth, compute the position in view space.
+    rayStartInfo.samplePosInVS = gUniform.InvProjMat * rayStartInfo.samplePosInCS;
+    rayStartInfo.samplePosInVS /= rayStartInfo.samplePosInVS.w;
+
+    // rayStartInfo.samplePosInVS.xyz += sampleNormalInVS * 0.01f;
     // Texture space
     rayStartInfo.samplePosInTS = rayStartInfo.samplePosInCS.xyz;
     rayStartInfo.samplePosInTS.xy *= vec2(0.5f, -0.5f);
@@ -511,10 +536,10 @@ bool ComputePosAndReflection(
     float sampleDepth = texelFetch(hi_z, ivec2(tid), 0).x;
     if(sampleDepth == 1) return false;
 
-    vec4 samplePosInCS =  vec4(((vec2(tid)+0.5)/pushConstants.view_size)*2-1.0f, sampleDepth, 1);
+    vec4 samplePosInCS =  vec4(((vec2(tid)+0.5)/gUniform.view_size)*2-1.0f, sampleDepth, 1);
     samplePosInCS.y *= -1;
 
-    vec4 samplePosInVS = pushConstants.InvProjMat * samplePosInCS;
+    vec4 samplePosInVS = gUniform.InvProjMat * samplePosInCS;
     samplePosInVS /= samplePosInVS.w;
 
     vec3 vCamToSampleInVS = normalize(samplePosInVS.xyz);
@@ -522,7 +547,7 @@ bool ComputePosAndReflection(
 
     vec4 vReflectionEndPosInVS = samplePosInVS + vReflectionInVS * 1000;
     vReflectionEndPosInVS /= (vReflectionEndPosInVS.z < 0 ? vReflectionEndPosInVS.z : 1);
-    vec4 vReflectionEndPosInCS = pushConstants.ProjMat * vec4(vReflectionEndPosInVS.xyz, 1);
+    vec4 vReflectionEndPosInCS = gUniform.ProjMat * vec4(vReflectionEndPosInVS.xyz, 1);
     vReflectionEndPosInCS /= vReflectionEndPosInCS.w;
     vec3 vReflectionDir = normalize((vReflectionEndPosInCS - samplePosInCS).xyz);
 
@@ -552,7 +577,7 @@ SSRay PrepareSSRT(
     const float signRefl = vReflectionInVS.z < 0 ? -1 : 1;
     vec4 vReflectionEndPosInVS = startInfo.samplePosInVS + vReflectionInVS * 10 * signRefl;
     // vReflectionEndPosInVS /= (vReflectionEndPosInVS.z < 0 ? vReflectionEndPosInVS.z : 1);
-    vec4 vReflectionEndPosInCS = pushConstants.ProjMat * vec4(vReflectionEndPosInVS.xyz, 1);
+    vec4 vReflectionEndPosInCS = gUniform.ProjMat * vec4(vReflectionEndPosInVS.xyz, 1);
     vReflectionEndPosInCS /= vReflectionEndPosInCS.w;
     vec3 vReflectionDir = normalize((vReflectionEndPosInCS - startInfo.samplePosInCS).xyz * signRefl);
     // Transform to texture space    
@@ -593,3 +618,135 @@ SSRay PrepareSSRT(
     return ray;
 }
 
+
+
+/*****************************************************
+**               Find Ray Intersection              **
+*****************************************************/
+
+bool FindIntersection_DDA(
+    in const SSRay ray,
+    out vec3 intersection,
+    inout SSRTConfig config
+) {
+    const vec2 cellCount = getCellCount(0);
+
+    const vec3 vReflectionEndPosInTS = ray.rayPosInTS + ray.rayDirInTS * ray.maxDistance;
+    const vec2 m0 = getCellCoord(ray.rayPosInTS.xy, cellCount);
+    const vec2 m1 = getCellCoord(vReflectionEndPosInTS.xy, cellCount);
+
+    // DDA setup
+    DDA2D_Linear dda;
+    Trace2D_Linear tr;
+    setup(m0, m1, dda, tr);
+    nextIsect(dda, tr);
+    
+    const vec3 dir_norm = ray.rayDirInTS * abs(ray.maxDistance / tr.t1);
+    
+    int iter = 0;
+    float z_cell = texelFetch(hi_z, dda.mp, 0).r;
+    float z_cell_prev = z_cell;
+    vec3 point = ray.rayPosInTS + dda.t * dir_norm;
+
+    while (traverse(dda, tr)) {
+        if(iter > gUniform.max_iteration) break;
+        
+        // take one step forward
+        nextIsect(dda, tr);
+
+        if(dda.mp.x < 0 || dda.mp.x >= cellCount.x || dda.mp.y < 0 || dda.mp.y >= cellCount.y) {
+            return false;
+        }
+
+        const vec3 point_new = ray.rayPosInTS + dda.t * dir_norm;
+        const float z_old = point.z;
+        const float z_new = point_new.z;
+        
+        if(iter > 1) {
+            // if(
+            //     (z_cell_prev != 1 && z_cell != 1) &&
+            //     (z_cell_prev - z_old) * (z_cell - z_old) < 0) {
+            //     // Find intersection
+            //     intersection = 0.5 * (point_new + point);
+            //     return true;
+            // }
+            if((z_cell - z_old) * (z_cell - z_new) < 0) {
+                // Find intersection
+                intersection = 0.5 * (point_new + point);
+                return true;
+            }
+        }
+        // update cell_z
+        z_cell_prev = z_cell;
+        z_cell = texelFetch(hi_z, dda.mp, 0).r;
+        point = point_new;
+        iter++;
+    }
+    
+    return false;
+}
+
+bool FindOcclusion_DDA(
+    in const SSRay ray,
+    in const vec2 end_uv,
+    out vec3 intersection,
+    inout SSRTConfig config
+) {
+    const vec2 cellCount = getCellCount(0);
+
+    const vec3 vReflectionEndPosInTS = ray.rayPosInTS + ray.rayDirInTS * ray.maxDistance;
+    const vec2 m0 = getCellCoord(ray.rayPosInTS.xy, cellCount);
+    const vec2 m1 = getCellCoord(end_uv, cellCount);
+
+    // DDA setup
+    DDA2D_Linear dda;
+    Trace2D_Linear tr;
+    setup(m0, m1, dda, tr);
+    nextIsect(dda, tr);
+    
+    const vec3 dir_norm = ray.rayDirInTS * abs(ray.maxDistance / tr.t1);
+    
+    int iter = 0;
+    float z_cell = texelFetch(hi_z, dda.mp, 0).r;
+    float z_cell_prev = z_cell;
+    vec3 point = ray.rayPosInTS + dda.t * dir_norm;
+
+    while (traverse(dda, tr)) {
+        if(iter > gUniform.max_iteration) break;
+        
+        // take one step forward
+        nextIsect(dda, tr);
+
+        if(dda.mp.x < 0 || dda.mp.x >= cellCount.x || dda.mp.y < 0 || dda.mp.y >= cellCount.y) {
+            return false;
+        }
+
+        const vec3 point_new = ray.rayPosInTS + dda.t * dir_norm;
+        const float z_old = point.z;
+        const float z_new = point_new.z;
+        
+        if(iter > 1) {
+            // if(
+            //     (z_cell_prev != 1 && z_cell != 1) &&
+            //     (z_cell_prev - z_old) * (z_cell - z_old) < 0) {
+            //     // Find intersection
+            //     intersection = 0.5 * (point_new + point);
+            //     return true;
+            // }
+            if((z_cell - z_old) * (z_cell - z_new) < 0) {
+                // Find intersection
+                const float a = abs(z_cell - z_old);
+                const float b = abs(z_cell - z_new);
+                intersection = (point * b + point_new * a) / (a + b);
+                return true;
+            }
+        }
+        // update cell_z
+        z_cell_prev = z_cell;
+        z_cell = texelFetch(hi_z, dda.mp, 0).r;
+        point = point_new;
+        iter++;
+    }
+    
+    return false;
+}

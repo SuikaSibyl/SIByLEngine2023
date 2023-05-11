@@ -15,7 +15,12 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Public\SE.Editor.Config.ixx">
+    <ClInclude Include="Public\SE.Editor.Config.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Public\SE.Editor.Config.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

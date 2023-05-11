@@ -1,9 +1,9 @@
 module;
 #include <string>
 #include <glfw3.h>
+#include <Event/SE.Core.Event.hpp>
 export module SE.Platform.Window:WindowGLFW;
 import :Window;
-import SE.Core.Event;
 
 namespace SIByL::Platform
 {

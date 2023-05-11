@@ -5,8 +5,8 @@
       "name": "windows-base",
       "hidden": true,
       "generator": "Visual Studio 17 2022",
-      "binaryDir": "${sourceDir}/Engine/Bin/Source/${presetName}",
-      "installDir": "${sourceDir}/Engine/Bin-Int/${presetName}",
+      "binaryDir": "${sourceDir}/Engine/Binaries-Int/CmakeBin/${presetName}",
+      "installDir": "${sourceDir}/Engine/Binaries-Int/${presetName}",
       "cacheVariables": {
       },
       "condition": {

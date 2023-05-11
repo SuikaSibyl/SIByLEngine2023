@@ -1,86 +1,6 @@
 #ifndef _HEADER_SSRT_SAMPLER_
 #define _HEADER_SSRT_SAMPLER_
 
-
-/*****************************************************
-**               Find Ray Intersection              **
-*****************************************************/
-
-bool FindIntersection_DDA(
-    in const SSRay ray,
-    out vec3 intersection,
-    inout SSRTConfig config
-) {
-    const vec2 cellCount = getCellCount(0);
-
-    const vec3 vReflectionEndPosInTS = ray.rayPosInTS + ray.rayDirInTS * ray.maxDistance;
-    const vec2 m0 = getCellCoord(ray.rayPosInTS.xy, cellCount);
-    const vec2 m1 = getCellCoord(vReflectionEndPosInTS.xy, cellCount);
-
-    // DDA setup
-    DDA2D_Linear dda;
-    Trace2D_Linear tr;
-    setup(m0, m1, dda, tr);
-    nextIsect(dda, tr);
-    
-    const vec3 dir_norm = ray.rayDirInTS * abs(ray.maxDistance / tr.t1);
-    
-    int iter = 0;
-    float z_cell = texelFetch(hi_z, dda.mp, 0).r;
-    float z_cell_prev = z_cell;
-    vec3 point = ray.rayPosInTS + dda.t * dir_norm;
-
-    while (traverse(dda, tr)) {
-        if(iter > pushConstants.max_iteration) break;
-        
-        // take one step forward
-        nextIsect(dda, tr);
-
-        if(dda.mp.x < 0 || dda.mp.x >= cellCount.x || dda.mp.y < 0 || dda.mp.y >= cellCount.y) {
-            return false;
-        }
-
-        const vec3 point_new = ray.rayPosInTS + dda.t * dir_norm;
-        const float z_old = point.z;
-        const float z_new = point_new.z;
-        
-        if(iter > 5) {
-            if(
-                (z_cell_prev != 1 && z_cell != 1) &&
-                (z_cell_prev - z_old) * (z_cell - z_old) < 0) {
-                // Find intersection
-                intersection = 0.5 * (point_new + point);
-                return true;
-            }
-            if((z_cell - z_old) * (z_cell - z_new) < 0) {
-                // Find intersection
-                intersection = 0.5 * (point_new + point);
-                return true;
-            }
-        }
-        // update cell_z
-        z_cell_prev = z_cell;
-        z_cell = texelFetch(hi_z, dda.mp, 0).r;
-        point = point_new;
-        iter++;
-    }
-    
-    return false;
-}
-
-bool FindIntersection_Interface(
-    in const SSRay ray,
-    out vec3 intersection,
-    inout SSRTConfig config
-) {
-    if(pushConstants.debug_ray_mode == 0) {
-        return FindIntersection_HiZ(ray, intersection, config);
-    }
-    else {
-        return FindIntersection_DDA(ray, intersection, config);
-    }
-}
-
 /*****************************************************
 **              Interface Definition                **
 *****************************************************/
@@ -106,6 +26,12 @@ bool unpackVSInfo(
     return unpackVSInfo(tid, state.normalInVS, state.info);
 }
 
+bool unpackVSInfo_Vec(
+    in const vec2 uv,
+    out InitStateTS state
+) {
+    return unpackVSInfo_vec(uv, state.normalInVS, state.info);
+}
 /*****************************************************
 **                        Ray                       **
 *****************************************************/
@@ -132,19 +58,59 @@ uint FindIntersection(
 
     vec3 intersection;
     if(FindIntersection_Interface(ray, intersection, config)) {
-        isect.xy = ivec2(intersection.xy * pushConstants.view_size);
+        isect.xy = ivec2(intersection.xy * gUniform.view_size);
         isect.uv = intersection.xy;
         bool hasIsect = unpackVSInfo(isect.xy, isect.normalInVS, isect.info);
         if(!hasIsect) {
             return EnumIsectResult_Err;
         }
-        const vec3 actualDir = normalize((isect.info.samplePosInVS - state.info.samplePosInVS).xyz);
-        if(dot(actualDir, rayDirInVS) < MatchDirectionThreshold) {
-            return EnumIsectResult_MismatchDir;
+        // const vec3 actualDir = normalize((isect.info.samplePosInVS - state.info.samplePosInVS).xyz);
+        // if(dot(actualDir, rayDirInVS) < MatchDirectionThreshold) {
+        //     return EnumIsectResult_MismatchDir;
+        // }
+        if(dot(isect.normalInVS, -rayDirInVS) < 0.) {
+        // || dot(rayDirInVS, actualDir) < 0.) {
+            return EnumIsectResult_NegativeCos;
         }
+        return EnumIsectResult_True;
+    }
+    return EnumIsectResult_None;
+}
+
+
+uint FindOcclusion(
+    in const InitStateTS beg_state,
+    in const InitStateTS end_state,
+    out SampleTS isect
+) {
+    const float NormalCheckThreshold = 1;
+    const float MatchDirectionThreshold = 0.999;
+    SSRTConfig config = SSRTConfig(false);
+    
+    vec3 rayDirInVS = end_state.info.samplePosInVS.xyz - beg_state.info.samplePosInVS.xyz;
+    const float dist = length(rayDirInVS);
+    rayDirInVS = normalize(rayDirInVS);
+
+    SSRay ray = PrepareSSRT(beg_state.info, rayDirInVS);
+    const float NdL = dot(beg_state.normalInVS, rayDirInVS);
+    if(NdL < 0.) return EnumIsectResult_NegativeCos;
+    else if(NdL < NormalCheckThreshold) config.normal_check = true;
+
+    vec3 intersection;
+    if(FindOcclusion_DDA(ray, end_state.info.samplePosInTS.xy, intersection, config)) {
+        isect.xy = ivec2(intersection.xy * gUniform.view_size);
+        isect.uv = intersection.xy;
+        bool hasIsect = unpackVSInfo(isect.xy, isect.normalInVS, isect.info);
+        if(!hasIsect) {
+            return EnumIsectResult_Err;
+        }
+        // const vec3 actualDir = normalize((isect.info.samplePosInVS - state.info.samplePosInVS).xyz);
+        // if(dot(actualDir, rayDirInVS) < MatchDirectionThreshold) {
+        //     return EnumIsectResult_MismatchDir;
+        // }
         if(dot(isect.normalInVS, -rayDirInVS) < 0.
-        || dot(isect.normalInVS, -actualDir) < 0.
-        || dot(rayDirInVS, actualDir) < 0.) {
+        || dot(-rayDirInVS, vec3(0,0,-1)) < 0.) {
+        // || dot(rayDirInVS, actualDir) < 0.) {
             return EnumIsectResult_NegativeCos;
         }
         return EnumIsectResult_True;
@@ -276,7 +242,7 @@ vec4 ComputeChildNodeProb(
     in const vec3 sampleNormalInVS
 ) {
     vec4 child_importance = vec4(0);
-    if(pushConstants.lightcut_mode == 0) {
+    if(gUniform.lightcut_mode == 0) {
         for (int j=0; j<4; ++j) {
             ivec2 xy_offset = four_neighbors_pix[j];
             float lumin_importance = texelFetch(importance_mip, xy + xy_offset, mip_level).x;
@@ -285,7 +251,7 @@ vec4 ComputeChildNodeProb(
         const float sum = dot(vec4(1), child_importance);
         child_importance /= sum;
     }
-    else if(pushConstants.lightcut_mode >= 1 && pushConstants.lightcut_mode <= 6) {
+    else if(gUniform.lightcut_mode >= 1 && gUniform.lightcut_mode <= 6) {
         vec4 lum_importance = vec4(0);
         vec4 min_importance = vec4(0);
         vec4 max_importance = vec4(0);
@@ -308,18 +274,18 @@ vec4 ComputeChildNodeProb(
             float min_dist = min_distance(aabb, startInfo.samplePosInVS.xyz);
             float max_dist = max_distance(aabb, startInfo.samplePosInVS.xyz);
             float g_term = 1.f;
-            if(pushConstants.lightcut_mode == 2) {
+            if(gUniform.lightcut_mode == 2) {
                 g_term = (min_dist == 0) // inside the aabb?
                     ? 1.f
                     : geometry_term(aabb, normal_cone, startInfo.samplePosInVS.xyz, sampleNormalInVS.xyz);
             }
-            else if(pushConstants.lightcut_mode == 3 || pushConstants.lightcut_mode == 4) {
+            else if(gUniform.lightcut_mode == 3 || gUniform.lightcut_mode == 4) {
                 if(dot(normal_cone.direction, sampleNormalInVS.xyz) > 0.999
                  && normal_cone.theta_o < 0.01) {
                     g_term = 0.f;
                 }
             }
-            else if(pushConstants.lightcut_mode == 5) {
+            else if(gUniform.lightcut_mode == 5) {
                 const float cdn = dot(normal_cone.direction, sampleNormalInVS.xyz);
                 if(cdn > 0.999 && normal_cone.theta_o < 0.01) {
                     g_term = 0.f;
@@ -340,7 +306,7 @@ vec4 ComputeChildNodeProb(
             max_importance[j] = lumin_importance / (max_dist * max_dist);
         }
 
-        if(pushConstants.lightcut_mode == 3 || pushConstants.lightcut_mode == 5) {
+        if(gUniform.lightcut_mode == 3 || gUniform.lightcut_mode == 5) {
             float parent = dot(vec4(1), lum_importance);
             if(parent == 0) child_importance = vec4(0);
             else child_importance = lum_importance / parent;
@@ -359,7 +325,7 @@ vec4 ComputeChildNodeProb(
                 child_importance = 0.5 * (min_importance / min_parent + max_importance / max_parent);
             }
 
-            if(pushConstants.lightcut_mode == 6) {
+            if(gUniform.lightcut_mode == 6) {
                 float lum_parent = dot(vec4(1), lum_importance);
                 lum_importance /= lum_parent;
                 child_importance = lum_importance - 0.2 * child_importance;
@@ -369,7 +335,7 @@ vec4 ComputeChildNodeProb(
             }
         }
     }
-    else if(pushConstants.lightcut_mode == 4) {
+    else if(gUniform.lightcut_mode == 4) {
         vec4 lum_importance = vec4(0);
         vec4 min_importance = vec4(0);
         vec4 max_importance = vec4(0);
@@ -392,7 +358,7 @@ vec4 ComputeChildNodeProb(
             float min_dist = min_distance(aabb, startInfo.samplePosInVS.xyz);
             float max_dist = max_distance(aabb, startInfo.samplePosInVS.xyz);
             float g_term = 1.f;
-            if(pushConstants.lightcut_mode == 2) {
+            if(gUniform.lightcut_mode == 2) {
                 g_term = (min_dist == 0) // inside the aabb?
                     ? 1.f
                     : geometry_term(aabb, normal_cone, startInfo.samplePosInVS.xyz, sampleNormalInVS.xyz);
@@ -441,7 +407,7 @@ vec2 sampleImportanceUV_LC_v0(
     float p = 1.f;
     float pixel_size = 1. / 2;
     
-    for (int i = 0; i < pushConstants.is_depth; ++i) {
+    for (int i = 0; i < gUniform.is_depth; ++i) {
         pixel_size /= 2;    // half pixel size
         mip_level--; // next mip level
         xy *= 2; // sample next level
@@ -494,6 +460,97 @@ vec2 sampleImportanceUV_LC_v0(
     return uv;
 }
 
+vec3 SS2WS(in const vec2 xy, in const float z) {
+    const vec4 posInCS =  vec4((xy/512)*2-1.0f, z, 1) * vec4(1,1,1,1);
+    vec4 posInVS = gUniform.InvProjMat * posInCS;
+    posInVS /= posInVS.w;
+    const vec4 posInWS = transpose(gUniform.TransInvViewMat) * vec4(posInVS.xyz, 1.0);
+    return posInWS.xyz;
+}
+
+vec2 sampleImportanceUV_LC_v0_v1(
+    inout uint RNG,
+    out float probability,
+    in const RayStartInfo startInfo,
+    in const vec3 sampleNormalInVS
+) {
+    // gImportanceMIP
+    int mip_level = 9;
+    vec2 uv = vec2(0.5, 0.5);
+    ivec2 xy = ivec2(0);
+
+    float p = 1.f;
+    float pixel_size = 1. / 2;
+    
+    for (int i = 0; i < gUniform.is_depth; ++i) {
+        pixel_size /= 2;    // half pixel size
+        mip_level--; // next mip level
+        xy *= 2; // sample next level
+
+        // sample next level
+        float rnd = UniformFloat(RNG);
+        float accum = 0.f;
+        int last_non_zero = -1;
+        float last_non_zero_imp = 0;
+        float last_non_zero_pdf = 0;
+
+        vec4 child_importance = ComputeChildNodeProb(xy, mip_level, startInfo, sampleNormalInVS);
+
+        for (int j=0; j<4; ++j) {
+            vec2 uv_offset = four_neighbors[j] * pixel_size;
+            ivec2 xy_offset = four_neighbors_pix[j];
+            float importance = child_importance[j];
+            float nimportance = importance;
+            accum += nimportance;
+            
+            if(nimportance > 0) {
+                last_non_zero = j;
+                last_non_zero_pdf = nimportance;
+                last_non_zero_imp = importance;
+            }
+
+            if(rnd < accum) {
+                uv = uv + uv_offset;
+                xy = xy + xy_offset;
+                p = p * nimportance;
+                break;
+            }
+            else if(j==3 && last_non_zero!=-1) {
+                uv = uv + four_neighbors[last_non_zero] * pixel_size;
+                xy = xy + four_neighbors_pix[last_non_zero];
+                p = p * last_non_zero_pdf;
+                break;
+            }
+            else {
+                // should not happen...
+            }
+        }
+    }
+
+    for(int i=gUniform.is_depth; i<9; ++i) {
+        p /= 4;
+    }
+
+    vec2 uv_pertub = vec2(UniformFloat(RNG), UniformFloat(RNG)); // (0,1)
+    uv_pertub = vec2(-1, -1) + uv_pertub * 2; // (-1, 1)
+    uv += uv_pertub * pixel_size;
+
+    ivec2 fi_xy = ivec2(uv * 512);
+    {   // The depth value of the pixel:
+        const float z = texelFetch(hi_z, fi_xy, 0).r;
+        const bool is_valid = (z < 1.0) ? true : false;
+        // The position of the pixel in world space:
+        const vec3 posInWS_0 = is_valid ? SS2WS(fi_xy + vec2(0, 0), z) : vec3(0.0);
+        const vec3 posInWS_1 = is_valid ? SS2WS(fi_xy + vec2(0, 1), z) : vec3(0.0);
+        const vec3 posInWS_2 = is_valid ? SS2WS(fi_xy + vec2(1, 0), z) : vec3(0.0);
+        const float area = length(cross(posInWS_1 - posInWS_0, posInWS_2 - posInWS_0));
+        p /= area;
+    }
+
+    probability = p;
+    return uv;
+}
+
 float sampleImportanceUV_pdf(
     in const vec2 sample_uv,
     in const RayStartInfo startInfo,
@@ -508,7 +565,7 @@ float sampleImportanceUV_pdf(
     float p = 1.f;
     float pixel_size = 1. / 2;
     
-    for (int i = 0; i < pushConstants.is_depth; ++i) {
+    for (int i = 0; i < gUniform.is_depth; ++i) {
         pixel_size /= 2;    // half pixel size
         mip_level--; // next mip level
         xy *= 2; // sample next level
@@ -543,13 +600,13 @@ float jacobian_as2ss(
     out float ss2ss_pdf
 ) {    
     const vec2 sample_uv = samplets.uv;
-    vec3 pix_position = gCamera.cameraW
-                + (-0.5 + sample_uv.x) * 2 * gCamera.cameraU
-                + (-0.5 + sample_uv.y) * 2 * gCamera.cameraV;
+    vec3 pix_position = globalUniform.cameraData.cameraW
+                + (-0.5 + sample_uv.x) * 2 * globalUniform.cameraData.cameraU
+                + (-0.5 + sample_uv.y) * 2 * globalUniform.cameraData.cameraV;
     vec3 pix_dir = normalize(pix_position);
-    float cos_0 = max(dot(-pix_dir, -normalize(gCamera.cameraW)), 0);
+    float cos_0 = max(dot(-pix_dir, -normalize(globalUniform.cameraData.cameraW)), 0);
     float r_0 = length(pix_position);
-    float area_0 = 4 * length(gCamera.cameraU) * length(gCamera.cameraV);
+    float area_0 = 4 * length(globalUniform.cameraData.cameraU) * length(globalUniform.cameraData.cameraV);
     float jacobian_0 = cos_0 * area_0 / (r_0 * r_0);
 
     float dist_1 = length(samplets.info.samplePosInVS.xyz);
@@ -584,7 +641,7 @@ vec3 texture_sample_jacobian(
     area_prob = 0;
     
     InitStateTS endState;
-    bool hasIsect = unpackVSInfo(uvec2(sample_uv * pushConstants.view_size), endState);
+    bool hasIsect = unpackVSInfo_Vec(sample_uv, endState);
 
     if (!hasIsect) {
         return vec3(0);
@@ -596,36 +653,37 @@ vec3 texture_sample_jacobian(
 
     {
         SampleTS isect;
-        uint result = FindIntersection(initState, reflectionDirVS, isect);
-        if(result == EnumIsectResult_True) {
-            ivec2 offsetXY = abs(isect.xy - ivec2(sample_uv * pushConstants.view_size));
-            InitStateTS realEndState;
-            unpackVSInfo(isect.xy, realEndState);
-            if(offsetXY.x > 5 || offsetXY.y > 5) {
-                return vec3(0);
-            }
-            sample_color = texelFetch(di, ivec2(sample_uv * pushConstants.view_size), 0).xyz;
+        uint result = FindOcclusion(initState, endState, isect);
+        if(result == EnumIsectResult_None) {
+            // ivec2 offsetXY = abs(isect.xy - ivec2(sample_uv * gUniform.view_size));
+            // InitStateTS realEndState;
+            // unpackVSInfo(isect.xy, realEndState);
+            // if(offsetXY.x > 1 || offsetXY.y > 1) {
+            //     return vec3(0);
+            // }
         }
         else {
             return vec3(0);
         }
     }
 
-    vec3 pix_position = gCamera.cameraW
-                + (-0.5 + sample_uv.x) * 2 * gCamera.cameraU
-                + (-0.5 + sample_uv.y) * 2 * gCamera.cameraV;
+    sample_color = texelFetch(di, ivec2(sample_uv * gUniform.view_size), 0).xyz;
+    vec3 pix_position = globalUniform.cameraData.cameraW
+                + (-0.5 + sample_uv.x) * 2 * globalUniform.cameraData.cameraU
+                + (-0.5 + sample_uv.y) * 2 * globalUniform.cameraData.cameraV;
     vec3 pix_dir = normalize(pix_position);
-    float cos_0 = max(dot(-pix_dir, -normalize(gCamera.cameraW)), 0);
+    float cos_0 = max(dot(-pix_dir, -normalize(globalUniform.cameraData.cameraW)), 0);
     float r_0 = length(pix_position);
-    float area_0 = 4 * length(gCamera.cameraU) * length(gCamera.cameraV);
+    float area_0 = 4 * length(globalUniform.cameraData.cameraU) * length(globalUniform.cameraData.cameraV);
     float jacobian_0 = cos_0 * area_0 / (r_0 * r_0);
 
     float dist_1 = length(endState.info.samplePosInVS.xyz);
     vec3 dir_1 = normalize(endState.info.samplePosInVS.xyz);
     float cos_1 = max(dot(endState.normalInVS, -dir_1), 0);
     float jacobian_1 = jacobian_0 * (dist_1 * dist_1) / cos_1;
-
-    float cos_2 = max(dot(endState.normalInVS, -reflectionDirVS), 0);
+    
+    if(dot(endState.normalInVS, -reflectionDirVS) < 0) return vec3(0);
+    float cos_2 = max(dot(vec3(0,0,-1), -reflectionDirVS), 0);
     float dist_2 = max(length(endState.info.samplePosInVS - initState.info.samplePosInVS), 0);
 
     // vec3 sample_color = texture(di, sample_uv).xyz;
@@ -639,6 +697,124 @@ vec3 texture_sample_jacobian(
 
         return sample_color * jacobian_2 * cos_3;
     }
+    return vec3(0);
+}
+
+float g_term(
+    in const vec2 sample_uv,
+    in const InitStateTS initState,
+    out float area_prob
+) {
+    area_prob = 0;
+    
+    InitStateTS endState;
+    bool hasIsect = unpackVSInfo_Vec(sample_uv, endState);
+
+    if (!hasIsect) {
+        return (0);
+    }
+
+    // check visibility
+    vec3 sample_color = vec3(0);
+    vec3 reflectionDirVS = normalize(endState.info.samplePosInVS.xyz - initState.info.samplePosInVS.xyz);
+
+    {
+        SampleTS isect;
+        uint result = FindOcclusion(initState, endState, isect);
+        if(result == EnumIsectResult_None) {
+         }
+        else {
+            return 0;
+        }
+    }
+    
+    if(dot(endState.normalInVS, -reflectionDirVS) < 0) return 0;
+    float cos_2 = max(dot(vec3(0,0,-1), -reflectionDirVS), 0);
+    float dist_2 = max(length(endState.info.samplePosInVS - initState.info.samplePosInVS), 0);
+    return cos_2 / (dist_2 * dist_2);
+}
+
+vec2 sampleImportanceUV_v1(
+    inout uint RNG,
+    out float probability
+) {
+    // gImportanceMIP
+    int mip_level = 9;
+    vec2 uv = vec2(0.5, 0.5);
+    ivec2 xy = ivec2(0);
+
+    float p = 1.f;
+    float pixel_size = 1. / 2;
+    
+    for (int i = 0; i < gUniform.is_depth; ++i) {
+        pixel_size /= 2;    // half pixel size
+        mip_level--; // next mip level
+        xy *= 2; // sample next level
+
+        // sample next level
+        float rnd = UniformFloat(RNG);
+        float accum = 0.f;
+        int last_non_zero = -1;
+        float last_non_zero_imp = 0;
+        float last_non_zero_pdf = 0;
+    
+        vec4 child_importance;
+        {   for (int j=0; j<4; ++j) {
+                ivec2 xy_offset = four_neighbors_pix[j];
+                float lumin_importance = texelFetch(importance_mip, xy + xy_offset, mip_level).x;
+                child_importance[j] = lumin_importance;
+            }
+            const float sum = dot(vec4(1), child_importance);
+            child_importance /= sum;
+        }
+        for (int j=0; j<4; ++j) {
+            vec2 uv_offset = four_neighbors[j] * pixel_size;
+            ivec2 xy_offset = four_neighbors_pix[j];
+            float importance = child_importance[j];
+            float nimportance = importance;
+            accum += nimportance;
+            
+            if(nimportance > 0) {
+                last_non_zero = j;
+                last_non_zero_pdf = nimportance;
+                last_non_zero_imp = importance;
+            }
+
+            if(rnd < accum) {
+                uv = uv + uv_offset;
+                xy = xy + xy_offset;
+                p = p * nimportance;
+                break;
+            }
+            else if(j==3 && last_non_zero!=-1) {
+                uv = uv + four_neighbors[last_non_zero] * pixel_size;
+                xy = xy + four_neighbors_pix[last_non_zero];
+                p = p * last_non_zero_pdf;
+                break;
+            }
+            else {
+                // should not happen...
+            }
+        }
+        // p *= 4;
+    }
+
+
+    // The depth value of the pixel:
+    const float z = texelFetch(hi_z, xy, 0).r;
+    const bool is_valid = (z < 1.0) ? true : false;
+    // The position of the pixel in world space:
+    const vec3 posInWS_0 = is_valid ? SS2WS(xy + vec2(0, 0), z) : vec3(0.0);
+    const vec3 posInWS_1 = is_valid ? SS2WS(xy + vec2(0, 1), z) : vec3(0.0);
+    const vec3 posInWS_2 = is_valid ? SS2WS(xy + vec2(1, 0), z) : vec3(0.0);
+    const float area = length(cross(posInWS_1 - posInWS_0, posInWS_2 - posInWS_0));
+    p /= area;
+    
+    vec2 uv_pertub = vec2(UniformFloat(RNG), UniformFloat(RNG)); // (0,1)
+    uv_pertub = vec2(-1, -1) + uv_pertub * 2; // (-1, 1)
+    uv += uv_pertub * pixel_size;
+    probability = p;
+    return uv;
 }
 
 SampleTS SampleTech_LightCut(
@@ -646,18 +822,101 @@ SampleTS SampleTech_LightCut(
     inout uint RNG
 ) {
     SampleTS samplets;
+    samplets.radiance = vec3(0);
 
     float sample_uv_pdf;
-    vec2 sample_uv = sampleImportanceUV_LC_v0(RNG, sample_uv_pdf, state.info, state.normalInVS);
+    // vec2 sample_uv = sampleImportanceUV_LC_v0_v1(RNG, sample_uv_pdf, state.info, state.normalInVS);
 
-    float area_prob;
-    samplets.xy = ivec2(sample_uv * pushConstants.view_size);
-    samplets.uv = sample_uv;
-    samplets.hasIsect = unpackVSInfo(samplets.xy, samplets.normalInVS, samplets.info);
-    samplets.radiance = texture_sample_jacobian(sample_uv, state, area_prob) / sample_uv_pdf;
-    samplets.pdf = sample_uv_pdf / area_prob;
-    if(samplets.radiance == vec3(0) || samplets.pdf == 0) samplets.hasIsect = false;
+    // float sample_uv_pdf;
+    {
+        // vec2 uv = sampleImportanceUV_v1(RNG, sample_uv_pdf);
+        vec2 uv = sampleImportanceUV_LC_v0_v1(RNG, sample_uv_pdf, state.info, state.normalInVS);
+        
+        ivec2 xy = ivec2(floor(uv * 512));
+        const float z = texelFetch(hi_z, xy, 0).r;
+        // t_sample.position = SS2WS(uv * pushConstants.resolution, z);
+        // t_sample.xy = xy;
+        samplets.xy = ivec2(uv * gUniform.view_size);
+        samplets.uv = uv;
+        samplets.hasIsect = unpackVSInfo_vec(uv, samplets.normalInVS, samplets.info);
+    }
+
+    const vec3 di_sample = texelFetch(di, samplets.xy, 0).rgb;
+    if(di_sample == vec3(0)) return samplets;
+
+    if(!samplets.hasIsect)
+        return samplets;
+    
+    // t_sample.position
+
+    // Ray ray = Ray(
+    //     posWS,
+    //     0.01,
+    //     normalize(t_sample.position - posWS),
+    //     length(t_sample.position - posWS) - 0.01
+    // );
+    // traceRayEXT(tlas,          // Top-level acceleration structure
+    //     gl_RayFlagsOpaqueEXT,  // Ray flags, here saying "treat all geometry as opaque"
+    //     0xFF,                  // 8-bit instance mask, here saying "trace against all instances"
+    //     0,                     // SBT record offset
+    //     0,                     // SBT record stride for offset
+    //     0,                     // Miss index
+    //     ray.origin,            // Ray origin
+    //     ray.tMin,              // Minimum t-value
+    //     ray.direction,         // Ray direction
+    //     ray.tMax,              // Maximum t-value
+    //     0);                    // Location of payload
+
+    // if(pld.hit) return vec3(0);
+
+    const vec3 dir = samplets.info.samplePosInVS.xyz - state.info.samplePosInVS.xyz;
+    const float dist = length(dir);
+    const vec3 dirInVS = normalize(dir);
+    const float pdf = sample_uv_pdf;
+
+    if(dot(dir, samplets.normalInVS) > 0.0) return samplets;
+
+    SampleTS isect;
+    uint result = FindIntersection(state, dir, isect);
+    if(result == EnumIsectResult_True) {
+        vec2 offsetXY = abs(isect.uv - samplets.uv);
+        offsetXY *= gUniform.view_size;
+        InitStateTS realEndState;
+        unpackVSInfo(isect.xy, realEndState);
+        if(length(offsetXY) > 0.6) {
+            return samplets;
+        }
+    }
+    else return samplets;
+
+    samplets.radiance = di_sample * max(dot(dirInVS, state.normalInVS), 0) *
+            abs(dot(dirInVS, vec3(0,0,1))) / (pdf * dist * dist);
+
     return samplets;
+    
+    // float area_prob;
+    // samplets.xy = ivec2(sample_uv * gUniform.view_size);
+    // samplets.uv = sample_uv;
+    // samplets.hasIsect = unpackVSInfo(samplets.xy, samplets.normalInVS, samplets.info);
+    // samplets.radiance = texelFetch(di, samplets.xy, 0).rgb * g_term(sample_uv, state, area_prob) / sample_uv_pdf;
+    // samplets.pdf = sample_uv_pdf / area_prob;
+    // if(samplets.radiance == vec3(0) || samplets.pdf == 0) samplets.hasIsect = false;
+    // return samplets;
+
+    
+    // SampleTS samplets;
+
+    // float sample_uv_pdf;
+    // vec2 sample_uv = sampleImportanceUV_LC_v0(RNG, sample_uv_pdf, state.info, state.normalInVS);
+
+    // float area_prob;
+    // samplets.xy = ivec2(sample_uv * gUniform.view_size);
+    // samplets.uv = sample_uv;
+    // samplets.hasIsect = unpackVSInfo(samplets.xy, samplets.normalInVS, samplets.info);
+    // samplets.radiance = texture_sample_jacobian(sample_uv, state, area_prob) / sample_uv_pdf;
+    // samplets.pdf = sample_uv_pdf / area_prob;
+    // if(samplets.radiance == vec3(0) || samplets.pdf == 0) samplets.hasIsect = false;
+    // return samplets;
 }
 
 float SampleTechPdf_LightCut(

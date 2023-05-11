@@ -13,49 +13,16 @@
 #include <tinygltf/tiny_gltf.h>
 #include <crtdbg.h>
 
-import SE.Utility;
-import SE.Core.Log;
-import SE.Core.Memory;
-import SE.Core.IO;
-import SE.Core.Event;
-import SE.Core.Misc;
-import SE.Core.ECS;
-import SE.Core.Resource;
-import SE.Core.UnitTest;
+#include <Resource/SE.Core.Resource.hpp>
+#include <SE.Editor.Core.hpp>
+#include <SE.Editor.Config.hpp>
+#include <SE.Editor.DebugDraw.hpp>
+#include <SE.Application.hpp>
+#include <SE.SRenderer.hpp>
 
-import SE.Math.Misc;
-import SE.Math.Geometric;
-
-import SE.Platform.Window;
-import SE.Platform.Misc;
-import SE.Platform.Socket;
-import SE.Image;
-import SE.RHI;
-import SE.Parallelism;
-
-import SE.GFX;
-import SE.RDG;
-import SE.Video;
-
-import SE.Application;
-
-import SE.Editor.Core;
-import SE.Editor.GFX;
-import SE.Editor.RDG;
-import SE.Editor.Config;
-import SE.Editor.DebugDraw;
-
-import SE.SRenderer;
-import SE.SRenderer.ForwardPipeline;
-import SE.SRenderer.MMLTPipeline;
-import SE.SRenderer.UDPTPipeline;
-import SE.SRenderer.BDPTPipeline;
-import SE.SRenderer.BarGTPass;
-
-using namespace SIByL;
-using namespace SIByL::Core;
-using namespace SIByL::Math;
-
+#include <Pipeline/SE.SRendere-ForwardPipeline.hpp>
+#include <Pipeline/SE.SRendere-SSRXPipeline.hpp>
+#include <Passes/FullScreenPasses/ScreenSpace/SE.SRenderer-BarGTPass.hpp>
 
 struct SandBoxApplication :public Application::ApplicationBase {
 	
@@ -85,48 +52,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		RHI::Device* device = rhiLayer->getDevice();
 		RHI::SwapChain* swapchain = rhiLayer->getSwapChain();
 
-		//GFX::GFXManager::get()->registerTextureResource("P:/GitProjects/SIByLEngine2022/Sandbox/content/viking_room.png");
-		//Core::ResourceManager::get()->getResource<GFX::Texture>(mat.textures["normal_bump"])->serialize();
-
-		//GFX::GFXManager::get()->registerTextureResourceCubemap(
-		//	Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>(),
-		//	std::array<char const*, 6>{
-		//		"P:/GitProjects/SIByLEngine2022/Sandbox/content/textures/skybox/right.jpg",
-		//		"P:/GitProjects/SIByLEngine2022/Sandbox/content/textures/skybox/left.jpg",
-		//		"P:/GitProjects/SIByLEngine2022/Sandbox/content/textures/skybox/top.jpg",
-		//		"P:/GitProjects/SIByLEngine2022/Sandbox/content/textures/skybox/bottom.jpg",
-		//		"P:/GitProjects/SIByLEngine2022/Sandbox/content/textures/skybox/front.jpg",
-		//		"P:/GitProjects/SIByLEngine2022/Sandbox/content/textures/skybox/back.jpg"
-		//	}
-		//);
-		
-		//mat.path = "./content/cerberus.mat";
-		//mat.textures["normal_bump"] = GFX::GFXManager::get()->requestOfflineTextureResource(1658119028953168732);
-		//Core::GUID matID = GFX::GFXManager::get()->registerMaterialResource("P:/GitProjects/SIByLEngine2022/Sandbox/content/default.mat");
-		//GFX::Material* mat = Core::ResourceManager::get()->getResource<GFX::Material>(matID);
-		//mat.textures["base_color"] = GFX::GFXManager::get()->requestOfflineTextureResource(1658119031102545654);
-		//mat.serialize();
-		//mat.textures["base_color"] = GFX::GFXManager::get()->registerTextureResource("P:/GitProjects/SIByLEngine2022/Sandbox/content/textures/Cerberus_B.png");
-		//Core::ResourceManager::get()->getResource<GFX::Texture>(mat.textures["base_color"])->serialize();
-
 		GFX::GFXManager::get()->config.meshLoaderConfig = SRenderer::meshLoadConfig;
 		scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/test_scene.scene");
-		//GFX::SceneNodeLoader_obj::loadSceneNode("P:/GitProjects/SIByLEngine2022/Sandbox/content/cerberus.obj", scene, SRenderer::meshLoadConfig);
-		//GFX::SceneNodeLoader_obj::loadSceneNode("P:/GitProjects/SIByLEngine2022/Sandbox/content/scenes/wuson.obj", scene, SRenderer::meshLoadConfig);
-		//for (auto handle : scene.gameObjects) {
-		//	GFX::GameObject* go = scene.getGameObject(handle.first);
-		//	Math::mat4 objectMat;
-		//	GFX::MeshReference* meshref = go->getEntity().getComponent<GFX::MeshReference>();
-		//	if (meshref) {
-		//		GFX::MeshRenderer* meshrenderer = go->getEntity().addComponent<GFX::MeshRenderer>();
-		//		meshrenderer->materials.push_back(mat);
-		//	}
-		//}
-		//GFX::SceneNodeLoader_glTF::loadSceneNode("D:/Downloads/glTF-Sample-Models-master/glTF-Sample-Models-master/2.0/Sponza/glTF/Sponza.gltf", scene);
-		//GFX::SceneNodeLoader_glTF::loadSceneNode("P:/GitProjects/SIByLEngine2022/Sandbox/content/scenes/cornellBox.gltf", scene);
-		//scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/cornellBox.scene");
-		//scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/cornellBoxSphere.scene");
-		//scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/sponza.scene");
 
 		GFX::GFXManager::get()->commonSampler.defaultSampler = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Sampler>();
 		GFX::GFXManager::get()->registerSamplerResource(GFX::GFXManager::get()->commonSampler.defaultSampler, RHI::SamplerDescriptor{
@@ -141,11 +68,9 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		srenderer = std::make_unique<SRenderer>();
 
-		//GFX::SceneNodeLoader_assimp::loadSceneNode("D:/Art/Scenes/Bistro_v5_2/Bistro_v5_2/BistroExterior.fbx", scene, GFX::GFXManager::get()->config.meshLoaderConfig);
-
 		srenderer->init(scene);
 		pipeline1 = std::make_unique<SRP::BarGTPipeline>();
-		pipeline2 = std::make_unique<SRP::ForwardPipeline>();
+        pipeline2 = std::make_unique<SRP::SSRXPipeline>();
 		pipeline1->build();
 		pipeline2->build();
 
@@ -166,8 +91,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
 	virtual auto Update(double deltaTime) noexcept -> void override {
 		int width, height;
 		mainWindow->getFramebufferSize(&width, &height);
-		width = 1280;
-		height = 720;
+		width = 512;
+		height = 512;
 		{
 			auto view = Core::ComponentManager::get()->view<GFX::CameraComponent>();
 			for (auto& [entity, camera] : view) {
@@ -197,17 +122,21 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 
 		srenderer->invalidScene(scene);
-		srenderer->updateRDGData(pipeline->getActiveGraph());
+		std::vector<RDG::Graph*> graphs = pipeline->getActiveGraphs();
 
-		RDG::Graph* graph = pipeline->getActiveGraph();
-		for (size_t i : graph->getFlattenedPasses()) {
-			graph->getPass(i)->onInteraction(mainWindow.get()->getInput(), &(editorLayer->getWidget<Editor::ViewportWidget>()->info));
-		}
+		for(auto* graph: graphs) srenderer->updateRDGData(graph);
+
+		for(auto* graph: graphs)
+			for (size_t i : graph->getFlattenedPasses()) {
+				graph->getPass(i)->onInteraction(mainWindow.get()->getInput(), &(editorLayer->getWidget<Editor::ViewportWidget>()->info));
+			}
 
 		pipeline->execute(commandEncoder.get());
 
 		//Editor::DebugDraw::DrawAABB(srenderer->statisticsData.aabb, 5., 5.);
-		srenderer->updateRDGData(Editor::DebugDraw::get()->pipeline->getActiveGraph());
+		auto editor_graphs = Editor::DebugDraw::get()->pipeline->getActiveGraphs();
+		for (auto* graph : editor_graphs)
+			srenderer->updateRDGData(graph);
 		Editor::DebugDraw::Draw(commandEncoder.get());
 
 		device->getGraphicsQueue()->submit({ commandEncoder->finish({}) }, 
@@ -264,7 +193,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		editorLayer = nullptr;
 		imguiLayer = nullptr;
 
-		ResourceManager::get()->clear();
+		Core::ResourceManager::get()->clear();
 
 		rhiLayer = nullptr;
 	}
@@ -294,14 +223,13 @@ int main()
 {
 	// application root, control all managers
 	Application::Root root;
-	Core::UnitTestManager::run();
 
 	// run app
 	SandBoxApplication app;
 	app.createMainWindow({
 			Platform::WindowVendor::GLFW,
 			L"SIByL Engine 2023.1",
-			1280, 720,
+			512, 512,
 			Platform::WindowProperties::VULKAN_CONTEX
 		});
 	app.run();

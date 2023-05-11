@@ -15,26 +15,43 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Public\Core\SE.GFX.Core-Loader.MeshLoader.ixx">
+    <ClCompile Include="Private\SE.GFX-Loader.MeshLoader.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Core\SE.GFX.Core-Loader.SceneNodeLoader.ixx">
+    <ClCompile Include="Private\SE.GFX-Loader.SceneNodeLoader.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Core\SE.GFX.Core-SerializeUtils.ixx">
+    <ClCompile Include="Private\SE.GFX-Main.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Core\SE.GFX.Core.ixx">
+    <ClCompile Include="Private\SE.GFX-Loader.ShaderLoader.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Core\SE.GFX.Core-GFXConfig.ixx">
+    <ClCompile Include="Private\SE.GFX-GFXConfig.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Core\SE.GFX.Core-Main.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Core\SE.GFX.Core-Loader.ShaderLoader.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Public\SE.GFX-SerializeUtils.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.GFX-GFXConfig.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.GFX-Loader.MeshLoader.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.GFX-Main.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.GFX-Loader.SceneNodeLoader.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.GFX-Loader.ShaderLoader.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.GFX.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

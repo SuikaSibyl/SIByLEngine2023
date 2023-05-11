@@ -1,6 +1,8 @@
 module;
 #include <string>
 #include <codecvt>
+#include <Print/SE.Core.Log.hpp>
+#include <Memory/SE.Core.Memory.hpp>
 #ifdef _WIN32
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #ifndef _WINSOCK2API_
@@ -9,8 +11,6 @@ module;
 #endif // !_WINSOCK2API_
 #endif // !__WIN32
 export module SE.Platform.Socket:Win64;
-import SE.Core.Log;
-import SE.Core.Memory;
 
 #ifdef _WIN32
 namespace SIByL::Platform

@@ -1,0 +1,606 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#include "ssrgt_common.glsl"
+#include "../../../Utility/random.h"
+#include "../../../Utility/geometry.h"
+
+struct PushConstants { 
+    uvec2 resolution;
+    uint sample_batch;
+    uint primitive_count;
+};
+layout(push_constant) uniform PushConsts { PushConstants pushConstants; };
+
+#include "rgen_header.h"
+
+#include "../../rasterizer/ssrt/ssrt.glsl"
+bool FindIntersection_Interface(
+    in const SSRay ray,
+    out vec3 intersection,
+    inout SSRTConfig config
+) {
+    if(gUniform.debug_ray_mode == 0) {
+        return FindIntersection_HiZ(ray, intersection, config);
+    }
+    else {
+        return FindIntersection_DDA(ray, intersection, config);
+    }
+}
+#include "../../rasterizer/ssrt/ssrt_sampler.glsl"
+
+vec2 sampleImportanceUV(
+    inout uint RNG,
+    out float probability
+) {
+    // gImportanceMIP
+    int mip_level = 9;
+    vec2 uv = vec2(0.5, 0.5);
+    ivec2 xy = ivec2(0);
+
+    float p = 1.f;
+    float pixel_size = 1. / 2;
+    
+    for (int i = 0; i < gUniform.is_depth; ++i) {
+        pixel_size /= 2;    // half pixel size
+        mip_level--; // next mip level
+        xy *= 2; // sample next level
+
+        // sample next level
+        float rnd = UniformFloat(RNG);
+        float accum = 0.f;
+        int last_non_zero = -1;
+        float last_non_zero_imp = 0;
+        float last_non_zero_pdf = 0;
+    
+        vec4 child_importance;
+        {   for (int j=0; j<4; ++j) {
+                ivec2 xy_offset = four_neighbors_pix[j];
+                float lumin_importance = texelFetch(importance_mip, xy + xy_offset, mip_level).x;
+                child_importance[j] = lumin_importance;
+            }
+            const float sum = dot(vec4(1), child_importance);
+            child_importance /= sum;
+        }
+        for (int j=0; j<4; ++j) {
+            vec2 uv_offset = four_neighbors[j] * pixel_size;
+            ivec2 xy_offset = four_neighbors_pix[j];
+            float importance = child_importance[j];
+            float nimportance = importance;
+            accum += nimportance;
+            
+            if(nimportance > 0) {
+                last_non_zero = j;
+                last_non_zero_pdf = nimportance;
+                last_non_zero_imp = importance;
+            }
+
+            if(rnd < accum) {
+                uv = uv + uv_offset;
+                xy = xy + xy_offset;
+                p = p * nimportance;
+                break;
+            }
+            else if(j==3 && last_non_zero!=-1) {
+                uv = uv + four_neighbors[last_non_zero] * pixel_size;
+                xy = xy + four_neighbors_pix[last_non_zero];
+                p = p * last_non_zero_pdf;
+                break;
+            }
+            else {
+                // should not happen...
+            }
+        }
+        // p *= 4;
+    }
+
+
+    // The depth value of the pixel:
+    const float z = texelFetch(hi_z, xy, 0).r;
+    const bool is_valid = (z < 1.0) ? true : false;
+    // The position of the pixel in world space:
+    const vec3 posInWS_0 = is_valid ? SS2WS(xy + vec2(0, 0), z) : vec3(0.0);
+    const vec3 posInWS_1 = is_valid ? SS2WS(xy + vec2(0, 1), z) : vec3(0.0);
+    const vec3 posInWS_2 = is_valid ? SS2WS(xy + vec2(1, 0), z) : vec3(0.0);
+    const float area = length(cross(posInWS_1 - posInWS_0, posInWS_2 - posInWS_0));
+    p /= area;
+    
+    vec2 uv_pertub = vec2(UniformFloat(RNG), UniformFloat(RNG)); // (0,1)
+    uv_pertub = vec2(-1, -1) + uv_pertub * 2; // (-1, 1)
+    uv += uv_pertub * pixel_size;
+    probability = p;
+    return uv;
+}
+
+struct TriangleSample {
+    vec3 position;
+    float area;
+    ivec2 xy;
+};
+
+TriangleSample SampleTriangle(inout uint RNG) {
+    TriangleSample tsample;
+    // sample a triangle in the geometry
+    const uint primitive_id = uint(pushConstants.primitive_count * UniformFloat(RNG));
+    const uint pixel_id = primitive_id / 2;
+    tsample.xy.x = int(pixel_id % pushConstants.resolution.x);
+    tsample.xy.y = int(pixel_id / pushConstants.resolution.x);
+    // Get the indices of the vertices of the triangle
+    const uint i0 = indices[3 * primitive_id + 0];
+    const uint i1 = indices[3 * primitive_id + 1];
+    const uint i2 = indices[3 * primitive_id + 2];
+    // Get the vertices / normals of the triangle
+    const vec3 v0 = vertices[i0];
+    const vec3 v1 = vertices[i1];
+    const vec3 v2 = vertices[i2];
+    // Sample on the triangle
+    const vec2 sample_uv = vec2(UniformFloat(RNG), UniformFloat(RNG));
+    const vec3 e1 = v1 - v0;
+    const vec3 e2 = v2 - v0;
+    const float a = sqrt(clamp(sample_uv[0], 0., 1.));
+    const float b1 = 1 - a;
+    const float b2 = a * sample_uv[1];
+    tsample.position = v0 + (e1 * b1) + (e2 * b2);
+    tsample.area = 0.5 * length(cross(e1, e2));
+    return tsample;
+}
+
+vec3 GetPosFromVertexBuffer(ivec2 xy) {
+    const uint primitive_id = (xy.x + xy.y * pushConstants.resolution.x) * 2;
+    const uint i0 = indices[3 * primitive_id + 0];
+    const uint i1 = indices[3 * primitive_id + 1];
+    const uint i2 = indices[3 * primitive_id + 2];
+    // Get the vertices / normals of the triangle
+    const vec3 v0 = vertices[i0];
+    const vec3 v1 = vertices[i1];
+    const vec3 v2 = vertices[i2];
+    // Sample on the triangle
+    const vec2 sample_uv = vec2(0.5);
+    const vec3 e1 = v1 - v0;
+    const vec3 e2 = v2 - v0;
+    const float a = sqrt(clamp(sample_uv[0], 0., 1.));
+    const float b1 = 1 - a;
+    const float b2 = a * sample_uv[1];
+    return v0 + (e1 * b1) + (e2 * b2);
+}
+
+vec3 texture_sample_jacobian1(
+    in const vec2 sample_uv,
+    in const InitStateTS initState,
+    out float area_prob
+) {
+    area_prob = 0;
+    
+    InitStateTS endState;
+    bool hasIsect = unpackVSInfo(uvec2(sample_uv * gUniform.view_size), endState);
+
+    if (!hasIsect) {
+        return vec3(0);
+    }
+
+    // check visibility
+    vec3 reflectionDirVS = normalize(endState.info.samplePosInVS.xyz - initState.info.samplePosInVS.xyz);
+
+    vec3 pix_position = globalUniform.cameraData.cameraW
+                + (-0.5 + sample_uv.x) * 2 * globalUniform.cameraData.cameraU
+                + (-0.5 + sample_uv.y) * 2 * globalUniform.cameraData.cameraV;
+    vec3 pix_dir = normalize(pix_position);
+    float cos_0 = max(dot(-pix_dir, -normalize(globalUniform.cameraData.cameraW)), 0);
+    float r_0 = length(pix_position);
+    float area_0 = 4 * length(globalUniform.cameraData.cameraU) * length(globalUniform.cameraData.cameraV);
+    float jacobian_0 = cos_0 * area_0 / (r_0 * r_0);
+
+    float dist_1 = length(endState.info.samplePosInVS.xyz);
+    vec3 dir_1 = normalize(endState.info.samplePosInVS.xyz);
+    float cos_1 = max(dot(endState.normalInVS, -dir_1), 0);
+    float jacobian_1 = jacobian_0 * (dist_1 * dist_1) / cos_1;
+    
+    if(dot(endState.normalInVS, -reflectionDirVS) < 0) return vec3(0);
+    float cos_2 = max(dot(vec3(0,0,-1), -reflectionDirVS), 0);
+    float dist_2 = max(length(endState.info.samplePosInVS - initState.info.samplePosInVS), 0);
+
+    // vec3 sample_color = texture(di, sample_uv).xyz;
+    if (dist_2 != 0 && !isinf(dist_2) && !isnan(dist_2) && !isinf(jacobian_1)) {
+        float g = cos_2 / (dist_2 * dist_2);
+        float jacobian_2 = jacobian_1 * g;
+    
+        float cos_3 = max(dot(reflectionDirVS, initState.normalInVS), 0);
+
+        area_prob = jacobian_1;
+
+        return vec3(1) * jacobian_2 * cos_3;
+    }
+}
+
+vec3 importance_pixel_selection(
+    in const InitStateTS state,
+    in Ray ray,
+    inout uint RNG
+) {
+    float sample_uv_pdf;
+    
+    vec2 uv = sampleImportanceUV(RNG, sample_uv_pdf);
+
+    ivec2 xy = ivec2(floor(uv * pushConstants.resolution));
+    const float z = texelFetch(hi_z, xy, 0).r;
+    vec3 targetPosWS = SS2WS(uv * pushConstants.resolution, z);
+    vec3 posWS;
+
+    {
+        const ivec2 resolution = ivec2(pushConstants.resolution);
+        const ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
+
+        vec2 uv = vec2(pixel + 0.5) / vec2(resolution);
+        ivec2 xy = ivec2(floor(uv * resolution));
+        const float z = texelFetch(hi_z, xy, 0).r;
+        posWS = SS2WS(uv * resolution, z);
+    }
+
+    Ray tray = Ray(
+        posWS,
+        0.01,
+        normalize(targetPosWS - posWS),
+        length(targetPosWS - posWS) - 0.01
+    );
+
+    traceRayEXT(tlas,          // Top-level acceleration structure
+        gl_RayFlagsOpaqueEXT,  // Ray flags, here saying "treat all geometry as opaque"
+        0xFF,                  // 8-bit instance mask, here saying "trace against all instances"
+        0,                     // SBT record offset
+        0,                     // SBT record stride for offset
+        0,                     // Miss index
+        tray.origin,            // Ray origin
+        tray.tMin,              // Minimum t-value
+        tray.direction,         // Ray direction
+        tray.tMax,              // Maximum t-value
+        0);                    // Location of payload
+
+    // if(pld.hit) return vec3(0);
+
+    float area_prob;
+    SampleTS samplets;
+    samplets.xy = xy;
+    samplets.uv = uv;
+    samplets.hasIsect = unpackVSInfo(samplets.xy, samplets.normalInVS, samplets.info);
+    // samplets.radiance = texture_sample_jacobian1(uv, state, area_prob) / sample_uv_pdf;
+    samplets.pdf = sample_uv_pdf / area_prob;
+    
+    samplets.radiance = vec3(1) * max(dot(state.normalInVS, tray.direction), dot(-tray.direction, vec3(0,0,-1))) / sample_uv_pdf
+        / (length(targetPosWS - posWS) * length(targetPosWS - posWS));
+
+    // const vec3 dir = end_info.samplePosInVS.xyz - start_info.samplePosInVS.xyz;
+    // const float dist = length(dir);
+    // const vec3 dirInVS = normalize(dir);
+    // const float pdf = 1. / (t_sample.area * pushConstants.primitive_count);
+
+    // if(dot(tray.direction, samplets.normalInVS) > 0.0) return vec3(0);
+
+    // return di_sample * max(dot(dirInVS, start_normalInVS), 0) *
+    //         max(dot(dirInVS, vec3(0,0,1)),0) / (pdf * dist * dist);
+
+    // InitStateTS start_state;
+    // unpackVSInfo(uvec2(pixel), start_state);
+    // InitStateTS end_state;
+    // unpackVSInfo(uvec2(xy), end_state);
+    // const vec3 dirInVS = normalize(end_state.info.samplePosInVS.xyz - start_state.info.samplePosInVS.xyz);
+
+    // if((dot(dirInVS, vec3(0,0,1)) > 0.0)
+    // && (dot(sampleNormalInWS, vRefDirInWS) < 0.0)) {
+
+    
+    vec3 sampleNormalInWS = unpackNormal(texelFetch(ws_normal, xy, 0).xyz);
+    if(dot(sampleNormalInWS, ray.direction) > 0) {
+        return vec3(0);
+    }
+
+    if(samplets.radiance == vec3(0) || samplets.pdf == 0) samplets.hasIsect = false;
+    // return samplets;
+    return samplets.radiance * texelFetch(di, xy, 0).rgb;
+}
+
+vec3 diffuse_pixel_sampling(
+    in const ivec2 resolution,
+    in const ivec2 pixel
+) {
+    uint RNG = InitRNG(pixel, pushConstants.sample_batch);
+    
+    TriangleSample t_sample;
+    float sample_uv_pdf;
+    {
+        vec2 uv = sampleImportanceUV(RNG, sample_uv_pdf);
+        ivec2 xy = ivec2(floor(uv * pushConstants.resolution));
+        const float z = texelFetch(hi_z, xy, 0).r;
+        t_sample.position = SS2WS(uv * pushConstants.resolution, z);
+        t_sample.xy = xy;
+    }
+
+    // TriangleSample t_sample = SampleTriangle(RNG);
+
+    vec2 uv = vec2(pixel + 0.5) / vec2(resolution);
+    ivec2 xy = ivec2(floor(uv * resolution));
+    const float z = texelFetch(hi_z, xy, 0).r;
+    vec3 posWS = SS2WS(uv * resolution, z);
+
+    RayStartInfo start_info;
+    vec3 start_normalInVS;
+    if(!unpackVSInfo(pixel, start_normalInVS, start_info))
+        return vec3(0);
+
+    const vec3 di_sample = texelFetch(di, t_sample.xy, 0).rgb;
+    if(di_sample == vec3(0)) return vec3(0);
+
+    RayStartInfo end_info;
+    vec3 end_normalInVS;
+    if(!unpackVSInfo(t_sample.xy, end_normalInVS, end_info))
+        return vec3(0);
+    
+    // t_sample.position
+
+    Ray ray = Ray(
+        posWS,
+        0.01,
+        normalize(t_sample.position - posWS),
+        length(t_sample.position - posWS) - 0.01
+    );
+
+    traceRayEXT(tlas,          // Top-level acceleration structure
+        gl_RayFlagsOpaqueEXT,  // Ray flags, here saying "treat all geometry as opaque"
+        0xFF,                  // 8-bit instance mask, here saying "trace against all instances"
+        0,                     // SBT record offset
+        0,                     // SBT record stride for offset
+        0,                     // Miss index
+        ray.origin,            // Ray origin
+        ray.tMin,              // Minimum t-value
+        ray.direction,         // Ray direction
+        ray.tMax,              // Maximum t-value
+        0);                    // Location of payload
+
+    // if(pld.hit) return vec3(0);
+
+    const vec3 dir = end_info.samplePosInVS.xyz - start_info.samplePosInVS.xyz;
+    const float dist = length(dir);
+    const vec3 dirInVS = normalize(dir);
+    const float pdf = sample_uv_pdf;
+
+    if(dot(dir, end_normalInVS) > 0.0) return vec3(0);
+
+    return di_sample * max(dot(dirInVS, start_normalInVS), 0) *
+            abs(dot(dirInVS, vec3(0,0,1))) / (pdf * dist * dist);
+}
+
+void intersect(in const Ray ray) {
+    traceRayEXT(tlas,          // Top-level acceleration structure
+        gl_RayFlagsOpaqueEXT,  // Ray flags, here saying "treat all geometry as opaque"
+        0xFF,                  // 8-bit instance mask, here saying "trace against all instances"
+        0,                     // SBT record offset
+        0,                     // SBT record stride for offset
+        0,                     // Miss index
+        ray.origin,            // Ray origin
+        ray.tMin,              // Minimum t-value
+        ray.direction,         // Ray direction
+        ray.tMax,              // Maximum t-value
+        0);                    // Location of payload
+}
+
+vec3 specular(
+    in const ivec2 resolution,
+    in const ivec2 pixel
+) {
+    uint RNG = InitRNG(pixel, pushConstants.sample_batch);
+
+    Ray primaryRay = generateRay(
+        pixel,
+        resolution,
+        false
+    );
+    pld.hit = false;
+    intersect(primaryRay);
+    vec3 pixelColor = vec3(0);
+    if(pld.hit) {
+        vec3 samplePositionInWS = pld.position;    
+        vec3 sampleNormalInWS = unpackNormal(texelFetch(ws_normal, ivec2(pixel), 0).xyz);
+        vec3 vCamToSampleInWS = normalize(samplePositionInWS - globalUniform.cameraData.posW);
+        vec3 vRefDirInWS = normalize(reflect(vCamToSampleInWS, sampleNormalInWS));
+
+        Ray secondaryRay = Ray(
+            samplePositionInWS,
+            0.0001,
+            vRefDirInWS,
+            k_inf
+        );
+        
+        pld.hit = false;
+        intersect(secondaryRay);
+        if(pld.hit) {
+            int pix_id = pld.triangleIndex / 2;
+            int pix_x = pix_id % resolution.x;
+            int pix_y = pix_id / resolution.x;
+            ivec2 pix = ivec2(pix_x, pix_y);
+            vec3 sampleNormalInWS = unpackNormal(texelFetch(ws_normal, pix, 0).xyz);
+            if(dot(sampleNormalInWS, vRefDirInWS) < 0.0) {
+                pixelColor = texelFetch(di, pix, 0).rgb;
+            }
+        }
+        else {
+            pixelColor += vec3(0.0, 0.0, 0.0);
+        }
+    }
+    return pixelColor;
+}
+
+vec3 diffuse(
+    in const ivec2 resolution,
+    in const ivec2 pixel
+) {
+    if(gUniform.strategy == 1) {
+        return diffuse_pixel_sampling(resolution, pixel);
+    }
+    uint RNG = InitRNG(pixel, pushConstants.sample_batch);
+
+    Ray primaryRay = generateRay(
+        pixel,
+        resolution,
+        false
+    );
+    
+    pld.hit = false;
+    intersect(primaryRay);
+    
+    vec3 pixelColor = vec3(0);
+    if(pld.hit) {
+        vec3 samplePositionInWS = pld.position;    
+        vec3 sampleNormalInWS = unpackNormal(texelFetch(ws_normal, ivec2(pixel), 0).xyz);
+        vec3 vCamToSampleInWS = normalize(samplePositionInWS - globalUniform.cameraData.posW);
+        // vec3 vRefDirInWS = normalize(reflect(vCamToSampleInWS, sampleNormalInWS));
+        const vec3 vRefDirInWS = normalize(normalize(sampleNormalInWS) + randomPointInSphere(RNG));
+
+        Ray secondaryRay = Ray(
+            samplePositionInWS,
+            0.0001,
+            vRefDirInWS,
+            k_inf
+        );
+
+        if(gUniform.strategy == 0) {
+            pld.hit = false;
+            intersect(secondaryRay);
+            if(pld.hit) {
+                int pix_id = pld.triangleIndex / 2;
+                int pix_x = pix_id % resolution.x;
+                int pix_y = pix_id / resolution.x;
+                ivec2 pix = ivec2(pix_x, pix_y);
+                vec3 sampleNormalInWS = unpackNormal(texelFetch(ws_normal, pix, 0).xyz);
+                
+                InitStateTS start_state;
+                unpackVSInfo(uvec2(pixel), start_state);
+                InitStateTS end_state;
+                unpackVSInfo(uvec2(pix), end_state);
+                const vec3 dirInVS = normalize(end_state.info.samplePosInVS.xyz - start_state.info.samplePosInVS.xyz);
+
+                if((dot(sampleNormalInWS, vRefDirInWS) < 0.0)) {
+                    pixelColor += texelFetch(di, pix, 0).rgb * k_pi;
+                }
+            }
+            else {
+                pixelColor += vec3(0.0, 0.0, 0.0);
+            }
+        }
+        else {
+            InitStateTS state;
+            bool hasIsect = unpackVSInfo(uvec2(pixel), state);
+            pixelColor += importance_pixel_selection(state, secondaryRay, RNG);
+        }
+    }
+    return pixelColor;
+}
+
+
+vec3 diffuse_light_sampling(
+    in const ivec2 resolution,
+    in const ivec2 pixel
+) {
+    uint RNG = InitRNG(pixel, pushConstants.sample_batch);
+    TriangleSample t_sample = SampleTriangle(RNG);
+
+    vec2 uv = vec2(pixel + 0.5) / vec2(resolution);
+    ivec2 xy = ivec2(floor(uv * resolution));
+    const float z = texelFetch(hi_z, xy, 0).r;
+    vec3 posWS = SS2WS(uv * resolution, z);
+
+    RayStartInfo start_info;
+    vec3 start_normalInVS;
+    if(!unpackVSInfo(pixel, start_normalInVS, start_info))
+        return vec3(0);
+
+    const vec3 di_sample = texelFetch(di, t_sample.xy, 0).rgb;
+    if(di_sample == vec3(0)) return vec3(0);
+
+    RayStartInfo end_info;
+    vec3 end_normalInVS;
+    if(!unpackVSInfo(t_sample.xy, end_normalInVS, end_info))
+        return vec3(0);
+    
+    // t_sample.position
+
+    Ray ray = Ray(
+        posWS,
+        0.01,
+        normalize(t_sample.position - posWS),
+        length(t_sample.position - posWS) - 0.01
+    );
+
+    traceRayEXT(tlas,          // Top-level acceleration structure
+        gl_RayFlagsOpaqueEXT,  // Ray flags, here saying "treat all geometry as opaque"
+        0xFF,                  // 8-bit instance mask, here saying "trace against all instances"
+        0,                     // SBT record offset
+        0,                     // SBT record stride for offset
+        0,                     // Miss index
+        ray.origin,            // Ray origin
+        ray.tMin,              // Minimum t-value
+        ray.direction,         // Ray direction
+        ray.tMax,              // Maximum t-value
+        0);                    // Location of payload
+
+    if(pld.hit) return vec3(0);
+
+    const vec3 dir = end_info.samplePosInVS.xyz - start_info.samplePosInVS.xyz;
+    const float dist = length(dir);
+    const vec3 dirInVS = normalize(dir);
+    const float pdf = 1. / (t_sample.area * pushConstants.primitive_count);
+
+    if(dot(dir, end_normalInVS) > 0.0) return vec3(0);
+
+    return di_sample * max(dot(dirInVS, start_normalInVS), 0) *
+            max(dot(dirInVS, vec3(0,0,1)),0) / (pdf * dist * dist);
+}
+
+void main() {
+    // The resolution of the image, which is the same as the launch size:
+    const ivec2 resolution = ivec2(pushConstants.resolution);
+    const ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
+    // If the pixel is outside of the image, don't do anything:
+    if((pixel.x >= resolution.x) || (pixel.y >= resolution.y)) {
+        return;
+    }
+    const vec2 in_uv = vec2(pixel + 0.5) / vec2(resolution);
+    
+    vec3 pixelColor = vec3(0);
+    // DI result
+    if(gUniform.debug_mode == 0) {
+        Ray primaryRay = generateRay(
+            pixel,
+            resolution,
+            false
+        );
+        pld.hit = false;
+        intersect(primaryRay);
+        if(pld.hit) {
+            int pix_id = pld.triangleIndex / 2;
+            int pix_x = pix_id % resolution.x;
+            int pix_y = pix_id / resolution.x;
+            ivec2 pix = ivec2(pix_x, pix_y);
+            pixelColor = texelFetch(di, pix, 0).rgb;
+        }
+        else {
+            pixelColor = vec3(0.0, 0.0, 0.0);
+        }
+        vec3 pixelColor = vec3(0);
+    }
+    else if (gUniform.debug_mode == 1) {
+        pixelColor = specular(resolution, pixel);
+    }
+    else if (gUniform.debug_mode == 2) {
+        pixelColor = diffuse(resolution, pixel);
+    }
+    else if (gUniform.debug_mode == 3) {
+        pixelColor = diffuse_light_sampling(resolution, pixel);
+    }
+    else if (gUniform.debug_mode == 4) {
+        pixelColor = GetPosFromVertexBuffer(pixel);
+    }
+    
+    // if(pushConstants.sample_batch != 0) {
+    //     vec3 color = imageLoad(storageImage, ivec2(pixel)).rgb;
+    //     pixelColor = (pushConstants.sample_batch * color + pixelColor) / (pushConstants.sample_batch + 1);
+    // }
+    imageStore(storageImage, pixel, vec4(pixelColor, 1.0));
+}

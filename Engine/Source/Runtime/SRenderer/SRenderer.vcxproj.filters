@@ -15,95 +15,127 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Public\SE.SRenderer.ixx">
+    <ClCompile Include="Public\Passes\RayTracingPasses\SE.SRenderer-UDPTPass.hpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Core\SE.SRenderer-SRenderer.ixx">
+    <ClCompile Include="Public\Passes\RayTracingPasses\SE.SRenderer-MMLTPass.hpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Core\SE.SRenderer-RTCommon.ixx">
+    <ClCompile Include="Public\Pipeline\SE.SRendere-ForwardPipeline.hpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\RayTracingPasses\SE.SRenderer-UDPTPass.ixx">
+    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-AlbedoPass.hpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\RayTracingPasses\SE.SRenderer-MMLTPass.ixx">
+    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-PreZPass.hpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Pipeline\SE.SRendere-ForwardPipeline.ixx">
+    <ClCompile Include="Public\Pipeline\SE.SRendere-MMLTPipeline.hpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-AlbedoPass.ixx">
+    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-ACEsPass.hpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Core\SE.SRenderer-RACommon.ixx">
+    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-ClearI32RGBA.hpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-PreZPass.ixx">
+    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-CombineI32RGBA.hpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Pipeline\SE.SRendere-MMLTPipeline.ixx">
+    <ClCompile Include="Public\Pipeline\SE.SRendere-UDPTPipeline.hpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-ACEsPass.ixx">
+    <ClCompile Include="Public\Pipeline\SE.SRendere-BDPTPipeline.hpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-ClearI32RGBA.ixx">
+    <ClCompile Include="Public\Passes\RayTracingPasses\SE.SRenderer-BDPTPass.hpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-CombineI32RGBA.ixx">
+    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-FooPass.hpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPAddPoolingPass.ixx">
+    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-GBufferPass.hpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-Blit.ixx">
+    <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarPass.hpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Pipeline\SE.SRendere-UDPTPipeline.ixx">
+    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-ForwardPass.hpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Pipeline\SE.SRendere-BDPTPipeline.ixx">
+    <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarLCPass.hpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\RayTracingPasses\SE.SRenderer-BDPTPass.ixx">
+    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-AccumulatePass.hpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPMinPoolingPass.ixx">
+    <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarGTPass.hpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-FooPass.ixx">
+    <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-RSSGeoReconstrPass.hpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-GBufferPass.ixx">
+    <ClCompile Include="Private\SE.SRenderer-RACommon.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarPass.ixx">
+    <ClCompile Include="Private\SE.SRenderer-RTCommon.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-ShadowMapPass.ixx">
+    <ClCompile Include="Private\SE.SRenderer-SRenderer.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-CascadeShadowMapPass.ixx">
+    <ClCompile Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPSSLCPass.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-ForwardPass.ixx">
+    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-Blit.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPSSLCPass.ixx">
+    <ClCompile Include="Public\Pipeline\SE.SRendere-SSRXPipeline.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarLCPass.ixx">
+    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-CascadeShadowMapPass.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-AccumulatePass.ixx">
+    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-ShadowMapPass.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarGTPass.ixx">
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Public\Core\SE.SRenderer-SRenderer.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\Core\SE.SRenderer-RTCommon.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\Core\SE.SRenderer-RACommon.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.SRenderer.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPSSLCPass.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\Passes\FullScreenPasses\SE.SRenderer-Blit.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPMinPoolingPass.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPAddPoolingPass.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\Passes\RasterizerPasses\SE.SRenderer-CascadeShadowMapPass.hpp">
       <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-RSSGeoReconstrPass.ixx">
+    </ClInclude>
+    <ClInclude Include="Public\Passes\RasterizerPasses\SE.SRenderer-ShadowMapPass.hpp">
       <Filter>源文件</Filter>
-    </ClCompile>
+    </ClInclude>
+    <ClInclude Include="Public\Pipeline\SE.SRendere-SSRXPipeline.hpp">
+      <Filter>源文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\Passes\RayTracingPasses\SE.SRenderer-SSRXGTPass.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

@@ -1,68 +1,55 @@
 cmake_minimum_required(VERSION 3.23)
-
+# Set project setting
 set(PROJECT_NAME GFX)
 set(CMAKE_CXX_STANDARD 20)
-
-
-################################################################################
-# Source groups
-################################################################################
-file(GLOB_RECURSE MOD_FILES "Public/*.ixx")
-
-set(MOD_LIST ${MOD_FILES}
+# Add target library
+file(GLOB_RECURSE SRC_FILES "Public/*.hpp" "Private/*.cpp")
+add_library(${PROJECT_NAME})
+target_sources(${PROJECT_NAME}
+        PRIVATE
+        ${SRC_FILES})
+# Set c++ standard 20
+# Set In Folder - Dependency
+set_target_properties(
+        ${PROJECT_NAME}
+        PROPERTIES
+        CXX_STANDARD 20
+        USE_FOLDERS ON
+        FOLDER Graphics)
+# Set Include Folder
+target_include_directories(${PROJECT_NAME}
+        PUBLIC
+        Public
+        ${CMAKE_SOURCE_DIR}/Engine/Source/ThirdParty/assimp
+        ${CMAKE_SOURCE_DIR}/Engine/Source/ThirdParty/tinyobjloader
+        ${CMAKE_SOURCE_DIR}/Engine/Source/ThirdParty/tinygltf/include
+        ${CMAKE_SOURCE_DIR}/Engine/Source/ThirdParty/yaml/include
+        ${CMAKE_SOURCE_DIR}/Engine/Source/ThirdParty/spirvcross/include
+        ${CMAKE_SOURCE_DIR}/Engine/Source/ThirdParty/openfbx/include)
+target_link_directories(${PROJECT_NAME} PUBLIC
+        ${CMAKE_SOURCE_DIR}/Engine/Binaries/ThirdParty/assimp
+        ${CMAKE_SOURCE_DIR}/Engine/Binaries/ThirdParty/glfw
+        ${CMAKE_SOURCE_DIR}/Engine/Binaries/ThirdParty/vulkan
+        ${CMAKE_SOURCE_DIR}/Engine/Binaries/ThirdParty/spirvcross
         )
-set(SRC_LIST
-        )
-
-set(ALL_FILES
-        ${MOD_LIST}
-        ${SRC_LIST}
-        )
-
-if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    # using Clang
-    cmake_minimum_required(VERSION 3.26)
-    set(CMAKE_EXPERIMENTAL_CXX_MODULE_CMAKE_API 2182bf5c-ef0d-489a-91da-49dbc3090d2a)
-    set(CMAKE_EXPERIMENTAL_CXX_MODULE_DYNDEP 1)
-    set(CMAKE_CXX_EXTENSIONS OFF)
-    set(CMAKE_CXX_STANDARD_REQUIRED ON)
-    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse3")
-
-    add_library(${PROJECT_NAME})
-    target_sources(${PROJECT_NAME}
-            PRIVATE
-            ${SRC_LIST}
-            PRIVATE FILE_SET CXX_MODULES FILES
-            ${MOD_LIST}
-            )
-
-elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    # using Visual Studio C++
-    add_library(${PROJECT_NAME})
-    target_sources(${PROJECT_NAME}
-            PRIVATE
-            ${SRC_LIST}
-            ${MOD_LIST}
-            )
-
-    set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 20)
-
+target_link_libraries(${PROJECT_NAME} PUBLIC Prelude Core RHI Image yaml
+        PUBLIC
+        assimp-vc143-mt.lib
+        glfw3.lib
+        vulkan-1.lib
+        opengl32.lib)
+if (CMAKE_BUILD_TYPE AND (CMAKE_BUILD_TYPE STREQUAL "Debug"))
+    target_link_libraries(${PROJECT_NAME} PUBLIC
+            spirv-cross-cored.lib
+            spirv-cross-cppd.lib
+            spirv-cross-glsld.lib)
+else ()
+    target_link_libraries(${PROJECT_NAME} PUBLIC
+            spirv-cross-core.lib
+            spirv-cross-cpp.lib
+            spirv-cross-glsl.lib)
 endif ()
-
-target_link_libraries(${PROJECT_NAME} Core)
-target_link_libraries(${PROJECT_NAME} Utility)
-target_link_libraries(${PROJECT_NAME} Math)
-target_link_libraries(${PROJECT_NAME} Platform)
-target_link_libraries(${PROJECT_NAME} RHI)
-target_link_libraries(${PROJECT_NAME} Image)
-target_link_libraries(${PROJECT_NAME} yaml)
-
-set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER Graphics)
-
-include_directories(${CMAKE_SOURCE_DIR}/Engine/Source/ThirdParty/tinyobjloader)
-include_directories(${CMAKE_SOURCE_DIR}/Engine/Source/ThirdParty/tinygltf/include)
-include_directories(${CMAKE_SOURCE_DIR}/Engine/Source/ThirdParty/yaml/include)
-include_directories(${CMAKE_SOURCE_DIR}/Engine/Source/ThirdParty/spirvcross/include)
-include_directories(${CMAKE_SOURCE_DIR}/Engine/Source/ThirdParty/openfbx/include)
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/Engine/Binaries/ThirdParty/assimp/assimp-vc143-mt.dll"
+        "${EXECUTABLE_OUTPUT_PATH}/${CMAKE_BUILD_TYPE}/assimp-vc143-mt.dll")

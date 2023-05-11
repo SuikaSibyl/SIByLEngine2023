@@ -2,11 +2,10 @@ module;
 #include <memory>
 module SE.Platform.Window:Window;
 import SE.Platform.Window;
-import SE.Core.Memory;
 
 namespace SIByL::Platform
 {
-	auto Window::create(WindowOptions const& options) noexcept -> Scope<Window> {
+	auto Window::create(WindowOptions const& options) noexcept -> std::unique_ptr<Window> {
 		switch (options.vendor)
 		{
 		case WindowVendor::GLFW:

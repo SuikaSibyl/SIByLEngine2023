@@ -5,13 +5,12 @@ module;
 #include <Windows.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <glfw3native.h>
+#include <Event/SE.Core.Event.hpp>
+#include <Print/SE.Core.Log.hpp>
 module SE.Platform.Window:WindowGLFW;
 import SE.Platform.Misc;
 import SE.Platform.Window;
 import :Window;
-import SE.Utility;
-import SE.Core.Log;
-import SE.Core.Event;
 
 namespace SIByL::Platform
 {

@@ -15,14 +15,13 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Public\SE.Video.ixx">
+    <ClCompile Include="Private\SE.Video.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\SE.Video-Decoder.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\SE.Video-VideoClip.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Public\SE.Video.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

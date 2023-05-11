@@ -1,12 +1,8 @@
 cmake_minimum_required(VERSION 3.23)
-
+# Set project setting
 set(PROJECT_NAME Platform)
 set(CMAKE_CXX_STANDARD 20)
-
-
-################################################################################
-# Source groups
-################################################################################
+# Add target library
 set(MOD_LIST
         # SE.Platform.Window Module
         "Public/Window/SE.Platform.Window-Window.ixx"
@@ -23,13 +19,7 @@ set(MOD_LIST
         "Public/Misc/SE.Platform.Misc-Func.Win64.ixx"
         "Public/Misc/SE.Platform.Misc.ixx"
         )
-set(SRC_LIST
-        )
-
-set(ALL_FILES
-        ${MOD_LIST}
-        ${SRC_LIST}
-        )
+set(ALL_FILES ${MOD_LIST})
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     # using Clang
@@ -48,23 +38,27 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
             PRIVATE FILE_SET CXX_MODULES FILES
             ${MOD_LIST}
             )
-
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     # using Visual Studio C++
     add_library(${PROJECT_NAME})
     target_sources(${PROJECT_NAME}
             PRIVATE
-            ${SRC_LIST}
             ${MOD_LIST}
             )
-
-    set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 20)
-
 endif ()
 
+# Set c++ standard 20
+# Set In Folder - Dependency
+set_target_properties(
+        ${PROJECT_NAME}
+        PROPERTIES
+        CXX_STANDARD 20
+        USE_FOLDERS ON
+        FOLDER Core)
+# Set Include Folder
+target_include_directories(${PROJECT_NAME}
+        PUBLIC
+        Public
+        ${CMAKE_SOURCE_DIR}/Engine/Source/ThirdParty/glfw/include)
+add_compile_definitions(UNICODE 1)
 target_link_libraries(${PROJECT_NAME} Core)
-target_link_libraries(${PROJECT_NAME} Utility)
-
-set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER Core)
-include_directories(${CMAKE_SOURCE_DIR}/Engine/Source/ThirdParty/glfw/include)

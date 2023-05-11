@@ -1,9 +1,9 @@
 module;
 #include <string>
 #include <windows.h>
+#include <Event/SE.Core.Event.hpp>
 export module SE.Platform.Window:WindowWin64;
 import :Window;
-import SE.Core.Event;
 
 namespace SIByL::Platform
 {

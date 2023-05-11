@@ -15,20 +15,28 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Public\SE.Editor.Core.ixx">
+    <ClCompile Include="Private\SE.Editor.Core-ImGuiLayer.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\SE.Editor.Core-ImGuiLayer.ixx">
+    <ClCompile Include="Private\SE.Editor.Core-Framework.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\SE.Editor.Core-ImGuiBackend.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\SE.Editor.Core-ImGuiBackend.VK.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\SE.Editor.Core-Framework.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Public\SE.Editor.Core-ImGuiBackend.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.Editor.Core-ImGuiBackend.VK.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.Editor.Core-ImGuiLayer.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.Editor.Core-Framework.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.Editor.Core.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

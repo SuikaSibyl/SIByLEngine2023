@@ -15,7 +15,7 @@ layout(binding = 2, set = 0, scalar) buffer _IndicesBuffer    { uint indices[]; 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 vec3 SS2WS(in const vec2 xy, in const float z) {
-    const vec4 posInCS =  vec4((xy/pushConstants.resolution)*2-1.0f, z, 1) * vec4(1,-1,1,1);
+    const vec4 posInCS =  vec4((xy/pushConstants.resolution)*2-1.0f, z, 1) * vec4(1,1,1,1);
     vec4 posInVS = pushConstants.invProjMat * posInCS;
     posInVS /= posInVS.w;
     const vec4 posInWS = pushConstants.invViewMat * vec4(posInVS.xyz, 1.0);
@@ -41,7 +41,7 @@ void geo_setting_1_reconstruct() {
     const vec3 posInWS_1 = is_valid ? SS2WS(pixel + vec2(0, 1), z) : vec3(0.0);
     const vec3 posInWS_2 = is_valid ? SS2WS(pixel + vec2(1, 0), z) : vec3(0.0);
     const vec3 posInWS_3 = is_valid ? SS2WS(pixel + vec2(1, 1), z) : vec3(0.0);
-    
+
     // mapping texture space to world space
     positions[gid * 4 + 0] = posInWS_0;
     positions[gid * 4 + 1] = posInWS_1;

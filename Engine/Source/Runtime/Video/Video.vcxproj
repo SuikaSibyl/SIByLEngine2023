@@ -73,12 +73,15 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\vulkan\Include;$(SolutionDir)Engine\Source\ThirdParty\yaml\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\vulkan\Include;$(SolutionDir)Engine\Source\ThirdParty\yaml\include;$(SolutionDir)Engine\Source\Runtime\Prelude\Public;$(SolutionDir)Engine\Source\Runtime\Core\Public;$(SolutionDir)Engine\Source\Runtime\Image\Public;$(SolutionDir)Engine\Source\Runtime\Math\Public;$(SolutionDir)Engine\Source\Runtime\RHI\Public;$(SolutionDir)Engine\Source\Runtime\GFX\Public;$(SolutionDir)Engine\Source\Runtime\Platform\Public;$(SolutionDir)Engine\Source\ThirdParty\glfw\include;$(SolutionDir)Engine\Source\ThirdParty\vma\include;$(SolutionDir)Engine\Source\ThirdParty\glad\include;$(SolutionDir)Engine\Source\ThirdParty\tinyobjloader;$(SolutionDir)Engine\Source\ThirdParty\tinygltf\include;$(SolutionDir)Engine\Source\ThirdParty\spirvcross\include;$(SolutionDir)Engine\Source\ThirdParty\openfbx;$(SolutionDir)Engine\Source\ThirdParty\ffmpeg;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\vulkan\Include;$(SolutionDir)Engine\Source\ThirdParty\yaml\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\vulkan\Include;$(SolutionDir)Engine\Source\ThirdParty\yaml\include;$(SolutionDir)Engine\Source\Runtime\Prelude\Public;$(SolutionDir)Engine\Source\Runtime\Core\Public;$(SolutionDir)Engine\Source\Runtime\Image\Public;$(SolutionDir)Engine\Source\Runtime\Math\Public;$(SolutionDir)Engine\Source\Runtime\RHI\Public;$(SolutionDir)Engine\Source\Runtime\GFX\Public;$(SolutionDir)Engine\Source\Runtime\Platform\Public;$(SolutionDir)Engine\Source\ThirdParty\glfw\include;$(SolutionDir)Engine\Source\ThirdParty\vma\include;$(SolutionDir)Engine\Source\ThirdParty\glad\include;$(SolutionDir)Engine\Source\ThirdParty\tinyobjloader;$(SolutionDir)Engine\Source\ThirdParty\tinygltf\include;$(SolutionDir)Engine\Source\ThirdParty\spirvcross\include;$(SolutionDir)Engine\Source\ThirdParty\openfbx;$(SolutionDir)Engine\Source\ThirdParty\ffmpeg;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Label="Vcpkg">
+    <VcpkgEnabled>false</VcpkgEnabled>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -139,9 +142,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Public\SE.Video-Decoder.ixx" />
-    <ClCompile Include="Public\SE.Video-VideoClip.ixx" />
-    <ClCompile Include="Public\SE.Video.ixx" />
+    <ClCompile Include="Private\SE.Video.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\ThirdParty\yaml\yaml.vcxproj">
@@ -156,9 +157,15 @@
     <ProjectReference Include="..\Image\Image.vcxproj">
       <Project>{0fc8b275-7514-4117-93a1-7e9c112b4b70}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\Platform\Platform.vcxproj">
+      <Project>{05b6310e-59bc-496a-ad4f-ccdd23c7f04d}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\RHI\RHI.vcxproj">
       <Project>{795eb3a2-9f78-4ab8-833f-2b02fbc175f9}</Project>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Public\SE.Video.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

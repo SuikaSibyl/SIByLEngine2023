@@ -2,8 +2,8 @@ module;
 #include <string>
 #include <functional>
 #include <Windows.h>
+#include <Memory/SE.Core.Memory.hpp>
 export module SE.Platform.Window:Window;
-import SE.Core.Memory;
 
 namespace SIByL::Platform
 {
@@ -45,7 +45,7 @@ namespace SIByL::Platform
 
 	export struct Window {
 		/** create a window with options */
-		static auto create(WindowOptions const& options) noexcept -> Scope<Window>;
+		static auto create(WindowOptions const& options) noexcept -> std::unique_ptr<Window>;
 		// ---------------------------------
 		// Life Cycle
 		// ---------------------------------

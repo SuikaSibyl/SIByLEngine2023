@@ -1,4 +1,3 @@
-module;
 #include <random>
 #include <string>
 #include <cstdint>
@@ -7,10 +6,10 @@ module;
 #include <unordered_map>
 #include <yaml-cpp/yaml.h>
 #include <yaml-cpp/node/node.h>
-module SE.Core.Resource;
-import SE.Core.IO;
-import SE.Core.Log;
-import SE.Core.Memory;
+#include "SE.Core.Resource.hpp"
+#include <Memory/SE.Core.Memory.hpp>
+#include <IO/SE.Core.IO.hpp>
+#include <Print/SE.Core.Log.hpp>
 
 namespace SIByL::Core::Impl {
     //Google CityHash
@@ -251,15 +250,15 @@ namespace SIByL::Core::Impl {
     uint64_t CityHash64WithSeed(const char* s, size_t len, uint64_t seed) {
         return CityHash64WithSeeds(s, len, k2, seed);
     }
-}
+}  // namespace SIByL::Core::Impl
 
-namespace SIByL::Core {
-    
-    inline auto hashUID(char const* path) noexcept -> uint64_t {
+    namespace SIByL::Core {
+
+    auto hashUID(char const* path) noexcept -> uint64_t {
         return Impl::CityHash64(path, strlen(path));
     }
 
-    inline auto requestORID() noexcept -> ORID {
+    auto requestORID() noexcept -> ORID {
         static std::default_random_engine e;
         static std::uniform_int_distribution<uint64_t> u(0, 0X3FFFFF);
 
@@ -281,38 +280,47 @@ namespace SIByL::Core {
         return id;
     }
 
-    auto ResourceDatabase::registerResource(Core::ORID orid, Core::GUID guid) noexcept -> void {
+    auto ResourceDatabase::registerResource(Core::ORID orid,
+                                            Core::GUID guid) noexcept -> void {
         mapper[orid] = guid;
     }
 
-    auto ResourceDatabase::findResource(Core::ORID orid) noexcept -> Core::GUID {
+    auto ResourceDatabase::findResource(Core::ORID orid) noexcept
+        -> Core::GUID {
         auto iter = mapper.find(orid);
-        if (iter == mapper.end()) return INVALID_ORID;
-        else return iter->second;
+        if (iter == mapper.end())
+            return INVALID_ORID;
+        else
+            return iter->second;
     }
 
-    auto ResourceDatabase::findResourcePath(char const* path_c) noexcept -> Core::ORID {
+    auto ResourceDatabase::findResourcePath(char const* path_c) noexcept
+        -> Core::ORID {
         std::filesystem::path path(path_c);
         std::filesystem::path current_path = std::filesystem::current_path();
-        std::filesystem::path relative_path = std::filesystem::relative(path, current_path);
+        std::filesystem::path relative_path =
+            std::filesystem::relative(path, current_path);
         auto iter = resource_mapper.find(relative_path.string());
         if (iter == resource_mapper.end()) {
             return INVALID_ORID;
-        }
-        else return iter->second;
+        } else
+            return iter->second;
     }
 
-    auto ResourceDatabase::mapResourcePath(char const* path_c) noexcept -> Core::ORID {
+    auto ResourceDatabase::mapResourcePath(char const* path_c) noexcept
+        -> Core::ORID {
         std::filesystem::path path(path_c);
         std::filesystem::path current_path = std::filesystem::current_path();
-        std::filesystem::path relative_path = std::filesystem::relative(path, current_path);
+        std::filesystem::path relative_path =
+            std::filesystem::relative(path, current_path);
         auto iter = resource_mapper.find(relative_path.string());
         if (iter == resource_mapper.end()) {
-            Core::ORID orid = requestORID();;
+            Core::ORID orid = requestORID();
+            ;
             resource_mapper[relative_path.string()] = orid;
             return orid;
-        }
-        else return iter->second;
+        } else
+            return iter->second;
     }
 
     auto ResourceDatabase::serialize() noexcept -> void {
@@ -341,35 +349,34 @@ namespace SIByL::Core {
         Core::Buffer adb_proxy;
         Core::syncReadFile(path.string().c_str(), adb_proxy);
         if (adb_proxy.size != 0) {
-            YAML::NodeAoS data = YAML::Load(reinterpret_cast<char*>(adb_proxy.data));
+            YAML::NodeAoS data =
+                YAML::Load(reinterpret_cast<char*>(adb_proxy.data));
             // check scene name
             if (!data["Prefix"]) {
-                Core::LogManager::Error("GFX :: Asset Database not found when deserializing {0}");
+                Core::LogManager::Error(
+                    "GFX :: Asset Database not found when deserializing {0}");
                 return;
             }
             auto entries = data["Entries"];
             for (auto node : entries) {
-                resource_mapper[node["PATH"].as<std::string>()] = node["ORID"].as<Core::ORID>();
+                resource_mapper[node["PATH"].as<std::string>()] =
+                    node["ORID"].as<Core::ORID>();
             }
         }
     }
 
     ResourceManager* ResourceManager::singleton = nullptr;
-    
+
     auto ResourceManager::startUp() noexcept -> void {
-    	singleton = this;
-    	database.deserialize();
+        singleton = this;
+        database.deserialize();
     }
-    	
-    auto ResourceManager::shutDown() noexcept -> void {
-    	database.serialize();
-    }
-    
+
+    auto ResourceManager::shutDown() noexcept -> void { database.serialize(); }
+
     auto ResourceManager::get() noexcept -> ResourceManager* {
-    	return singleton;
+        return singleton;
     }
-    
-    auto ResourceManager::clear() noexcept -> void {
-    	resourcePools.clear();
-    }
-}
+
+    auto ResourceManager::clear() noexcept -> void { resourcePools.clear(); }
+    }  // namespace SIByL::Core

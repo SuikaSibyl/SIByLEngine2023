@@ -15,89 +15,28 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Public\Geometric\Vector\SE.Math.Geometric-Vector2.ixx">
+    <ClCompile Include="Private\SE.Math.Misc.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Geometric\Vector\SE.Math.Geometric-Vector3.ixx">
+    <ClCompile Include="Private\SE.Math.Geometric.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Geometric\Vector\SE.Math.Geometric-Vector4.ixx">
+    <ClCompile Include="Private\SE.Math.Spline.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Geometric\Matrix\SE.Math.Geometric-Matrix2x2.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Geometric\Matrix\SE.Math.Geometric-Matrix3x3.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Geometric\Matrix\SE.Math.Geometric-Matrix4x4.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Geometric\Geometry\SE.Math.Geometric-Point3.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Geometric\Geometry\SE.Math.Geometric-Normal3.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Geometric\Geometry\SE.Math.Geometric-Ray3.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Misc\SE.Math.Misc-Limits.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Geometric\Geometry\SE.Math.Geometric-Bounds2.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Geometric\Geometry\SE.Math.Geometric-Point2.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Geometric\Geometry\SE.Math.Geometric-Bounds3.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Misc\SE.Math.Misc-Trigonometric.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Geometric\Geometry\SE.Math.Geometric-Quaternions.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Misc\SE.Math.Misc-Common.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Misc\SE.Math.Misc-RNG.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Misc\SE.Math.Misc-RoundingError.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Misc\SE.Math.Misc-EquationSolving.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Misc\SE.Math.Misc-SIMD.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Geometric\Geometry\SE.Math.Geometric-Integral.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Geometric\Geometry\SE.Math.Geometric-Geometric.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Spline\SE.Math.Spline.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Spline\SE.Math.Spline-AnimationCurve.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Geometric\SE.Math.Geometric.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Misc\SE.Math.Misc.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Geometric\Geometry\SE.Math.Geometric-Transform.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Geometric\Geometry\SE.Math.Geometric-AnimatedTransform.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Public\SE.Math.Geometric.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.Math.Misc.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.Math.Spline.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.Math.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
