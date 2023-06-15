@@ -30,6 +30,9 @@
     <ClCompile Include="Public\Misc\SE.Core.Misc.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Config\SE.Core.Config.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Public\System\SE.Core.System.hpp">
@@ -60,6 +63,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="Public\SE.Core.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\Config\SE.Core.Config.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

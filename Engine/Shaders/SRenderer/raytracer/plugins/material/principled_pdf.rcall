@@ -3,7 +3,7 @@
 #extension GL_GOOGLE_include_directive  : enable
 
 #include "../../include/common_trace.h"
-#include "../../../include/microfacet.h"
+#include "../../../include/common/common_microfacet.h"
 #include "../../../include/plugins/material/principled_common.h"
 #include "../../../../Utility/math.h"
 #include "../../../../Utility/geometry.h"

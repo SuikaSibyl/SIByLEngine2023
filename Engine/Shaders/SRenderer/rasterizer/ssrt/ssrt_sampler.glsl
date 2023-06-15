@@ -23,14 +23,18 @@ bool unpackVSInfo(
     in const uvec2 tid,
     out InitStateTS state
 ) {
-    return unpackVSInfo(tid, state.normalInVS, state.info);
+    bool isect = unpackVSInfo(tid, state.info);
+    state.normalInVS = state.info.sampleNormalInVS;
+    return isect;
 }
 
 bool unpackVSInfo_Vec(
     in const vec2 uv,
     out InitStateTS state
 ) {
-    return unpackVSInfo_vec(uv, state.normalInVS, state.info);
+    bool isect = unpackVSInfo_vec(uv, state.info);
+    state.normalInVS = state.info.sampleNormalInVS;
+    return isect;
 }
 /*****************************************************
 **                        Ray                       **
@@ -60,7 +64,8 @@ uint FindIntersection(
     if(FindIntersection_Interface(ray, intersection, config)) {
         isect.xy = ivec2(intersection.xy * gUniform.view_size);
         isect.uv = intersection.xy;
-        bool hasIsect = unpackVSInfo(isect.xy, isect.normalInVS, isect.info);
+        bool hasIsect = unpackVSInfo(isect.xy, isect.info);
+        isect.normalInVS = isect.info.sampleNormalInVS;
         if(!hasIsect) {
             return EnumIsectResult_Err;
         }
@@ -100,7 +105,8 @@ uint FindOcclusion(
     if(FindOcclusion_DDA(ray, end_state.info.samplePosInTS.xy, intersection, config)) {
         isect.xy = ivec2(intersection.xy * gUniform.view_size);
         isect.uv = intersection.xy;
-        bool hasIsect = unpackVSInfo(isect.xy, isect.normalInVS, isect.info);
+        bool hasIsect = unpackVSInfo(isect.xy, isect.info);
+        isect.normalInVS = isect.info.sampleNormalInVS;
         if(!hasIsect) {
             return EnumIsectResult_Err;
         }
@@ -400,7 +406,7 @@ vec2 sampleImportanceUV_LC_v0(
     in const vec3 sampleNormalInVS
 ) {
     // gImportanceMIP
-    int mip_level = 9;
+    int mip_level = 11;
     vec2 uv = vec2(0.5, 0.5);
     ivec2 xy = ivec2(0);
 
@@ -460,14 +466,6 @@ vec2 sampleImportanceUV_LC_v0(
     return uv;
 }
 
-vec3 SS2WS(in const vec2 xy, in const float z) {
-    const vec4 posInCS =  vec4((xy/512)*2-1.0f, z, 1) * vec4(1,1,1,1);
-    vec4 posInVS = gUniform.InvProjMat * posInCS;
-    posInVS /= posInVS.w;
-    const vec4 posInWS = transpose(gUniform.TransInvViewMat) * vec4(posInVS.xyz, 1.0);
-    return posInWS.xyz;
-}
-
 vec2 sampleImportanceUV_LC_v0_v1(
     inout uint RNG,
     out float probability,
@@ -475,7 +473,7 @@ vec2 sampleImportanceUV_LC_v0_v1(
     in const vec3 sampleNormalInVS
 ) {
     // gImportanceMIP
-    int mip_level = 9;
+    int mip_level = 11;
     vec2 uv = vec2(0.5, 0.5);
     ivec2 xy = ivec2(0);
 
@@ -527,25 +525,13 @@ vec2 sampleImportanceUV_LC_v0_v1(
         }
     }
 
-    for(int i=gUniform.is_depth; i<9; ++i) {
+    for(int i=gUniform.is_depth; i<11; ++i) {
         p /= 4;
     }
 
     vec2 uv_pertub = vec2(UniformFloat(RNG), UniformFloat(RNG)); // (0,1)
     uv_pertub = vec2(-1, -1) + uv_pertub * 2; // (-1, 1)
     uv += uv_pertub * pixel_size;
-
-    ivec2 fi_xy = ivec2(uv * 512);
-    {   // The depth value of the pixel:
-        const float z = texelFetch(hi_z, fi_xy, 0).r;
-        const bool is_valid = (z < 1.0) ? true : false;
-        // The position of the pixel in world space:
-        const vec3 posInWS_0 = is_valid ? SS2WS(fi_xy + vec2(0, 0), z) : vec3(0.0);
-        const vec3 posInWS_1 = is_valid ? SS2WS(fi_xy + vec2(0, 1), z) : vec3(0.0);
-        const vec3 posInWS_2 = is_valid ? SS2WS(fi_xy + vec2(1, 0), z) : vec3(0.0);
-        const float area = length(cross(posInWS_1 - posInWS_0, posInWS_2 - posInWS_0));
-        p /= area;
-    }
 
     probability = p;
     return uv;
@@ -557,8 +543,8 @@ float sampleImportanceUV_pdf(
     in const vec3 sampleNormalInVS
 ) {
     // gImportanceMIP
-    vec2 samp_uv = vec2(floor(sample_uv * 512) + vec2(0.5)) / 512;
-    int mip_level = 9;
+    vec2 samp_uv = vec2(floor(sample_uv * 2048) + vec2(0.5)) / 2048;
+    int mip_level = 11;
     vec2 uv = vec2(0.5, 0.5);
     ivec2 xy = ivec2(0);
     
@@ -739,7 +725,7 @@ vec2 sampleImportanceUV_v1(
     out float probability
 ) {
     // gImportanceMIP
-    int mip_level = 9;
+    int mip_level = 11;
     vec2 uv = vec2(0.5, 0.5);
     ivec2 xy = ivec2(0);
 
@@ -832,13 +818,29 @@ SampleTS SampleTech_LightCut(
         // vec2 uv = sampleImportanceUV_v1(RNG, sample_uv_pdf);
         vec2 uv = sampleImportanceUV_LC_v0_v1(RNG, sample_uv_pdf, state.info, state.normalInVS);
         
-        ivec2 xy = ivec2(floor(uv * 512));
+        ivec2 xy = ivec2(floor(uv * 2048));
+        if(xy.x >= gUniform.view_size.x || xy.y >= gUniform.view_size.y) {
+            samplets.radiance = vec3(1,0,1);
+            return samplets;
+        }
+        {
+            ivec2 fi_xy = xy;
+            {   // The depth value of the pixel:
+                const float z = texelFetch(hi_z, fi_xy, 0).r;
+                const bool is_valid = (z < 1.0) ? true : false;
+                // The position of the pixel in world space:
+                const vec3 posInWS_0 = is_valid ? SS2WS(fi_xy + vec2(0, 0), z) : vec3(0.0);
+                const vec3 posInWS_1 = is_valid ? SS2WS(fi_xy + vec2(0, 1), z) : vec3(0.0);
+                const vec3 posInWS_2 = is_valid ? SS2WS(fi_xy + vec2(1, 0), z) : vec3(0.0);
+                const float area = length(cross(posInWS_1 - posInWS_0, posInWS_2 - posInWS_0));
+                sample_uv_pdf /= area;
+            }
+        }
         const float z = texelFetch(hi_z, xy, 0).r;
-        // t_sample.position = SS2WS(uv * pushConstants.resolution, z);
-        // t_sample.xy = xy;
-        samplets.xy = ivec2(uv * gUniform.view_size);
-        samplets.uv = uv;
-        samplets.hasIsect = unpackVSInfo_vec(uv, samplets.normalInVS, samplets.info);
+        samplets.xy = xy;
+        samplets.uv = (xy + vec2(UniformFloat(RNG), UniformFloat(RNG))) / gUniform.view_size;
+        samplets.hasIsect = unpackVSInfo_vec(uv, samplets.info);
+        samplets.normalInVS = samplets.info.sampleNormalInVS;
     }
 
     const vec3 di_sample = texelFetch(di, samplets.xy, 0).rgb;
@@ -847,76 +849,30 @@ SampleTS SampleTech_LightCut(
     if(!samplets.hasIsect)
         return samplets;
     
-    // t_sample.position
-
-    // Ray ray = Ray(
-    //     posWS,
-    //     0.01,
-    //     normalize(t_sample.position - posWS),
-    //     length(t_sample.position - posWS) - 0.01
-    // );
-    // traceRayEXT(tlas,          // Top-level acceleration structure
-    //     gl_RayFlagsOpaqueEXT,  // Ray flags, here saying "treat all geometry as opaque"
-    //     0xFF,                  // 8-bit instance mask, here saying "trace against all instances"
-    //     0,                     // SBT record offset
-    //     0,                     // SBT record stride for offset
-    //     0,                     // Miss index
-    //     ray.origin,            // Ray origin
-    //     ray.tMin,              // Minimum t-value
-    //     ray.direction,         // Ray direction
-    //     ray.tMax,              // Maximum t-value
-    //     0);                    // Location of payload
-
-    // if(pld.hit) return vec3(0);
-
     const vec3 dir = samplets.info.samplePosInVS.xyz - state.info.samplePosInVS.xyz;
     const float dist = length(dir);
     const vec3 dirInVS = normalize(dir);
     const float pdf = sample_uv_pdf;
-
+    
     if(dot(dir, samplets.normalInVS) > 0.0) return samplets;
 
-    SampleTS isect;
-    uint result = FindIntersection(state, dir, isect);
-    if(result == EnumIsectResult_True) {
-        vec2 offsetXY = abs(isect.uv - samplets.uv);
-        offsetXY *= gUniform.view_size;
-        InitStateTS realEndState;
-        unpackVSInfo(isect.xy, realEndState);
-        if(length(offsetXY) > 0.6) {
-            return samplets;
-        }
-    }
-    else return samplets;
+    // SampleTS isect;
+    // uint result = FindIntersection(state, dir, isect);
+    // if(result == EnumIsectResult_True) {
+    //     vec2 offsetXY = abs(isect.uv - samplets.uv);
+    //     offsetXY *= gUniform.view_size;
+    //     InitStateTS realEndState;
+    //     unpackVSInfo(isect.xy, realEndState);
+    //     if(length(offsetXY) > 0.6) {
+    //         return samplets;
+    //     }
+    // }
+    // else return samplets;
 
     samplets.radiance = di_sample * max(dot(dirInVS, state.normalInVS), 0) *
             abs(dot(dirInVS, vec3(0,0,1))) / (pdf * dist * dist);
 
     return samplets;
-    
-    // float area_prob;
-    // samplets.xy = ivec2(sample_uv * gUniform.view_size);
-    // samplets.uv = sample_uv;
-    // samplets.hasIsect = unpackVSInfo(samplets.xy, samplets.normalInVS, samplets.info);
-    // samplets.radiance = texelFetch(di, samplets.xy, 0).rgb * g_term(sample_uv, state, area_prob) / sample_uv_pdf;
-    // samplets.pdf = sample_uv_pdf / area_prob;
-    // if(samplets.radiance == vec3(0) || samplets.pdf == 0) samplets.hasIsect = false;
-    // return samplets;
-
-    
-    // SampleTS samplets;
-
-    // float sample_uv_pdf;
-    // vec2 sample_uv = sampleImportanceUV_LC_v0(RNG, sample_uv_pdf, state.info, state.normalInVS);
-
-    // float area_prob;
-    // samplets.xy = ivec2(sample_uv * gUniform.view_size);
-    // samplets.uv = sample_uv;
-    // samplets.hasIsect = unpackVSInfo(samplets.xy, samplets.normalInVS, samplets.info);
-    // samplets.radiance = texture_sample_jacobian(sample_uv, state, area_prob) / sample_uv_pdf;
-    // samplets.pdf = sample_uv_pdf / area_prob;
-    // if(samplets.radiance == vec3(0) || samplets.pdf == 0) samplets.hasIsect = false;
-    // return samplets;
 }
 
 float SampleTechPdf_LightCut(

@@ -15,7 +15,8 @@ SE_EXPORT struct SceneNodeLoader_obj {
 SE_EXPORT struct SceneNodeLoader_glTF {
   /** Load glTF file */
   static auto loadSceneNode(std::filesystem::path const& path,
-                            GFX::Scene& gfxscene) noexcept -> void;
+                            GFX::Scene& gfxscene,
+                            MeshLoaderConfig meshConfig = {}) noexcept -> void;
 };
 
 SE_EXPORT struct SceneNodeLoader_assimp {

@@ -1,0 +1,10 @@
+glslangValidator --target-env vulkan1.2 P:/GitProjects/SIByLEngine2022/Demo/FLIP/asset/particle_draw.vert -o particle_draw_vert.spv -g
+
+glslangValidator --target-env vulkan1.2 P:/GitProjects/SIByLEngine2022/Demo/FLIP/asset/particle_draw.frag -o particle_draw_frag.spv -g
+
+glslangValidator --target-env vulkan1.2 P:/GitProjects/SIByLEngine2022/Demo/FLIP/asset/cell_draw.frag -o cell_draw_frag.spv -g
+
+
+
+glslangValidator --target-env vulkan1.2 P:/GitProjects/SIByLEngine2022/Demo/FLIP/asset/cell_quad_draw.vert -o cell_quad_draw_vert.spv -g
+glslangValidator --target-env vulkan1.2 P:/GitProjects/SIByLEngine2022/Demo/FLIP/asset/cell_quad_draw.frag -o cell_quad_draw_frag.spv -g

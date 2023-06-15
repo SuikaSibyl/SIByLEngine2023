@@ -1,0 +1,681 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_shader_atomic_float : enable
+
+struct PushConstants { 
+    uvec2 resolution;
+    uint sample_batch; 
+    uint modes_pack_1;
+    uint debug_info_x;
+    uint debug_info_y;
+    float imp_vis_scalar;
+    uint modes_pack_2;
+};
+layout(push_constant) uniform PushConsts { PushConstants pushConstants; };
+
+struct UniformStruct {
+    mat4 inv_view;
+    mat4 inv_proj;
+    mat4 proj_view;
+    vec3 direction;
+    float area;
+};
+
+#include "../../../Utility/random.h"
+#include "../../../Utility/sampling.h"
+
+#include "../../common/slc.glsl"
+
+#include "../include/common_trace.h"
+#include "../include/common_rgen.h"
+
+#define _CUSTOM_WRS_SAMPLE_
+struct SampleLit {
+    vec2 uv;
+};
+
+#include "../../include/common/common_random.h"
+#include "../../include/common/common_wrs.h"
+#include "../../include/common/common_space_filling_curve.h"
+#include "../../include/common/common_octahedral.h"
+#include "../../include/plugins/material/lambertian_common.h"
+
+// #define COHERENT coherent
+
+layout(binding = 0, set = 2) uniform sampler2D in_luminance;
+layout(binding = 1, set = 2) uniform sampler2D in_normalcone;
+layout(binding = 2, set = 2) uniform sampler2D in_boundingboxXY;
+layout(binding = 3, set = 2) uniform sampler2D in_boundingboxZ;
+layout(binding = 4, set = 2) uniform sampler2D in_visibility;
+layout(binding = 5, set = 2, rgba32f) uniform image2D storageImage;
+layout(binding = 6, set = 2, rgba32f) uniform image2D debugImpImage;
+layout(binding = 7, set = 2, r32f)    uniform image2D visibilityImg;
+layout(binding = 8, set = 2, scalar)  uniform _Uniforms { UniformStruct gUniform; };
+layout(binding = 9, set = 2, r32f)    uniform image2D importanceImg;
+
+const int MAX_MIP_LEVEL = 9;
+const int MAX_MIP_LEVEL_VIS = 4;
+
+uint unpack_uint8_0(uint data) { return (data >> 0) & 0x000000FF; }
+uint unpack_uint8_1(uint data) { return (data >> 8) & 0x000000FF; }
+uint unpack_uint8_2(uint data) { return (data >> 16) & 0x000000FF; }
+uint unpack_uint8_3(uint data) { return (data >> 24) & 0x000000FF; }
+
+uint get_render_mode()      { return unpack_uint8_0(pushConstants.modes_pack_1); }
+uint get_sample_mode()      { return unpack_uint8_1(pushConstants.modes_pack_1); }
+uint get_mip_layer()        { return unpack_uint8_2(pushConstants.modes_pack_1); }
+uint get_pixse_mode()       { return unpack_uint8_3(pushConstants.modes_pack_1); }
+uint get_slc_mode()         { return unpack_uint8_0(pushConstants.modes_pack_2); }
+uint get_visualize_mode()   { return unpack_uint8_1(pushConstants.modes_pack_2); }
+uint get_ris_count()        { return unpack_uint8_2(pushConstants.modes_pack_2); }
+
+bool get_use_visibility()   { return ((get_slc_mode() >> 1) & 0x1) == 1; }
+bool get_use_importance()   { return ((get_slc_mode() >> 2) & 0x1) == 1; }
+bool get_visualize_ideal()  { return ((get_visualize_mode() >> 0) & 0x1) == 1; }
+
+const uint enum_render_mode_combine = 0;
+const uint enum_render_mode_di      = 1;
+const uint enum_render_mode_gi      = 2;
+
+const uint enum_sampling_mode_cos       = 0;
+const uint enum_sampling_mode_rsm       = 1;
+const uint enum_sampling_mode_rsm_ris   = 2;
+
+const uint enum_pixse_mode_uniform      = 0;
+const uint enum_pixse_mode_irradiance   = 1;
+const uint enum_pixse_mode_slc          = 2;
+
+const ivec2 four_neighbors_pix[4] = ivec2[](
+    ivec2(0, 1),
+    ivec2(1, 1),
+    ivec2(1, 0),
+    ivec2(0, 0)
+);
+
+ivec2 get_visibility_offset(int mip) { 
+    const ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
+    const ivec2 tile_offset = ivec2(pixel / 16) * 16;
+    return tile_offset >> mip;
+}
+
+ivec2 get_visibility_offset_debug(int mip) { 
+    const ivec2 pixel = ivec2(pushConstants.debug_info_x, pushConstants.debug_info_y);
+    const ivec2 tile_offset = ivec2(pixel / 16) * 16;
+    return tile_offset >> mip;
+}
+
+vec3 CS2WS(in const vec2 uv) {
+    const vec4 posInCS =  vec4(uv*2-1.0f, 0, 1);
+    vec4 posInVS = gUniform.inv_proj * posInCS;
+    posInVS /= posInVS.w;
+    const vec4 posInWS = gUniform.inv_view * vec4(posInVS.xyz, 1.0);
+    return posInWS.xyz;
+}
+
+vec3 CS2WS(in const vec3 uvw) {
+    const vec4 posInCS =  vec4(uvw.xy*2-1.0f, uvw.z, 1);
+    vec4 posInVS = gUniform.inv_proj * posInCS;
+    posInVS /= posInVS.w;
+    const vec4 posInWS = gUniform.inv_view * vec4(posInVS.xyz, 1.0);
+    return posInWS.xyz;
+}
+
+vec2 WS2CS(in const vec3 pos) {
+    vec4 cs = gUniform.proj_view * vec4(pos, 1.0);
+    cs /= cs.w;
+    return cs.xy * 0.5 + 0.5;
+}
+
+vec4 NodeWeight(
+    in const vec3 P,
+    in const vec3 N,
+    in const ivec2 xy,
+    in const int mip_level,
+    bool is_debugger
+) {
+    const bool use_visibility = get_use_visibility();
+    const int visibility_mip_level = mip_level - 5;
+    const ivec2 vis_offset = is_debugger 
+        ? get_visibility_offset_debug(visibility_mip_level)
+        : get_visibility_offset(visibility_mip_level);
+
+    vec4 lumin = vec4(0);
+    vec4 visibility = vec4(0);
+    SLCNode nodes[4];
+    for (int i=0; i<4; ++i) {
+        const ivec2 xy_offset = four_neighbors_pix[i];
+        const ivec2 vReadCoord = xy + xy_offset;
+        lumin[i] = texelFetch(in_luminance, vReadCoord, mip_level).x;
+        const vec4 bounding_box_xy = texelFetch(in_boundingboxXY, vReadCoord, mip_level);
+        const vec4 bounding_box_z = texelFetch(in_boundingboxZ, vReadCoord, mip_level);
+        nodes[i].cone = texelFetch(in_normalcone, vReadCoord, mip_level);
+        nodes[i].bound = AABB(vec3(bounding_box_xy.xy, bounding_box_z.x), vec3(bounding_box_xy.zw, bounding_box_z.y));
+        visibility[i] = (use_visibility && (visibility_mip_level >= 0)) 
+            ? texelFetch(in_visibility, vis_offset + vReadCoord, visibility_mip_level).x
+            : 1.0;
+    }
+    if(visibility == vec4(0)) {
+        visibility = vec4(1);
+    }
+    lumin = normalizeWeights(lumin * visibility);
+    
+    uint ps_mode = get_pixse_mode();
+    uint slc_mode = get_slc_mode();
+    if(ps_mode == enum_pixse_mode_uniform) {  return vec4(0.25); }
+    else if(ps_mode == enum_pixse_mode_irradiance) { return lumin; }
+    else if(ps_mode == enum_pixse_mode_slc){
+        return ComputeNodeWeights_QuadTree(P, N, lumin, nodes[0], nodes[1], nodes[2], nodes[3], slc_mode);
+    }
+    else { return vec4(0.25); }
+}
+
+ivec2 PixelSelection(
+    in const vec3 P,
+    in const vec3 N,
+    inout uint RNG,
+    out float probability
+) {
+    int mip_level = MAX_MIP_LEVEL;
+    ivec2 xy = ivec2(0);
+    float p = 1.f;
+    // go through the tree down to leaf
+    int mip_layer = int(get_mip_layer());
+    for (int i = 0; i < MAX_MIP_LEVEL; ++i) {
+        mip_level--; // next mip level
+        xy *= 2;
+        // sample next level
+        const float rnd = UniformFloat(RNG);
+        float accum = 0.f;
+        int last_non_zero = -1;
+        float last_non_zero_pdf = 0;
+
+        const vec4 child_importance = (i < mip_layer)
+            ? NodeWeight(P, N, xy, mip_level, false)
+            : vec4(0.25);
+        for (int j=0; j<4; ++j) {
+            const ivec2 xy_offset = four_neighbors_pix[j];
+            const float importance = child_importance[j];
+            accum += importance;
+            
+            if(importance > 0) {
+                last_non_zero = j;
+                last_non_zero_pdf = importance;
+            }
+
+            if(rnd < accum) {
+                xy = xy + xy_offset;
+                p = p * importance;
+                break;
+            }
+            else if(j==3 && last_non_zero!=-1) {
+                xy = xy + four_neighbors_pix[last_non_zero];
+                p = p * last_non_zero_pdf;
+                break;
+            }
+            else if(j==3){  // this should never happen, sample failed
+                probability = -1;
+                return ivec2(-1);
+            }
+        }
+        p *= 4;
+    }
+    probability = p;
+    return xy;
+}
+
+float PixelSelectionPdf(
+    in const vec3 P,
+    in const vec3 N,
+    in const ivec2 sample_xy,
+    bool is_debugger
+) {
+    // gImportanceMIP
+    int mip_level = MAX_MIP_LEVEL;
+    ivec2 xy = ivec2(0);
+    float p = 1.f;
+    
+    int mip_layer = int(get_mip_layer());
+    for (int i = 0; i < mip_layer; ++i) {
+        mip_level--;    // next mip level
+        xy *= 2;        // sample next level
+        const ivec2 selected_xy = sample_xy >> mip_level;
+        const vec4 child_importance = NodeWeight(P, N, xy, mip_level, is_debugger);
+
+        vec2 xy_direction = selected_xy - xy;
+        
+        for (int j=0; j<4; ++j) {
+            bool isChosen = (xy_direction == four_neighbors_pix[j]);
+            if(isChosen) {
+                ivec2 xy_offset = four_neighbors_pix[j];
+                float importance = child_importance[j];
+                xy = xy + xy_offset;
+                p = p * importance;
+                if(p == 0) return 0;
+                break;
+            }
+        }
+        p *= 4;
+    }
+    return p;
+}
+
+vec3 skyColor(in vec3 rayDir) {
+    const float t = 0.5 * (rayDir.y + 1.0);
+    return (1.0-t)*vec3(1.0) + t*vec3(0.5, 0.7, 1.0);
+}
+
+void VisualizeImportance(
+    in const vec3 P,
+    in const vec3 N
+) {
+    // The resolution of the image, which is the same as the launch size:
+    const ivec2 resolution = ivec2(512);
+    const ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
+    // If the pixel is outside of the image, don't do anything:
+    if((pixel.x >= resolution.x) || (pixel.y >= resolution.y)) {
+        return;
+    }
+
+    float pdf = PixelSelectionPdf(P, N, pixel, true);
+    if(isnan(pdf))
+        imageStore(debugImpImage, pixel, vec4(1,0,1,1));
+    else
+        imageStore(debugImpImage, pixel, vec4(vec3(pdf * pushConstants.imp_vis_scalar), 1));
+}
+
+void VisualizeImportanceRIS(
+    in const vec3 P,
+    in const vec3 N
+) {
+    // The resolution of the image, which is the same as the launch size:
+    const ivec2 resolution = ivec2(512);
+    const ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
+    // If the pixel is outside of the image, don't do anything:
+    if((pixel.x >= resolution.x) || (pixel.y >= resolution.y)) {
+        return;
+    }
+
+    const ivec2 pix_select = pixel;
+    float pix_probability = PixelSelectionPdf(P, N, pix_select, true);
+    const float approx_Lum  = texelFetch(in_luminance, pix_select, 0).x;
+    const  vec3 approx_Norm = texelFetch(in_normalcone, pix_select, 0).xyz;
+    const  vec2 approx_xy = texelFetch(in_boundingboxXY, pix_select, 0).xy;
+    const  float approx_z = texelFetch(in_boundingboxZ, pix_select, 0).x;
+    const  vec2 uv_select = (vec2(pix_select) + vec2(0.5)) / 512;
+    const  vec3 approx_PosWS = vec3(approx_xy, approx_z);
+    // vertex.position, vertex.geometric_normal
+    float target_pdf = 0;
+    float source_pdf = 0;
+    const vec3 L = normalize(approx_PosWS - P);
+    const float distance = length(approx_PosWS - P);
+    const float area_pdf = pix_probability / gUniform.area;
+    source_pdf = area_pdf;
+    const float cos_theta = dot(L, N);
+    if(cos_theta <= 0) {
+
+    } else {
+        target_pdf = approx_Lum * cos_theta * max(-dot(L, approx_Norm), 0) / (distance * distance);
+    }
+
+    if(isnan(pix_probability))
+        imageStore(debugImpImage, pixel, vec4(1,0,1,1));
+    else
+        imageStore(debugImpImage, pixel, vec4(vec3(target_pdf * pushConstants.imp_vis_scalar), 1));
+}
+
+void VisualizeImportance(inout uint RNG) {
+    const ivec2 resolution = ivec2(pushConstants.resolution);
+    Ray primaryRay = generateRay(
+        ivec2(pushConstants.debug_info_x, pushConstants.debug_info_y),
+        resolution,
+        false
+    );
+    // primary intersection
+    SurfaceIntersection vertex;
+    bool intersected = intersectEX(primaryRay, vertex, RNG);   // TODO :: ray differential
+    if(!intersected) {
+        imageStore(debugImpImage, ivec2(gl_LaunchIDEXT.xy), vec4(1,0,1,1));
+        return;
+    }
+    
+    const uint sample_mode = get_sample_mode();
+    if(sample_mode == enum_sampling_mode_cos) {
+
+    }
+    else if(sample_mode == enum_sampling_mode_rsm) {
+        VisualizeImportance(vertex.position, vertex.geometric_normal);
+    }
+    if(sample_mode == enum_sampling_mode_rsm_ris) {
+        VisualizeImportanceRIS(vertex.position, vertex.geometric_normal);
+    }
+}
+
+void VisualizeImportanceIdeal(inout uint RNG) {
+    const ivec2 resolution = ivec2(pushConstants.resolution);
+    Ray primaryRay = generateRay(
+        ivec2(pushConstants.debug_info_x, pushConstants.debug_info_y),
+        resolution,
+        false
+    );
+    // primary intersection
+    SurfaceIntersection vertex;
+    bool intersected = intersectEX(primaryRay, vertex, RNG);   // TODO :: ray differential
+    // ivec2(gl_LaunchIDEXT.xy)
+    if(!intersected) {
+        imageStore(debugImpImage, ivec2(gl_LaunchIDEXT.xy), vec4(1,0,1,1));
+    } else {
+        // The resolution of the image, which is the same as the launch size:
+        const ivec2 resolution = ivec2(512);
+        const ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
+        // If the pixel is outside of the image, don't do anything:
+        if((pixel.x >= resolution.x) || (pixel.y >= resolution.y)) {
+            return;
+        }
+        // compute area
+        const vec2 uv_select = (vec2(pixel) + vec2(UniformFloat(RNG),UniformFloat(RNG))) / 512;
+        const vec3 wsPos = CS2WS(uv_select);
+        const float area = gUniform.area;
+        Ray light_ray = Ray(wsPos - gUniform.direction * 1000.0f, 0, gUniform.direction, k_inf);
+        SurfaceIntersection light_vertex;
+        bool light_ray_intersected = intersectEX(light_ray, light_vertex, RNG);
+        if(light_ray_intersected) {
+            vec3 dir = light_vertex.position - vertex.position;
+            const float distance = length(dir);
+            dir = dir / distance;
+            
+            vec3 visible = transmittanceEX(vertex, light_vertex, RNG);
+            if(dot(light_vertex.geometric_normal, -dir) < 0) {
+                visible = vec3(0);
+            }
+            const vec3 albedo_second = texture(textures[lambertian_materials[light_vertex.matID].basecolor_opacity_tex], light_vertex.uv).rgb;
+            const float cost = max(dot(light_vertex.geometric_normal, -gUniform.direction), 0.f);
+            vec3 irradiance = albedo_second * visible.x;
+            irradiance *= area;
+            // irradiance *= area * pix_probability;
+            // irradiance *= visible.x * (cost * cost);
+
+            const float cos_theta2 = max(dot(light_vertex.geometric_normal, -dir), 0);
+            const float cos_theta1 = max(dot(vertex.geometric_normal, dir), 0);
+            const vec3 radiance = irradiance * cos_theta1 * cos_theta2 / (distance * distance);
+            // gi_radiance += radiance;
+
+            const float lum = dot(radiance, vec3(1)) * pushConstants.imp_vis_scalar;
+            // SplatVisibility(light_vertex.position, 1);
+            imageStore(debugImpImage, ivec2(gl_LaunchIDEXT.xy), vec4(vec3(lum),1));
+        }
+        else {
+            imageStore(debugImpImage, ivec2(gl_LaunchIDEXT.xy), vec4(0,0,0,1));
+        }
+    }
+}
+
+bool SameDirection(
+    in const vec3 dir1,
+    in const vec3 dir2,
+    in const vec3 normal
+) {
+    return dot(dir1, normal) * dot(dir2, normal) > 0;
+}
+
+void SplatVisibility(
+    in const vec3 position,
+    in const float visibility
+) {
+    const vec2 uv = WS2CS(position);
+    const ivec2 xy = min(ivec2(uv * 16), 15);
+    const ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
+    const ivec2 tile_offset = ivec2(pixel / 16) * 16;
+    // imageAtomicAdd(visibilityImg, tile_offset + xy, visibility);
+    imageStore(visibilityImg, tile_offset + xy, vec4(1.));
+}
+
+void SplatImportance(
+    in const vec3 position,
+    in const float visibility
+) {
+    const vec2 uv = WS2CS(position);
+    const ivec2 xy = min(ivec2(uv * 512), 511);
+    imageAtomicAdd(importanceImg, xy, visibility);
+}
+
+vec3 unidirectional_path_tracing(in Ray ray, inout uint RNG) {
+    const uint render_mode = get_render_mode();
+    const uint sample_mode = get_sample_mode();
+    const bool use_visibility = get_use_visibility();
+    const bool use_importance = get_use_importance();
+
+    // loop carrying variable definition
+    // A path's contribution is 
+    // C(v) = W(v0, v1) * G(v0, v1) * f(v0, v1, v2) * 
+    //                    G(v1, v2) * f(v1, v2, v3) * 
+    //                  ........
+    //                  * G(v_{n-1}, v_n) * L(v_{n-1}, v_n)
+    // where v is the path vertices, W is the sensor response
+    // G is the geometry term, f is the BSDF, L is the emission
+    vec3 radiance = vec3(0);
+    // current_path_throughput stores the ratio between
+    // 1) the path contribution from v0 up to v_{i} (the BSDF f(v_{i-1}, v_i, v_{i+1}) is not included), 
+    // where i is where the PathVertex "vertex" lies on, and
+    // 2) the probability density for computing the path v from v0 up to v_i,
+    // so that we can compute the Monte Carlo estimates C/p. 
+    vec3 path_throughput = vec3(1);
+    // eta_scale stores the scale introduced by Snell-Descartes law to the BSDF (eta^2).
+    // We use the same Russian roulette strategy as Mitsuba/pbrt-v3
+    // and tracking eta_scale and removing it from the
+    // path contribution is crucial for many bounces of refraction.
+    float eta_scale = 1.f;
+
+    // primary intersection
+    SurfaceIntersection vertex;
+    bool intersected = intersectEX(ray, vertex, RNG);   // TODO :: ray differential
+    if(!intersected) {
+        // TODO:: add background / env map
+        // return skyColor(ray.direction);
+        return vec3(0,0,0);
+    }
+
+    const vec3 albedo = texture(textures[lambertian_materials[vertex.matID].basecolor_opacity_tex], vertex.uv).rgb;    
+    Ray shadow_ray = spawnRay(vertex, -gUniform.direction);
+    SurfaceIntersection shadow_vertex;
+    bool shadow_ray_intersected = intersectEX(shadow_ray, shadow_vertex, RNG);
+    if(!shadow_ray_intersected) {
+        radiance += albedo * dot(vertex.geometric_normal, -gUniform.direction);
+    }
+
+    if(render_mode == enum_render_mode_di) {
+        return radiance;
+    }
+
+    vec3 gi_radiance = vec3(0);
+    
+    if(sample_mode == enum_sampling_mode_cos) {
+        // cos sample
+        const vec3 dirInWS = normalize(normalize(vertex.geometric_normal) + randomPointInSphere(RNG));
+        Ray bsdf_ray = spawnRay(vertex, dirInWS);
+        SurfaceIntersection bsdf_vertex;
+        bool bsdf_ray_intersected = intersectEX(bsdf_ray, bsdf_vertex, RNG);
+        if(bsdf_ray_intersected) {
+            const vec3 albedo_second = texture(textures[lambertian_materials[bsdf_vertex.matID].basecolor_opacity_tex], bsdf_vertex.uv).rgb;
+            Ray shadow_ray = spawnRay(bsdf_vertex, -gUniform.direction);
+            SurfaceIntersection shadow_vertex;
+            bool shadow_ray_intersected = intersectEX(shadow_ray, shadow_vertex, RNG);
+            if((!shadow_ray_intersected) && SameDirection(-bsdf_ray.direction, -gUniform.direction, bsdf_vertex.geometric_normal)) {
+                const float cos_term = dot(shadow_vertex.geometric_normal, -gUniform.direction);
+                gi_radiance += albedo_second * cos_term;
+            }
+        }
+        gi_radiance *= k_pi;
+    }
+    else if(sample_mode == enum_sampling_mode_rsm) {
+        // light sampling
+        float pix_probability;
+        const ivec2 pix_select = PixelSelection(vertex.position, vertex.geometric_normal, RNG, pix_probability);
+        const vec2 uv_select = (vec2(pix_select) + vec2(UniformFloat(RNG),UniformFloat(RNG))) / 512;
+        const vec3 wsPos = CS2WS(uv_select);
+
+        // compute area
+        const float area = gUniform.area;
+        Ray light_ray = Ray(wsPos - gUniform.direction * 1000.0f, 0, gUniform.direction, k_inf);
+        SurfaceIntersection light_vertex;
+        bool light_ray_intersected = intersectEX(light_ray, light_vertex, RNG);
+        if(light_ray_intersected) {
+            vec3 dir = light_vertex.position - vertex.position;
+            const float distance = length(dir);
+            dir = dir / distance;
+            
+            vec3 visible = transmittanceEX(vertex, light_vertex, RNG);
+            if(dot(light_vertex.geometric_normal, -dir) < 0) {
+                visible = vec3(0);
+            }
+            const vec3 albedo_second = texture(textures[lambertian_materials[light_vertex.matID].basecolor_opacity_tex], light_vertex.uv).rgb;
+            const float cost = max(dot(light_vertex.geometric_normal, -gUniform.direction), 0.f);
+            vec3 irradiance = albedo_second * visible.x;
+            irradiance *= area / pix_probability;
+            // irradiance *= area * pix_probability;
+            // irradiance *= visible.x * (cost * cost);
+
+            const float cos_theta2 = max(dot(light_vertex.geometric_normal, -dir), 0);
+            const float cos_theta1 = max(dot(vertex.geometric_normal, dir), 0);
+            const vec3 radiance = irradiance * cos_theta1 * cos_theta2 / (distance * distance);
+            gi_radiance += radiance;
+
+            const float lum = dot(radiance, vec3(1));
+            if(use_visibility && (visible != vec3(0)) && (cos_theta1 * cos_theta2 > 0) && (lum > 0)) {
+                SplatVisibility(light_vertex.position, 1);
+            }
+            // if(use_importance && (visible != vec3(0)) && (cos_theta1 * cos_theta2 > 0) && (lum > 0)) {
+            //     SplatImportance(light_vertex.position,cos_theta1 * cos_theta2 / (distance * distance));
+            // }
+        }
+
+        if(use_visibility || use_importance) {
+            // cos sample
+            const vec3 dirInWS = normalize(normalize(vertex.geometric_normal) + randomPointInSphere(RNG));
+            Ray bsdf_ray = spawnRay(vertex, dirInWS);
+            SurfaceIntersection bsdf_vertex;
+            bool bsdf_ray_intersected = intersectEX(bsdf_ray, bsdf_vertex, RNG);
+            if(bsdf_ray_intersected) {
+                const vec3 albedo_second = texture(textures[lambertian_materials[bsdf_vertex.matID].basecolor_opacity_tex], bsdf_vertex.uv).rgb;
+                Ray shadow_ray = spawnRay(bsdf_vertex, -gUniform.direction);
+                SurfaceIntersection shadow_vertex;
+                bool shadow_ray_intersected = intersectEX(shadow_ray, shadow_vertex, RNG);
+                if((!shadow_ray_intersected) && SameDirection(-bsdf_ray.direction, -gUniform.direction, bsdf_vertex.geometric_normal)) {
+                    const float cos_theta1 = dot(vertex.geometric_normal, dirInWS);
+                    const float cos_theta2 = dot(bsdf_vertex.geometric_normal, -dirInWS);
+                    const float distance = distance(bsdf_vertex.position, vertex.position);
+                    SplatVisibility(bsdf_vertex.position, 1.);
+                    float importance = cos_theta1 * cos_theta2 / (distance * distance);
+                    if(importance > 0)
+                        SplatImportance(bsdf_vertex.position, importance);
+                }
+            }
+        }
+    }
+    else if (sample_mode == enum_sampling_mode_rsm_ris) {
+        ReservoirLit reservoir = EmptyReservoir();
+        uint ris_count = 32;
+        for(int i=0; i<ris_count; ++i) {
+            float pix_probability;
+            const ivec2 pix_select = PixelSelection(vertex.position, vertex.geometric_normal, RNG, pix_probability);
+            const float approx_Lum  = texelFetch(in_luminance, pix_select, 0).x;
+            const  vec3 approx_Norm = texelFetch(in_normalcone, pix_select, 0).xyz;
+            const  vec2 approx_xy = texelFetch(in_boundingboxXY, pix_select, 0).xy;
+            const  float approx_z = texelFetch(in_boundingboxZ, pix_select, 0).x;
+            const  vec2 uv_select = (vec2(pix_select) + vec2(UniformFloat(RNG),UniformFloat(RNG))) / 512;
+            const  vec3 approx_PosWS = vec3(approx_xy, approx_z);
+            // vertex.position, vertex.geometric_normal
+            float target_pdf = 0;
+            float source_pdf = 0;
+            const vec3 L = normalize(approx_PosWS - vertex.position);
+            const float distance = length(approx_PosWS - vertex.position);
+            const float area_pdf = pix_probability / gUniform.area;
+            source_pdf = area_pdf;
+            const float cos_theta = dot(L, vertex.geometric_normal);
+            if(cos_theta <= 0) {
+
+            } else {
+                target_pdf = approx_Lum * cos_theta * max(-dot(L, approx_Norm), 0) / (distance * distance);
+            }
+            
+            UpdateReservoir(reservoir, SampleLit(uv_select) ,target_pdf, source_pdf, UniformFloat(RNG));
+        }
+        float res_weight = GetRISWeight(reservoir);
+        if(isnan(res_weight)) {     // find no available sample
+            return vec3(0);
+        }
+        // light sampling
+        const vec2 uv_select = reservoir.y.uv;
+        const vec3 wsPos = CS2WS(uv_select);
+        // compute area
+        const float area = gUniform.area;
+        Ray light_ray = Ray(wsPos - gUniform.direction * 1000.0f, 0, gUniform.direction, k_inf);
+        SurfaceIntersection light_vertex;
+        bool light_ray_intersected = intersectEX(light_ray, light_vertex, RNG);
+        if(light_ray_intersected) {
+            vec3 dir = light_vertex.position - vertex.position;
+            const float distance = length(dir);
+            dir = dir / distance;
+            
+            vec3 visible = transmittanceEX(vertex, light_vertex, RNG);
+            if(dot(light_vertex.geometric_normal, -dir) < 0) {
+                visible = vec3(0);
+            }
+            const vec3 albedo_second = texture(textures[lambertian_materials[light_vertex.matID].basecolor_opacity_tex], light_vertex.uv).rgb;
+            const float cost = max(dot(light_vertex.geometric_normal, -gUniform.direction), 0.f);
+            vec3 irradiance = albedo_second * visible.x;
+            irradiance *= res_weight;
+
+            const float cos_theta2 = max(dot(light_vertex.geometric_normal, -dir), 0);
+            const float cos_theta1 = max(dot(vertex.geometric_normal, dir), 0);
+            const vec3 radiance = irradiance * cos_theta1 * cos_theta2 / (distance * distance);
+
+            if(any(isnan(radiance))) {
+                gi_radiance += vec3(1,0,1);
+            }
+            else 
+                gi_radiance += radiance;
+
+        }
+    }
+    
+    if(render_mode == enum_render_mode_gi) {
+        return gi_radiance;
+    }
+
+    radiance += gi_radiance * albedo;
+
+    return radiance;
+}
+
+void main() {
+    // The resolution of the image, which is the same as the launch size:
+    const ivec2 resolution = ivec2(pushConstants.resolution);
+    const ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
+    // If the pixel is outside of the image, don't do anything:
+    if((pixel.x >= resolution.x) || (pixel.y >= resolution.y)) {
+        return;
+    }
+
+    uint RNG = InitRNG(pixel, pushConstants.sample_batch);
+
+    Ray primaryRay = generateRay(
+        pixel,
+        resolution,
+        false
+    );
+    
+    vec3 pixelColor = unidirectional_path_tracing(primaryRay, RNG);
+
+    if(length(vec2(pixel) - vec2(pushConstants.debug_info_x, pushConstants.debug_info_y)) < 5) {
+        pixelColor = vec3(1, 0, 0);
+    }
+
+    imageStore(storageImage, pixel, vec4(pixelColor, 1.0));
+
+    const bool visualize_ideal = get_visualize_ideal();
+    if(visualize_ideal) {
+        VisualizeImportanceIdeal(RNG);
+    } else {
+        VisualizeImportance(RNG);
+    }
+}

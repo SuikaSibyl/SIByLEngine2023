@@ -19,7 +19,7 @@ SE_EXPORT struct ImGuiLayer : public Core::Layer {
 
   auto startNewFrame() -> void;
   auto startGuiRecording() -> void;
-  auto render() -> void;
+  auto render(RHI::Semaphore* waitSemaphore = nullptr) -> void;
 
   auto getDPI() noexcept -> float { return dpi; }
   auto createImGuiTexture(RHI::Sampler* sampler, RHI::TextureView* view,

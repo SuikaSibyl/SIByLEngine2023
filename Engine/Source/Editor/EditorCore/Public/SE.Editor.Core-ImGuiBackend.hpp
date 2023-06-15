@@ -22,7 +22,8 @@ SE_EXPORT struct ImGuiBackend {
   virtual auto onWindowResize(size_t, size_t) -> void = 0;
 
   virtual auto startNewFrame() -> void = 0;
-  virtual auto render(ImDrawData* draw_data) -> void = 0;
+  virtual auto render(ImDrawData* draw_data,
+                      RHI::Semaphore* waitSemaphore = nullptr) -> void = 0;
   virtual auto present() -> void = 0;
 
   virtual auto createImGuiTexture(RHI::Sampler* sampler, RHI::TextureView* view,

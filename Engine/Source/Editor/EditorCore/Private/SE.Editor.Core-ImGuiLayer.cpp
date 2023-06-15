@@ -1,3 +1,4 @@
+#include <Config/SE.Core.Config.hpp>
 #include <SE.Editor.Core-ImGuiLayer.hpp>
 #include <SE.Editor.Core-ImGuiBackend.VK.hpp>
 #include <System/SE.Core.System.hpp>
@@ -34,12 +35,18 @@ ImGuiLayer::ImGuiLayer(RHI::RHILayer* rhiLayer) : rhiLayer(rhiLayer) {
   ImGui::StyleColorsDark();
   // ImGui::StyleColorsClassic();
 
+  std::string engine_path = Core::RuntimeConfig::get()->string_property("engine_path");
+
   dpi = imguiBackend->getWindowDPI();
   io.Fonts->AddFontFromFileTTF(
-      "../Engine/Binaries/Runtime/fonts/opensans/OpenSans-Bold.ttf",
+      (engine_path +
+       "Binaries/Runtime/fonts/opensans/OpenSans-Bold.ttf")
+          .c_str(),
       dpi * 15.0f);
   io.FontDefault = io.Fonts->AddFontFromFileTTF(
-      "../Engine/Binaries/Runtime/fonts/opensans/OpenSans-Regular.ttf",
+      (engine_path +
+       "Binaries/Runtime/fonts/opensans/OpenSans-Bold.ttf")
+          .c_str(),
       dpi * 15.0f);
 
   // set dark theme
@@ -178,7 +185,7 @@ auto ImGuiLayer::startGuiRecording() -> void {
   }
 }
 
-auto ImGuiLayer::render() -> void {
+auto ImGuiLayer::render(RHI::Semaphore* waitSemaphore) -> void {
   // End docking space
   ImGui::End();
   // Do render ImGui stuffs
@@ -186,7 +193,7 @@ auto ImGuiLayer::render() -> void {
   ImDrawData* main_draw_data = ImGui::GetDrawData();
   const bool main_is_minimized = (main_draw_data->DisplaySize.x <= 0.0f ||
                                   main_draw_data->DisplaySize.y <= 0.0f);
-  if (!main_is_minimized) imguiBackend->render(main_draw_data);
+  if (!main_is_minimized) imguiBackend->render(main_draw_data, waitSemaphore);
   ImGuiIO& io = ImGui::GetIO();
   (void)io;
   // Update and Render additional Platform Windows

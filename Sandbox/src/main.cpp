@@ -20,8 +20,11 @@
 #include <SE.Application.hpp>
 #include <SE.SRenderer.hpp>
 
+#include <Plugins/SE.SRendererExt.GeomTab.hpp>
+#include <Pipeline/SE.SRendere-RTGIPipeline.hpp>
 #include <Pipeline/SE.SRendere-ForwardPipeline.hpp>
 #include <Pipeline/SE.SRendere-SSRXPipeline.hpp>
+#include <Pipeline/SE.SRendere-GeoInspectPipeline.hpp>
 #include <Passes/FullScreenPasses/ScreenSpace/SE.SRenderer-BarGTPass.hpp>
 
 struct SandBoxApplication :public Application::ApplicationBase {
@@ -36,6 +39,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				RHI::ContextExtensionsFlags(
 					RHI::ContextExtension::RAY_TRACING
 					| RHI::ContextExtension::BINDLESS_INDEXING
+					| RHI::ContextExtension::FRAGMENT_BARYCENTRIC
 					| RHI::ContextExtension::ATOMIC_FLOAT),
 				mainWindow.get(),
 				true
@@ -65,16 +69,19 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		GFX::GFXManager::get()->registerSamplerResource(GFX::GFXManager::get()->commonSampler.clamp_nearest, RHI::SamplerDescriptor{});
 		Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler->setName("DefaultSampler");
 		Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.clamp_nearest)->sampler->setName("ClampNearestSampler");
+        
+		InvalidScene();
 
-		srenderer = std::make_unique<SRenderer>();
-
-		srenderer->init(scene);
 		pipeline1 = std::make_unique<SRP::BarGTPipeline>();
         pipeline2 = std::make_unique<SRP::SSRXPipeline>();
+        rtgi_pipeline = std::make_unique<SRP::RTGIPipeline>();
+        geoinsp_pipeline = std::make_unique<SRP::GeoInspectPipeline>();
 		pipeline1->build();
 		pipeline2->build();
+		rtgi_pipeline->build();
+        geoinsp_pipeline->build();
 
-		pipeline = pipeline2.get();
+		pipeline = rtgi_pipeline.get();
 
 		Editor::DebugDraw::Init(pipeline->getOutput(), nullptr);
 
@@ -87,17 +94,36 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		cameraController.init(mainWindow.get()->getInput(), &timer, editorLayer->getWidget<Editor::ViewportWidget>());
 	};
 
+	void InvalidScene() {
+        srenderer = std::make_unique<SRenderer>();
+        srenderer->init(scene);
+        GeometryTabulator::tabulate(
+            512, srenderer->sceneDataPack.position_buffer_cpu,
+            srenderer->sceneDataPack.index_buffer_cpu,
+            srenderer->sceneDataPack.geometry_buffer_cpu);
+	}
+
 	/** Update the application every loop */
-	virtual auto Update(double deltaTime) noexcept -> void override {
+    virtual auto Update(double deltaTime) noexcept -> void override {
+        RHI::Device* device = rhiLayer->getDevice();
+		if (scene.isDirty == true) {
+          device->waitIdle();
+          InvalidScene();
+          scene.isDirty = false;
+		}
+
 		int width, height;
 		mainWindow->getFramebufferSize(&width, &height);
-		width = 512;
-		height = 512;
+		width = 1280;
+		height = 720;
 		{
 			auto view = Core::ComponentManager::get()->view<GFX::CameraComponent>();
 			for (auto& [entity, camera] : view) {
 				if (camera.isPrimaryCamera) {
 					camera.aspect = 1.f * width / height;
+                                  editorLayer
+                                      ->getWidget<Editor::ViewportWidget>()
+                                      ->camera = &camera;
 					cameraController.bindTransform(scene.getGameObject(entity)->getEntity().getComponent<GFX::TransformComponent>());
 					srenderer->updateCamera(*(scene.getGameObject(entity)->getEntity().getComponent<GFX::TransformComponent>()), camera);
 					break;
@@ -111,7 +137,6 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		Editor::DebugDraw::Clear();
 
 		// frame start
-		RHI::Device* device = rhiLayer->getDevice();
 		RHI::SwapChain* swapChain = rhiLayer->getSwapChain();
 		RHI::MultiFrameFlights* multiFrameFlights = rhiLayer->getMultiFrameFlights();
 		multiFrameFlights->frameStart();
@@ -151,10 +176,10 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		ImGui::Begin("Pipeline Choose");
 		{	// Select an item type
-			const char* item_names[] = {
-				"RayTracing", "Forward",
-			};
-			static int pipeline_id = 1;
+            const char* item_names[] = {"RayTracing", "Forward",
+                                        "RTGI Pipeline",
+                                        "Geo Inspector"};
+			static int pipeline_id = 2;
 			ImGui::Combo("Mode", &pipeline_id, item_names, IM_ARRAYSIZE(item_names), IM_ARRAYSIZE(item_names));
 			if (pipeline_id == 0) {
 				pipeline = pipeline1.get();
@@ -163,7 +188,16 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			else if (pipeline_id == 1) {
 				pipeline = pipeline2.get();
 				editorLayer->getWidget<Editor::RDGViewerWidget>()->pipeline = pipeline;
-			}
+            } else if (pipeline_id == 2) {
+                pipeline = rtgi_pipeline.get();
+                editorLayer
+                    ->getWidget<Editor::RDGViewerWidget>()
+                    ->pipeline = pipeline;
+            } else if (pipeline_id == 3) {
+                pipeline = geoinsp_pipeline.get();
+                editorLayer->getWidget<Editor::RDGViewerWidget>()->pipeline =
+                    pipeline;
+            }
 		}
 		ImGui::End();
 
@@ -186,7 +220,9 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		rhiLayer->getDevice()->waitIdle();
 		srenderer = nullptr;
 		pipeline1 = nullptr;
-		pipeline2 = nullptr;
+        pipeline2 = nullptr;
+        rtgi_pipeline = nullptr;
+        geoinsp_pipeline = nullptr;
 
 		Editor::DebugDraw::Destroy();
 
@@ -211,7 +247,9 @@ private:
 	RDG::Pipeline* pipeline = nullptr;
 	std::unique_ptr<RDG::Pipeline> pipeline1 = nullptr;
 	std::unique_ptr<RDG::Pipeline> pipeline2 = nullptr;
-
+    std::unique_ptr<RDG::Pipeline> rtgi_pipeline = nullptr;
+    std::unique_ptr<RDG::Pipeline> geoinsp_pipeline = nullptr;
+    
 	// the embedded scene, which should be removed in the future
 	GFX::Scene scene;
 
@@ -229,7 +267,7 @@ int main()
 	app.createMainWindow({
 			Platform::WindowVendor::GLFW,
 			L"SIByL Engine 2023.1",
-			512, 512,
+			1920, 1080,
 			Platform::WindowProperties::VULKAN_CONTEX
 		});
 	app.run();

@@ -108,14 +108,15 @@ auto Allocator::nextBlock(BlockHeader* pBlock) noexcept -> BlockHeader* {
                                         blockSize);
 }
 
-Buffer::Buffer() : data(nullptr), size(0) {}
+Buffer::Buffer() : data(nullptr), size(0), isReference(false) {}
 
-Buffer::Buffer(size_t size) : size(size) { data = Alloc(size); }
+Buffer::Buffer(size_t size) : size(size), isReference(false) { data = Alloc(size); }
 
 Buffer::Buffer(Buffer const& b) {
   release();
   size = b.size;
   data = Alloc(size);
+  isReference = false;
   memcpy(data, b.data, size);
 }
 
@@ -123,9 +124,12 @@ Buffer::Buffer(Buffer&& b) {
   release();
   size = b.size;
   data = b.data;
+  isReference = false;
   b.data = nullptr;
   b.size = 0;
 }
+Buffer::Buffer(void* data, size_t size)
+    : data(data), size(size), isReference(true) {}
 
 Buffer::~Buffer() { release(); }
 
@@ -148,6 +152,7 @@ auto Buffer::operator=(Buffer&& b) -> Buffer& {
 
 auto Buffer::release() noexcept -> void {
   if (data == nullptr) return;
+  if (isReference) return;
   Free(data, size);
   data = nullptr;
   size = 0;

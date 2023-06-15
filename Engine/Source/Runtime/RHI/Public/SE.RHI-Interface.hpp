@@ -2221,7 +2221,7 @@ SE_EXPORT struct AffineTransformMatrix {
     for (int i = 0; i < 3; ++i)
       for (int j = 0; j < 4; ++j) matrix[i][j] = mat.data[i][j];
   }
-  operator Math::mat4() {
+  operator Math::mat4() const {
     Math::mat4 mat;
     for (int i = 0; i < 3; ++i)
       for (int j = 0; j < 4; ++j) mat.data[i][j] = matrix[i][j];

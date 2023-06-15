@@ -31,7 +31,7 @@ SE_EXPORT struct SSRXForwardGraph : public RDG::Graph {
 
 SE_EXPORT struct SSRXGeoReconstrGraph : public RDG::Graph {
   SSRXGeoReconstrGraph() {
-    addPass(std::make_unique<RSSGeoReconstrPass>(512, 512), "Reconstr Pass");
+    addPass(std::make_unique<RSSGeoReconstrPass>(1280, 720), "Reconstr Pass");
     markOutput("Reconstr Pass", "Depth");
 
     reconstrPass = static_cast<RSSGeoReconstrPass*>(getPass("Reconstr Pass"));
@@ -76,6 +76,7 @@ SE_EXPORT struct SSRXPipeline : public RDG::Pipeline {
 
   GFX::Buffer* vertex_buffer = nullptr;
   GFX::Buffer* index_buffer = nullptr;
+  uint32_t max_vertex, primitive_count;
   bool to_build = false;
 
   SSRXForwardGraph      forwardGraph;

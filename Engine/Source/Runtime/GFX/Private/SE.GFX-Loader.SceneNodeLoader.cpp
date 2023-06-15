@@ -1,5 +1,5 @@
 #pragma once
-
+#include <Misc/SE.Core.Misc.hpp>
 #include <SE.GFX-Loader.SceneNodeLoader.hpp>
 #include <Print/SE.Core.Log.hpp>
 #include <ECS/SE.Core.ECS.hpp>
@@ -315,8 +315,7 @@ auto SceneNodeLoader_obj::loadSceneNode(
   }
   Core::GUID guid =
       Core::ResourceManager::get()->requestRuntimeGUID<GFX::Mesh>();
-  Core::ORID orid = Core::ResourceManager::get()->database.mapResourcePath(
-      path.string().c_str());
+  Core::ORID orid = Core::requestORID();
   Core::ResourceManager::get()->database.registerResource(orid, guid);
   Core::ResourceManager::get()->addResource<GFX::Mesh>(guid, std::move(mesh));
   GFX::Mesh* meshResourceRef =
@@ -335,102 +334,142 @@ auto SceneNodeLoader_obj::loadSceneNode(
       ->mesh = meshResourceRef;
 }
 
-  /** Load glTF file */
-auto SceneNodeLoader_glTF::loadSceneNode(std::filesystem::path const& path,
-                                         GFX::Scene& gfxscene) noexcept
-    -> void {
-#define INDEX_TYPE uint32_t
-  // use tinygltf to load file
-  tinygltf::Model model;
-  tinygltf::TinyGLTF loader;
-  std::string err;
-  std::string warn;
-  bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, path.string());
-  if (!warn.empty())
-    Core::LogManager::Warning(
-        std::format("GFX :: tinygltf :: {0}", warn.c_str()));
-  if (!err.empty())
-    Core::LogManager::Error(std::format("GFX :: tinygltf :: {0}", err.c_str()));
-  if (!ret) {
-    Core::LogManager::Error("GFX :: tinygltf :: Failed to parse glTF");
-    return;
+struct glTFLoaderEnv {
+  std::string directory;
+  std::unordered_map<tinygltf::Texture const*, Core::GUID> textures;
+  std::unordered_map<tinygltf::Material const*, Core::GUID> materials;
+};
+
+auto loadGLTFMaterialTextures(tinygltf::Texture const* gltexture, tinygltf::Model const* model,
+                              glTFLoaderEnv& env, GFX::Scene& gfxscene,
+                              MeshLoaderConfig meshConfig = {}) noexcept
+    -> Core::GUID {
+  if (env.textures.find(gltexture) != env.textures.end()) {
+    return env.textures[gltexture];
   }
-  // Iterate through all the meshes in the glTF file
+
+  tinygltf::Image glimage = model->images[gltexture->source];
+  std::string tex_path = env.directory + "\\" + glimage.uri;
+  Core::GUID guid =
+      GFX::GFXManager::get()->registerTextureResource(tex_path.c_str());
+
+  env.textures[gltexture] = guid;
+  return guid;
+}
+
+auto loadGLTFMaterial(tinygltf::Material const* glmaterial, tinygltf::Model const* model,
+                      glTFLoaderEnv& env, GFX::Scene& gfxscene,
+                      MeshLoaderConfig meshConfig = {}) noexcept
+    -> Core::GUID {
+  if (env.materials.find(glmaterial) != env.materials.end()) {
+    return env.materials[glmaterial];
+  }
+
+  std::string name = glmaterial->name;
+  GFX::Material gfxmat;
+  gfxmat.ORID = Core::requestORID();
+  if (name == "") name = std::to_string(gfxmat.ORID);
+  gfxmat.path = "content/materials/" +
+                Core::StringHelper::invalidFileFolderName(name) + ".mat";
+  gfxmat.BxDF = 0;
+  gfxmat.name = name;
+
+  // load diffuse information
+  { // load diffuse texture
+    Core::GUID texBasecolor = loadGLTFMaterialTextures(
+        &model->textures[glmaterial->pbrMetallicRoughness.baseColorTexture
+                             .index],
+        model, env, gfxscene, meshConfig);
+    glmaterial->pbrMetallicRoughness.baseColorTexture;
+    gfxmat.textures["base_color"] =
+        GFX::Material::TextureEntry{texBasecolor, 0};
+  }
+  gfxmat.serialize();
+  Core::GUID matID =
+      GFX::GFXManager::get()->registerMaterialResource(gfxmat.path.c_str());
+  env.materials[glmaterial] = matID;
+  return matID;
+}
+
+ static inline auto loadGLTFMesh(tinygltf::Mesh const& gltfmesh,
+                                GameObjectHandle const& gfxNode, int node_id,
+                                tinygltf::Model const* model,
+                                glTFLoaderEnv& env, GFX::Scene& gfxscene,
+                                MeshLoaderConfig meshConfig = {}) noexcept
+    -> Core::GUID {
+#define INDEX_TYPE uint32_t
   // Load meshes into Runtime resource managers.
   RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
-  std::vector<Core::GUID> meshGUIDs = {};
-  std::vector<Core::GUID> matGUIDs = {};
-  std::unordered_map<tinygltf::Mesh const*, Core::GUID> meshMap = {};
-  for (auto const& gltfMesh : model.meshes) {
-    std::vector<INDEX_TYPE> indexBuffer_uint = {};
-    std::vector<float> vertexBuffer = {};
-    std::vector<float> PositionBuffer = {};
-    // Create GFX mesh, and add it to resource manager
-    GFX::Mesh mesh;
-    uint32_t submesh_index_offset = 0;
-    uint32_t submesh_vertex_offset = 0;
-    // For each primitive
-    for (auto const& meshPrimitive : gltfMesh.primitives) {
-      std::vector<INDEX_TYPE> indexArray_uint = {};
-      std::vector<float> vertexBuffer_positionOnly = {};
-      std::vector<float> vertexBuffer_normalOnly = {};
-      std::vector<float> vertexBuffer_uvOnly = {};
-      auto const& indicesAccessor = model.accessors[meshPrimitive.indices];
-      auto const& bufferView = model.bufferViews[indicesAccessor.bufferView];
-      auto const& buffer = model.buffers[bufferView.buffer];
-      auto const dataAddress = buffer.data.data() + bufferView.byteOffset +
-                               indicesAccessor.byteOffset;
-      auto const byteStride = indicesAccessor.ByteStride(bufferView);
-      uint64_t const count = indicesAccessor.count;
-      switch (indicesAccessor.componentType) {
-        case TINYGLTF_COMPONENT_TYPE_BYTE: {
-          ArrayAdapter<char> originIndexArray(dataAddress, count, byteStride);
-          for (size_t i = 0; i < count; ++i)
-            indexArray_uint.emplace_back(INDEX_TYPE(originIndexArray[i]));
-        } break;
-        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE: {
-          ArrayAdapter<unsigned char> originIndexArray(dataAddress, count,
-                                                       byteStride);
-          for (size_t i = 0; i < count; ++i)
-            indexArray_uint.emplace_back(INDEX_TYPE(originIndexArray[i]));
-        } break;
-        case TINYGLTF_COMPONENT_TYPE_SHORT: {
-          ArrayAdapter<short> originIndexArray(dataAddress, count, byteStride);
-          for (size_t i = 0; i < count; ++i)
-            indexArray_uint.emplace_back(INDEX_TYPE(originIndexArray[i]));
-        } break;
-        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: {
-          ArrayAdapter<unsigned short> originIndexArray(dataAddress, count,
-                                                        byteStride);
-          for (size_t i = 0; i < count; ++i)
-            indexArray_uint.emplace_back(INDEX_TYPE(originIndexArray[i]));
-        } break;
-        case TINYGLTF_COMPONENT_TYPE_INT: {
-          ArrayAdapter<int> originIndexArray(dataAddress, count, byteStride);
-          for (size_t i = 0; i < count; ++i)
-            indexArray_uint.emplace_back(INDEX_TYPE(originIndexArray[i]));
-        } break;
-        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT: {
-          ArrayAdapter<unsigned int> originIndexArray(dataAddress, count,
+  std::vector<INDEX_TYPE> indexBuffer_uint = {};
+  std::vector<float> vertexBuffer = {};
+  std::vector<float> PositionBuffer = {};
+  // Create GFX mesh, and add it to resource manager
+  GFX::Mesh mesh;
+  uint32_t submesh_index_offset = 0;
+  uint32_t submesh_vertex_offset = 0;
+  // For each primitive
+  for (auto const& meshPrimitive : gltfmesh.primitives) {
+    std::vector<INDEX_TYPE> indexArray_uint = {};
+    std::vector<float> vertexBuffer_positionOnly = {};
+    std::vector<float> vertexBuffer_normalOnly = {};
+    std::vector<float> vertexBuffer_uvOnly = {};
+    std::vector<float> vertexBuffer_tangentOnly = {};
+    auto const& indicesAccessor = model->accessors[meshPrimitive.indices];
+    auto const& bufferView = model->bufferViews[indicesAccessor.bufferView];
+    auto const& buffer = model->buffers[bufferView.buffer];
+    auto const dataAddress =
+        buffer.data.data() + bufferView.byteOffset + indicesAccessor.byteOffset;
+    auto const byteStride = indicesAccessor.ByteStride(bufferView);
+    uint64_t const count = indicesAccessor.count;
+    switch (indicesAccessor.componentType) {
+      case TINYGLTF_COMPONENT_TYPE_BYTE: {
+        ArrayAdapter<char> originIndexArray(dataAddress, count, byteStride);
+        for (size_t i = 0; i < count; ++i)
+          indexArray_uint.emplace_back(INDEX_TYPE(originIndexArray[i]));
+      } break;
+      case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE: {
+        ArrayAdapter<unsigned char> originIndexArray(dataAddress, count,
+                                                     byteStride);
+        for (size_t i = 0; i < count; ++i)
+          indexArray_uint.emplace_back(INDEX_TYPE(originIndexArray[i]));
+      } break;
+      case TINYGLTF_COMPONENT_TYPE_SHORT: {
+        ArrayAdapter<short> originIndexArray(dataAddress, count, byteStride);
+        for (size_t i = 0; i < count; ++i)
+          indexArray_uint.emplace_back(INDEX_TYPE(originIndexArray[i]));
+      } break;
+      case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: {
+        ArrayAdapter<unsigned short> originIndexArray(dataAddress, count,
                                                       byteStride);
-          for (size_t i = 0; i < count; ++i)
-            indexArray_uint.emplace_back(INDEX_TYPE(originIndexArray[i]));
-        } break;
-        default:
-          break;
-      }
-      // We re-arrange the indices so that it describe a simple list of
-      // triangles
-      switch (meshPrimitive.mode) {
-        // case TINYGLTF_MODE_TRIANGLE_FAN: // TODO
-        // case TINYGLTF_MODE_TRIANGLE_STRIP: // TODO
-        case TINYGLTF_MODE_TRIANGLES:  // this is the simpliest case to handle
+        for (size_t i = 0; i < count; ++i)
+          indexArray_uint.emplace_back(INDEX_TYPE(originIndexArray[i]));
+      } break;
+      case TINYGLTF_COMPONENT_TYPE_INT: {
+        ArrayAdapter<int> originIndexArray(dataAddress, count, byteStride);
+        for (size_t i = 0; i < count; ++i)
+          indexArray_uint.emplace_back(INDEX_TYPE(originIndexArray[i]));
+      } break;
+      case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT: {
+        ArrayAdapter<unsigned int> originIndexArray(dataAddress, count,
+                                                    byteStride);
+        for (size_t i = 0; i < count; ++i)
+          indexArray_uint.emplace_back(INDEX_TYPE(originIndexArray[i]));
+      } break;
+      default:
+        break;
+    }
+    // We re-arrange the indices so that it describe a simple list of
+    // triangles
+    switch (meshPrimitive.mode) {
+      // case TINYGLTF_MODE_TRIANGLE_FAN: // TODO
+      // case TINYGLTF_MODE_TRIANGLE_STRIP: // TODO
+      case TINYGLTF_MODE_TRIANGLES:  // this is the simpliest case to handle
         {
           for (auto const& attribute : meshPrimitive.attributes) {
-            auto const attribAccessor = model.accessors[attribute.second];
+            auto const attribAccessor = model->accessors[attribute.second];
             auto const& bufferView =
-                model.bufferViews[attribAccessor.bufferView];
-            auto const& buffer = model.buffers[bufferView.buffer];
+                model->bufferViews[attribAccessor.bufferView];
+            auto const& buffer = model->buffers[bufferView.buffer];
             auto const dataPtr = buffer.data.data() + bufferView.byteOffset +
                                  attribAccessor.byteOffset;
             auto const byte_stride = attribAccessor.ByteStride(bufferView);
@@ -638,84 +677,370 @@ auto SceneNodeLoader_glTF::loadSceneNode(std::filesystem::path const& path,
                       "GFX :: tinygltf :: unreconized componant type for UV");
               }
             }
-          }
+            if (attribute.first == "TANGENT") {
+              switch (attribAccessor.type) {
+                case TINYGLTF_TYPE_VEC3: {
+                  switch (attribAccessor.componentType) {
+                    case TINYGLTF_COMPONENT_TYPE_FLOAT: {
+                      ArrayAdapter<Math::vec3> tangents(dataPtr, count,
+                                                       byte_stride);
+                      // For each triangle :
+                      for (size_t i{0}; i < indexArray_uint.size() / 3; ++i) {
+                        // get the i'th triange's indexes
+                        auto f0 = indexArray_uint[3 * i + 0];
+                        auto f1 = indexArray_uint[3 * i + 1];
+                        auto f2 = indexArray_uint[3 * i + 2];
+                        // get the 3 normal vectors for that face
+                        Math::vec3 n0, n1, n2;
+                        n0 = tangents[f0];
+                        n1 = tangents[f1];
+                        n2 = tangents[f2];
+                        // Put them in the array in the correct order
+                        vertexBuffer_tangentOnly.push_back(n0.x);
+                        vertexBuffer_tangentOnly.push_back(n0.y);
+                        vertexBuffer_tangentOnly.push_back(n0.z);
+
+                        vertexBuffer_tangentOnly.push_back(n1.x);
+                        vertexBuffer_tangentOnly.push_back(n1.y);
+                        vertexBuffer_tangentOnly.push_back(n1.z);
+
+                        vertexBuffer_tangentOnly.push_back(n2.x);
+                        vertexBuffer_tangentOnly.push_back(n2.y);
+                        vertexBuffer_tangentOnly.push_back(n2.z);
+                      }
+                    } break;
+                    case TINYGLTF_COMPONENT_TYPE_DOUBLE: {
+                      ArrayAdapter<Math::dvec3> tangents(dataPtr, count,
+                                                        byte_stride);
+                      // IMPORTANT: We need to reorder normals (and texture
+                      // coordinates into "facevarying" order) for each face
+                      // For each triangle :
+                      for (size_t i{0}; i < indexArray_uint.size() / 3; ++i) {
+                        // get the i'th triange's indexes
+                        auto f0 = indexArray_uint[3 * i + 0];
+                        auto f1 = indexArray_uint[3 * i + 1];
+                        auto f2 = indexArray_uint[3 * i + 2];
+                        // get the 3 normal vectors for that face
+                        Math::dvec3 n0, n1, n2;
+                        n0 = tangents[f0];
+                        n1 = tangents[f1];
+                        n2 = tangents[f2];
+                        // Put them in the array in the correct order
+                        vertexBuffer_tangentOnly.push_back(n0.x);
+                        vertexBuffer_tangentOnly.push_back(n0.y);
+                        vertexBuffer_tangentOnly.push_back(n0.z);
+
+                        vertexBuffer_tangentOnly.push_back(n1.x);
+                        vertexBuffer_tangentOnly.push_back(n1.y);
+                        vertexBuffer_tangentOnly.push_back(n1.z);
+
+                        vertexBuffer_tangentOnly.push_back(n2.x);
+                        vertexBuffer_tangentOnly.push_back(n2.y);
+                        vertexBuffer_tangentOnly.push_back(n2.z);
+                      }
+                    } break;
+                  }
+                }
+              }
+            }  
+        }
           break;
         }
-        default:
-          Core::LogManager::Error(
-              "GFX :: tinygltf :: primitive mode not implemented");
-          break;
-      }
-      // Assemble vertex buffer
-      for (size_t i = 0; i < indexArray_uint.size(); ++i) {
-        vertexBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 0]);
-        vertexBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 1]);
-        vertexBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 2]);
-
-        vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 0]);
-        vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 1]);
-        vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 2]);
-
-        vertexBuffer.push_back(vertexBuffer_uvOnly[i * 2 + 0]);
-        vertexBuffer.push_back(vertexBuffer_uvOnly[i * 2 + 1]);
-
-        PositionBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 0]);
-        PositionBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 1]);
-        PositionBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 2]);
-
-        indexBuffer_uint.push_back(i);
-      }
-      mesh.submeshes.push_back(GFX::Mesh::Submesh{
-          submesh_index_offset, uint32_t(indexArray_uint.size()),
-          submesh_vertex_offset, uint32_t(meshPrimitive.material)});
-      submesh_index_offset = indexBuffer_uint.size();
-      submesh_vertex_offset = vertexBuffer.size() / 8;
+      default:
+        Core::LogManager::Error(
+            "GFX :: tinygltf :: primitive mode not implemented");
+        break;
     }
-    mesh.vertexBuffer_device = device->createDeviceLocalBuffer(
-        (void*)vertexBuffer.data(), vertexBuffer.size() * sizeof(float),
-        (uint32_t)RHI::BufferUsage::VERTEX |
-            (uint32_t)RHI::BufferUsage::STORAGE);
-    mesh.indexBuffer_device = device->createDeviceLocalBuffer(
-        (void*)indexBuffer_uint.data(),
-        indexBuffer_uint.size() * sizeof(INDEX_TYPE),
-        (uint32_t)RHI::BufferUsage::INDEX |
-            (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
-            (uint32_t)
-                RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY |
-            (uint32_t)RHI::BufferUsage::STORAGE);
-    mesh.positionBuffer_device = device->createDeviceLocalBuffer(
-        (void*)PositionBuffer.data(), PositionBuffer.size() * sizeof(float),
-        (uint32_t)RHI::BufferUsage::VERTEX |
-            (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
-            (uint32_t)
-                RHI::BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY |
-            (uint32_t)RHI::BufferUsage::STORAGE);
-    mesh.primitiveState.stripIndexFormat = RHI::IndexFormat::UINT32_T;
-    Core::GUID guid =
-        Core::ResourceManager::get()->requestRuntimeGUID<GFX::Mesh>();
-    meshGUIDs.push_back(guid);
-    meshMap[&gltfMesh] = guid;
-    Core::ResourceManager::get()->addResource<GFX::Mesh>(guid, std::move(mesh));
-    Core::ResourceManager::get()->getResource<GFX::Mesh>(guid)->serialize();
-    Core::ResourceManager::get()->database.registerResource(
-        Core::ResourceManager::get()->getResource<GFX::Mesh>(guid)->ORID, guid);
+    // Assemble vertex buffer
+    if (vertexBuffer_tangentOnly.size() == 0) {
+      for (size_t i = 0; i < indexArray_uint.size(); i += 3) {
+        size_t i0 = i + 0;
+        size_t i1 = i + 1;
+        size_t i2 = i + 2;
+        Math::vec3 pos1 = {vertexBuffer_positionOnly[i0 * 3 + 0],
+                           vertexBuffer_positionOnly[i0 * 3 + 1],
+                           vertexBuffer_positionOnly[i0 * 3 + 2]};
+        Math::vec3 pos2 = {vertexBuffer_positionOnly[i1 * 3 + 0],
+                           vertexBuffer_positionOnly[i1 * 3 + 1],
+                           vertexBuffer_positionOnly[i1 * 3 + 2]};
+        Math::vec3 pos3 = {vertexBuffer_positionOnly[i2 * 3 + 0],
+                           vertexBuffer_positionOnly[i2 * 3 + 1],
+                           vertexBuffer_positionOnly[i2 * 3 + 2]};
+        Math::vec2 uv1 = {vertexBuffer_uvOnly[i0 * 2 + 0],
+                          vertexBuffer_uvOnly[i0 * 2 + 1]};
+        Math::vec2 uv2 = {vertexBuffer_uvOnly[i1 * 2 + 0],
+                          vertexBuffer_uvOnly[i1 * 2 + 1]};
+        Math::vec2 uv3 = {vertexBuffer_uvOnly[i2 * 2 + 0],
+                          vertexBuffer_uvOnly[i2 * 2 + 1]};
+        Math::vec3 tangent;
+        Math::vec3 edge1 = pos2 - pos1;
+        Math::vec3 edge2 = pos3 - pos1;
+        Math::vec2 deltaUV1 = uv2 - uv1;
+        Math::vec2 deltaUV2 = uv3 - uv1;
+        float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+        tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+        tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+        tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+        tangent = Math::normalize(tangent);
+        for (int i = 0; i < 3; ++i) {
+            vertexBuffer_tangentOnly.push_back(tangent.x);
+            vertexBuffer_tangentOnly.push_back(tangent.y);
+            vertexBuffer_tangentOnly.push_back(tangent.z);
+        }
+      }
+    }
+    for (size_t i = 0; i < indexArray_uint.size(); ++i) {
+      for (auto const& entry : meshConfig.layout.layout) {
+        // vertex position
+        if (entry.info == MeshDataLayout::VertexInfo::POSITION) {
+            if (entry.format == RHI::VertexFormat::FLOAT32X3) {
+              vertexBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 0]);
+              vertexBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 1]);
+              vertexBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 2]);
+              if (meshConfig.usePositionBuffer) {
+                if (vertexBuffer_positionOnly.size() != 0) {
+                    PositionBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 0]);
+                    PositionBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 1]);
+                    PositionBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 2]);
+                } else {
+                
+                }
+              }
+            } else {
+              Core::LogManager::Error(
+                  "GFX :: SceneNodeLoader_assimp :: unwanted vertex format for "
+                  "POSITION attributes.");
+              return Core::INVALID_GUID;
+            }
+        } else if (entry.info == MeshDataLayout::VertexInfo::NORMAL) {
+            vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 0]);
+            vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 1]);
+            vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 2]);
+        } else if (entry.info == MeshDataLayout::VertexInfo::UV) {
+            vertexBuffer.push_back(vertexBuffer_uvOnly[i * 2 + 0]);
+            vertexBuffer.push_back(vertexBuffer_uvOnly[i * 2 + 1]);
+        } else if (entry.info == MeshDataLayout::VertexInfo::TANGENT) {
+            vertexBuffer.push_back(vertexBuffer_tangentOnly[i * 3 + 0]);
+            vertexBuffer.push_back(vertexBuffer_tangentOnly[i * 3 + 1]);
+            vertexBuffer.push_back(vertexBuffer_tangentOnly[i * 3 + 2]);
+        } else if (entry.info == MeshDataLayout::VertexInfo::COLOR) {
+            // Optional: vertex colors
+            vertexBuffer.push_back(0);
+            vertexBuffer.push_back(0);
+            vertexBuffer.push_back(0);
+        } else if (entry.info == MeshDataLayout::VertexInfo::CUSTOM) {
+        }
+      }
+
+      indexBuffer_uint.push_back(i);
+    }
+    mesh.submeshes.push_back(GFX::Mesh::Submesh{
+        submesh_index_offset, uint32_t(indexArray_uint.size()),
+        submesh_vertex_offset, uint32_t(meshPrimitive.material)});
+    submesh_index_offset = indexBuffer_uint.size();
+    submesh_vertex_offset = PositionBuffer.size() / 3;
   }
-  // Bind scene
+  // create mesh resource
+  {  // register mesh
+    mesh.vertexBufferLayout = getVertexBufferLayout(meshConfig.layout);
+    if (meshConfig.residentOnHost) {
+      mesh.vertexBuffer_host =
+          Core::Buffer(sizeof(float) * vertexBuffer.size());
+      memcpy(mesh.vertexBuffer_host.data, vertexBuffer.data(),
+             mesh.vertexBuffer_host.size);
+      mesh.vertexBufferInfo.onHost = true;
+      mesh.vertexBufferInfo.size = mesh.vertexBuffer_host.size;
+      if (meshConfig.layout.format == RHI::IndexFormat::UINT16_t) {
+        mesh.indexBuffer_host =
+            Core::Buffer(sizeof(uint16_t) * indexBuffer_uint.size());
+        memcpy(mesh.indexBuffer_host.data, indexBuffer_uint.data(),
+               mesh.indexBuffer_host.size);
+        mesh.indexBufferInfo.size = mesh.indexBuffer_host.size;
+        mesh.indexBufferInfo.onHost = true;
+      } else if (meshConfig.layout.format == RHI::IndexFormat::UINT32_T) {
+        mesh.indexBuffer_host =
+            Core::Buffer(sizeof(uint32_t) * indexBuffer_uint.size());
+        memcpy(mesh.indexBuffer_host.data, indexBuffer_uint.data(),
+               mesh.indexBuffer_host.size);
+        mesh.indexBufferInfo.size = mesh.indexBuffer_host.size;
+        mesh.indexBufferInfo.onHost = true;
+      }
+      if (meshConfig.usePositionBuffer) {
+        mesh.positionBuffer_host =
+            Core::Buffer(sizeof(float) * PositionBuffer.size());
+        memcpy(mesh.positionBuffer_host.data, PositionBuffer.data(),
+               mesh.positionBuffer_host.size);
+        mesh.positionBufferInfo.onHost = true;
+        mesh.positionBufferInfo.size = mesh.positionBuffer_host.size;
+      }
+    }
+  }
+
+  Core::GUID guid =
+      Core::ResourceManager::get()->requestRuntimeGUID<GFX::Mesh>();
+  Core::ORID orid = Core::requestORID();
+  Core::ResourceManager::get()->database.registerResource(orid, guid);
+  Core::ResourceManager::get()->addResource<GFX::Mesh>(guid,
+                                                       std::move(mesh));
+  GFX::Mesh* meshResourceRef =
+      Core::ResourceManager::get()->getResource<GFX::Mesh>(guid);
+  meshResourceRef->ORID = orid;
+  meshResourceRef->serialize();
+
+  return guid;
+ }
+
+static inline auto processGLTFMesh(GameObjectHandle const& gfxNode, int node_id,
+                                   tinygltf::Model const* model,
+                                   glTFLoaderEnv& env, GFX::Scene& gfxscene,
+                                   MeshLoaderConfig meshConfig = {}) noexcept
+    -> void {
+  tinygltf::Node const& node = model->nodes[node_id];
+  if (node.mesh == -1) return;
+
+  Core::GUID meshGUID = loadGLTFMesh(model->meshes[node.mesh], gfxNode, node_id,
+                                     model, env, gfxscene, meshConfig);
+  gfxscene.getGameObject(gfxNode)->getEntity().addComponent<MeshReference>();
+  GFX::Mesh* meshResourceRef =
+      Core::ResourceManager::get()->getResource<GFX::Mesh>(meshGUID);
+  meshResourceRef->ORID = meshGUID;
+  meshResourceRef->serialize();
+  // bind scene
+  gfxscene.getGameObject(gfxNode)
+      ->getEntity()
+      .addComponent<MeshReference>()
+      ->mesh = meshResourceRef;
+
+  gfxscene.getGameObject(gfxNode)->getEntity().addComponent<MeshRenderer>();
+   MeshRenderer* meshRenderer =
+      gfxscene.getGameObject(gfxNode)->getEntity().getComponent<MeshRenderer>();
+
+   for (auto const& meshPrimitive : model->meshes[node.mesh].primitives) {
+    int matID = meshPrimitive.material;
+    Core::GUID matGUID = loadGLTFMaterial(&model->materials[matID], model, env,
+                                          gfxscene, meshConfig);
+    meshRenderer->materials.push_back(
+        Core::ResourceManager::get()->getResource<GFX::Material>(matGUID));
+  }
+}
+
+void QuatToAngleAxis(const std::vector<double> quaternion,
+                     double& outAngleDegrees, double* axis) {
+  double qx = quaternion[0];
+  double qy = quaternion[1];
+  double qz = quaternion[2];
+  double qw = quaternion[3];
+
+  double angleRadians = 2 * acos(qw);
+  if (angleRadians == 0.0) {
+    outAngleDegrees = 0.0;
+    axis[0] = 0.0;
+    axis[1] = 0.0;
+    axis[2] = 1.0;
+    return;
+  }
+
+  double denom = sqrt(1 - qw * qw);
+  outAngleDegrees = angleRadians * 180.0 / 3.1415926;
+  axis[0] = qx / denom;
+  axis[1] = qy / denom;
+  axis[2] = qz / denom;
+}
+
+static inline auto processGLTFNode(GameObjectHandle const& gfxNode, int node_id,
+                                   tinygltf::Model const* model,
+                                   glTFLoaderEnv& env, GFX::Scene& gfxscene,
+                                   MeshLoaderConfig meshConfig = {}) noexcept
+    -> void {
+    
+  // process all meshes
+  processGLTFMesh(gfxNode, node_id, model, env, gfxscene, meshConfig);
+  // process the meshes for all the following nodes
+  tinygltf::Node const& node = model->nodes[node_id];
+  TransformComponent* transform = gfxscene.getGameObject(gfxNode)
+                                      ->getEntity()
+                                      .getComponent<TransformComponent>();
+  if (node.scale.size() == 3)
+    transform->scale = {static_cast<float>(node.scale[0]),
+                        static_cast<float>(node.scale[1]),
+                        static_cast<float>(node.scale[2])};
+  if (node.translation.size() == 3)
+    transform->translation = {static_cast<float>(node.translation[0]),
+                              static_cast<float>(node.translation[1]),
+                              static_cast<float>(node.translation[2])};
+  if (node.rotation.size() == 4) {
+    double angleDegrees;
+    double axis[3];
+    //QuatToAngleAxis(node.rotation, angleDegrees, axis);
+    double qx = node.rotation[0];
+    double qy = node.rotation[1];
+    double qz = node.rotation[2];
+    double qw = node.rotation[3];
+    double roll = atan2(2 * (qw * qx + qy * qz), 1 - 2 * (qx * qx + qy * qy));
+    double pitch = std::asin(2 * (qw * qy - qz * qx));
+    double yaw = atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz));
+    roll *= 180. / Math::double_Pi;
+    pitch *= 180. / Math::double_Pi;
+    yaw *= 180. / Math::double_Pi;
+    transform->eulerAngles = {static_cast<float>(roll),
+                              static_cast<float>(pitch),
+                              static_cast<float>(yaw)};
+  }
+
+  for (uint32_t i : node.children) {
+    GameObjectHandle subNode = gfxscene.createGameObject(gfxNode);
+    gfxscene.getGameObject(subNode)
+        ->getEntity()
+        .getComponent<TagComponent>()
+        ->name = std::string(node.name);
+    processGLTFNode(subNode, i, model, env, gfxscene, meshConfig);
+  }
+}
+
+/** Load glTF file */
+auto SceneNodeLoader_glTF::loadSceneNode(
+    std::filesystem::path const& path, GFX::Scene& gfxscene,
+    MeshLoaderConfig meshConfig) noexcept
+    -> void {
+  // use tinygltf to load file
+  tinygltf::Model model;
+  tinygltf::TinyGLTF loader;
+  std::string err;
+  std::string warn;
+  bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, path.string());
+  if (!warn.empty())
+    Core::LogManager::Warning(
+        std::format("GFX :: tinygltf :: {0}", warn.c_str()));
+  if (!err.empty())
+    Core::LogManager::Error(std::format("GFX :: tinygltf :: {0}", err.c_str()));
+  if (!ret) {
+    Core::LogManager::Error("GFX :: tinygltf :: Failed to parse glTF");
+    return;
+  }
+
+  std::string directory = path.parent_path().string();
+
   GameObjectHandle rootNode = gfxscene.createGameObject(GFX::NULL_GO);
   gfxscene.getGameObject(rootNode)
       ->getEntity()
       .getComponent<TagComponent>()
       ->name = path.filename().string();
-  tinygltf::Scene const& scene = model.scenes[model.defaultScene];
-  for (size_t i = 0; i < scene.nodes.size(); ++i) {
-    assert((scene.nodes[i] >= 0) && (scene.nodes[i] < model.nodes.size()));
-    // bindModelNodes(gfxscene, rootNode, model, model.nodes[scene.nodes[i]],
-    // meshMap);
+
+  glTFLoaderEnv env;
+  env.directory = directory;
+  uint32_t i = 0;
+  for (auto& scene : model.scenes) {
+    GameObjectHandle sceneNode = gfxscene.createGameObject(rootNode);
+    std::string name = scene.name;
+    if (name == "") name = "scene_" + std::to_string(i++);
+    gfxscene.getGameObject(sceneNode)
+        ->getEntity()
+        .getComponent<TagComponent>()
+        ->name = name;
+    for (auto node : scene.nodes)
+      processGLTFNode(rootNode, node, &model, env, gfxscene, meshConfig);
   }
-
-  GFX::Mesh mesh;
 }
-
 
 struct AssimpLoaderEnv {
   std::string directory;
@@ -754,23 +1079,88 @@ auto loadMaterial(aiMaterial* material, AssimpLoaderEnv& env) noexcept
 
   std::string name = std::string(material->GetName().C_Str());
   GFX::Material gfxmat;
-  gfxmat.path = "content/materials/" + name;
-  gfxmat.ORID = Core::ResourceManager::get()->database.mapResourcePath(
-      gfxmat.path.c_str());
+  gfxmat.path = "content/materials/" +
+                Core::StringHelper::invalidFileFolderName(name) + ".mat";
+  gfxmat.ORID = Core::requestORID();
   gfxmat.BxDF = 0;
 
   gfxmat.name = name;
-  // load diffuse texture
-  std::vector<Core::GUID> diffuseMaps =
-      loadMaterialTextures(material, aiTextureType_DIFFUSE, env);
-  if (diffuseMaps.size() != 1) {
-    Core::LogManager::Error(
-        "GFX :: SceneNodeLoader_assimp :: diffuse map number is not 1.");
-  } else {
-    gfxmat.textures["base_color"] =
-        GFX::Material::TextureEntry{diffuseMaps[0], 0};
+  // load diffuse information
+  int shading_model = 0;
+  material->Get(AI_MATKEY_SHADING_MODEL, shading_model);
+  { // load diffuse texture
+    std::vector<Core::GUID> diffuseMaps =
+        loadMaterialTextures(material, aiTextureType_DIFFUSE, env);
+    aiColor3D diffuse_color(0.f, 0.f, 0.f);
+    material->Get(AI_MATKEY_COLOR_DIFFUSE, diffuse_color);
+    if (diffuseMaps.size() != 1) {
+      Core::LogManager::Error(
+          "GFX :: SceneNodeLoader_assimp :: diffuse map number is not 1.");
+    } else {
+      gfxmat.textures["base_color"] =
+          GFX::Material::TextureEntry{diffuseMaps[0], 0};
+    }
   }
-
+  { // load normal texture
+    std::vector<Core::GUID> normalMaps =
+        loadMaterialTextures(material, aiTextureType_NORMALS, env);
+    if (normalMaps.size() != 1) {
+      Core::LogManager::Error(
+          "GFX :: SceneNodeLoader_assimp :: roughness map number is not 1.");
+    } else {
+      gfxmat.textures["normal_bump"] =
+          GFX::Material::TextureEntry{normalMaps[0], 0};
+    }
+  }
+  { // load roughness texture
+    std::vector<Core::GUID> roughnessMaps =
+        loadMaterialTextures(material, aiTextureType_DIFFUSE_ROUGHNESS, env);
+    float roughness_factor = 1.f;
+    material->Get(AI_MATKEY_ROUGHNESS_FACTOR, roughness_factor);
+    if (roughnessMaps.size() != 1) {
+      Core::LogManager::Error(
+          "GFX :: SceneNodeLoader_assimp :: roughness map number is not 1.");
+    } else {
+      gfxmat.textures["roughness"] =
+          GFX::Material::TextureEntry{roughnessMaps[0], 0};
+    }
+    { 
+      //std::vector<Core::GUID> unknownMaps =
+      //  loadMaterialTextures(material, aiTextureType_UNKNOWN, env);
+      //if (unknownMaps.size() != 1) {
+      //  Core::LogManager::Error(
+      //      "GFX :: SceneNodeLoader_assimp :: unknown map number is not 1.");
+      //} else {
+      //  gfxmat.textures["base_color"] =
+      //      GFX::Material::TextureEntry{unknownMaps[0], 0};
+      //}
+    }
+    std::vector<Core::GUID> unknownMaps =
+        loadMaterialTextures(material, aiTextureType_DIFFUSE, env);
+    unknownMaps = loadMaterialTextures(material, aiTextureType_SPECULAR, env);
+    unknownMaps = loadMaterialTextures(material, aiTextureType_AMBIENT, env);
+    unknownMaps = loadMaterialTextures(material, aiTextureType_EMISSIVE, env);
+    unknownMaps = loadMaterialTextures(material, aiTextureType_HEIGHT, env);
+    unknownMaps = loadMaterialTextures(material, aiTextureType_NORMALS, env);
+    unknownMaps = loadMaterialTextures(material, aiTextureType_SHININESS, env);
+    unknownMaps = loadMaterialTextures(material, aiTextureType_OPACITY, env);
+    unknownMaps =
+        loadMaterialTextures(material, aiTextureType_DISPLACEMENT, env);
+    unknownMaps = loadMaterialTextures(material, aiTextureType_LIGHTMAP, env);
+    unknownMaps = loadMaterialTextures(material, aiTextureType_REFLECTION, env);
+    unknownMaps = loadMaterialTextures(material, aiTextureType_BASE_COLOR, env);
+    unknownMaps =
+        loadMaterialTextures(material, aiTextureType_NORMAL_CAMERA, env);
+    unknownMaps = loadMaterialTextures(material, aiTextureType_EMISSION_COLOR, env);
+    unknownMaps =
+        loadMaterialTextures(material, aiTextureType_EMISSION_COLOR, env);
+    unknownMaps = loadMaterialTextures(material, aiTextureType_METALNESS, env);
+    unknownMaps =
+        loadMaterialTextures(material, aiTextureType_DIFFUSE_ROUGHNESS, env);
+    unknownMaps =
+        loadMaterialTextures(material, aiTextureType_AMBIENT_OCCLUSION, env);
+    unknownMaps = loadMaterialTextures(material, aiTextureType_UNKNOWN, env);
+  }
   gfxmat.serialize();
   Core::GUID matID =
       GFX::GFXManager::get()->registerMaterialResource(gfxmat.path.c_str());
@@ -917,8 +1307,7 @@ static inline auto processAssimpMesh(GameObjectHandle const& gfxNode,
   std::string path = env.directory + std::string(node->mName.C_Str());
   Core::GUID guid =
       Core::ResourceManager::get()->requestRuntimeGUID<GFX::Mesh>();
-  Core::ORID orid =
-      Core::ResourceManager::get()->database.mapResourcePath(path.c_str());
+  Core::ORID orid = Core::requestORID();
   Core::ResourceManager::get()->database.registerResource(orid, guid);
   Core::ResourceManager::get()->addResource<GFX::Mesh>(guid,
                                                        std::move(gfxmesh));

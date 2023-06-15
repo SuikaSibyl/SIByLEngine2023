@@ -1,0 +1,47 @@
+
+
+void main() {
+    const RTXDI_ResamplingRuntimeParameters params = g_Const.runtimeParams;
+
+    uint2 pixelPosition = RTXDI_ReservoirPosToPixelPos(GlobalIndex, params);
+
+    RAB_RandomSamplerState rng = RAB_InitRandomSampler(pixelPosition, 2);
+
+    RAB_Surface surface = RAB_GetGBufferSurface(pixelPosition, false);
+
+    bool usePermutationSampling = false;
+    if (g_Const.enablePermutationSampling)
+    {
+        // Permutation sampling makes more noise on thin, high-detail objects.
+        usePermutationSampling = !IsComplexSurface(pixelPosition, surface);
+    }
+
+    RTXDI_Reservoir temporalResult = RTXDI_EmptyReservoir();
+    int2 temporalSamplePixelPos = -1;
+    
+    if (RAB_IsSurfaceValid(surface))
+    {
+        RTXDI_Reservoir curSample = RTXDI_LoadReservoir(params,
+            GlobalIndex, g_Const.initialOutputBufferIndex);
+
+        float3 motionVector = t_MotionVectors[pixelPosition].xyz;
+        motionVector = convertMotionVectorToPixelSpace(g_Const.view, g_Const.prevView, pixelPosition, motionVector);
+
+        RTXDI_TemporalResamplingParameters tparams;
+        tparams.screenSpaceMotion = motionVector;
+        tparams.sourceBufferIndex = g_Const.temporalInputBufferIndex;
+        tparams.maxHistoryLength = g_Const.maxHistoryLength;
+        tparams.biasCorrectionMode = g_Const.temporalBiasCorrection;
+        tparams.depthThreshold = g_Const.temporalDepthThreshold;
+        tparams.normalThreshold = g_Const.temporalNormalThreshold;
+        tparams.enableVisibilityShortcut = g_Const.discardInvisibleSamples;
+        tparams.enablePermutationSampling = usePermutationSampling;
+
+        RAB_LightSample selectedLightSample = (RAB_LightSample)0;
+        
+        temporalResult = RTXDI_TemporalResampling(pixelPosition, surface, curSample,
+            rng, tparams, params, temporalSamplePixelPos, selectedLightSample);
+    }
+    u_TemporalSamplePositions[GlobalIndex] = temporalSamplePixelPos;
+    RTXDI_StoreReservoir(temporalResult, params, GlobalIndex, g_Const.temporalOutputBufferIndex);
+}

@@ -112,7 +112,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_NEED_LOG;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
@@ -127,7 +127,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_NEED_LOG;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
@@ -142,25 +142,38 @@
     <ClCompile Include="Private\SE.SRenderer-RACommon.cpp" />
     <ClCompile Include="Private\SE.SRenderer-RTCommon.cpp" />
     <ClCompile Include="Private\SE.SRenderer-SRenderer.cpp" />
+    <ClCompile Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPSLCPoolingPass.cpp" />
+    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-GeometryInspectorPass.cpp" />
+    <ClCompile Include="Public\Passes\RayTracingPasses\SE.SRenderer-RTRSMPass.cpp" />
     <ClCompile Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPSSLCPass.cpp" />
-    <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarLCPass.hpp" />
+    <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarGTPass.cpp" />
+    <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarLCPass.cpp" />
+    <ClCompile Include="Public\Plugins\SE.SRendererExt.GeomTab.cpp" />
+    <ClInclude Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPSLCPoolingPass.hpp" />
+    <ClInclude Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarLCPass.hpp" />
     <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarPass.hpp" />
-    <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarGTPass.hpp" />
+    <ClInclude Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarGTPass.hpp" />
     <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-RSSGeoReconstrPass.hpp" />
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-AccumulatePass.hpp" />
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-Blit.cpp" />
     <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-CascadeShadowMapPass.cpp" />
+    <ClInclude Include="Public\Passes\FullScreenPasses\SE.SRenderer-ClearPass.hpp" />
     <ClInclude Include="Public\Passes\RasterizerPasses\SE.SRenderer-CascadeShadowMapPass.hpp" />
     <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-FooPass.hpp" />
     <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-ForwardPass.hpp" />
     <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-GBufferPass.hpp" />
     <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-ShadowMapPass.cpp" />
+    <ClInclude Include="Public\Passes\RasterizerPasses\SE.SRenderer-GeometryInspectorPass.hpp" />
     <ClInclude Include="Public\Passes\RasterizerPasses\SE.SRenderer-ShadowMapPass.hpp" />
     <ClCompile Include="Public\Pipeline\SE.SRendere-BDPTPipeline.hpp" />
     <ClCompile Include="Public\Pipeline\SE.SRendere-ForwardPipeline.hpp" />
     <ClCompile Include="Public\Pipeline\SE.SRendere-MMLTPipeline.hpp" />
     <ClCompile Include="Public\Pipeline\SE.SRendere-SSRXPipeline.cpp" />
+    <ClInclude Include="Public\Passes\RayTracingPasses\SE.SRenderer-RTILMPass.hpp" />
+    <ClInclude Include="Public\Passes\RayTracingPasses\SE.SRenderer-RTRSMPass.hpp" />
     <ClInclude Include="Public\Passes\RayTracingPasses\SE.SRenderer-SSRXGTPass.hpp" />
+    <ClInclude Include="Public\Pipeline\SE.SRendere-GeoInspectPipeline.hpp" />
+    <ClInclude Include="Public\Pipeline\SE.SRendere-RTGIPipeline.hpp" />
     <ClInclude Include="Public\Pipeline\SE.SRendere-SSRXPipeline.hpp" />
     <ClCompile Include="Public\Pipeline\SE.SRendere-UDPTPipeline.hpp" />
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-ACEsPass.hpp" />
@@ -212,6 +225,7 @@
     <ClInclude Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPMinPoolingPass.hpp" />
     <ClInclude Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPSSLCPass.hpp" />
     <ClInclude Include="Public\Passes\FullScreenPasses\SE.SRenderer-Blit.hpp" />
+    <ClInclude Include="Public\Plugins\SE.SRendererExt.GeomTab.hpp" />
     <ClInclude Include="Public\SE.SRenderer.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

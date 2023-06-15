@@ -7,6 +7,8 @@ set(CURRENT_PLATFORM "x64")
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/Engine/Binaries/Source/${CURRENT_PLATFORM})
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Engine/Binaries/Source/${CURRENT_PLATFORM})
 
+add_compile_definitions(_NEED_LOG)
+
 add_subdirectory("Engine/Source/ThirdParty/yaml")
 add_subdirectory("Engine/Source/ThirdParty/imgui")
 
@@ -16,6 +18,7 @@ add_subdirectory("Engine/Source/Runtime/Math")
 add_subdirectory("Engine/Source/Runtime/Platform")
 #add_subdirectory("Engine/Source/Runtime/Parallelism")
 
+add_subdirectory("Engine/Source/Runtime/HSL")
 add_subdirectory("Engine/Source/Runtime/RHI")
 add_subdirectory("Engine/Source/Runtime/Image")
 add_subdirectory("Engine/Source/Runtime/GFX")

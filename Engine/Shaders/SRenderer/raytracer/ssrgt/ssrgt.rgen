@@ -8,6 +8,7 @@ struct PushConstants {
     uvec2 resolution;
     uint sample_batch;
     uint primitive_count;
+    uint geo_setting;
 };
 layout(push_constant) uniform PushConsts { PushConstants pushConstants; };
 
@@ -33,7 +34,7 @@ vec2 sampleImportanceUV(
     out float probability
 ) {
     // gImportanceMIP
-    int mip_level = 9;
+    int mip_level = 11;
     vec2 uv = vec2(0.5, 0.5);
     ivec2 xy = ivec2(0);
 
@@ -93,7 +94,6 @@ vec2 sampleImportanceUV(
         // p *= 4;
     }
 
-
     // The depth value of the pixel:
     const float z = texelFetch(hi_z, xy, 0).r;
     const bool is_valid = (z < 1.0) ? true : false;
@@ -124,6 +124,33 @@ TriangleSample SampleTriangle(inout uint RNG) {
     const uint pixel_id = primitive_id / 2;
     tsample.xy.x = int(pixel_id % pushConstants.resolution.x);
     tsample.xy.y = int(pixel_id / pushConstants.resolution.x);
+    // Get the indices of the vertices of the triangle
+    const uint i0 = indices[3 * primitive_id + 0];
+    const uint i1 = indices[3 * primitive_id + 1];
+    const uint i2 = indices[3 * primitive_id + 2];
+    // Get the vertices / normals of the triangle
+    const vec3 v0 = vertices[i0];
+    const vec3 v1 = vertices[i1];
+    const vec3 v2 = vertices[i2];
+    // Sample on the triangle
+    const vec2 sample_uv = vec2(UniformFloat(RNG), UniformFloat(RNG));
+    const vec3 e1 = v1 - v0;
+    const vec3 e2 = v2 - v0;
+    const float a = sqrt(clamp(sample_uv[0], 0., 1.));
+    const float b1 = 1 - a;
+    const float b2 = a * sample_uv[1];
+    tsample.position = v0 + (e1 * b1) + (e2 * b2);
+    tsample.area = 0.5 * length(cross(e1, e2));
+    return tsample;
+}
+
+TriangleSample SamplePixel(inout uint RNG, int x, int y) {
+    TriangleSample tsample;
+    // sample a triangle in the geometry
+    const uint pixel_id = uint(x + y * pushConstants.resolution.x);
+    const uint primitive_id = uint(2 * pixel_id + min(2 * UniformFloat(RNG), 1.));
+    tsample.xy.x = x;
+    tsample.xy.y = y;
     // Get the indices of the vertices of the triangle
     const uint i0 = indices[3 * primitive_id + 0];
     const uint i1 = indices[3 * primitive_id + 1];
@@ -216,11 +243,14 @@ vec3 importance_pixel_selection(
     in Ray ray,
     inout uint RNG
 ) {
+    return vec3(1,0,1);
     float sample_uv_pdf;
     
     vec2 uv = sampleImportanceUV(RNG, sample_uv_pdf);
 
-    ivec2 xy = ivec2(floor(uv * pushConstants.resolution));
+    ivec2 xy = ivec2(floor(uv * 2048));
+    return vec3(xy, 0);
+
     const float z = texelFetch(hi_z, xy, 0).r;
     vec3 targetPosWS = SS2WS(uv * pushConstants.resolution, z);
     vec3 posWS;
@@ -260,32 +290,14 @@ vec3 importance_pixel_selection(
     SampleTS samplets;
     samplets.xy = xy;
     samplets.uv = uv;
-    samplets.hasIsect = unpackVSInfo(samplets.xy, samplets.normalInVS, samplets.info);
+    samplets.hasIsect = unpackVSInfo(samplets.xy, samplets.info);
+    samplets.normalInVS = samplets.info.sampleNormalInVS;
+    
     // samplets.radiance = texture_sample_jacobian1(uv, state, area_prob) / sample_uv_pdf;
     samplets.pdf = sample_uv_pdf / area_prob;
     
     samplets.radiance = vec3(1) * max(dot(state.normalInVS, tray.direction), dot(-tray.direction, vec3(0,0,-1))) / sample_uv_pdf
         / (length(targetPosWS - posWS) * length(targetPosWS - posWS));
-
-    // const vec3 dir = end_info.samplePosInVS.xyz - start_info.samplePosInVS.xyz;
-    // const float dist = length(dir);
-    // const vec3 dirInVS = normalize(dir);
-    // const float pdf = 1. / (t_sample.area * pushConstants.primitive_count);
-
-    // if(dot(tray.direction, samplets.normalInVS) > 0.0) return vec3(0);
-
-    // return di_sample * max(dot(dirInVS, start_normalInVS), 0) *
-    //         max(dot(dirInVS, vec3(0,0,1)),0) / (pdf * dist * dist);
-
-    // InitStateTS start_state;
-    // unpackVSInfo(uvec2(pixel), start_state);
-    // InitStateTS end_state;
-    // unpackVSInfo(uvec2(xy), end_state);
-    // const vec3 dirInVS = normalize(end_state.info.samplePosInVS.xyz - start_state.info.samplePosInVS.xyz);
-
-    // if((dot(dirInVS, vec3(0,0,1)) > 0.0)
-    // && (dot(sampleNormalInWS, vRefDirInWS) < 0.0)) {
-
     
     vec3 sampleNormalInWS = unpackNormal(texelFetch(ws_normal, xy, 0).xyz);
     if(dot(sampleNormalInWS, ray.direction) > 0) {
@@ -307,13 +319,12 @@ vec3 diffuse_pixel_sampling(
     float sample_uv_pdf;
     {
         vec2 uv = sampleImportanceUV(RNG, sample_uv_pdf);
-        ivec2 xy = ivec2(floor(uv * pushConstants.resolution));
-        const float z = texelFetch(hi_z, xy, 0).r;
-        t_sample.position = SS2WS(uv * pushConstants.resolution, z);
-        t_sample.xy = xy;
+        ivec2 xy = ivec2(floor(uv * 2048));
+        if(xy.x >= resolution.x || xy.y >= resolution.y) {
+            return vec3(1,0,1);
+        }
+        t_sample = SamplePixel(RNG, xy.x, xy.y);
     }
-
-    // TriangleSample t_sample = SampleTriangle(RNG);
 
     vec2 uv = vec2(pixel + 0.5) / vec2(resolution);
     ivec2 xy = ivec2(floor(uv * resolution));
@@ -322,16 +333,18 @@ vec3 diffuse_pixel_sampling(
 
     RayStartInfo start_info;
     vec3 start_normalInVS;
-    if(!unpackVSInfo(pixel, start_normalInVS, start_info))
+    if(!unpackVSInfo(pixel, start_info))
         return vec3(0);
+    start_normalInVS = start_info.sampleNormalInVS;
 
     const vec3 di_sample = texelFetch(di, t_sample.xy, 0).rgb;
     if(di_sample == vec3(0)) return vec3(0);
 
     RayStartInfo end_info;
     vec3 end_normalInVS;
-    if(!unpackVSInfo(t_sample.xy, end_normalInVS, end_info))
+    if(!unpackVSInfo(t_sample.xy, end_info))
         return vec3(0);
+    end_normalInVS = end_info.sampleNormalInVS;
     
     // t_sample.position
 
@@ -354,17 +367,17 @@ vec3 diffuse_pixel_sampling(
         ray.tMax,              // Maximum t-value
         0);                    // Location of payload
 
-    // if(pld.hit) return vec3(0);
+    if(pld.hit) return vec3(0);
 
     const vec3 dir = end_info.samplePosInVS.xyz - start_info.samplePosInVS.xyz;
     const float dist = length(dir);
     const vec3 dirInVS = normalize(dir);
-    const float pdf = sample_uv_pdf;
 
+    if(t_sample.area == 0) return vec3(0);
     if(dot(dir, end_normalInVS) > 0.0) return vec3(0);
-
+    
     return di_sample * max(dot(dirInVS, start_normalInVS), 0) *
-            abs(dot(dirInVS, vec3(0,0,1))) / (pdf * dist * dist);
+            abs(dot(dirInVS, vec3(0,0,1))) / (sample_uv_pdf * dist * dist);
 }
 
 void intersect(in const Ray ray) {
@@ -403,7 +416,7 @@ vec3 specular(
 
         Ray secondaryRay = Ray(
             samplePositionInWS,
-            0.0001,
+            0.2,
             vRefDirInWS,
             k_inf
         );
@@ -411,17 +424,50 @@ vec3 specular(
         pld.hit = false;
         intersect(secondaryRay);
         if(pld.hit) {
-            int pix_id = pld.triangleIndex / 2;
-            int pix_x = pix_id % resolution.x;
-            int pix_y = pix_id / resolution.x;
-            ivec2 pix = ivec2(pix_x, pix_y);
-            vec3 sampleNormalInWS = unpackNormal(texelFetch(ws_normal, pix, 0).xyz);
-            if(dot(sampleNormalInWS, vRefDirInWS) < 0.0) {
+            if(pushConstants.geo_setting == 0) {
+                int pix_id = pld.triangleIndex / 2;
+                int pix_x = pix_id % resolution.x;
+                int pix_y = pix_id / resolution.x;
+                ivec2 pix = ivec2(pix_x, pix_y);
+                vec3 sampleNormalInWS = unpackNormal(texelFetch(ws_normal, pix, 0).xyz);
+
+                // if(dot(sampleNormalInWS, vRefDirInWS) < 0.0) {
+                //     pixelColor = texelFetch(di, pix, 0).rgb;
+                // }
                 pixelColor = texelFetch(di, pix, 0).rgb;
             }
-        }
-        else {
-            pixelColor += vec3(0.0, 0.0, 0.0);
+            else if(pushConstants.geo_setting == 1) {
+                int pix_id = pld.triangleIndex / 6;
+                int pix_x = pix_id % resolution.x;
+                int pix_y = pix_id / resolution.x;
+                ivec2 pix = ivec2(pix_x, pix_y);
+                vec3 sampleNormalInWS = unpackNormal(texelFetch(ws_normal, pix, 0).xyz);
+                pixelColor = texelFetch(di, pix, 0).rgb;
+            }
+            else if(pushConstants.geo_setting == 2) {
+                int pix_id = pld.triangleIndex / 2;
+                int pix_x = pix_id % resolution.x;
+                int pix_y = pix_id / resolution.x;
+                ivec2 pix = ivec2(pix_x, pix_y);
+                vec3 sampleNormalInWS = unpackNormal(texelFetch(ws_normal, pix, 0).xyz);
+
+                // if(dot(sampleNormalInWS, vRefDirInWS) < 0.0) {
+                //     pixelColor = texelFetch(di, pix, 0).rgb;
+                // }
+                pixelColor = texelFetch(di, pix, 0).rgb;
+            }
+            else if(pushConstants.geo_setting == 3) {
+                int pix_id = pld.triangleIndex / 2;
+                int pix_x = pix_id % resolution.x;
+                int pix_y = pix_id / resolution.x;
+                ivec2 pix = ivec2(pix_x, pix_y);
+                vec3 sampleNormalInWS = unpackNormal(texelFetch(ws_normal, pix, 0).xyz);
+
+                // if(dot(sampleNormalInWS, vRefDirInWS) < 0.0) {
+                //     pixelColor = texelFetch(di, pix, 0).rgb;
+                // }
+                pixelColor = texelFetch(di, pix, 0).rgb;
+            }
         }
     }
     return pixelColor;
@@ -508,16 +554,18 @@ vec3 diffuse_light_sampling(
 
     RayStartInfo start_info;
     vec3 start_normalInVS;
-    if(!unpackVSInfo(pixel, start_normalInVS, start_info))
+    if(!unpackVSInfo(pixel, start_info))
         return vec3(0);
+    start_normalInVS = start_info.sampleNormalInVS;
 
     const vec3 di_sample = texelFetch(di, t_sample.xy, 0).rgb;
     if(di_sample == vec3(0)) return vec3(0);
 
     RayStartInfo end_info;
     vec3 end_normalInVS;
-    if(!unpackVSInfo(t_sample.xy, end_normalInVS, end_info))
+    if(!unpackVSInfo(t_sample.xy, end_info))
         return vec3(0);
+    end_normalInVS = end_info.sampleNormalInVS;
     
     // t_sample.position
 
@@ -547,10 +595,11 @@ vec3 diffuse_light_sampling(
     const vec3 dirInVS = normalize(dir);
     const float pdf = 1. / (t_sample.area * pushConstants.primitive_count);
 
+    if(t_sample.area == 0) return vec3(0);
     if(dot(dir, end_normalInVS) > 0.0) return vec3(0);
-
+    
     return di_sample * max(dot(dirInVS, start_normalInVS), 0) *
-            max(dot(dirInVS, vec3(0,0,1)),0) / (pdf * dist * dist);
+            abs(dot(dirInVS, vec3(0,0,1))) / (pdf * dist * dist);
 }
 
 void main() {
@@ -563,6 +612,11 @@ void main() {
     }
     const vec2 in_uv = vec2(pixel + 0.5) / vec2(resolution);
     
+    // const vec2 quad_uv = vec2(pixel + 1) / vec2(resolution);
+    // vec4 zQuad = textureGather(hi_z, vec2(pixel + 1));
+    // imageStore(storageImage, pixel, zQuad);
+    // return;
+
     vec3 pixelColor = vec3(0);
     // DI result
     if(gUniform.debug_mode == 0) {
@@ -584,7 +638,7 @@ void main() {
             pixelColor = vec3(0.0, 0.0, 0.0);
         }
         vec3 pixelColor = vec3(0);
-    }
+    } 
     else if (gUniform.debug_mode == 1) {
         pixelColor = specular(resolution, pixel);
     }

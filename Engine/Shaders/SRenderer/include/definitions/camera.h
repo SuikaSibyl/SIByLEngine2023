@@ -41,4 +41,37 @@ struct CameraData {
     float   _padding2;
 };
 
+/**
+* Universal camera data for both rasterizer & raytracer.
+* Definition & annotations are modified from NV=Path-Tracing-SDK:
+* @ref: https://github.com/NVIDIAGameWorks/Path-Tracing-SDK
+*/
+struct PlanarViewData {
+    mat4    matWorldToView;
+    mat4    matViewToClip;
+    mat4    matWorldToClip;
+    mat4    matClipToView;
+    mat4    matViewToWorld;
+    mat4    matClipToWorld;
+
+    mat4    matViewToClipNoOffset;
+    mat4    matWorldToClipNoOffset;
+    mat4    matClipToViewNoOffset;
+    mat4    matClipToWorldNoOffset;
+
+    vec2    viewportOrigin;
+    vec2    viewportSize;
+
+    vec2    viewportSizeInv;
+    vec2    pixelOffset;
+
+    vec2    clipToWindowScale;
+    vec2    clipToWindowBias;
+
+    vec2    windowToClipScale;
+    vec2    windowToClipBias;
+
+    vec4    cameraDirectionOrPosition;
+};
+
 #endif

@@ -1,7 +1,7 @@
 #version 460
 #extension GL_GOOGLE_include_directive : enable
 
-#include "../../include/spectrum.h"
+#include "../../include/common/common_spectrum.h"
 #include "../../include/common_descriptor_sets.h"
 #include "../../include/plugins/material/principled_common.h"
 #include "../../../Utility/geometry.h"

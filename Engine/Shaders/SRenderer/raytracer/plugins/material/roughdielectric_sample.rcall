@@ -4,7 +4,7 @@
 
 #include "../../include/common_trace.h"
 #include "../../../include/plugins/material/lambertian_common.h"
-#include "../../../include/microfacet.h"
+#include "../../../include/common/common_microfacet.h"
 #include "../../../../Utility/math.h"
 #include "../../../../Utility/geometry.h"
 #include "../../../../Utility/sampling.h"

@@ -16,6 +16,7 @@
 #include "SE.Math.Misc.hpp"
 
 namespace SIByL::Math {
+
 SE_EXPORT template <class T>
 struct Vector2 {
   union {
@@ -55,6 +56,7 @@ struct Vector2 {
   auto operator+(Vector2<T> const& v) const -> Vector2<T>;
   auto operator-(Vector2<T> const& v) const -> Vector2<T>;
   auto operator*(Vector2<T> const& v) const -> Vector2<T>;
+  auto operator/(Vector2<T> const& v) const -> Vector2<T>;
   auto operator==(Vector2<T> const& v) const -> bool;
   auto operator!=(Vector2<T> const& v) const -> bool;
   auto operator*=(T s) -> Vector2<T>&;
@@ -82,10 +84,10 @@ auto operator*(S s, Vector2<T> const& v) noexcept -> Vector2<T> {
 }
 
 SE_EXPORT template <class T>
-inline auto abs(Vector2<T> const& v) noexcept -> T {
-  T result;
+inline auto abs(Vector2<T> const& v) noexcept -> Vector2<T> {
+  Vector2<T> result;
   for (size_t i = 0; i < 2; ++i) {
-    result = std::abs(v.data[i]);
+    result.data[i] = std::abs(v.data[i]);
   }
   return result;
 }
@@ -94,7 +96,7 @@ SE_EXPORT template <class T>
 inline auto floor(Vector2<T> const& v) noexcept -> Vector2<T> {
   Vector2<T> result;
   for (size_t i = 0; i < 2; ++i) {
-    result.data[i] = std::ceil(v.data[i]);
+    result.data[i] = std::floor(v.data[i]);
   }
   return result;
 }
@@ -133,6 +135,27 @@ inline auto normalize(Vector2<T> const& v) noexcept -> Vector2<T> {
 }
 
 SE_EXPORT template <class T>
+inline auto length(Vector2<T> const& v) noexcept -> T {
+  return v.length();
+}
+
+SE_EXPORT inline auto sign(float x) noexcept -> float {
+  if (x > 0) return 1.f;
+  else if (x<0) return -1.f;
+  else return 0.f;
+}
+
+SE_EXPORT template <class T>
+inline auto sign(Vector2<T> const& v) noexcept -> Vector2<float> {
+  return Vector2<float> { sign(v.x), sign(v.y) };
+}
+
+SE_EXPORT template <class T>
+inline auto equal(Vector2<T> const& v1, Vector2<T> const& v2) noexcept -> bool {
+  return v1.x == v2.x && v1.y == v2.y;
+}
+
+SE_EXPORT template <class T>
 inline auto minComponent(Vector2<T> const& v) noexcept -> T {
   return std::min(v.x, v.y);
 }
@@ -153,7 +176,8 @@ inline auto minDimension(Vector2<T> const& v) noexcept -> size_t {
 }
 
 SE_EXPORT template <class T>
-inline auto max(Vector2<T> const& x, Vector2<T>& y) noexcept -> Vector2<T> {
+inline auto max(Vector2<T> const& x, Vector2<T> const& y) noexcept
+    -> Vector2<T> {
   Vector2<T> result;
   for (size_t i = 0; i < 2; ++i) {
     result[i] = std::max(x[i], y[i]);
@@ -162,7 +186,8 @@ inline auto max(Vector2<T> const& x, Vector2<T>& y) noexcept -> Vector2<T> {
 }
 
 SE_EXPORT template <class T>
-inline auto min(Vector2<T> const& x, Vector2<T>& y) noexcept -> Vector2<T> {
+inline auto min(Vector2<T> const& x, Vector2<T> const& y) noexcept
+    -> Vector2<T> {
   Vector2<T> result;
   for (size_t i = 0; i < 2; ++i) {
     result[i] = std::min(x[i], y[i]);
@@ -278,6 +303,15 @@ auto Vector2<T>::operator*(Vector2<T> const& v) const -> Vector2<T> {
 }
 
 template <class T>
+auto Vector2<T>::operator/(Vector2<T> const& v) const -> Vector2<T> {
+  Vector2<T> result;
+  for (size_t i = 0; i < 2; i++) {
+    result.data[i] = data[i] / v[i];
+  }
+  return result;
+}
+
+template <class T>
 auto Vector2<T>::operator+=(Vector2<T> const& v) -> Vector2<T>& {
   for (size_t i = 0; i < 2; i++) {
     data[i] += v.data[i];
@@ -327,6 +361,10 @@ struct Vector3 {
       T x, y, z;
     };
     struct {
+      Vector2<T> xy;
+      T _z;
+    };
+    struct {
       T r, g, b;
     };
     struct {
@@ -361,6 +399,7 @@ struct Vector3 {
   auto operator+(Vector3<T> const& v) const -> Vector3<T>;
   auto operator-(Vector3<T> const& v) const -> Vector3<T>;
   auto operator*(Vector3<T> const& v) const -> Vector3<T>;
+  auto operator/(Vector3<T> const& v) const -> Vector3<T>;
   auto operator==(Vector3<T> const& v) const -> bool;
   auto operator!=(Vector3<T> const& v) const -> bool;
   auto operator*=(T s) -> Vector3<T>&;
@@ -387,10 +426,10 @@ auto operator*(S s, Vector3<T> const& v) noexcept -> Vector3<T> {
 }
 
 SE_EXPORT template <class T>
-inline auto abs(Vector3<T> const& v) noexcept -> T {
-  T result;
+inline auto abs(Vector3<T> const& v) noexcept -> Vector3<T> {
+  Vector3<T> result;
   for (size_t i = 0; i < 3; ++i) {
-    result = std::abs(v.data[i]);
+    result.data[i] = std::abs(v.data[i]);
   }
   return result;
 }
@@ -441,6 +480,16 @@ inline auto normalize(Vector3<T> const& v) noexcept -> Vector3<T> {
 }
 
 SE_EXPORT template <class T>
+inline auto sign(Vector3<T> const& v) noexcept -> Vector3<float> {
+  return Vector3<float>{sign(v.x), sign(v.y), sign(v.z)};
+}
+
+SE_EXPORT template <class T>
+inline auto equal(Vector3<T> const& v1, Vector3<T> const& v2) noexcept -> bool {
+  return v1.x == v2.x && v1.y == v2.y && v1.z == v2.z;
+}
+
+SE_EXPORT template <class T>
 inline auto minComponent(Vector3<T> const& v) noexcept -> T {
   return std::min(std::min(v.x, v.y), v.z);
 }
@@ -454,6 +503,10 @@ SE_EXPORT template <class T>
 inline auto maxDimension(Vector3<T> const& v) noexcept -> size_t {
   return (v.x > v.y) ? ((v.x > v.z) ? 0 : 2) : ((v.y > v.z) ? 1 : 2);
 }
+SE_EXPORT template <typename T>
+inline auto permute(const Vector3<T>& p, int x, int y, int z) -> Vector3<T> {
+  return Vector3<T>(p.data[x], p.data[y], p.data[z]);
+}
 
 SE_EXPORT template <class T>
 inline auto minDimension(Vector3<T> const& v) noexcept -> size_t {
@@ -461,7 +514,8 @@ inline auto minDimension(Vector3<T> const& v) noexcept -> size_t {
 }
 
 SE_EXPORT template <class T>
-inline auto max(Vector3<T> const& x, Vector3<T>& y) noexcept -> Vector3<T> {
+inline auto max(Vector3<T> const& x, Vector3<T> const& y) noexcept
+    -> Vector3<T> {
   Vector3<T> result;
   for (size_t i = 0; i < 3; ++i) {
     result[i] = std::max(x[i], y[i]);
@@ -470,7 +524,8 @@ inline auto max(Vector3<T> const& x, Vector3<T>& y) noexcept -> Vector3<T> {
 }
 
 SE_EXPORT template <class T>
-inline auto min(Vector3<T> const& x, Vector3<T>& y) noexcept -> Vector3<T> {
+inline auto min(Vector3<T> const& x, Vector3<T> const& y) noexcept
+    -> Vector3<T> {
   Vector3<T> result;
   for (size_t i = 0; i < 3; ++i) {
     result[i] = std::min(x[i], y[i]);
@@ -606,6 +661,15 @@ auto Vector3<T>::operator*(Vector3<T> const& v) const -> Vector3<T> {
 }
 
 template <class T>
+auto Vector3<T>::operator/(Vector3<T> const& v) const -> Vector3<T> {
+  Vector3<T> result;
+  for (size_t i = 0; i < 3; i++) {
+    result.data[i] = data[i] / v.data[i];
+  }
+  return result;
+}
+
+template <class T>
 auto Vector3<T>::operator+=(Vector3<T> const& v) -> Vector3<T>& {
   for (size_t i = 0; i < 3; i++) {
     data[i] += v.data[i];
@@ -664,10 +728,20 @@ struct Vector4 {
   Vector4() : x(0), y(0), z(0), w(0) {}
   Vector4(T const& _v) : x(_v), y(_v), z(_v), w(_v) {}
   Vector4(Vector2<T> const& _v) : x(_v.x), y(_v.y), z(0), w(0) {}
+  Vector4(Vector2<T> const& _v, T _z, T _w) : x(_v.x), y(_v.y), z(_z), w(_w) {}
+  Vector4(Vector2<T> const& _v1, Vector2<T> const& _v2)
+      : x(_v1.x), y(_v1.y), z(_v2.x), w(_v2.y){}
   Vector4(Vector3<T> const& _v) : x(_v.x), y(_v.y), z(_v.z), w(0) {}
   Vector4(Vector3<T> const& _v, T _w) : x(_v.x), y(_v.y), z(_v.z), w(_w) {}
   Vector4(T const& _x, T const& _y, T const& _z = 0, T const& _w = 0)
       : x(_x), y(_y), z(_z), w(_w) {}
+
+  inline auto xyz() noexcept -> Vector3<T> { return Vector3<T>(x, y, z); }
+  inline auto xzy() noexcept -> Vector3<T> { return Vector3<T>{x, z, y}; }
+  inline auto xyw() noexcept -> Vector3<T> { return Vector3<T>{x, y, w}; }
+  inline auto xwy() noexcept -> Vector3<T> { return Vector3<T>{x, w, y}; }
+  inline auto xzw() noexcept -> Vector3<T> { return Vector3<T>{x, z, w}; }
+  inline auto xwz() noexcept -> Vector3<T> { return Vector3<T>{x, w, z}; }
 
   operator T*() { return data; }
   operator const T* const() { return static_cast<const T*>(data); }
@@ -679,8 +753,8 @@ struct Vector4 {
   auto operator-() const -> Vector4<T>;
   auto operator*(T s) const -> Vector4<T>;
   auto operator/(T s) const -> Vector4<T>;
-  auto operator*=(T s) const -> Vector4<T>&;
-  auto operator/=(T s) const -> Vector4<T>&;
+  auto operator*=(T s) -> Vector4<T>&;
+  auto operator/=(T s) -> Vector4<T>&;
   auto operator+(Vector4<T> const& v) const -> Vector4<T>;
   auto operator-(Vector4<T> const& v) const -> Vector4<T>;
   auto operator*(Vector4<T> const& v) const -> Vector4<T>;
@@ -694,6 +768,7 @@ struct Vector4 {
 SE_EXPORT using vec4 = Vector4<float>;
 SE_EXPORT using ivec4 = Vector4<int32_t>;
 SE_EXPORT using uvec4 = Vector4<uint32_t>;
+SE_EXPORT using dvec4 = Vector4<double>;
 
 template <class T>
 template <class U>
@@ -750,6 +825,16 @@ inline auto absDot(Vector4<T> const& x, Vector4<T> const& y) noexcept -> T {
 SE_EXPORT template <class T>
 inline auto normalize(Vector4<T> const& v) noexcept -> Vector4<T> {
   return v / v.length();
+}
+
+SE_EXPORT template <class T>
+inline auto sign(Vector4<T> const& v) noexcept -> Vector4<float> {
+  return Vector4<float>{sign(v.x), sign(v.y), sign(v.z), sign(v.w)};
+}
+
+SE_EXPORT template <class T>
+inline auto equal(Vector4<T> const& v1, Vector4<T> const& v2) noexcept -> bool {
+  return v1.x == v2.x && v1.y == v2.y && v1.z == v2.z && v1.w == v2.w;
 }
 
 SE_EXPORT template <class T>
@@ -865,7 +950,7 @@ auto Vector4<T>::operator/(T s) const -> Vector4<T> {
 }
 
 template <class T>
-auto Vector4<T>::operator*=(T s) const -> Vector4<T>& {
+auto Vector4<T>::operator*=(T s) -> Vector4<T>& {
   for (size_t i = 0; i < 4; i++) {
     data[i] *= s;
   }
@@ -873,7 +958,7 @@ auto Vector4<T>::operator*=(T s) const -> Vector4<T>& {
 }
 
 template <class T>
-auto Vector4<T>::operator/=(T s) const -> Vector4<T>& {
+auto Vector4<T>::operator/=(T s) -> Vector4<T>& {
   float inv = 1.f / s;
   for (size_t i = 0; i < 4; i++) {
     data[i] *= inv;
@@ -942,6 +1027,21 @@ auto Vector4<T>::operator!=(Vector4<T> const& v) const -> bool {
   return !(*this == v);
 }
 
+SE_EXPORT template<class T>
+auto cross(const Vector4<T>& a, const Vector4<T>& b, const Vector4<T>& c)
+    -> Vector4<T> {
+  // Code adapted from VecLib4d.c in Graphics Gems V
+  T d1 = (b[2] * c[3]) - (b[3] * c[2]);
+  T d2 = (b[1] * c[3]) - (b[3] * c[1]);
+  T d3 = (b[1] * c[2]) - (b[2] * c[1]);
+  T d4 = (b[0] * c[3]) - (b[3] * c[0]);
+  T d5 = (b[0] * c[2]) - (b[2] * c[0]);
+  T d6 = (b[0] * c[1]) - (b[1] * c[0]);
+  return Vector4<T>(
+      -a[1] * d1 + a[2] * d2 - a[3] * d3, a[0] * d1 - a[2] * d4 + a[3] * d5,
+      -a[0] * d2 + a[1] * d4 - a[3] * d6, a[0] * d3 - a[1] * d5 + a[2] * d6);
+}
+
 SE_EXPORT template <class T>
 struct Matrix2x2 {
   union {
@@ -957,7 +1057,11 @@ SE_EXPORT template <class T>
 struct Matrix3x3 {
   Matrix3x3() = default;
   Matrix3x3(T const mat[3][3]);
+  Matrix3x3(Vector3<T> x, Vector3<T> y, Vector3<T> z);
   Matrix3x3(T t00, T t01, T t02, T t10, T t11, T t12, T t20, T t21, T t22);
+
+  auto row(int i) const noexcept -> Vector3<T>;
+  auto col(int i) const noexcept -> Vector3<T>;
 
   union {
     T data[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
@@ -965,8 +1069,37 @@ struct Matrix3x3 {
 };
 
 template <class T>
+auto Matrix3x3<T>::row(int i) const noexcept -> Vector3<T> {
+  if (i < 0 || i >= 3)
+    return Vector3<T>{0.};
+  else
+    return Vector3<T>{data[i][0], data[i][1], data[i][2]};
+}
+
+template <class T>
+auto Matrix3x3<T>::col(int i) const noexcept->Vector3<T> {
+  if (i < 0 || i >= 3)
+    return Vector3<T>{0};
+  else
+    return Vector3<T>{data[0][i], data[1][i], data[2][i]};
+}
+
+template <class T>
 Matrix3x3<T>::Matrix3x3(T const mat[3][3]) {
   memcpy(&(data[0][0]), &(mat[0][0]), sizeof(T) * 9);
+}
+
+template <class T>
+Matrix3x3<T>::Matrix3x3(Vector3<T> x, Vector3<T> y, Vector3<T> z) {
+  data[0][0] = x.x;
+  data[0][1] = x.y;
+  data[0][2] = x.z;
+  data[1][0] = y.x;
+  data[1][1] = y.y;
+  data[1][2] = y.z;
+  data[2][0] = z.x;
+  data[2][1] = z.y;
+  data[2][2] = z.z;
 }
 
 template <class T>
@@ -999,20 +1132,52 @@ auto operator*(Matrix3x3<T> const& m, Vector3<T> const& v) -> Vector3<T> {
   return mul<T>(m, v);
 }
 
+SE_EXPORT template <class T>
+auto operator/(Matrix3x3<T> const& m, T s) -> Matrix3x3<T> {
+  return Matrix3x3<T>(m.row(0) / s, m.row(1) / s, m.row(2) / s);
+}
+
+SE_EXPORT template <class T>
+Matrix3x3<T> adjoint(Matrix3x3<T> const& m) {
+  return Matrix3x3<T>(cross(m.row(1), m.row(2)), cross(m.row(2), m.row(0)),
+                      cross(m.row(0), m.row(1)));
+}
+
+SE_EXPORT template <class T>
+Matrix3x3<T> transpose(Matrix3x3<T> const& m) {
+  return Matrix3x3<T>(m.col(0), m.col(1), m.col(2));
+}
+
+SE_EXPORT template <class T>
+double invert(Matrix3x3<T>& inv, Matrix3x3<T> const& m) {
+  Matrix3x3<T> A = adjoint(m);
+  double d = dot(A.row(0), m.row(0));
+  if (d == 0.0) return 0.0;
+  inv = transpose(A) / d;
+  return d;
+}
+
 SE_EXPORT using mat3 = Matrix3x3<float>;
+SE_EXPORT using dmat3 = Matrix3x3<double>;
 SE_EXPORT using imat3 = Matrix3x3<int32_t>;
 SE_EXPORT using umat3 = Matrix3x3<uint32_t>;
 
 SE_EXPORT template <class T>
 struct Matrix4x4 {
   Matrix4x4() = default;
+  Matrix4x4(T s);
   Matrix4x4(T const mat[4][4]);
+  Matrix4x4(Vector4<T> const& a, Vector4<T> const& b, Vector4<T> const& c,
+            Vector4<T> const& d);
   Matrix4x4(T t00, T t01, T t02, T t03, T t10, T t11, T t12, T t13, T t20,
             T t21, T t22, T t23, T t30, T t31, T t32, T t33);
 
   auto operator==(Matrix4x4<T> const& t) const -> bool;
   auto operator!=(Matrix4x4<T> const& t) const -> bool;
   auto operator-() const -> Matrix4x4<T>;
+  auto operator+(Matrix4x4<T> const& t) const -> Matrix4x4<T>;
+  auto operator-(Matrix4x4<T> const& t) const -> Matrix4x4<T>;
+
   operator Matrix3x3<T>() const;
 
   T data[4][4] = {
@@ -1021,6 +1186,10 @@ struct Matrix4x4 {
       {0, 0, 1, 0},
       {0, 0, 0, 1},
   };
+
+  auto row(int i) const noexcept -> Vector4<T>;
+  auto col(int i) const noexcept -> Vector4<T>;
+  auto set_row(int i, Vector4<T> const& x) noexcept -> void;
 
   static inline auto translate(Vector3<T> const& delta) noexcept
       -> Matrix4x4<T>;
@@ -1034,8 +1203,77 @@ struct Matrix4x4 {
 };
 
 template <class T>
+auto Matrix4x4<T>::row(int i) const noexcept -> Vector4<T> {
+  if (i < 0 || i >= 4)
+    return Vector4<T>{0};
+  else
+    return Vector4<T>{data[i][0], data[i][1], data[i][2], data[i][3]};
+}
+
+template <class T>
+auto Matrix4x4<T>::col(int i) const noexcept->Vector4<T> {
+  if (i < 0 || i >= 4)
+    return Vector4<T>{nanf};
+  else
+    return Vector4<T>{data[0][i], data[1][i], data[2][i], data[3][i]};
+}
+
+template <class T>
+auto Matrix4x4<T>::set_row(int i, Vector4<T> const& x) noexcept -> void {
+  if (i < 0 || i >= 4)
+    return;
+  else {
+    data[i][0] = x.x;
+    data[i][1] = x.y;
+    data[i][2] = x.z;
+    data[i][3] = x.w;
+  }
+}
+
+template <class T>
+Matrix4x4<T>::Matrix4x4(T s) {
+  data[0][0] = s;
+  data[0][1] = 0;
+  data[0][2] = 0;
+  data[0][3] = 0;
+  data[1][0] = 0;
+  data[1][1] = s;
+  data[1][2] = 0;
+  data[1][3] = 0;
+  data[2][0] = 0;
+  data[2][1] = 0;
+  data[2][2] = s;
+  data[2][3] = 0;
+  data[3][0] = 0;
+  data[3][1] = 0;
+  data[3][2] = 0;
+  data[3][3] = 1;
+}
+
+template <class T>
 Matrix4x4<T>::Matrix4x4(T const mat[4][4]) {
   memcpy(&(data[0][0]), &(mat[0][0]), sizeof(T) * 16);
+}
+
+template <class T>
+Matrix4x4<T>::Matrix4x4(Vector4<T> const& a, Vector4<T> const& b,
+    Vector4<T> const& c, Vector4<T> const& d) {
+  data[0][0] = a.x;
+  data[0][1] = a.y;
+  data[0][2] = a.z;
+  data[0][3] = a.w;
+  data[1][0] = b.x;
+  data[1][1] = b.y;
+  data[1][2] = b.z;
+  data[1][3] = b.w;
+  data[2][0] = c.x;
+  data[2][1] = c.y;
+  data[2][2] = c.z;
+  data[2][3] = c.w;
+  data[3][0] = d.x;
+  data[3][1] = d.y;
+  data[3][2] = d.z;
+  data[3][3] = d.w;
 }
 
 template <class T>
@@ -1080,6 +1318,22 @@ auto Matrix4x4<T>::operator-() const -> Matrix4x4<T> {
 }
 
 template <class T>
+auto Matrix4x4<T>::operator+(Matrix4x4<T> const& t) const -> Matrix4x4<T> {
+  return Matrix4x4<T>{data[0][0]+t.data[0][0], data[0][1]+t.data[0][1], data[0][2]+t.data[0][2], data[0][3]+t.data[0][3],
+                      data[1][0]+t.data[1][0], data[1][1]+t.data[1][1], data[1][2]+t.data[1][2], data[1][3]+t.data[1][3],
+                      data[2][0]+t.data[2][0], data[2][1]+t.data[2][1], data[2][2]+t.data[2][2], data[2][3]+t.data[2][3],
+                      data[3][0]+t.data[3][0], data[3][1]+t.data[3][1], data[3][2]+t.data[3][2], data[3][3]+t.data[3][3]};
+}
+
+template <class T>
+auto Matrix4x4<T>::operator-(Matrix4x4<T> const& t) const -> Matrix4x4<T> {
+  return Matrix4x4<T>{data[0][0]-t.data[0][0], data[0][1]-t.data[0][1], data[0][2]-t.data[0][2], data[0][3]-t.data[0][3],
+                      data[1][0]-t.data[1][0], data[1][1]-t.data[1][1], data[1][2]-t.data[1][2], data[1][3]-t.data[1][3],
+                      data[2][0]-t.data[2][0], data[2][1]-t.data[2][1], data[2][2]-t.data[2][2], data[2][3]-t.data[2][3],
+                      data[3][0]-t.data[3][0], data[3][1]-t.data[3][1], data[3][2]-t.data[3][2], data[3][3]-t.data[3][3]};
+}
+
+template <class T>
 Matrix4x4<T>::operator Matrix3x3<T>() const {
   return Matrix3x3<T>{
       data[0][0], data[0][1], data[0][2], data[1][0], data[1][1],
@@ -1096,6 +1350,11 @@ inline auto transpose(Matrix4x4<T> const& m) noexcept -> Matrix4x4<T> {
 }
 
 SE_EXPORT template <class T>
+inline auto trace(Matrix4x4<T> const& m) noexcept -> T {
+  return m.data[0][0] + m.data[1][1] + m.data[2][2] + m.data[3][3];
+}
+
+SE_EXPORT template <class T>
 inline auto mul(Matrix4x4<T> const& m1, Matrix4x4<T> const& m2) noexcept
     -> Matrix4x4<T> {
   Matrix4x4<T> s;
@@ -1109,7 +1368,7 @@ inline auto mul(Matrix4x4<T> const& m1, Matrix4x4<T> const& m2) noexcept
 
 SE_EXPORT template <class T>
 inline auto operator*(Matrix4x4<T> const& m1, Matrix4x4<T> const& m2) -> Matrix4x4<T> {
-  return mul<T>(m1, m1);
+  return mul<T>(m1, m2);
 }
 
 SE_EXPORT template <>
@@ -1188,28 +1447,183 @@ inline auto operator*(Matrix4x4<float> const& m, Vector4<float> const& v)
 }
 
 SE_EXPORT template <class T>
-inline auto inverse(Matrix4x4<T> const& m) noexcept -> Matrix4x4<T> {
-  Matrix4x4<T> origin;
-  Matrix4x4<T> inv;
-  memcpy(&(origin.data[0][0]), &(m.data[0][0]), sizeof(T) * 16);
+inline auto determinant(Matrix4x4<T> const& m) noexcept -> double {
+  double Result[4][4];
+  double tmp[12]; /* temp array for pairs */
+  double src[16]; /* array of transpose source matrix */
+  double det;     /* determinant */
+  /* transpose matrix */
+  for (int i = 0; i < 4; i++) {
+    src[i + 0] = m.data[i][0];
+    src[i + 4] = m.data[i][1];
+    src[i + 8] = m.data[i][2];
+    src[i + 12] = m.data[i][3];
+  }
+  /* calculate pairs for first 8 elements (cofactors) */
+  tmp[0] = src[10] * src[15];
+  tmp[1] = src[11] * src[14];
+  tmp[2] = src[9] * src[15];
+  tmp[3] = src[11] * src[13];
+  tmp[4] = src[9] * src[14];
+  tmp[5] = src[10] * src[13];
+  tmp[6] = src[8] * src[15];
+  tmp[7] = src[11] * src[12];
+  tmp[8] = src[8] * src[14];
+  tmp[9] = src[10] * src[12];
+  tmp[10] = src[8] * src[13];
+  tmp[11] = src[9] * src[12];
+  /* calculate first 8 elements (cofactors) */
+  Result[0][0] = tmp[0] * src[5] + tmp[3] * src[6] + tmp[4] * src[7];
+  Result[0][0] -= tmp[1] * src[5] + tmp[2] * src[6] + tmp[5] * src[7];
+  Result[0][1] = tmp[1] * src[4] + tmp[6] * src[6] + tmp[9] * src[7];
+  Result[0][1] -= tmp[0] * src[4] + tmp[7] * src[6] + tmp[8] * src[7];
+  Result[0][2] = tmp[2] * src[4] + tmp[7] * src[5] + tmp[10] * src[7];
+  Result[0][2] -= tmp[3] * src[4] + tmp[6] * src[5] + tmp[11] * src[7];
+  Result[0][3] = tmp[5] * src[4] + tmp[8] * src[5] + tmp[11] * src[6];
+  Result[0][3] -= tmp[4] * src[4] + tmp[9] * src[5] + tmp[10] * src[6];
+  Result[1][0] = tmp[1] * src[1] + tmp[2] * src[2] + tmp[5] * src[3];
+  Result[1][0] -= tmp[0] * src[1] + tmp[3] * src[2] + tmp[4] * src[3];
+  Result[1][1] = tmp[0] * src[0] + tmp[7] * src[2] + tmp[8] * src[3];
+  Result[1][1] -= tmp[1] * src[0] + tmp[6] * src[2] + tmp[9] * src[3];
+  Result[1][2] = tmp[3] * src[0] + tmp[6] * src[1] + tmp[11] * src[3];
+  Result[1][2] -= tmp[2] * src[0] + tmp[7] * src[1] + tmp[10] * src[3];
+  Result[1][3] = tmp[4] * src[0] + tmp[9] * src[1] + tmp[10] * src[2];
+  Result[1][3] -= tmp[5] * src[0] + tmp[8] * src[1] + tmp[11] * src[2];
+  /* calculate pairs for second 8 elements (cofactors) */
+  tmp[0] = src[2] * src[7];
+  tmp[1] = src[3] * src[6];
+  tmp[2] = src[1] * src[7];
+  tmp[3] = src[3] * src[5];
+  tmp[4] = src[1] * src[6];
+  tmp[5] = src[2] * src[5];
 
-  for (int j = 0; j < 4; ++j) {
-    for (int i = 0; i < 4; ++i) {
-      if (i == j) continue;
-      T p = origin.data[i][j];
-      for (int k = 0; k < 4; ++k) {
-        origin.data[i][k] =
-            origin.data[j][j] * origin.data[i][k] - p * origin.data[j][k];
-        inv.data[i][k] =
-            origin.data[j][j] * inv.data[i][k] - p * inv.data[j][k];
-      }
+  tmp[6] = src[0] * src[7];
+  tmp[7] = src[3] * src[4];
+  tmp[8] = src[0] * src[6];
+  tmp[9] = src[2] * src[4];
+  tmp[10] = src[0] * src[5];
+  tmp[11] = src[1] * src[4];
+  /* calculate second 8 elements (cofactors) */
+  Result[2][0] = tmp[0] * src[13] + tmp[3] * src[14] + tmp[4] * src[15];
+  Result[2][0] -= tmp[1] * src[13] + tmp[2] * src[14] + tmp[5] * src[15];
+  Result[2][1] = tmp[1] * src[12] + tmp[6] * src[14] + tmp[9] * src[15];
+  Result[2][1] -= tmp[0] * src[12] + tmp[7] * src[14] + tmp[8] * src[15];
+  Result[2][2] = tmp[2] * src[12] + tmp[7] * src[13] + tmp[10] * src[15];
+  Result[2][2] -= tmp[3] * src[12] + tmp[6] * src[13] + tmp[11] * src[15];
+  Result[2][3] = tmp[5] * src[12] + tmp[8] * src[13] + tmp[11] * src[14];
+  Result[2][3] -= tmp[4] * src[12] + tmp[9] * src[13] + tmp[10] * src[14];
+  Result[3][0] = tmp[2] * src[10] + tmp[5] * src[11] + tmp[1] * src[9];
+  Result[3][0] -= tmp[4] * src[11] + tmp[0] * src[9] + tmp[3] * src[10];
+  Result[3][1] = tmp[8] * src[11] + tmp[0] * src[8] + tmp[7] * src[10];
+  Result[3][1] -= tmp[6] * src[10] + tmp[9] * src[11] + tmp[1] * src[8];
+  Result[3][2] = tmp[6] * src[9] + tmp[11] * src[11] + tmp[3] * src[8];
+  Result[3][2] -= tmp[10] * src[11] + tmp[2] * src[8] + tmp[7] * src[9];
+  Result[3][3] = tmp[10] * src[10] + tmp[4] * src[8] + tmp[9] * src[9];
+  Result[3][3] -= tmp[8] * src[9] + tmp[11] * src[10] + tmp[5] * src[8];
+  /* calculate determinant */
+  det = src[0] * Result[0][0] + src[1] * Result[0][1] + src[2] * Result[0][2] +
+        src[3] * Result[0][3];
+  return det;
+}
+
+SE_EXPORT template <class T>
+inline auto adjoint(Matrix4x4<T> const& m) noexcept -> Matrix4x4<T> {
+  Matrix4x4<T> A;
+  A.set_row(0, cross(m.row(1), m.row(2), m.row(3)));
+  A.set_row(1, cross(-m.row(0), m.row(2), m.row(3)));
+  A.set_row(2, cross(m.row(0), m.row(1), m.row(3)));
+  A.set_row(3, cross(-m.row(0), m.row(1), m.row(2)));
+  return A;
+}
+
+SE_EXPORT template <class T>
+inline auto inverse(Matrix4x4<T> const& m) noexcept -> Matrix4x4<T> {
+  //  Inversion by Cramer's rule.  Code taken from an Intel publication
+  double Result[4][4];
+  double tmp[12]; /* temp array for pairs */
+  double src[16]; /* array of transpose source matrix */
+  double det;     /* determinant */
+  /* transpose matrix */
+  for (int i = 0; i < 4; i++) {
+    src[i + 0] = m.data[i][0];
+    src[i + 4] = m.data[i][1];
+    src[i + 8] = m.data[i][2];
+    src[i + 12] = m.data[i][3];
+  }
+  /* calculate pairs for first 8 elements (cofactors) */
+  tmp[0] = src[10] * src[15];
+  tmp[1] = src[11] * src[14];
+  tmp[2] = src[9] * src[15];
+  tmp[3] = src[11] * src[13];
+  tmp[4] = src[9] * src[14];
+  tmp[5] = src[10] * src[13];
+  tmp[6] = src[8] * src[15];
+  tmp[7] = src[11] * src[12];
+  tmp[8] = src[8] * src[14];
+  tmp[9] = src[10] * src[12];
+  tmp[10] = src[8] * src[13];
+  tmp[11] = src[9] * src[12];
+  /* calculate first 8 elements (cofactors) */
+  Result[0][0] = tmp[0] * src[5] + tmp[3] * src[6] + tmp[4] * src[7];
+  Result[0][0] -= tmp[1] * src[5] + tmp[2] * src[6] + tmp[5] * src[7];
+  Result[0][1] = tmp[1] * src[4] + tmp[6] * src[6] + tmp[9] * src[7];
+  Result[0][1] -= tmp[0] * src[4] + tmp[7] * src[6] + tmp[8] * src[7];
+  Result[0][2] = tmp[2] * src[4] + tmp[7] * src[5] + tmp[10] * src[7];
+  Result[0][2] -= tmp[3] * src[4] + tmp[6] * src[5] + tmp[11] * src[7];
+  Result[0][3] = tmp[5] * src[4] + tmp[8] * src[5] + tmp[11] * src[6];
+  Result[0][3] -= tmp[4] * src[4] + tmp[9] * src[5] + tmp[10] * src[6];
+  Result[1][0] = tmp[1] * src[1] + tmp[2] * src[2] + tmp[5] * src[3];
+  Result[1][0] -= tmp[0] * src[1] + tmp[3] * src[2] + tmp[4] * src[3];
+  Result[1][1] = tmp[0] * src[0] + tmp[7] * src[2] + tmp[8] * src[3];
+  Result[1][1] -= tmp[1] * src[0] + tmp[6] * src[2] + tmp[9] * src[3];
+  Result[1][2] = tmp[3] * src[0] + tmp[6] * src[1] + tmp[11] * src[3];
+  Result[1][2] -= tmp[2] * src[0] + tmp[7] * src[1] + tmp[10] * src[3];
+  Result[1][3] = tmp[4] * src[0] + tmp[9] * src[1] + tmp[10] * src[2];
+  Result[1][3] -= tmp[5] * src[0] + tmp[8] * src[1] + tmp[11] * src[2];
+  /* calculate pairs for second 8 elements (cofactors) */
+  tmp[0] = src[2] * src[7];
+  tmp[1] = src[3] * src[6];
+  tmp[2] = src[1] * src[7];
+  tmp[3] = src[3] * src[5];
+  tmp[4] = src[1] * src[6];
+  tmp[5] = src[2] * src[5];
+
+  tmp[6] = src[0] * src[7];
+  tmp[7] = src[3] * src[4];
+  tmp[8] = src[0] * src[6];
+  tmp[9] = src[2] * src[4];
+  tmp[10] = src[0] * src[5];
+  tmp[11] = src[1] * src[4];
+  /* calculate second 8 elements (cofactors) */
+  Result[2][0] = tmp[0] * src[13] + tmp[3] * src[14] + tmp[4] * src[15];
+  Result[2][0] -= tmp[1] * src[13] + tmp[2] * src[14] + tmp[5] * src[15];
+  Result[2][1] = tmp[1] * src[12] + tmp[6] * src[14] + tmp[9] * src[15];
+  Result[2][1] -= tmp[0] * src[12] + tmp[7] * src[14] + tmp[8] * src[15];
+  Result[2][2] = tmp[2] * src[12] + tmp[7] * src[13] + tmp[10] * src[15];
+  Result[2][2] -= tmp[3] * src[12] + tmp[6] * src[13] + tmp[11] * src[15];
+  Result[2][3] = tmp[5] * src[12] + tmp[8] * src[13] + tmp[11] * src[14];
+  Result[2][3] -= tmp[4] * src[12] + tmp[9] * src[13] + tmp[10] * src[14];
+  Result[3][0] = tmp[2] * src[10] + tmp[5] * src[11] + tmp[1] * src[9];
+  Result[3][0] -= tmp[4] * src[11] + tmp[0] * src[9] + tmp[3] * src[10];
+  Result[3][1] = tmp[8] * src[11] + tmp[0] * src[8] + tmp[7] * src[10];
+  Result[3][1] -= tmp[6] * src[10] + tmp[9] * src[11] + tmp[1] * src[8];
+  Result[3][2] = tmp[6] * src[9] + tmp[11] * src[11] + tmp[3] * src[8];
+  Result[3][2] -= tmp[10] * src[11] + tmp[2] * src[8] + tmp[7] * src[9];
+  Result[3][3] = tmp[10] * src[10] + tmp[4] * src[8] + tmp[9] * src[9];
+  Result[3][3] -= tmp[8] * src[9] + tmp[11] * src[10] + tmp[5] * src[8];
+  /* calculate determinant */
+  det = src[0] * Result[0][0] + src[1] * Result[0][1] + src[2] * Result[0][2] +
+        src[3] * Result[0][3];
+  /* calculate matrix inverse */
+  det = 1.0f / det;
+
+  Matrix4x4<T> result;
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      result.data[i][j] = float(Result[i][j] * det);
     }
   }
-
-  for (int i = 0; i < 4; ++i)
-    for (int j = 0; j < 4; ++j) inv.data[i][j] /= origin.data[i][i];
-
-  return inv;
+  return result;
 }
 
 template <class T>
@@ -1312,7 +1726,6 @@ SE_EXPORT template <class T>
 	auto operator+(Vector2<T> const& a) const -> Point2 { return Point2{ this->x + a.x,this->y + a.y }; }
 	auto operator-(Vector2<T> const& a) const -> Point2 { return Point2{ this->x - a.x,this->y - a.y }; }
 };
-
 
 SE_EXPORT template <class T>
 inline auto max(Point2<T> const& a, Point2<T> const& b) noexcept -> Point2<T> {
@@ -2021,7 +2434,32 @@ SE_EXPORT inline auto decompose(mat4 const& m, vec3* t, Quaternion* rquat,
                              mat4* s) noexcept -> void;
 SE_EXPORT inline auto decompose(mat4 const& m, vec3* t, vec3* r, vec3* s) noexcept
     -> void;
+
 }  // namespace SIByL::Math
+
+namespace SIByL::Math {
+    using namespace SIByL::Math;
+
+    /** Light weight ray triangle intersection
+    * @ref: https://github.com/SebLague/Gamedev-Maths/blob/master/PointInTriangle.cs */
+    SE_EXPORT inline auto ray_triangle_intersection_lightweight(
+        vec3 const& ray, vec3 const& rayDir,
+        vec3 const& A, vec3 const& B, vec3 const& C
+    ) noexcept -> bool {
+        vec3 normal = normalize(cross(B - A, C - A));
+        float t = dot(-ray, normal) / dot(normal, rayDir);
+        vec3 P = ray + rayDir * t;  // hit point
+
+        float s1 = C.y - A.y;
+        float s2 = C.x - A.x;
+        float s3 = B.y - A.y;
+        float s4 = P.y - A.y;
+
+        float w1 = (A.x * s1 + s4 * s2 - P.x * s1) / (s3 * s2 - (B.x - A.x) * s1);
+        float w2 = (s4 - w1 * s3) / s1;
+        return w1 >= 0.0 && w2 >= 0.0 && (w1 + w2) <= 1.0 ? true : false;
+    }
+}
 
 namespace SIByL::Math {
 
@@ -2270,4 +2708,6 @@ inline auto decompose(mat4 const& m, vec3* t, vec3* r, vec3* s) noexcept
     s->z =
         Math::vec3(smat.data[0][2], smat.data[1][2], smat.data[2][2]).length();
 }
+
+
 }

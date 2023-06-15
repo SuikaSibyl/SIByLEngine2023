@@ -375,6 +375,10 @@ auto setupExtensions(Context_VK* context, ContextExtensionsFlags& ext) -> void {
     context->getDeviceExtensions().emplace_back(
         VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME);
   }
+  if (ext & (ContextExtensionsFlags)ContextExtension::FRAGMENT_BARYCENTRIC) {
+    context->getDeviceExtensions().emplace_back(
+        VK_KHR_FRAGMENT_SHADER_BARYCENTRIC_EXTENSION_NAME);
+  }
 }
 
 auto attachWindow(Context_VK* contexVk) noexcept -> void {
@@ -927,7 +931,10 @@ auto Device_VK::init() noexcept -> void {
   allocatorInfo.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
   vmaCreateAllocator(&allocatorInfo, &allocator);
   // initialize extensions
-  initRayTracingExt();
+  if (static_cast<Context_VK*>(adapter->getContext())
+          ->getContextExtensionsFlags() &
+      (uint32_t)RHI::ContextExtension::RAY_TRACING)
+    initRayTracingExt();
 }
 
 auto Device_VK::createCommandPools() noexcept -> void {
@@ -1124,6 +1131,8 @@ auto Device_VK::createBuffer(BufferDescriptor const& desc) noexcept
   if (desc.memoryProperties & (uint32_t)MemoryProperty::HOST_VISIBLE_BIT ||
       desc.memoryProperties & (uint32_t)MemoryProperty::HOST_COHERENT_BIT) {
     allocInfo.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    allocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                              VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
   }
   if (vmaCreateBuffer(allocator, &bufferInfo, &allocInfo,
                       &buffer->getVkBuffer(), &buffer->getVMAAllocation(),
@@ -2391,7 +2400,7 @@ RenderPass_VK::RenderPass_VK(Device_VK* device,
     colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     colorAttachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     attachments.emplace_back(colorAttachment);
 
     VkAttachmentReference colorAttachmentRef{};
@@ -2417,7 +2426,8 @@ RenderPass_VK::RenderPass_VK(Device_VK* device,
         getVkAttachmentStoreOp(desc.depthStencilAttachment.stencilStoreOp);
     depthAttachment.initialLayout =
         VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    depthAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    depthAttachment.finalLayout =
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     attachments.emplace_back(depthAttachment);
   }
   VkAttachmentReference depthAttachmentRef = {};
@@ -3218,8 +3228,13 @@ MultiFrameFlights_VK::MultiFrameFlights_VK(Device_VK* device, int maxFlightNum,
 }
 
 auto MultiFrameFlights_VK::frameStart() noexcept -> void {
-  vkWaitForFences(device->getVkDevice(), 1, &inFlightFences[currentFrame].fence,
+  VkResult result = vkWaitForFences(device->getVkDevice(), 1,
+                          &inFlightFences[currentFrame].fence,
                   VK_TRUE, UINT64_MAX);
+  if (result != VK_SUCCESS) {
+    Core::LogManager::Error(
+        "Vulkan::MultiFrameFlight::frameStart()::WaitForFenceFailed!");
+  }
   vkResetFences(device->getVkDevice(), 1, &inFlightFences[currentFrame].fence);
   if (swapChain)
     vkAcquireNextImageKHR(device->getVkDevice(), swapChain->swapChain,
@@ -4044,13 +4059,8 @@ BLAS_VK::BLAS_VK(Device_VK* device, BLASDescriptor const& descriptor)
       1,                    // Number of acceleration structures to build
       &buildInfo,           // Array of ...BuildGeometryInfoKHR objects
       &pRangeInfo);         // Array of ...RangeInfoKHR objects
-
-  std::unique_ptr<Fence> fence = device->createFence();
-  fence->reset();
-  device->getGraphicsQueue()->submit({commandEncoder->finish({})}, fence.get());
-  device->getGraphicsQueue()->waitIdle();
+  device->getGraphicsQueue()->submit({commandEncoder->finish({})});
   device->waitIdle();
-  fence->wait();
 }
 
 BLAS_VK::BLAS_VK(Device_VK* device, BLAS_VK* src)
@@ -4142,6 +4152,12 @@ BLAS_VK::~BLAS_VK() {
 
 auto Device_VK::createBLAS(BLASDescriptor const& desc) noexcept
     -> std::unique_ptr<BLAS> {
+  if (desc.customGeometries.size() == 0 &&
+      desc.triangleGeometries.size() == 0) {
+    Core::LogManager::get()->Error(
+        "RHI :: Vulkan :: Create BLAS with no input geometry!");
+    return nullptr;
+  }
   return std::make_unique<BLAS_VK>(this, desc);
 }
 
@@ -4474,9 +4490,9 @@ RayTracingPipeline_VK::RayTracingPipeline_VK(
       }
     }
     // push callable SBT shader stages
+    callableBegin = pssci.size();
+    callableCount = desc.sbtsDescriptor.callableSBT.callableRecords.size();
     if (desc.sbtsDescriptor.callableSBT.callableRecords.size() > 0) {
-      callableBegin = pssci.size();
-      callableCount = desc.sbtsDescriptor.callableSBT.callableRecords.size();
       for (auto& callableRecord :
            desc.sbtsDescriptor.callableSBT.callableRecords) {
         pssci.push_back(
@@ -4660,7 +4676,7 @@ RayTracingPipeline_VK::RayTracingPipeline_VK(
     missRegion.deviceAddress = SBTBufferAddress + rayGenRegion.size;
     hitRegion.deviceAddress =
         SBTBufferAddress + rayGenRegion.size + missRegion.size;
-    callableRegion.deviceAddress =
+    callableRegion.deviceAddress = (callableCount == 0) ? 0 :
         SBTBufferAddress + rayGenRegion.size + missRegion.size + hitRegion.size;
   }
 }

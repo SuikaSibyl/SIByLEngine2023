@@ -51,7 +51,8 @@ SE_EXPORT struct ImGuiBackend_VK : public ImGuiBackend {
   virtual auto onWindowResize(size_t x, size_t y) -> void override;
 
   virtual auto startNewFrame() -> void override;
-  virtual auto render(ImDrawData* draw_data) -> void override;
+  virtual auto render(ImDrawData* draw_data,
+                      RHI::Semaphore* waitSemaphore = nullptr) -> void override;
   virtual auto present() -> void override;
 
   virtual auto createImGuiTexture(RHI::Sampler* sampler, RHI::TextureView* view,
@@ -64,6 +65,7 @@ SE_EXPORT struct ImGuiBackend_VK : public ImGuiBackend {
   VkDescriptorPool descriptorPool;
   RHI::RHILayer* rhiLayer = nullptr;
   Platform::Window* bindedWindow = nullptr;
+  bool swapChainRebuild = false;
 };
 
 inline int g_MinImageCount = 2;
@@ -246,7 +248,8 @@ auto ImGuiBackend_VK::startNewFrame() -> void {
 
 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-auto ImGuiBackend_VK::render(ImDrawData* draw_data) -> void {
+auto ImGuiBackend_VK::render(ImDrawData* draw_data,
+                             RHI::Semaphore* waitSemaphore) -> void {
   mainWindowData.ClearValue.color.float32[0] = clear_color.x * clear_color.w;
   mainWindowData.ClearValue.color.float32[1] = clear_color.y * clear_color.w;
   mainWindowData.ClearValue.color.float32[2] = clear_color.z * clear_color.w;
@@ -304,13 +307,20 @@ auto ImGuiBackend_VK::render(ImDrawData* draw_data) -> void {
   // Submit command buffer
   vkCmdEndRenderPass(fd->CommandBuffer);
   {
-    VkPipelineStageFlags wait_stage =
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    std::vector<VkSemaphore> waitSeams = {image_acquired_semaphore};
+    std::vector<VkPipelineStageFlags> wait_stages = {
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    if (waitSemaphore) {
+      waitSeams.push_back(
+          static_cast<RHI::Semaphore_VK*>(waitSemaphore)->semaphore);
+      wait_stages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+    }
+
     VkSubmitInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    info.waitSemaphoreCount = 1;
-    info.pWaitSemaphores = &image_acquired_semaphore;
-    info.pWaitDstStageMask = &wait_stage;
+    info.waitSemaphoreCount = waitSeams.size();
+    info.pWaitSemaphores = waitSeams.data();
+    info.pWaitDstStageMask = wait_stages.data();
     info.commandBufferCount = 1;
     info.pCommandBuffers = &fd->CommandBuffer;
     info.signalSemaphoreCount = 1;

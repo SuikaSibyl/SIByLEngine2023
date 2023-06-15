@@ -1,4 +1,5 @@
 #include "../Public/Core/SE.SRenderer-SRenderer.hpp"
+#include <Config/SE.Core.Config.hpp>
 
 namespace SIByL {
 
@@ -42,9 +43,12 @@ auto SRenderer::init(GFX::Scene& scene) noexcept -> void {
           ->createStructuredUniformBuffer<SceneInfoUniforms>();
 
   // create default setting
+  std::string engine_path =
+      Core::RuntimeConfig::get()->string_property("engine_path");
   defaultResources.defaultTexture =
       GFX::GFXManager::get()->registerTextureResource(
-          "../Engine/Binaries/Runtime/textures/uv_checker.png");
+          (engine_path + "../Engine/Binaries/Runtime/textures/uv_checker.png")
+              .c_str());
 
   // create custom primitive records
   {
@@ -69,8 +73,9 @@ auto SRenderer::init(GFX::Scene& scene) noexcept -> void {
     customPrimitive.sphere.meshRecord.blas_desc = RHI::BLASDescriptor{};
     customPrimitive.sphere.meshRecord.blas_desc.customGeometries.push_back(
         customPrimitive.sphere.customGeometry);
-    customPrimitive.sphere.meshRecord.blases =
-        device->createBLAS(customPrimitive.sphere.meshRecord.blas_desc);
+    if (device->getRayTracingExtension() != nullptr)
+      customPrimitive.sphere.meshRecord.blases =
+          device->createBLAS(customPrimitive.sphere.meshRecord.blas_desc);
   }
 
   raCommon.csm_info_device =
@@ -429,7 +434,8 @@ auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
   sceneDataPack.back_tlas = sceneDataPack.tlas;
 
   // if (packstate.invalidTLAS)
-  sceneDataPack.tlas = device->createTLAS(sceneDataPack.tlas_desc);
+  if (sceneDataPack.tlas_desc.instances.size() != 0)
+    sceneDataPack.tlas = device->createTLAS(sceneDataPack.tlas_desc);
 
   sceneDataPack.back_light_buffer = std::move(sceneDataPack.light_buffer);
   sceneDataPack.light_buffer = device->createDeviceLocalBuffer(
@@ -465,7 +471,9 @@ auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
 
   commonDescData.set0_flights_resources[fid][6] = {
       6, RHI::BindingResource{{sceneDataPack.sample_dist_buffer.get(), 0,
-                               sceneDataPack.sample_dist_buffer->size()}}};
+                               sceneDataPack.sample_dist_buffer.get() != 0
+                                   ? sceneDataPack.sample_dist_buffer->size()
+                                   : 0}}};
 
   if (packstate.invalidAccumulation) {
     state.batchIdx = 0;
@@ -585,8 +593,9 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
         // add all submeshes
         for (auto& submesh : mesh->submeshes) {
           GeometryDrawData geometry;
-          geometry.vertexOffset = vertex_offset * sizeof(float) /
-                                  SRenderer::vertexBufferLayout.arrayStride;
+          geometry.vertexOffset = submesh.baseVertex +
+                                  vertex_offset * sizeof(float) /
+                                      SRenderer::vertexBufferLayout.arrayStride;
           geometry.indexOffset = submesh.offset + index_offset;
           geometry.materialID = 0;
           geometry.indexSize = submesh.size;
@@ -647,6 +656,9 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
               return findTex->second;
             };
             matData.bsdf_id = mat->BxDF;
+            if (baseTexGUID == 0) {
+              baseTexGUID = GFX::GFXManager::get()->registerTextureResource("content/textures/white.png");
+            }
             matData.basecolor_opacity_tex = getTexID(baseTexGUID);
             matData.normal_bump_tex = 0;
             sceneDataPack.material_buffer_cpu.push_back(matData);
@@ -919,7 +931,9 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
     sceneDataPack.tlas_desc.instances.push_back(iter.second.blasInstance);
   }
   sceneDataPack.tlas_desc.allowRefitting = true;
-  sceneDataPack.tlas = device->createTLAS(sceneDataPack.tlas_desc);
+
+  if (device->getRayTracingExtension())
+    sceneDataPack.tlas = device->createTLAS(sceneDataPack.tlas_desc);
 
   raCommon.structured_drawcalls.buildIndirectDrawcalls();
   // for (int i = 0; i < 2; ++i) {
@@ -936,23 +950,34 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
 
   // rebuild all bind groups
   for (int i = 0; i < 2; ++i) {
-    commonDescData.set0_flights_resources[i] = std::vector<RHI::BindGroupEntry>{
-        {0,
-         RHI::BindingResource{
-             sceneDataBuffers.global_uniform_buffer.getBufferBinding(i)}},
-        {1, RHI::BindingResource{{sceneDataPack.vertex_buffer.get(), 0,
-                                  sceneDataPack.vertex_buffer->size()}}},
+    commonDescData.set0_flights_resources[i] =
+        std::vector<RHI::BindGroupEntry> {
+      {0,
+       RHI::BindingResource{
+           sceneDataBuffers.global_uniform_buffer.getBufferBinding(i)}},
+          {1, RHI::BindingResource{{sceneDataPack.vertex_buffer.get(), 0,
+                                    sceneDataPack.vertex_buffer.get() != 0
+                                        ? sceneDataPack.vertex_buffer->size()
+                                        : 0}}},
         {2, RHI::BindingResource{{sceneDataPack.index_buffer.get(), 0,
-                                  sceneDataPack.index_buffer->size()}}},
+                                  sceneDataPack.index_buffer.get() != 0
+                                      ? sceneDataPack.index_buffer->size()
+                                      : 0}}},
         {3,
          RHI::BindingResource{
              sceneDataBuffers.geometry_buffer.getBufferBinding(i)}},
         {4, RHI::BindingResource{{sceneDataPack.material_buffer.get(), 0,
-                                  sceneDataPack.material_buffer->size()}}},
+                                  sceneDataPack.material_buffer.get() != 0
+                                      ? sceneDataPack.material_buffer->size()
+                                      : 0}}},
         {5, RHI::BindingResource{{sceneDataPack.light_buffer.get(), 0,
-                                  sceneDataPack.light_buffer->size()}}},
+                                  sceneDataPack.light_buffer.get() != 0
+                                      ? sceneDataPack.light_buffer->size()
+                                      : 0}}},
         {6, RHI::BindingResource{{sceneDataPack.sample_dist_buffer.get(), 0,
-                                  sceneDataPack.sample_dist_buffer->size()}}},
+                                  sceneDataPack.sample_dist_buffer.get() != 0
+                                      ? sceneDataPack.sample_dist_buffer->size()
+                                      : 0}}},
         {7,
          RHI::BindingResource{
              sceneDataBuffers.scene_info_buffer.getBufferBinding(i)}},
@@ -965,34 +990,6 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
                  ->sampler.get()}},
     };
 
-    commonDescData.set0_flights_resources[i] = std::vector<RHI::BindGroupEntry>{
-        {0,
-         RHI::BindingResource{
-             sceneDataBuffers.global_uniform_buffer.getBufferBinding(i)}},
-        {1, RHI::BindingResource{{sceneDataPack.vertex_buffer.get(), 0,
-                                  sceneDataPack.vertex_buffer->size()}}},
-        {2, RHI::BindingResource{{sceneDataPack.index_buffer.get(), 0,
-                                  sceneDataPack.index_buffer->size()}}},
-        {3,
-         RHI::BindingResource{
-             sceneDataBuffers.geometry_buffer.getBufferBinding(i)}},
-        {4, RHI::BindingResource{{sceneDataPack.material_buffer.get(), 0,
-                                  sceneDataPack.material_buffer->size()}}},
-        {5, RHI::BindingResource{{sceneDataPack.light_buffer.get(), 0,
-                                  sceneDataPack.light_buffer->size()}}},
-        {6, RHI::BindingResource{{sceneDataPack.sample_dist_buffer.get(), 0,
-                                  sceneDataPack.sample_dist_buffer->size()}}},
-        {7,
-         RHI::BindingResource{
-             sceneDataBuffers.scene_info_buffer.getBufferBinding(i)}},
-        {8,
-         RHI::BindingResource{
-             sceneDataPack.unbinded_textures,
-             Core::ResourceManager::get()
-                 ->getResource<GFX::Sampler>(
-                     GFX::GFXManager::get()->commonSampler.defaultSampler)
-                 ->sampler.get()}},
-    };
     commonDescData.set1_flights_resources[i] = std::vector<RHI::BindGroupEntry>{
         {0, RHI::BindingResource{sceneDataPack.tlas.get()}},
     };
@@ -1018,9 +1015,7 @@ auto SRenderer::updateCamera(GFX::TransformComponent const& transform,
 
     camData.viewMat = Math::transpose(
         Math::lookAt(camData.posW, camData.target, Math::vec3(0, 1, 0)).m);
-    camData.projMat = Math::transpose(
-        Math::perspective(camera.fovy, camera.aspect, camera.near, camera.far)
-            .m);
+    camData.projMat = Math::transpose(camera.getProjectionMat());
     raCommon.mainCameraInfo.view = Math::transpose(camData.viewMat);
 
     camData.viewProjMat = camData.viewMat * camData.projMat;

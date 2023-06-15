@@ -25,6 +25,8 @@ SE_EXPORT struct Config {
     layer->getWidget<Editor::SceneWidget>()->bindScene(nullptr);
     layer->getWidget<Editor::SceneWidget>()->inspectorWidget =
         layer->getWidget<Editor::InspectorWidget>();
+    layer->getWidget<Editor::SceneWidget>()->viewportWidget =
+        layer->getWidget<Editor::ViewportWidget>();
     layer->getWidget<Editor::SceneWidget>()
         ->gameobjectInspector.registerFragment<Editor::TagComponentFragment>();
     layer->getWidget<Editor::SceneWidget>()

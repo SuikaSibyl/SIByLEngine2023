@@ -63,13 +63,7 @@
     <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-ForwardPass.hpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarLCPass.hpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="Public\Passes\FullScreenPasses\SE.SRenderer-AccumulatePass.hpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarGTPass.hpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-RSSGeoReconstrPass.hpp">
@@ -97,6 +91,24 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-ShadowMapPass.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarGTPass.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarLCPass.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Passes\RayTracingPasses\SE.SRenderer-RTRSMPass.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPSLCPoolingPass.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Plugins\SE.SRendererExt.GeomTab.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-GeometryInspectorPass.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
@@ -135,6 +147,36 @@
       <Filter>源文件</Filter>
     </ClInclude>
     <ClInclude Include="Public\Passes\RayTracingPasses\SE.SRenderer-SSRXGTPass.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarGTPass.hpp">
+      <Filter>源文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarLCPass.hpp">
+      <Filter>源文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\Passes\RayTracingPasses\SE.SRenderer-RTRSMPass.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\Pipeline\SE.SRendere-RTGIPipeline.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPSLCPoolingPass.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\Passes\FullScreenPasses\SE.SRenderer-ClearPass.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\Passes\RayTracingPasses\SE.SRenderer-RTILMPass.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\Plugins\SE.SRendererExt.GeomTab.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\Passes\RasterizerPasses\SE.SRenderer-GeometryInspectorPass.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\Pipeline\SE.SRendere-GeoInspectPipeline.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

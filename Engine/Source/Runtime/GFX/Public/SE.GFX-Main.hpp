@@ -349,6 +349,8 @@ SE_EXPORT struct Scene : public Core::Resource {
   auto serialize(std::filesystem::path path) noexcept -> void;
   /** deserialize scene */
   auto deserialize(std::filesystem::path path) noexcept -> void;
+  /** release */
+  auto release() noexcept -> void;
   /** name description */
   std::string name = "new scene";
   /** mapping handle to GameObject */
@@ -363,7 +365,7 @@ SE_EXPORT struct Scene : public Core::Resource {
 
 SE_EXPORT struct CameraComponent {
   auto getViewMat() noexcept -> Math::mat4;
-  auto getProjectionMat() noexcept -> Math::mat4;
+  auto getProjectionMat() const noexcept -> Math::mat4;
 
   enum struct ProjectType {
     PERSPECTIVE,
@@ -503,6 +505,7 @@ auto StructuredUniformBufferView<T>::setStructure(T const& x,
 template <class T>
 auto StructuredUniformBufferView<T>::getBufferBinding(uint32_t idx) noexcept
     -> RHI::BufferBinding {
+  if (buffer == nullptr) return RHI::BufferBinding{nullptr, 0, 0};
   return RHI::BufferBinding{buffer->buffer.get(), idx * sizeof(T), sizeof(T)};
 }
 
@@ -523,6 +526,7 @@ auto StructuredArrayUniformBufferView<T>::setStructure(T* x,
 template <class T>
 auto StructuredArrayUniformBufferView<T>::getBufferBinding(
     uint32_t idx) noexcept -> RHI::BufferBinding {
+  if (buffer == nullptr) return RHI::BufferBinding{nullptr, 0, 0};
   return RHI::BufferBinding{buffer->buffer.get(), idx * sizeof(T) * size,
                             sizeof(T) * size};
 }
@@ -548,6 +552,7 @@ auto StructuredArrayMultiStorageBufferView<T>::setStructure(T* x, uint32_t idx,
 template <class T>
 auto StructuredArrayMultiStorageBufferView<T>::getBufferBinding(
     uint32_t idx) noexcept -> RHI::BufferBinding {
+  if (buffer == nullptr) return RHI::BufferBinding{nullptr, 0, 0};
   return RHI::BufferBinding{buffer->buffer.get(), idx * sizeof(T) * size,
                             sizeof(T) * size};
 }
@@ -628,6 +633,8 @@ SE_EXPORT struct GFXManager : public Core::Manager {
   /** request offline material resource */
   auto registerMaterialResource(char const* filepath) noexcept -> Core::GUID;
   auto requestOfflineMaterialResource(Core::ORID orid) noexcept -> Core::GUID;
+  /** Register all samplers */
+  auto registerDefualtSamplers() noexcept -> void;
   /** RHI layer */
   RHI::RHILayer* rhiLayer = nullptr;
   /** common samplers */

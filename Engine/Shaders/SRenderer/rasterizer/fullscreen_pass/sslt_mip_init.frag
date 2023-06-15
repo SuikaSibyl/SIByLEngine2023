@@ -25,7 +25,7 @@ layout(binding = 0) uniform sampler2D in_color;
 layout(binding = 1) uniform sampler2D in_depth;
 layout(binding = 2) uniform sampler2D in_normal;
 
-#include "../../include/spectrum.h"
+#include "../../include/common/common_spectrum.h"
 #include "../../../Utility/geometry.h"
 
 float computeJacobian_1(
@@ -48,7 +48,7 @@ float computeJacobian_1(
     return jacobian_0 * (dist_1 * dist_1) / cos_1;
 }
 
-void main() {
+void fit_to_screen() {
     const vec2 uv = in_uv;
     const ivec2 id = ivec2(uv * pushConstants.resolution);
 
@@ -94,4 +94,68 @@ void main() {
         normal_cone = vec4(packNormal(sampleNormalInVS), 1);
         sum_luminance = importance;
     }
+}
+
+const int screen_size = 2048;
+
+void contained_in_screen() {
+    const vec2 uv = in_uv;
+    const ivec2 id = ivec2(uv * screen_size);
+
+    if(id.x >= pushConstants.resolution.x || id.y >= pushConstants.resolution.y) {
+        boundingbox = vec4(vec2(k_inf), vec2(-k_inf));
+        bbnc_pack = vec4(k_inf, -k_inf, 0, 0);
+        normal_cone = vec4(0);
+        sum_luminance = 0;
+        return;
+    }
+
+    const vec2 uv_ = vec2(id + 0.5) / vec2(pushConstants.resolution);
+
+    // Unpack the depth from the texture.
+    const float sampleDepth = texelFetch(in_depth, id, 0).x;
+    const vec3 color = texelFetch(in_color, id, 0).rgb;
+    if(sampleDepth == 1) {
+        boundingbox = vec4(vec2(k_inf), vec2(-k_inf));
+        bbnc_pack = vec4(k_inf, -k_inf, 0, 0);
+        normal_cone = vec4(0);
+        sum_luminance = 0;
+    }
+    else {
+        // Unpack the normal from the texture.
+        const vec3 sampleNormalInWS = unpackNormal(texelFetch(in_normal, id, 0).xyz);
+        vec3 sampleNormalInVS = normalize((pushConstants.transInvViewMat * vec4(sampleNormalInWS, 0)).xyz);
+        sampleNormalInVS.y = -sampleNormalInVS.y;
+
+        // From the depth, compute the position in clip space.
+        vec4 samplePosInCS =  vec4(uv_*2-1.0f, sampleDepth, 1);
+        samplePosInCS.y *= -1;
+        // From the depth, compute the position in view space.
+        vec4 samplePosInVS = pushConstants.invProjMat * samplePosInCS;
+        samplePosInVS /= samplePosInVS.w;
+
+        float importance = 0;
+        if(pushConstants.importance_operator == 0) // luminance
+            importance = luminance(color);
+        else if(pushConstants.importance_operator == 1) // average
+            importance = dot(color, vec3(1)) / 3;
+        else if(pushConstants.importance_operator == 2) // max
+            importance = max(max(color.x, color.y), color.z);
+        else if(pushConstants.importance_operator == 3) // uniform
+            importance = 1;
+            
+        if(pushConstants.modulateJacobian) {
+            const float jacobian = computeJacobian_1(uv, samplePosInVS.xyz, sampleNormalInVS);
+            importance *= jacobian / 1000;
+        }
+        
+        boundingbox = vec4(vec2(samplePosInVS.xy), vec2(samplePosInVS.xy));
+        bbnc_pack = vec4(samplePosInVS.z, samplePosInVS.z, k_pi_over_2, 0);
+        normal_cone = vec4(packNormal(sampleNormalInVS), 1);
+        sum_luminance = importance;
+    }
+}
+
+void main() {
+    contained_in_screen();
 }

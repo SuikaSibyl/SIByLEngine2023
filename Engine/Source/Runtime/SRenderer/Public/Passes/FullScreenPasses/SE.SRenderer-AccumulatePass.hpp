@@ -60,7 +60,7 @@ namespace SIByL
 		struct PushConstant {
 			Math::uvec2 resolution;
 			uint32_t gAccumCount;
-			uint32_t gAccumulate;
+			uint32_t gAccumulate = 0;
 			uint32_t gMovingAverageMode;
 		};
 		PushConstant pConst;
@@ -73,6 +73,11 @@ namespace SIByL
 				pConst.gAccumCount = 0;
 			}
 			ImGui::SameLine();
+            bool useAccum = pConst.gAccumulate != 0;
+			if (ImGui::Checkbox("Use Accum", &useAccum)) {
+				pConst.gAccumulate = useAccum ? 1 : 0;
+            }
+            //pConst.gAccumulate = useAccum ? 1 : 0;
 			ImGui::Text(std::string("Accumulated Count: " + std::to_string(pConst.gAccumCount)).c_str());
 		}
 		virtual auto execute(RDG::RenderContext* context, RDG::RenderData const& renderData) noexcept -> void {
@@ -99,7 +104,6 @@ namespace SIByL
 			if (batchIdx == 0) {
 				pConst.gAccumCount = 0;
 			}
-			pConst.gAccumulate = 1;
 			pConst.gMovingAverageMode = pConst.gAccumCount > 0 ? 1 : 0;
 
 			encoder->pushConstants(&pConst,

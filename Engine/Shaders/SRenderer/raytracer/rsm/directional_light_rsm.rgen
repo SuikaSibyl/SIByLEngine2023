@@ -1,0 +1,94 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+
+struct PushConstants { 
+    mat4 inv_view;
+    mat4 inv_proj;
+    vec3 direction;
+    uint useWeight;
+    uvec2 resolution;
+    uint sample_batch;
+};
+layout(push_constant) uniform PushConsts { PushConstants pushConstants; };
+
+#include "../../../Utility/random.h"
+#include "../../../Utility/sampling.h"
+
+#include "../include/common_trace.h"
+#include "../include/common_rgen.h"
+
+#include "../../include/plugins/material/lambertian_common.h"
+
+layout(binding = 0, set = 2, r32f)      uniform image2D pixImpImage;
+layout(binding = 1, set = 2, rgba32f)   uniform image2D normalConeImage;
+layout(binding = 2, set = 2, rgba32f)   uniform image2D aabbXYImage;
+layout(binding = 3, set = 2, rg32f)     uniform image2D aabbzImage;
+layout(binding = 4, set = 2, r32f)      uniform image2D weightImage;
+
+vec3 CS2WS(in const vec2 uv) {
+    const vec4 posInCS =  vec4(uv*2-1.0f, 0, 1);
+    vec4 posInVS = pushConstants.inv_proj * posInCS;
+    posInVS /= posInVS.w;
+    const vec4 posInWS = pushConstants.inv_view * vec4(posInVS.xyz, 1.0);
+    return posInWS.xyz;
+}
+
+vec3 CS2WS(in const vec3 uvw) {
+    const vec4 posInCS =  vec4(uvw.xy*2-1.0f, uvw.z, 1);
+    vec4 posInVS = pushConstants.inv_proj * posInCS;
+    posInVS /= posInVS.w;
+    const vec4 posInWS = pushConstants.inv_view * vec4(posInVS.xyz, 1.0);
+    return posInWS.xyz;
+}
+
+void main() {
+    // The resolution of the image, which is the same as the launch size:
+    const ivec2 resolution = ivec2(pushConstants.resolution);
+    const ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
+    // If the pixel is outside of the image, don't do anything:
+    if((pixel.x >= resolution.x) || (pixel.y >= resolution.y)) {
+        return;
+    }
+
+    const vec3 direction = pushConstants.direction;
+
+    const vec2 uv = (vec2(pixel) + vec2(0.5)) / vec2(resolution);
+    const vec3 wsPos = CS2WS(uv);
+    
+    uint RNG = InitRNG(pixel, pushConstants.sample_batch);
+
+    Ray ray = Ray(wsPos - direction * 1000.0f, 0, direction, k_inf);
+
+    // primary intersection
+    SurfaceIntersection vertex;
+    const bool intersected = intersectEX(ray, vertex, RNG);   // TODO :: ray differential
+    const vec3 albedo = intersected 
+        ? texture(textures[lambertian_materials[vertex.matID].basecolor_opacity_tex], vertex.uv).rgb 
+        : vec3(0.0f);
+    float lum = max(albedo.x, max(albedo.y, albedo.z));
+    
+    const vec3 normal = intersected ? vertex.geometric_normal : vec3(0.0f);
+
+    const vec3 aabbMin = intersected ? vertex.position : vec3(+k_inf);
+    const vec3 aabbMax = intersected ? vertex.position : vec3(-k_inf);
+
+    // For orthogonal camera, the pixel area is the same for all pixels
+    // but we still cares about normals which compress the pixel area    
+    const float pixelAreaCompensation = intersected 
+        ? min(1. / abs(dot(direction, normal)), 5.)
+        : 1.;
+
+    float weight = 0;
+    if(pushConstants.useWeight == 1) {
+        float weight = imageLoad(weightImage, ivec2(pixel)).r;
+        lum *= weight > 0 ? 1 : 0;
+    }
+
+    imageStore(pixImpImage, pixel, vec4(lum));
+    imageStore(normalConeImage, pixel, vec4(normal, 0));
+    imageStore(aabbXYImage, pixel, vec4(aabbMin.xy, aabbMax.xy));
+    imageStore(aabbzImage, pixel, vec4(aabbMin.z, aabbMax.z,0,0));
+
+    
+    // imageStore(weightImage, pixel, vec4(weight / 2));
+}

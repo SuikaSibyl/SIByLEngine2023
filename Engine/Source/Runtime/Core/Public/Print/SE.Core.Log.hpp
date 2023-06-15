@@ -29,6 +29,13 @@
 
 #include <System/SE.Core.System.hpp>
 
+#ifdef _NEED_LOG
+#define SE_ASSERT(b, message) \
+  if (!b) { SIByL::Core::LogManager::Error(message); }
+#else
+#define SE_ASSERT(b, message) 
+#endif
+
 namespace SIByL::Core {
 /** A block of memory to contain data in a log stream. */
 struct LogStreamBlock {

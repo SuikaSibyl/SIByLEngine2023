@@ -13,6 +13,8 @@
 #include <typeinfo>
 #include <unordered_map>
 #include <vector>
+#include <ImGuizmo.h>
+#include <Config/SE.Core.Config.hpp>
 
 namespace SIByL::Editor {
 auto drawBoolControl(std::string const& label, bool& value,
@@ -683,10 +685,197 @@ auto captureImage(Core::GUID src) noexcept -> void {
    }
 }
 
+static const float identityMatrix[16] = {1.f, 0.f, 0.f, 0.f, 0.f, 1.f,
+                                         0.f, 0.f, 0.f, 0.f, 1.f, 0.f,
+                                         0.f, 0.f, 0.f, 1.f};
+
+auto editTransform(float* cameraView, float* cameraProjection, float* matrix,
+                   bool editTransformDecomposition,
+                   ImGuizmoState& state) noexcept -> void {
+   static ImGuizmo::MODE mCurrentGizmoMode(ImGuizmo::LOCAL);
+   static bool useSnap = false;
+   static float snap[3] = {1.f, 1.f, 1.f};
+   static float bounds[] = {-0.5f, -0.5f, -0.5f, 0.5f, 0.5f, 0.5f};
+   static float boundsSnap[] = {0.1f, 0.1f, 0.1f};
+   static bool boundSizing = false;
+   static bool boundSizingSnap = false;
+
+   if (editTransformDecomposition) {
+    if (ImGui::IsKeyPressed(ImGuiKey_T))
+      state.mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
+    if (ImGui::IsKeyPressed(ImGuiKey_E))
+      state.mCurrentGizmoOperation = ImGuizmo::ROTATE;
+    if (ImGui::IsKeyPressed(ImGuiKey_R))  // r Key
+      state.mCurrentGizmoOperation = ImGuizmo::SCALE;
+    if (ImGui::RadioButton("Translate",
+                           state.mCurrentGizmoOperation == ImGuizmo::TRANSLATE))
+      state.mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Rotate",
+                           state.mCurrentGizmoOperation == ImGuizmo::ROTATE))
+      state.mCurrentGizmoOperation = ImGuizmo::ROTATE;
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Scale",
+                           state.mCurrentGizmoOperation == ImGuizmo::SCALE))
+      state.mCurrentGizmoOperation = ImGuizmo::SCALE;
+    if (ImGui::RadioButton("Universal",
+                           state.mCurrentGizmoOperation == ImGuizmo::UNIVERSAL))
+      state.mCurrentGizmoOperation = ImGuizmo::UNIVERSAL;
+    float matrixTranslation[3], matrixRotation[3], matrixScale[3];
+    ImGuizmo::DecomposeMatrixToComponents(matrix, matrixTranslation,
+                                          matrixRotation, matrixScale);
+    ImGui::InputFloat3("Tr", matrixTranslation);
+    ImGui::InputFloat3("Rt", matrixRotation);
+    ImGui::InputFloat3("Sc", matrixScale);
+    ImGuizmo::RecomposeMatrixFromComponents(matrixTranslation, matrixRotation,
+                                            matrixScale, matrix);
+
+    if (state.mCurrentGizmoOperation != ImGuizmo::SCALE) {
+      if (ImGui::RadioButton("Local", mCurrentGizmoMode == ImGuizmo::LOCAL))
+        mCurrentGizmoMode = ImGuizmo::LOCAL;
+      ImGui::SameLine();
+      if (ImGui::RadioButton("World", mCurrentGizmoMode == ImGuizmo::WORLD))
+        mCurrentGizmoMode = ImGuizmo::WORLD;
+    }
+    if (ImGui::IsKeyPressed(ImGuiKey_S)) useSnap = !useSnap;
+    ImGui::Checkbox("##UseSnap", &useSnap);
+    ImGui::SameLine();
+
+    switch (state.mCurrentGizmoOperation) {
+      case ImGuizmo::TRANSLATE:
+        ImGui::InputFloat3("Snap", &snap[0]);
+        break;
+      case ImGuizmo::ROTATE:
+        ImGui::InputFloat("Angle Snap", &snap[0]);
+        break;
+      case ImGuizmo::SCALE:
+        ImGui::InputFloat("Scale Snap", &snap[0]);
+        break;
+    }
+    ImGui::Checkbox("Bound Sizing", &boundSizing);
+    if (boundSizing) {
+      ImGui::PushID(3);
+      ImGui::Checkbox("##BoundSizing", &boundSizingSnap);
+      ImGui::SameLine();
+      ImGui::InputFloat3("Snap", boundsSnap);
+      ImGui::PopID();
+    }
+   }
+
+   ImGuiIO& io = ImGui::GetIO();
+   float viewManipulateRight = io.DisplaySize.x;
+   float viewManipulateTop = 0;
+   static ImGuiWindowFlags gizmoWindowFlags = 0;
+
+   bool useWindow = true;
+   ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y,
+                     state.width, state.height);
+   ImGuizmo::SetDrawlist();
+   viewManipulateRight = ImGui::GetWindowPos().x + state.width;
+   viewManipulateTop = ImGui::GetWindowPos().y;
+   ImGuiWindow* window = ImGui::GetCurrentWindow();
+   gizmoWindowFlags = ImGui::IsWindowHovered() &&
+                              ImGui::IsMouseHoveringRect(window->InnerRect.Min,
+                                                         window->InnerRect.Max)
+                          ? ImGuiWindowFlags_NoMove
+                          : 0;
+
+   ImGuizmo::DrawGrid(cameraView, cameraProjection, identityMatrix, 100.f);
+   ImGuizmo::DrawCubes(cameraView, cameraProjection,
+                       &state.objMatrix.data[0][0], 1);
+   ImGuizmo::Manipulate(
+       cameraView, cameraProjection, state.mCurrentGizmoOperation,
+       mCurrentGizmoMode, matrix, NULL, useSnap ? &snap[0] : NULL,
+       boundSizing ? bounds : NULL, boundSizingSnap ? boundsSnap : NULL);
+}
+
 auto ViewportWidget::setTarget(std::string const& name,
                                GFX::Texture* tex) noexcept -> void {
    this->name = name;
    texture = tex;
+}
+
+void Frustum(float left, float right, float bottom, float top, float znear,
+             float zfar, float* m16) {
+   float temp, temp2, temp3, temp4;
+   temp = 2.0f * znear;
+   temp2 = right - left;
+   temp3 = top - bottom;
+   temp4 = zfar - znear;
+   m16[0] = temp / temp2;
+   m16[1] = 0.0;
+   m16[2] = 0.0;
+   m16[3] = 0.0;
+   m16[4] = 0.0;
+   m16[5] = temp / temp3;
+   m16[6] = 0.0;
+   m16[7] = 0.0;
+   m16[8] = (right + left) / temp2;
+   m16[9] = (top + bottom) / temp3;
+   m16[10] = (-zfar - znear) / temp4;
+   m16[11] = -1.0f;
+   m16[12] = 0.0;
+   m16[13] = 0.0;
+   m16[14] = (-temp * zfar) / temp4;
+   m16[15] = 0.0;
+}
+
+void Perspective(float fovyInDegrees, float aspectRatio, float znear,
+                 float zfar, float* m16) {
+   float ymax, xmax;
+   ymax = znear * tanf(fovyInDegrees * 3.141592f / 180.0f);
+   xmax = ymax * aspectRatio;
+   Frustum(-xmax, xmax, -ymax, ymax, znear, zfar, m16);
+}
+
+void Cross(const float* a, const float* b, float* r) {
+   r[0] = a[1] * b[2] - a[2] * b[1];
+   r[1] = a[2] * b[0] - a[0] * b[2];
+   r[2] = a[0] * b[1] - a[1] * b[0];
+}
+
+float Dot(const float* a, const float* b) {
+   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+void Normalize(const float* a, float* r) {
+   float il = 1.f / (sqrtf(Dot(a, a)) + FLT_EPSILON);
+   r[0] = a[0] * il;
+   r[1] = a[1] * il;
+   r[2] = a[2] * il;
+}
+
+void LookAt(const float* eye, const float* at, const float* up, float* m16) {
+   float X[3], Y[3], Z[3], tmp[3];
+
+   tmp[0] = eye[0] - at[0];
+   tmp[1] = eye[1] - at[1];
+   tmp[2] = eye[2] - at[2];
+   Normalize(tmp, Z);
+   Normalize(up, Y);
+
+   Cross(Y, Z, tmp);
+   Normalize(tmp, X);
+
+   Cross(Z, X, tmp);
+   Normalize(tmp, Y);
+
+   m16[0] = X[0];
+   m16[1] = Y[0];
+   m16[2] = Z[0];
+   m16[3] = 0.0f;
+   m16[4] = X[1];
+   m16[5] = Y[1];
+   m16[6] = Z[1];
+   m16[7] = 0.0f;
+   m16[8] = X[2];
+   m16[9] = Y[2];
+   m16[10] = Z[2];
+   m16[11] = 0.0f;
+   m16[12] = -Dot(X, eye);
+   m16[13] = -Dot(Y, eye);
+   m16[14] = -Dot(Z, eye);
+   m16[15] = 1.0f;
 }
 
 /** draw gui*/
@@ -709,9 +898,8 @@ auto ViewportWidget::onDrawGui() noexcept -> void {
    info.mousePos = ImGui::GetMousePos();
    info.mousePos.x -= info.windowPos.x + currPos.x;
    info.mousePos.y -= info.windowPos.y + currPos.y;
-   // info.contentPos = info.windowPos;
-   // info.contentPos.x += currPos.x;
-   // info.contentPos.y += currPos.y;
+
+   ImVec2 p = ImGui::GetCursorScreenPos();
 
    if (texture) {
     ImGui::Image(
@@ -720,6 +908,147 @@ auto ViewportWidget::onDrawGui() noexcept -> void {
         {0, 0}, {1, 1});
    }
 
+   float width = (float)texture->texture->width();
+   float height = (float)texture->texture->height();
+
+   Math::vec3 posW = camera_transform.translation;
+   Math::vec3 target =
+       camera_transform.translation + camera_transform.getRotatedForward();
+
+   Math::mat4 view = Math::transpose(Math::lookAt(posW, target, Math::vec3(0, 1, 0)).m);
+   Math::mat4 proj = Math::transpose(Math::perspective(camera->fovy, camera->aspect,
+                                         camera->near, camera->far)
+           .m);
+
+   for (int i = 0; i < 4; i++)
+    for (int j = 0; j < 4; j++) {
+      float neg_view = (j == 0 || (i == 3 && j == 3)) ? 1 : -1;
+      view.data[i][j] *= neg_view;
+      float neg_proj = (i == 0 || i == 1) ? 1 : ((i == 2) ? -1 : 2);
+      proj.data[i][j] *= neg_proj;
+    }
+
+    ImGuizmo::SetOrthographic(false);
+    ImGuizmo::SetDrawlist();
+
+    float windowWidth = (float)ImGui::GetWindowWidth();
+   float windowHeight = (float)ImGui::GetWindowHeight();
+    ImVec2 wp = ImGui::GetWindowPos();
+
+   ImGuizmo::SetRect(wp.x + currPos.x, wp.y + currPos.y, width,
+                     height);
+
+   //Math::mat4 transform = tc.getAccumulativeTransform();
+   Math::mat4 transform;
+
+   ImGuiWindow* window = ImGui::GetCurrentWindow();
+   //ImGuizmo::DrawGrid(&view.data[0][0], &proj.data[0][0], identityMatrix,
+   //                   100.f);
+   bool test = false;
+   {
+    if (ImGui::IsKeyPressed(ImGuiKey_R))
+      gizmoState.mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
+    if (ImGui::IsKeyPressed(ImGuiKey_T))
+      gizmoState.mCurrentGizmoOperation = ImGuizmo::ROTATE;
+    if (ImGui::IsKeyPressed(ImGuiKey_Y))  // r Key
+      gizmoState.mCurrentGizmoOperation = ImGuizmo::SCALE;
+    if (ImGui::IsKeyPressed(ImGuiKey_U))
+      gizmoState.mCurrentGizmoOperation = ImGuizmo::UNIVERSAL;
+   }
+    Math::mat4 objectTransform;
+    Math::mat4 objectTransformPrecursor;
+   if (selectedGO.has_value() && selectedScene != nullptr) {
+    {//first compute the transform
+       //  get transform
+      float oddScaling = 1.f;
+      Math::vec3 scaling = Math::vec3{1, 1, 1};
+      {  // get mesh transform matrix
+        GFX::GameObject* go = selectedScene->getGameObject(selectedGO.value());
+        GFX::TransformComponent* transform =
+            go->getEntity().getComponent<GFX::TransformComponent>();
+        objectTransform = transform->getTransform() * objectTransform;
+        oddScaling *=
+            transform->scale.x * transform->scale.y * transform->scale.z;
+        scaling *= transform->scale;
+        while (go->parent != Core::NULL_ENTITY) {
+          test = true;
+          go = selectedScene->getGameObject(go->parent);
+          GFX::TransformComponent* transform =
+              go->getEntity().getComponent<GFX::TransformComponent>();
+          objectTransform = transform->getTransform() * objectTransform;
+          objectTransformPrecursor =
+              transform->getTransform() * objectTransformPrecursor;
+          oddScaling *=
+              transform->scale.x * transform->scale.y * transform->scale.z;
+          scaling *= transform->scale;
+        }
+      }
+    }
+    objectTransform = Math::transpose(objectTransform);
+    ImGuizmo::Manipulate(
+        &view.data[0][0], &proj.data[0][0], gizmoState.mCurrentGizmoOperation,
+        gizmoState.mCurrentGizmoMode, &objectTransform.data[0][0], NULL,
+        gizmoState.useSnap ? &gizmoState.snap[0] : NULL, NULL, NULL);
+
+    if (test) {
+      float a = 1.f;
+    }
+    float matrixTranslation[3], matrixRotation[3], matrixScale[3];
+
+    Math::mat4 inv = Math::transpose(Math::inverse(objectTransformPrecursor));
+    Math::mat4 thisMatrix = objectTransform * inv;
+    ImGuizmo::DecomposeMatrixToComponents(
+        &thisMatrix.data[0][0], matrixTranslation,
+                                          matrixRotation, matrixScale);
+    //ImGuizmo::RecomposeMatrixFromComponents(
+    //    matrixTranslation, matrixRotation, matrixScale, &thisMatrix.data[0][0]);
+
+    GFX::GameObject* go = selectedScene->getGameObject(selectedGO.value());
+    GFX::TransformComponent* transform =
+        go->getEntity().getComponent<GFX::TransformComponent>();
+    transform->translation = Math::vec3{
+        matrixTranslation[0], matrixTranslation[1], matrixTranslation[2]};
+    transform->eulerAngles =
+        Math::vec3{matrixRotation[0], matrixRotation[1], matrixRotation[2]};
+    transform->scale =
+        Math::vec3{matrixScale[0], matrixScale[1], matrixScale[2]};
+   }
+   float viewManipulateRight = wp.x + currPos.x + width;
+   float viewManipulateTop = wp.y + currPos.y;
+   Math::mat4 view_origin = view;
+   ImGuizmo::ManipulateResult result = ImGuizmo::ViewManipulate_Custom(
+       &view.data[0][0], 5,
+       ImVec2(viewManipulateRight - 128, viewManipulateTop), ImVec2(128, 128),
+       0x10101010);
+
+   if (selectedGO.has_value() && selectedScene != nullptr && result.edited) {
+    view = Math::transpose(view);
+    for (int i = 0; i < 4; i++)
+      for (int j = 0; j < 4; j++) {
+        float neg_view = (j == 0 || (i == 3 && j == 3)) ? 1 : -1;
+        view.data[i][j] *= neg_view;
+      }
+    Math::vec4 target =
+        Math::transpose(objectTransform) * Math::vec4(0, 0, 0, 1);
+    
+    //Math::mat4::rotateZ(eulerAngles.z) * Math::mat4::rotateY(eulerAngles.y) *
+    //    Math::mat4::rotateX(eulerAngles.x)
+    Math::vec3 forward =
+        Math::vec3{result.newDir[0], result.newDir[1], result.newDir[2]};
+    Math::vec3 cameraPos =
+        Math::vec3{target.x, target.y, target.z} + forward * 5;
+    camera_transform_ref->translation =
+        Math::vec3{cameraPos.data[0], cameraPos.data[1], cameraPos.data[2]};
+
+    float pitch = std::atan2(forward.z, sqrt(forward.x * forward.x + forward.y * forward.y));
+    float yaw = std::atan2(forward.x, forward.y);
+    pitch *= 180. / IM_PI;
+    yaw *= 180. / IM_PI;
+    yaw = 180. - yaw;
+    camera_transform_ref->eulerAngles = {pitch, yaw, 0};
+
+    *forceReset = true;
+   }
    ImGui::End();
 }
 }  // namespace SIByL::Editor
@@ -983,24 +1312,26 @@ auto ContentWidget::onDrawGui() noexcept -> void {
 }
 
 auto ContentWidget::reigsterIconResources() noexcept -> void {
+   std::string engine_path =
+       Core::RuntimeConfig::get()->string_property("engine_path");
    icons.back = GFX::GFXManager::get()->registerTextureResource(
-       "../Engine/Binaries/Runtime/icons/back.png");
+       (engine_path + "../Engine/Binaries/Runtime/icons/back.png").c_str());
    icons.folder = GFX::GFXManager::get()->registerTextureResource(
-       "../Engine/Binaries/Runtime/icons/folder.png");
+       (engine_path + "../Engine/Binaries/Runtime/icons/folder.png").c_str());
    icons.file = GFX::GFXManager::get()->registerTextureResource(
-       "../Engine/Binaries/Runtime/icons/file.png");
+       (engine_path + "../Engine/Binaries/Runtime/icons/file.png").c_str());
    icons.image = GFX::GFXManager::get()->registerTextureResource(
-       "../Engine/Binaries/Runtime/icons/image.png");
+       (engine_path + "../Engine/Binaries/Runtime/icons/image.png").c_str());
    icons.material = GFX::GFXManager::get()->registerTextureResource(
-       "../Engine/Binaries/Runtime/icons/material.png");
+       (engine_path + "../Engine/Binaries/Runtime/icons/material.png").c_str());
    icons.mesh = GFX::GFXManager::get()->registerTextureResource(
-       "../Engine/Binaries/Runtime/icons/mesh.png");
+       (engine_path + "../Engine/Binaries/Runtime/icons/mesh.png").c_str());
    icons.scene = GFX::GFXManager::get()->registerTextureResource(
-       "../Engine/Binaries/Runtime/icons/scene.png");
+       (engine_path + "../Engine/Binaries/Runtime/icons/scene.png").c_str());
    icons.shader = GFX::GFXManager::get()->registerTextureResource(
-       "../Engine/Binaries/Runtime/icons/shader.png");
+       (engine_path + "../Engine/Binaries/Runtime/icons/shader.png").c_str());
    icons.video = GFX::GFXManager::get()->registerTextureResource(
-       "../Engine/Binaries/Runtime/icons/video.png");
+       (engine_path + "../Engine/Binaries/Runtime/icons/video.png").c_str());
    Core::ResourceManager::get()
        ->getResource<GFX::Texture>(icons.back)
        ->texture->setName("editor_icon_back");
@@ -1062,19 +1393,24 @@ auto GameObjectInspector::onDrawGui() noexcept -> void {
 auto SceneWidget::onDrawGui() noexcept -> void {
    ImGui::Begin("Scene", 0, ImGuiWindowFlags_MenuBar);
    ImGui::PushItemWidth(ImGui::GetFontSize() * -12);
+
+   auto save_scene = [scene = scene]() {
+     std::string name = scene->name + ".scene";
+     std::string path = ImGuiLayer::get()
+                            ->rhiLayer->getRHILayerDescriptor()
+                            .windowBinded->saveFile(nullptr, name);
+     if (path != "") {
+       scene->serialize(path);
+       scene->isDirty = false;
+     }
+   };
+
    if (ImGui::BeginMenuBar()) {
     if (ImGui::Button("New")) {
     }
     if (ImGui::Button("Save")) {
       if (scene != nullptr) {
-        std::string name = scene->name + ".scene";
-        std::string path = ImGuiLayer::get()
-                               ->rhiLayer->getRHILayerDescriptor()
-                               .windowBinded->saveFile(nullptr, name);
-        if (path != "") {
-          scene->serialize(path);
-          scene->isDirty = false;
-        }
+        save_scene();
       }
     }
     if (ImGui::Button("Load")) {
@@ -1083,7 +1419,7 @@ auto SceneWidget::onDrawGui() noexcept -> void {
                                ->rhiLayer->getRHILayerDescriptor()
                                .windowBinded->openFile("scene");
         if (path != "") scene->deserialize(path);
-        // scene->isDirty = false;
+         scene->isDirty = true;
       }
     }
     if (ImGui::BeginMenu("Import")) {
@@ -1092,8 +1428,9 @@ auto SceneWidget::onDrawGui() noexcept -> void {
         std::string path = ImGuiLayer::get()
                                ->rhiLayer->getRHILayerDescriptor()
                                .windowBinded->openFile(".gltf");
-        // GFX::SceneNodeLoader_obj::loadSceneNode(path, *scene,
-        // SRenderer::meshLoadConfig);
+        GFX::SceneNodeLoader_glTF::loadSceneNode(
+            path, *scene, GFX::GFXManager::get()->config.meshLoaderConfig);
+        save_scene();
       }
       if (ImGui::MenuItem("Wavefront (.obj)")) {
         std::string path = ImGuiLayer::get()
@@ -1101,6 +1438,7 @@ auto SceneWidget::onDrawGui() noexcept -> void {
                                .windowBinded->openFile(".obj");
         GFX::SceneNodeLoader_obj::loadSceneNode(
             path, *scene, GFX::GFXManager::get()->config.meshLoaderConfig);
+        save_scene();
       }
       if (ImGui::MenuItem("FBX (.fbx)")) {
         std::string path = ImGuiLayer::get()
@@ -1108,6 +1446,7 @@ auto SceneWidget::onDrawGui() noexcept -> void {
                                .windowBinded->openFile(".fbx");
         GFX::SceneNodeLoader_assimp::loadSceneNode(
             path, *scene, GFX::GFXManager::get()->config.meshLoaderConfig);
+        save_scene();
       }
       ImGui::EndMenu();
     }
@@ -1143,7 +1482,10 @@ auto SceneWidget::onDrawGui() noexcept -> void {
    // Left-clock on blank space
    if (ImGui::IsMouseDown(0) && ImGui::IsWindowHovered()) {
     if (inspectorWidget) inspectorWidget->setEmpty();
-    // if (viewport) viewport->selectedEntity = {};
+    if (viewportWidget) {
+      viewportWidget->selectedScene = nullptr;
+      viewportWidget->selectedGO = std::nullopt;
+    }
    }
    // Right-click on blank space
    if (ImGui::BeginPopupContextWindow(0, 1, false)) {
@@ -1189,7 +1531,10 @@ auto SceneWidget::drawNode(GFX::GameObjectHandle const& node) -> bool {
     gameobjectInspector.data.handle = node;
     if (inspectorWidget)
       gameobjectInspector.setInspectorWidget(inspectorWidget);
-    // if (viewport) viewport->selectedEntity = entity;
+    if (viewportWidget) {
+      viewportWidget->selectedScene = scene;
+      viewportWidget->selectedGO = node;
+    }
    }
    // Right-click on blank space
    bool entityDeleted = false;
@@ -1237,6 +1582,10 @@ auto SceneWidget::drawNode(GFX::GameObjectHandle const& node) -> bool {
     }
     if (node == inspected || isParentOfInspected) {
       if (inspectorWidget) inspectorWidget->setEmpty();
+      if (viewportWidget) {
+        viewportWidget->selectedScene = nullptr;
+        viewportWidget->selectedGO = std::nullopt;
+      }
       // if (viewport) viewport->selectedEntity = {};
       inspected = 0;
     }
@@ -1311,6 +1660,9 @@ auto SimpleCameraController::getInputTranslationDirection() noexcept
 
 auto SimpleCameraController::bindTransform(
     GFX::TransformComponent* transform) noexcept -> void {
+   viewport->camera_transform = *transform;
+   viewport->camera_transform_ref = transform;
+   viewport->forceReset = &forceReset;
    if (this->transform != transform) {
     targetCameraState.setFromTransform(*transform);
     interpolatingCameraState.setFromTransform(*transform);
@@ -1319,6 +1671,12 @@ auto SimpleCameraController::bindTransform(
 }
 
 auto SimpleCameraController::onUpdate() noexcept -> void {
+   if (forceReset) {
+    forceReset = false;
+    targetCameraState.setFromTransform(*transform);
+    interpolatingCameraState.setFromTransform(*transform);
+    return;
+   }
    // check the viewport is hovered
    bool hovered = viewport->info.isHovered;
    // rotation
@@ -1364,6 +1722,109 @@ auto SimpleCameraController::onUpdate() noexcept -> void {
     justPressedMouse = true;
    }
 
+   // translation
+   Math::vec3 translation = getInputTranslationDirection();
+   translation *= timer->deltaTime() * 0.1;
+
+   // speed up movement when shift key held
+   if (input->isKeyPressed(Platform::SIByL_KEY_LEFT_SHIFT)) {
+    translation *= 10.0f;
+   }
+
+   // modify movement by a boost factor ( defined in Inspector and modified in
+   // play mode through the mouse scroll wheel)
+   float y = input->getMouseScrollY();
+   boost += y * 0.01f;
+   translation *= powf(2.0f, boost);
+
+   Math::vec4 rotatedFoward4 = Math::mat4::rotateZ(targetCameraState.roll) *
+                               Math::mat4::rotateY(targetCameraState.yaw) *
+                               Math::mat4::rotateX(targetCameraState.pitch) *
+                               Math::vec4(0, 0, -1, 0);
+   Math::vec3 rotatedFoward =
+       Math::vec3(rotatedFoward4.x, rotatedFoward4.y, rotatedFoward4.z);
+   Math::vec3 up = Math::vec3(0.0f, 1.0f, 0.0f);
+   Math::vec3 cameraRight = Math::normalize(Math::cross(rotatedFoward, up));
+   Math::vec3 cameraUp = Math::cross(cameraRight, rotatedFoward);
+   Math::vec3 movement = translation.z * rotatedFoward +
+                         translation.x * cameraRight + translation.y * cameraUp;
+
+   targetCameraState.x += movement.x;
+   targetCameraState.y += movement.y;
+   targetCameraState.z += movement.z;
+
+   // targetCameraState.translate(translation);
+
+   // Framerate-independent interpolation
+   // calculate the lerp amount, such that we get 99% of the way to our target
+   // in the specified time
+   float positionLerpPct =
+       1.f - expf(log(1.f - 0.99f) / positionLerpTime * timer->deltaTime());
+   float rotationLerpPct =
+       1.f - expf(log(1.f - 0.99f) / rotationLerpTime * timer->deltaTime());
+   interpolatingCameraState.lerpTowards(targetCameraState, positionLerpPct,
+                                        rotationLerpPct);
+
+   if (transform != nullptr)
+    interpolatingCameraState.updateTransform(*transform);
+}
+
+auto SimpleCameraController2D::onEnable(
+    GFX::TransformComponent const& transform) noexcept -> void {
+   targetCameraState.setFromTransform(transform);
+   interpolatingCameraState.setFromTransform(transform);
+}
+
+auto SimpleCameraController2D::getInputTranslationDirection() noexcept
+    -> Math::vec3 {
+   Math::vec3 direction(0.0f, 0.0f, 0.0f);
+   if (input->isKeyPressed(Platform::SIByL_KEY_W)) {
+    scaling *= 1.05;  // forward
+   }
+   if (input->isKeyPressed(Platform::SIByL_KEY_S)) {
+    scaling /= 1.05;  // back
+   }
+   if (input->isKeyPressed(Platform::SIByL_KEY_A)) {
+    direction += Math::vec3(-1, 0, 0);  // left
+   }
+   if (input->isKeyPressed(Platform::SIByL_KEY_D)) {
+    direction += Math::vec3(1, 0, 0);  // right
+   }
+   if (input->isKeyPressed(Platform::SIByL_KEY_Q)) {
+    direction += Math::vec3(0, -1, 0);  // down
+   }
+   if (input->isKeyPressed(Platform::SIByL_KEY_E)) {
+    direction += Math::vec3(0, 1, 0);  // up
+   }
+   return direction;
+}
+
+auto SimpleCameraController2D::bindTransform(
+    GFX::TransformComponent* transform) noexcept -> void {
+   viewport->camera_transform = *transform;
+   viewport->camera_transform_ref = transform;
+   viewport->forceReset = &forceReset;
+   if (this->transform != transform) {
+    targetCameraState.setFromTransform(*transform);
+    interpolatingCameraState.setFromTransform(*transform);
+    this->transform = transform;
+   }
+}
+
+auto SimpleCameraController2D::onUpdate() noexcept -> void {
+   if (forceReset) {
+    forceReset = false;
+    targetCameraState.setFromTransform(*transform);
+    interpolatingCameraState.setFromTransform(*transform);
+    return;
+   }
+   // check the viewport is hovered
+   bool hovered = viewport->info.isHovered;
+   // rotation
+   targetCameraState.yaw = 0;
+   targetCameraState.pitch = 0;
+   interpolatingCameraState.yaw = 0;
+   interpolatingCameraState.pitch = 0;
    // translation
    Math::vec3 translation = getInputTranslationDirection();
    translation *= timer->deltaTime() * 0.1;

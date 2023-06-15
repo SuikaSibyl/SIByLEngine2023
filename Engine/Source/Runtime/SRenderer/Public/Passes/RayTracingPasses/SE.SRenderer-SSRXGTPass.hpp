@@ -18,7 +18,8 @@ SE_EXPORT struct SSRXGTPass : public RDG::RayTracingPass {
     uint32_t height;
     uint32_t sample_batch;
     uint32_t primitive_num;
-  };
+    uint32_t geo_setting;
+  } pConst;
 
   Core::GUID rgen;
   Core::GUID rchit;
@@ -171,7 +172,7 @@ SE_EXPORT struct SSRXGTPass : public RDG::RayTracingPass {
     Math::vec4 debugPos;
     float z_min = 0.00211;
     float z_range = 0.036;
-    int is_depth = 0;
+    int is_depth = 11;
     int lightcut_mode = 0;
 
     Math::mat4 InvProjMat;
@@ -205,7 +206,7 @@ SE_EXPORT struct SSRXGTPass : public RDG::RayTracingPass {
     }
     if (pUniform.debug_mode == 2 || pUniform.debug_mode == 7) {
       int is_depth = pUniform.is_depth;
-      ImGui::DragInt("TexIS Depth", &is_depth, 1, 0, 9);
+      ImGui::DragInt("TexIS Depth", &is_depth, 1, 0, 11);
       pUniform.is_depth = is_depth;
       {  // Select an item type
         const char* item_names[] = {"Luminance",
@@ -266,10 +267,10 @@ SE_EXPORT struct SSRXGTPass : public RDG::RayTracingPass {
       float y = pUniform.debugPos.y;
       float z = pUniform.debugPos.z;
       float w = pUniform.debugPos.w;
-      ImGui::DragFloat("Debug x", &x, 1, 0, 512 - 1);
-      ImGui::DragFloat("Debug y", &y, 1, 0, 512 - 1);
-      ImGui::DragFloat("Debug z", &z, 1, 0, 512 - 1);
-      ImGui::DragFloat("Debug w", &w, 1, 0, 512 - 1);
+      ImGui::DragFloat("Debug x", &x, 1, 0, 1280 - 1);
+      ImGui::DragFloat("Debug y", &y, 1, 0, 720 - 1);
+      ImGui::DragFloat("Debug z", &z, 1, 0, 1280 - 1);
+      ImGui::DragFloat("Debug w", &w, 1, 0, 720 - 1);
       pUniform.debugPos.x = x;
       pUniform.debugPos.y = y;
       pUniform.debugPos.z = z;
@@ -387,9 +388,10 @@ SE_EXPORT struct SSRXGTPass : public RDG::RayTracingPass {
 
     uint32_t batchIdx = renderData.getUInt("AccumIdx");
 
-    PushConstant pConst = {color->texture->width(), color->texture->height(),
-                           batchIdx,
-                           ib->buffer->size() / (3 * sizeof(uint32_t))};
+    pConst.width = color->texture->width();
+    pConst.height = color->texture->height();
+    pConst.sample_batch = batchIdx;
+
     encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::RAYGEN, 0,
                            sizeof(PushConstant));
     encoder->traceRays(color->texture->width(), color->texture->height(), 1);

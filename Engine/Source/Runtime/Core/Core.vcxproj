@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Public\Config\SE.Core.Config.cpp" />
     <ClCompile Include="Public\ECS\SE.Core.ECS.cpp" />
     <ClCompile Include="Public\Misc\SE.Core.Misc.cpp" />
     <ClCompile Include="Public\Memory\SE.Core.Memory.cpp" />
@@ -34,6 +35,7 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Public\Config\SE.Core.Config.hpp" />
     <ClInclude Include="Public\ECS\SE.Core.ECS.hpp" />
     <ClInclude Include="Public\Event\SE.Core.Event.hpp" />
     <ClInclude Include="Public\IO\SE.Core.IO.hpp" />
@@ -146,7 +148,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_NEED_LOG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_NEED_LOG;_DEBUG;_NEED_LOG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
@@ -161,7 +163,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;_NEED_LOG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_NEED_LOG;NDEBUG;_CONSOLE;_NEED_LOG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>

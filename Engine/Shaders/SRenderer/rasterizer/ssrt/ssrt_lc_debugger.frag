@@ -47,7 +47,6 @@ layout(binding = 5, set = 0) uniform sampler2D bbncpack_mip;
 layout(binding = 6, set = 0) uniform sampler2D normalcone_mip;
 layout(binding = 7, set = 0) uniform sampler2D di;
 
-
 // #define DEBUG 1
 #include "ssrt.glsl"
 
@@ -59,8 +58,14 @@ bool FindIntersection_Interface(
     if(gUniform.debug_ray_mode == 0) {
         return FindIntersection_HiZ(ray, intersection, config);
     }
-    else {
+    else if(gUniform.debug_ray_mode == 1) {
         return FindIntersection_DDA(ray, intersection, config);
+    }
+    else if(gUniform.debug_ray_mode == 2) {
+        return FindIntersection_DDA_Connected(ray, intersection, config);
+    }
+    else if(gUniform.debug_ray_mode == 3){
+        return FindIntersection_DDA_Trianglulate_Safe(ray, intersection, config);
     }
 }
 
@@ -102,16 +107,15 @@ vec3 specular() {
     const uvec2 tid = uvec2(gl_FragCoord.xy);
     const vec2 iResolution = gUniform.view_size;
 
-    vec3 sampleNormalInVS;
     RayStartInfo startInfo;
 
-    bool hasIsect = unpackVSInfo(tid, sampleNormalInVS, startInfo);
+    bool hasIsect = unpackVSInfo(tid, startInfo);
     if(!hasIsect) {
         return vec3(0);
     }
 
     vec3 vCamToSampleInVS = normalize(startInfo.samplePosInVS.xyz);
-    vec3 vRefDirInVS = normalize(reflect(vCamToSampleInVS.xyz, sampleNormalInVS.xyz));
+    vec3 vRefDirInVS = normalize(reflect(vCamToSampleInVS.xyz, startInfo.sampleNormalInVS.xyz));
     
     SSRay ray = PrepareSSRT(startInfo, vRefDirInVS);
 
@@ -119,15 +123,28 @@ vec3 specular() {
     vec3 reflectedColor = vec3(0);
     SSRTConfig config = SSRTConfig(false);
     // int iter; vec4 u2v;
-    if(FindIntersection_Interface(ray, intersection, config)) {
-        reflectedColor = texture(di, intersection.xy).xyz;
+    vec3[4] points = FetchRectPointsSS(ivec2(tid / 2) + ivec2(1));
+    ivec2 mod2 = ivec2(tid) % 2;
+    
+    const float z = texelFetch(hi_z, ivec2(tid), 0).r;  
+    vec3 samplePositionInWS = SS2WS((tid + 0.5), z);    
+    vec3 sampleNormalInWS = unpackNormal(texelFetch(ws_normal, ivec2(tid), 0).xyz);
+    vec3 vCamToSampleInWS = normalize(samplePositionInWS - globalUniform.cameraData.posW);
+    vec3 vRefDirInWS = normalize(reflect(vCamToSampleInWS, sampleNormalInWS));
+
+    if(FindIntersection_Interface(ray, intersection, config
+        // ,samplePositionInWS, vRefDirInWS
+    )) {
+        // reflectedColor = vec3(1,0,1);
+        ivec2 xy = ivec2(intersection.xy * gUniform.view_size);
+        reflectedColor = texelFetch(di, xy, 0).xyz;
     }
     return reflectedColor;
 }
 
 vec2 sampleImportanceUV(inout uint RNG, out float probability) {
     // gImportanceMIP
-    int mip_level = 9;
+    int mip_level = 11;
     vec2 uv = vec2(0.5, 0.5);
     float parent_importance = textureLod(importance_mip, uv, mip_level).x;
 
@@ -184,8 +201,8 @@ vec2 sampleImportanceUV(inout uint RNG, out float probability) {
 float computeJacobian_1(in const vec2 sample_uv) {
     vec3 sampleNormalInVS_End;
     RayStartInfo endInfo;
-    bool hasIsect = unpackVSInfo(uvec2(sample_uv * gUniform.view_size), sampleNormalInVS_End, endInfo);
-
+    bool hasIsect = unpackVSInfo(uvec2(sample_uv * gUniform.view_size), endInfo);
+    sampleNormalInVS_End = endInfo.sampleNormalInVS;
     if (!hasIsect) {
         return 0;
     }
@@ -263,7 +280,9 @@ vec3 debugSpecular() {
 
     vec3 sampleNormalInVS;
     RayStartInfo startInfo;
-    bool hasIsect = unpackVSInfo(uvec2(gUniform.iDebugPos.xy), sampleNormalInVS, startInfo);
+    bool hasIsect = unpackVSInfo(uvec2(gUniform.iDebugPos.xy), startInfo);
+    sampleNormalInVS = startInfo.sampleNormalInVS;
+
     if(!hasIsect) {
         return vec3(0);
     }
@@ -315,7 +334,9 @@ vec3 debugOcclusion() {
     float z_uv = minimumDepthPlane(uv, level, cellCount);
     vec3 c = vec3(visualizeZ(z_uv));
 
-    bool hasIsect = unpackVSInfo(uvec2(gUniform.iDebugPos.xy), sampleNormalInVS, startInfo);
+    bool hasIsect = unpackVSInfo(uvec2(gUniform.iDebugPos.xy), startInfo);
+    sampleNormalInVS = startInfo.sampleNormalInVS;
+
     if(!hasIsect) {
         vec2 start_uv = gUniform.iDebugPos.xy / iResolution;
         vec2 end_uv = gUniform.iDebugPos.zw / iResolution;
@@ -326,7 +347,8 @@ vec3 debugOcclusion() {
     else {
         vec3 sampleNormalInVS_End;
         RayStartInfo endInfo;
-        hasIsect = unpackVSInfo(uvec2(gUniform.iDebugPos.zw), sampleNormalInVS_End, endInfo);
+        hasIsect = unpackVSInfo(uvec2(gUniform.iDebugPos.zw), endInfo);
+        sampleNormalInVS_End = endInfo.sampleNormalInVS;
         if(!hasIsect) {
             vec2 start_uv = gUniform.iDebugPos.xy / iResolution;
             vec2 end_uv = gUniform.iDebugPos.zw / iResolution;
@@ -412,7 +434,9 @@ vec3 calcShowImportance() {
     SampleTS samplets;
     samplets.xy = ivec2(uv * gUniform.view_size);
     samplets.uv = uv;
-    hasIsect = unpackVSInfo(samplets.xy, samplets.normalInVS, samplets.info);
+    hasIsect = unpackVSInfo(samplets.xy, samplets.info);
+    samplets.normalInVS = samplets.info.sampleNormalInVS;
+
     if(!hasIsect) {
         return vec3(0);
     }
@@ -519,7 +543,8 @@ void main() {
         const vec2 iResolution = gUniform.view_size;
         vec3 sampleNormalInVS;
         RayStartInfo startInfo;
-        bool hasIsect = unpackVSInfo(uvec2(uv*iResolution), sampleNormalInVS, startInfo);
+        bool hasIsect = unpackVSInfo(uvec2(uv*iResolution), startInfo);
+        sampleNormalInVS = startInfo.sampleNormalInVS;
         if(!hasIsect) {
             out_color = vec4(vec3(0), 1);
         }

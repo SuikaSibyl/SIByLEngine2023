@@ -1,9 +1,9 @@
 #ifndef _SRENDERER_COMMON_MICROFACET_HEADER_
 #define _SRENDERER_COMMON_MICROFACET_HEADER_
 
-#include "../../Utility/math.h"
-#include "../../Utility/geometry.h"
-#include "spectrum.h"
+#include "../../../Utility/math.h"
+#include "../../../Utility/geometry.h"
+#include "common_spectrum.h"
 
 /**
 * The Schlick Fresnel approximation is:
@@ -16,6 +16,15 @@ float SchlickWeight(in float cosTheta) {
     const float m2 = m*m;
     return m2*m2*m; // pow(m,5)
 }
+
+float SchlickFresnel(in float F0, in float VdotH) {
+    return F0 + (1 - F0) * SchlickWeight(VdotH); }
+vec2 SchlickFresnel(in vec2 F0, in float VdotH) {
+    return F0 + (1 - F0) * SchlickWeight(VdotH); }
+vec3 SchlickFresnel(in vec3 F0, in float VdotH) {
+    return F0 + (1 - F0) * SchlickWeight(VdotH); }
+vec4 SchlickFresnel(in vec4 F0, in float VdotH) {
+    return F0 + (1 - F0) * SchlickWeight(VdotH); }
 
 float GTR2_aniso(float NDotH, float HDotX, float HDotY, float ax, float ay) {
     float a = HDotX / ax;

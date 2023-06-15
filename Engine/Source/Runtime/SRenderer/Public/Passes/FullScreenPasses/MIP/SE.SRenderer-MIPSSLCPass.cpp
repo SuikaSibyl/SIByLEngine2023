@@ -1,7 +1,7 @@
 #include "SE.SRenderer-MIPSSLCPass.hpp"
 
 namespace SIByL {
-MIPSSLCInitSubPass::MIPSSLCInitSubPass() {
+MIPSSLCInitSubPass::MIPSSLCInitSubPass(size_t size) : size(size) {
   frag = GFX::GFXManager::get()->registerShaderModuleResource(
       "../Engine/Binaries/Runtime/spirv/SRenderer/rasterizer/fullscreen_pass/"
       "sslt_mip_init_frag.spv",
@@ -42,7 +42,7 @@ auto MIPSSLCInitSubPass::reflect() noexcept -> RDG::PassReflection {
 
   reflector.addOutput("ImportanceMIP")
       .isTexture()
-      .withSize(Math::ivec3{512, 512, 1})
+      .withSize(Math::ivec3{size, size, 1})
       .withLevels(RDG::MaxPossible)
       .withUsages((uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT)
       .withFormat(RHI::TextureFormat::R32_FLOAT)
@@ -56,7 +56,7 @@ auto MIPSSLCInitSubPass::reflect() noexcept -> RDG::PassReflection {
 
   reflector.addOutput("BoundingBoxMIP")
       .isTexture()
-      .withSize(Math::ivec3{512, 512, 1})
+      .withSize(Math::ivec3{size, size, 1})
       .withLevels(RDG::MaxPossible)
       .withUsages((uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT)
       .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
@@ -70,7 +70,7 @@ auto MIPSSLCInitSubPass::reflect() noexcept -> RDG::PassReflection {
 
   reflector.addOutput("BBNCPackMIP")
       .isTexture()
-      .withSize(Math::ivec3{512, 512, 1})
+      .withSize(Math::ivec3{size, size, 1})
       .withLevels(RDG::MaxPossible)
       .withUsages((uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT)
       .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
@@ -84,7 +84,7 @@ auto MIPSSLCInitSubPass::reflect() noexcept -> RDG::PassReflection {
 
   reflector.addOutput("NormalConeMIP")
       .isTexture()
-      .withSize(Math::ivec3{512, 512, 1})
+      .withSize(Math::ivec3{size, size, 1})
       .withLevels(RDG::MaxPossible)
       .withUsages((uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT)
       .withFormat(RHI::TextureFormat::RGB10A2_UNORM)
@@ -173,7 +173,7 @@ auto MIPSSLCInitSubPass::execute(
   pConst.trans_inv_view = Math::transpose(Math::inverse(cd->viewMat));
   pConst.resolution = {(int)color->texture->width(),
                        (int)color->texture->height()};
-  RHI::RenderPassEncoder* encoder = beginPass(context, 512, 512);
+  RHI::RenderPassEncoder* encoder = beginPass(context, size, size);
   encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::FRAGMENT, 0,
                          sizeof(PushConstant));
 
@@ -368,7 +368,7 @@ auto MIPSSLCSubPass::execute(
   }
 
   auto MIPSSLCPass::onRegister(RDG::Graph* graph) noexcept -> void {
-    graph->addPass(std::make_unique<MIPSSLCInitSubPass>(), CONCAT("Init"));
+    graph->addPass(std::make_unique<MIPSSLCInitSubPass>(width), CONCAT("Init"));
     graph->addPass(std::make_unique<MIPSSLCSubPass>(0),
                    CONCAT("MinPool Pass " + std::to_string(0)));
 

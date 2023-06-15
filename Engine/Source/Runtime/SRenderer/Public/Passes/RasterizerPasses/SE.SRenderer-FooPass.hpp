@@ -41,7 +41,7 @@ namespace SIByL
 				.withUsages((uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT)
 				.consume(RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::ColorAttachment }
 					.setAttachmentLoc(0));
-
+			
 			reflector.addOutput("LightProjLumMIP")
 				.isTexture()
 				.withSize(Math::ivec3(512, 512, 1))

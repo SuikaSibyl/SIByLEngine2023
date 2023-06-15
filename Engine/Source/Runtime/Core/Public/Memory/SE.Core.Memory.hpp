@@ -167,6 +167,7 @@ SE_EXPORT struct Buffer {
   Buffer(size_t size);
   Buffer(Buffer const& b);
   Buffer(Buffer&& b);
+  Buffer(void* data, size_t size);
   ~Buffer();
   auto operator=(Buffer const& b) -> Buffer&;
   auto operator=(Buffer&& b) -> Buffer&;
@@ -176,6 +177,7 @@ SE_EXPORT struct Buffer {
 
   void* data = nullptr;
   size_t size = 0;
+  bool isReference = false;
 };
 
 SE_EXPORT struct BufferStream {

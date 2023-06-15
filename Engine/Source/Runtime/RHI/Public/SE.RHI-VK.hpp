@@ -1087,7 +1087,7 @@ SE_EXPORT struct MultiFrameFlights_VK : public MultiFrameFlights {
   }
   /** get current Render Finished Semaphore */
   virtual auto getRenderFinishedSeamaphore() noexcept -> Semaphore* override {
-    return swapChain ? &renderFinishedSemaphores[currentFrame] : nullptr;
+    return &renderFinishedSemaphores[currentFrame];
   }
   /** get current fence */
   virtual auto getFence() noexcept -> Fence* override {

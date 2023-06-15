@@ -6,6 +6,9 @@
 #include <common_config.hpp>
 
 namespace SIByL::Core {
+SE_EXPORT struct StringHelper {
+  static auto invalidFileFolderName(std::string const& name) noexcept -> std::string;
+};
 /** Timer for the engine.
  * Tick every frame to get delta time. */
 SE_EXPORT struct Timer {

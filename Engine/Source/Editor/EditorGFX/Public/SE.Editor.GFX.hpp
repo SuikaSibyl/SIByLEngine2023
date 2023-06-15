@@ -10,6 +10,7 @@
 #include <SE.Video.hpp>
 #include <SE.Math.Spline.hpp>
 #include <Misc/SE.Core.Misc.hpp>
+#include <ImGuizmo.h>
 
 namespace SIByL::Editor {
 SE_EXPORT auto drawBoolControl(std::string const& label, bool& value,
@@ -168,11 +169,27 @@ SE_EXPORT struct LogWidget : public Widget {
 namespace SIByL::Editor {
 auto captureImage(Core::GUID src) noexcept -> void;
 
+SE_EXPORT struct ImGuizmoState {
+  ImGuizmo::OPERATION mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
+  ImGuizmo::MODE mCurrentGizmoMode = ImGuizmo::LOCAL;
+  Math::mat4 objMatrix;
+  bool useSnap = false;
+  float snap[3] = {1.f, 1.f, 1.f};
+  float width, height;
+};
+
 SE_EXPORT struct ViewportWidget : public Widget {
   auto setTarget(std::string const& name, GFX::Texture* tex) noexcept -> void;
 
   GFX::Texture* texture;
+  GFX::CameraComponent* camera;
+  GFX::TransformComponent camera_transform;
+  GFX::TransformComponent* camera_transform_ref;
   std::string name = "Viewport";
+  ImGuizmoState gizmoState;
+  bool* forceReset;
+  std::optional<GFX::GameObjectHandle> selectedGO = std::nullopt;
+  GFX::Scene* selectedScene;
 
   /** draw gui*/
   virtual auto onDrawGui() noexcept -> void override;
@@ -227,6 +244,8 @@ SE_EXPORT struct SceneWidget : public Widget {
   GFX::GameObjectHandle inspected = GFX::NULL_GO;
   /** inspector widget to show gameobject detail */
   InspectorWidget* inspectorWidget = nullptr;
+  /** viewport widget to show gameobject gizmos */
+  ViewportWidget* viewportWidget = nullptr;
   /** game object inspector */
   GameObjectInspector gameobjectInspector = {};
 };
@@ -346,6 +365,45 @@ SE_EXPORT struct SimpleCameraController {
   Math::AnimationCurve mouseSensitivityCurve = {{0, 0.5, 0, 5}, {1, 2.5, 0, 0}};
   float rotationLerpTime = 0.01f;
   bool invertY = true;
+  bool forceReset = false;
+
+  ViewportWidget* viewport = nullptr;
+
+  auto onEnable(GFX::TransformComponent const& transform) noexcept -> void;
+  auto getInputTranslationDirection() noexcept -> Math::vec3;
+  auto bindTransform(GFX::TransformComponent* transform) noexcept -> void;
+  auto onUpdate() noexcept -> void;
+
+ private:
+  GFX::TransformComponent* transform = nullptr;
+  Platform::Input* input;
+  Core::Timer* timer;
+};
+
+SE_EXPORT struct SimpleCameraController2D {
+  SimpleCameraController2D() : input(nullptr), timer(nullptr) {}
+  SimpleCameraController2D(Platform::Input* input, Core::Timer* timer,
+                         ViewportWidget* viewport)
+      : input(input), timer(timer), viewport(viewport) {}
+
+  auto inline init(Platform::Input* input, Core::Timer* timer,
+                   ViewportWidget* viewport) {
+    this->input = input;
+    this->timer = timer;
+    this->viewport = viewport;
+  }
+
+  float mouseSensitivityMultiplier = 0.01f;
+  CameraState targetCameraState;
+  CameraState interpolatingCameraState;
+  float boost = 3.5f;
+  float positionLerpTime = 0.2f;
+  float mouseSensitivity = 60.0f;
+  Math::AnimationCurve mouseSensitivityCurve = {{0, 0.5, 0, 5}, {1, 2.5, 0, 0}};
+  float rotationLerpTime = 0.01f;
+  bool invertY = true;
+  bool forceReset = false;
+  float scaling = 1.f;
 
   ViewportWidget* viewport = nullptr;
 

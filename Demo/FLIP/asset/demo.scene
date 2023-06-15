@@ -1,0 +1,30 @@
+SceneName: new scene
+SceneNodes:
+  - uid: 0
+    parent: 18446744073709551615
+    components:
+      TagComponent: Camera Object
+      Transform:
+        translation: [2.10364532, 1.52343571, 2.24029493]
+        eulerAngles: [0, 0, 0]
+        scale: [4.10000134, 1, 1]
+      CameraComponent:
+        fovy: 60
+        aspect: 1.77777779
+        near: 0.100000001
+        far: 1000
+        ProjectType: 1
+        IsPrimary: true
+  - uid: 1
+    parent: 18446744073709551615
+    components:
+      TagComponent: DirectionalLight
+      Transform:
+        translation: [0.00515320897, 0, 0]
+        eulerAngles: [0, -0, 0]
+        scale: [0.999841154, 0.999995828, 0.999841154]
+      LightComponent:
+        Type: 3
+        Intensity: [1, 1, 1]
+        Texture: 18446744073709551615
+SceneEnd: TRUE

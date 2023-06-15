@@ -23,11 +23,49 @@ SE_EXPORT struct RSSGeoReconstrPass : public RDG::ComputePass {
   uint32_t indices_count;
   uint32_t vertices_count;
   uint32_t width, height;
+
+  enum struct GeometrySetting {
+    PiecewiseConstant,
+    PiecewiseConstantCliff,
+    Triangulate,
+    TriangulateMirror,
+  } geoSetting;
+
+  auto getVerticesCount() noexcept -> uint32_t {
+    switch (geoSetting) {
+      case SIByL::RSSGeoReconstrPass::GeometrySetting::PiecewiseConstant:
+        return width * height * 4;
+      case SIByL::RSSGeoReconstrPass::GeometrySetting::PiecewiseConstantCliff:
+        return width * height * 8;
+      case SIByL::RSSGeoReconstrPass::GeometrySetting::Triangulate:
+        return width * height * 4;
+      case SIByL::RSSGeoReconstrPass::GeometrySetting::TriangulateMirror:
+        return width * height * 4;
+      default:
+        return 0;
+    }
+  }
+
+  auto getIndicesCount() noexcept -> uint32_t {
+    switch (geoSetting) {
+      case SIByL::RSSGeoReconstrPass::GeometrySetting::PiecewiseConstant:
+        return width * height * 6;
+      case SIByL::RSSGeoReconstrPass::GeometrySetting::PiecewiseConstantCliff:
+        return width * height * 18;
+      case SIByL::RSSGeoReconstrPass::GeometrySetting::Triangulate:
+        return width * height * 6;
+      case SIByL::RSSGeoReconstrPass::GeometrySetting::TriangulateMirror:
+        return width * height * 6;
+      default:
+        return 0;
+    }
+  }
+
   RSSGeoReconstrPass(uint32_t width, uint32_t height)
       : width(width), height(height) {
     pixel_count = width * height;
-    indices_count = pixel_count * 6;
-    vertices_count = pixel_count * 4;
+    vertices_count = pixel_count * 8;
+    indices_count = pixel_count * 18;
 
     comp = GFX::GFXManager::get()->registerShaderModuleResource(
         "../Engine/Binaries/Runtime/spirv/SRenderer/compute/rssrt/"
@@ -41,6 +79,7 @@ SE_EXPORT struct RSSGeoReconstrPass : public RDG::ComputePass {
     Math::mat4 invProjMat;
     Math::mat4 invViewMat;
     Math::uvec2 resolution;
+    int geoType;
   } pConst;
 
   virtual auto reflect() noexcept -> RDG::PassReflection {
@@ -109,6 +148,7 @@ SE_EXPORT struct RSSGeoReconstrPass : public RDG::ComputePass {
 
     pConst.resolution.x = width;
     pConst.resolution.y = height;
+    pConst.geoType = int(geoSetting);
     SRenderer::CameraData* cd = reinterpret_cast<SRenderer::CameraData*>(renderData.getPtr("CameraData"));
     pConst.invProjMat = Math::inverse((cd->projMat));
     pConst.invViewMat = Math::inverse(cd->viewMat);

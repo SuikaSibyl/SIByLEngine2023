@@ -101,7 +101,7 @@ void main() {
     // oneDepth(cameraSubpath, lightSubpath, 9, nLight, nCamera, L, RNG, resolution);
 
     oneStrategy(cameraSubpath, lightSubpath, 0, 2, nLight, nCamera, L, RNG, resolution);
-
+    
     oneStrategy(cameraSubpath, lightSubpath, 0, 3, nLight, nCamera, L, RNG, resolution);
     oneStrategy(cameraSubpath, lightSubpath, 1, 2, nLight, nCamera, L, RNG, resolution);
     oneStrategy(cameraSubpath, lightSubpath, 2, 1, nLight, nCamera, L, RNG, resolution);

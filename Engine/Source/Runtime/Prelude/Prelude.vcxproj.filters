@@ -15,19 +15,8 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Public\stdpch.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="Public\common_config.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="Public\common_windows.hpp">
-      <Filter>头文件</Filter>
-    </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="Public\stdpch.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
   </ItemGroup>
 </Project>

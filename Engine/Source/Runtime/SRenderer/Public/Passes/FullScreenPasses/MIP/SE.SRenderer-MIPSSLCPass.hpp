@@ -14,7 +14,7 @@
 
 namespace SIByL {
 SE_EXPORT struct MIPSSLCInitSubPass : public RDG::FullScreenPass {
-  MIPSSLCInitSubPass();
+  MIPSSLCInitSubPass(size_t size);
   auto reflect() noexcept -> RDG::PassReflection;
 
   struct PushConstant {
@@ -29,6 +29,7 @@ SE_EXPORT struct MIPSSLCInitSubPass : public RDG::FullScreenPass {
   virtual auto execute(RDG::RenderContext* context,
                        RDG::RenderData const& renderData) noexcept -> void;
 
+  int size;
   Core::GUID frag;
 };
 

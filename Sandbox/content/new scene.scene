@@ -2,110 +2,91 @@ SceneName: new scene
 SceneNodes:
   - uid: 0
     parent: 18446744073709551615
-    children:
-      - 1
-      - 2
-      - 3
-      - 4
-      - 5
-      - 6
-      - 7
-      - 8
-      - 9
-      - 10
-      - 11
     components:
-      TagComponent: cornellBox.gltf
+      TagComponent: Camera Object
+      Transform:
+        translation: [49.2856255, 4.66414309, 4.18008804]
+        eulerAngles: [1.28817821, 78.8153534, 0]
+        scale: [4.0999999, 1, 1]
+      CameraComponent:
+        fovy: 60
+        aspect: 1.77777779
+        near: 0.100000001
+        far: 1000
+        ProjectType: 0
+        IsPrimary: true
+  - uid: 1
+    parent: 18446744073709551615
+    components:
+      TagComponent: bistro_simple_tri.obj
+      Transform:
+        translation: [-0.800000012, 0.300000012, 3.4000001]
+        eulerAngles: [0, 0, 0]
+        scale: [0.5, 0.5, 0.5]
+      MeshReference:
+        ORID: 1674155445755951964
+        CPF: 1
+      MeshRendererComponent:
+        - ORID: 1672152927840615260
+  - uid: 2
+    parent: 18446744073709551615
+    components:
+      TagComponent: DirectionalLight
+      Transform:
+        translation: [-11.8000002, 0, 0]
+        eulerAngles: [101.099998, -25.1499996, -38.4000015]
+        scale: [1, 1, 1]
+      LightComponent:
+        Type: 3
+        Intensity: [1, 1, 1]
+        Texture: 18446744073709551615
+  - uid: 3
+    parent: 18446744073709551615
+    components:
+      TagComponent: temple.obj
+      Transform:
+        translation: [34.5999985, 0, 0]
+        eulerAngles: [0, 0, -0.699999988]
+        scale: [1, 1, 1]
+      MeshReference:
+        ORID: 1674254534292126556
+        CPF: 0
+      MeshRendererComponent:
+        - ORID: 1658390946990111580
+  - uid: 4
+    parent: 18446744073709551615
+    components:
+      TagComponent: room_cutt.obj
+      Transform:
+        translation: [21.2999992, 4.4000001, 25.5]
+        eulerAngles: [-0.600000024, 9.69999981, 0.699999988]
+        scale: [1, 1, 1]
+      MeshReference:
+        ORID: 1674256568563120988
+        CPF: 0
+      MeshRendererComponent:
+        - ORID: 1658390946990111580
+  - uid: 5
+    parent: 18446744073709551615
+    children:
+      - 6
+    components:
+      TagComponent: dog.fbx
       Transform:
         translation: [0, 0, 0]
         eulerAngles: [0, 0, 0]
         scale: [1, 1, 1]
-  - uid: 1
-    parent: 0
-    components:
-      TagComponent: CamInst
-      Transform:
-        translation: [0, 0, 19.9920921]
-        eulerAngles: [0, -0, 0]
-        scale: [1, 1, 1]
-  - uid: 2
-    parent: 0
-    components:
-      TagComponent: cube_instance
-      Transform:
-        translation: [-0, -0, -5]
-        eulerAngles: [0, -0, 0]
-        scale: [1, 1, 1]
-  - uid: 3
-    parent: 0
-    components:
-      TagComponent: cube_instance_2
-      Transform:
-        translation: [-0, -5, -0]
-        eulerAngles: [0, -0, 0]
-        scale: [1, 1, 1]
-  - uid: 4
-    parent: 0
-    components:
-      TagComponent: cube_instance_3
-      Transform:
-        translation: [0, 5, 0]
-        eulerAngles: [0, -0, 0]
-        scale: [1, 1, 1]
-  - uid: 5
-    parent: 0
-    components:
-      TagComponent: cube_instance_5
-      Transform:
-        translation: [-5, -0, -0]
-        eulerAngles: [0, -0, 0]
-        scale: [1, 1, 1]
   - uid: 6
-    parent: 0
+    parent: 5
     components:
-      TagComponent: cube_instance_6
+      TagComponent: My_Doggo
       Transform:
-        translation: [5, 0, 0]
-        eulerAngles: [0, -0, 0]
+        translation: [0, 0, 0]
+        eulerAngles: [0, 0, 0]
         scale: [1, 1, 1]
-  - uid: 7
-    parent: 0
-    components:
-      TagComponent: cube_instance_8
-      Transform:
-        translation: [0, 4.62618971, 0]
-        eulerAngles: [0, -0, 0]
-        scale: [3, 1, 3]
-  - uid: 8
-    parent: 0
-    components:
-      TagComponent: cube_instance_14
-      Transform:
-        translation: [3, -3.5, 1.67900002]
-        eulerAngles: [-1.65909865e-16, 0.959931135, -7.24640988e-17]
-        scale: [2.5, 2.5, 2.5]
-  - uid: 9
-    parent: 0
-    components:
-      TagComponent: cube_instance_16
-      Transform:
-        translation: [-2.5, -2, -2]
-        eulerAngles: [0, 0.0523596294, 0]
-        scale: [1, 1, 0.99999994]
-  - uid: 10
-    parent: 0
-    components:
-      TagComponent: sphere_instance
-      Transform:
-        translation: [3.31130004, -1, 0.0876000002]
-        eulerAngles: [0, -0, 0]
-        scale: [1, 1, 1]
-  - uid: 11
-    parent: 0
-    components:
-      TagComponent: sphere_instance_22
-      Transform:
-        translation: [-3, -4, 3]
-        eulerAngles: [0, -0, 0]
-        scale: [1, 1, 1]
+      MeshReference:
+        ORID: 1677403060916304732
+        CPF: 0
+      MeshRendererComponent:
+        - ORID: 1677403060917369582
 SceneEnd: TRUE

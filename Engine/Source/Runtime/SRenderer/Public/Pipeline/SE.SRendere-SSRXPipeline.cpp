@@ -8,10 +8,10 @@ SSRXForwardGraph::SSRXForwardGraph() {
   addSubgraph(std::make_unique<CascadeShadowmapPass>(), "Shadowmap Pass");
   addPass(std::make_unique<ForwardPass>(), "Forward Pass");
 
-  addSubgraph(std::make_unique<MIPMinPoolingPass>(512, 512), "HiZ-Gen Pass");
-  addSubgraph(std::make_unique<MIPSSLCPass>(512, 512), "MIPSSLC Pass");
+  addSubgraph(std::make_unique<MIPMinPoolingPass>(1280, 720), "HiZ-Gen Pass");
+  addSubgraph(std::make_unique<MIPSSLCPass>(2048, 2048), "MIPSSLC Pass");
   addPass(std::make_unique<MISCompensationDiffPass>(), "MISC Pass");
-  addSubgraph(std::make_unique<MIPAddPoolingPass>(512), "AddPooling Pass");
+  addSubgraph(std::make_unique<MIPAddPoolingPass>(2048), "AddPooling Pass");
 
   addPass(std::make_unique<BarLCPass>(), "BarLC Pass");
   addPass(std::make_unique<AccumulatePass>(), "Accumulate Pass");
@@ -86,23 +86,33 @@ auto SSRXPipeline::renderUI() noexcept -> void {
                  IM_ARRAYSIZE(item_names));
     state = static_cast<State>(debug_mode);
 
+    { // Geometry setting for reconstruct from screen space
+      const char* item_names[] = {"Piecewise Constant",
+                                  "Piecewise Constant with Cliff",
+                                  "Triangulate", "Triangulate Mirror"};
+      int geo_setting =
+          static_cast<int>(geoReconstrGraph.reconstrPass->geoSetting);
+      ImGui::Combo("Geometry Setting", &geo_setting, item_names, IM_ARRAYSIZE(item_names),
+                   IM_ARRAYSIZE(item_names));
+      geoReconstrGraph.reconstrPass->geoSetting =
+          static_cast<RSSGeoReconstrPass::GeometrySetting>(geo_setting);
+      geoRenderGraph.gtPass->pConst.geo_setting = uint32_t(geo_setting);
+    }
+
     if (ImGui::Button("Capture Geometry")) {
         
     }
 }
 
-std::unique_ptr<RHI::BLAS> createBLAS(GFX::Buffer* vb, GFX::Buffer* ib) {
+std::unique_ptr<RHI::BLAS> createBLAS(GFX::Buffer* vb, GFX::Buffer* ib, uint32_t max_vertex, uint32_t primitive_count) {
     RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
     return device->createBLAS(RHI::BLASDescriptor{
         std::vector<RHI::BLASTriangleGeometry>{RHI::BLASTriangleGeometry{
             vb->buffer.get(),
             ib->buffer.get(),
             nullptr,
-            RHI::IndexFormat::UINT32_T,
-            uint32_t(vb->buffer->size() / sizeof(uint32_t)),
-            0,
-            uint32_t(ib->buffer->size() / (3*sizeof(uint32_t))),
-            0,
+            RHI::IndexFormat::UINT32_T, 
+            max_vertex, 0, primitive_count, 0,
             RHI::AffineTransformMatrix{}
         }}});
 }
@@ -119,7 +129,8 @@ auto SSRXPipeline::execute(RHI::CommandEncoder* encoder) noexcept -> void {
       device->waitIdle();
       if (blas) blas_back = std::move(blas);
       if (tlas) tlas_back = std::move(tlas);
-      blas = createBLAS(vertex_buffer, index_buffer);
+      blas =
+          createBLAS(vertex_buffer, index_buffer, max_vertex, primitive_count);
       tlas = createTLAS(blas.get());
       device->waitIdle();
       to_build = false;  
@@ -136,9 +147,13 @@ auto SSRXPipeline::execute(RHI::CommandEncoder* encoder) noexcept -> void {
           forwardGraph.execute(encoder);
           geoReconstrGraph.execute(encoder);
           vertex_buffer = geoReconstrGraph.getBufferResource("Reconstr Pass", "VertexBuffer");
+          primitive_count =
+              geoReconstrGraph.reconstrPass->getIndicesCount() / 3;
+          max_vertex = geoReconstrGraph.reconstrPass->getVerticesCount();
           index_buffer = geoReconstrGraph.getBufferResource("Reconstr Pass", "IndicesBuffer");
           to_build = true;
           state = SIByL::SRP::SSRXPipeline::State::GeoRender;
+          geoRenderGraph.gtPass->pConst.primitive_num = primitive_count;
           }
         return;
       }

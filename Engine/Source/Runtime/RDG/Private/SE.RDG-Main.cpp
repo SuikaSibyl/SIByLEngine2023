@@ -1,4 +1,5 @@
 #include "../Public/SE.RDG-Main.hpp"
+#include <Config/SE.Core.Config.hpp>
 
 namespace SIByL::RDG {
 GFX::ShaderModule* FullScreenPass::fullscreen_vertex;
@@ -228,9 +229,13 @@ auto RenderPass::init(GFX::ShaderModule* vertex,
 
 auto FullScreenPass::init(GFX::ShaderModule* fragment) noexcept -> void {
   if (FullScreenPass::fullscreen_vertex == nullptr) {
+    std::string engine_path =
+        Core::RuntimeConfig::get()->string_property("engine_path");
     auto vert = GFX::GFXManager::get()->registerShaderModuleResource(
-        "../Engine/Binaries/Runtime/spirv/SRenderer/rasterizer/fullscreen_pass/"
-        "fullscreen_pass_vert.spv",
+        (engine_path +
+         "/Binaries/Runtime/spirv/SRenderer/rasterizer/fullscreen_pass/"
+         "fullscreen_pass_vert.spv")
+            .c_str(),
         {nullptr, RHI::ShaderStages::VERTEX});
     FullScreenPass::fullscreen_vertex =
         Core::ResourceManager::get()->getResource<GFX::ShaderModule>(vert);
@@ -456,6 +461,9 @@ auto Graph::build() noexcept -> bool {
             Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
         textureResources[rid]->desc =
             toTextureDescriptor(internal.second.info.texture, standardSize);
+        textureResources[rid]->name =
+            "RDG::" + passes[flattenedPasses[i]]->identifier +
+            "::" + internal.first;
         textureResources[rid]->cosumeHistories.push_back(
             {flattenedPasses[i],
              internal.second.info.texture.consumeHistories});
@@ -481,6 +489,9 @@ auto Graph::build() noexcept -> bool {
             Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
         textureResources[rid]->desc =
             toTextureDescriptor(internal.second.info.texture, standardSize);
+        textureResources[rid]->name =
+            "RDG::" + passes[flattenedPasses[i]]->identifier +
+            "::" + internal.first;
         textureResources[rid]->cosumeHistories.push_back(
             {flattenedPasses[i],
              internal.second.info.texture.consumeHistories});
@@ -626,6 +637,7 @@ auto Graph::build() noexcept -> bool {
       res.second->texture =
           Core::ResourceManager::get()->getResource<GFX::Texture>(
               res.second->guid);
+      res.second->texture->texture->setName(res.second->name);
     }
   }
 
@@ -693,13 +705,22 @@ auto Graph::generateTextureBarriers() noexcept -> void {
           barriers[hentry.passID].emplace_back(desc);
         if (subentry.type == TextureInfo::ConsumeType::ColorAttachment ||
             subentry.type == TextureInfo::ConsumeType::DepthStencilAttachment) {
-          vm.updateSubresource(
-              TextureResourceVirtualMachine::TextureSubresourceRange{
-                  subentry.level_beg, subentry.level_end, subentry.mip_beg,
-                  subentry.mip_end},
-              TextureResourceVirtualMachine::TextureSubresourceState{
-                  subentry.stages, subentry.access,
-                  RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL});
+          //vm.updateSubresource(
+          //    TextureResourceVirtualMachine::TextureSubresourceRange{
+          //        subentry.level_beg, subentry.level_end, subentry.mip_beg,
+          //        subentry.mip_end},
+          //    TextureResourceVirtualMachine::TextureSubresourceState{
+          //        (uint32_t)RHI::PipelineStages::DRAW_INDIRECT_BIT |
+          //        (uint32_t)RHI::PipelineStages::VERTEX_INPUT_BIT |
+          //        (uint32_t)RHI::PipelineStages::VERTEX_SHADER_BIT |
+          //        (uint32_t)RHI::PipelineStages::TESSELLATION_CONTROL_SHADER_BIT |
+          //        (uint32_t)RHI::PipelineStages::TESSELLATION_EVALUATION_SHADER_BIT |
+          //        (uint32_t)RHI::PipelineStages::GEOMETRY_SHADER_BIT |
+          //        (uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT |
+          //        (uint32_t)RHI::PipelineStages::EARLY_FRAGMENT_TESTS_BIT |
+          //        (uint32_t)RHI::PipelineStages::LATE_FRAGMENT_TESTS_BIT |
+          //        (uint32_t)RHI::PipelineStages::COLOR_ATTACHMENT_OUTPUT_BIT, subentry.access,
+          //        RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL});
         }
       }
     }

@@ -98,4 +98,22 @@ float erfinv(in const float a) {
 
 }
 
+
+float minComponent(in const vec3 v) {
+    return min(v.x, min(v.y, v.z));
+}
+
+float maxComponent(in const vec3 v) {
+    return max(v.x, max(v.y, v.z));
+}
+
+int maxDimension(in const vec3 v) {
+    return (v.x > v.y) ? ((v.x > v.z) ? 0 : 2) : 
+           ((v.y > v.z) ? 1 : 2);
+}
+
+vec3 permute(in const vec3 v, int x, int y, int z) {
+    return vec3(v[x], v[y], v[z]);
+}
+
 #endif

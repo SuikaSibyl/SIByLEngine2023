@@ -217,6 +217,7 @@ auto Scene::serialize(std::filesystem::path path) noexcept -> void {
 }
 
 auto Scene::deserialize(std::filesystem::path path) noexcept -> void {
+  release();
   // gameObjects.clear();
   Core::Buffer scene_proxy;
   Core::syncReadFile(path.string().c_str(), scene_proxy);
@@ -254,6 +255,17 @@ auto Scene::deserialize(std::filesystem::path path) noexcept -> void {
       iter->second.children[i] = mapper[iter->second.children[i]];
     }
   }
+}
+
+auto Scene::release() noexcept -> void {
+  std::vector<GameObjectHandle> handles;
+  for (auto go : gameObjects) {
+    handles.emplace_back(go.first);
+  }
+  for (auto handle : handles) {
+    removeGameObject(handle);
+  }
+  gameObjects.clear();
 }
 
 #pragma endregion
@@ -848,11 +860,13 @@ auto Material::loadPath() noexcept -> void {
 
 auto CameraComponent::getViewMat() noexcept -> Math::mat4 { return view; }
 
-auto CameraComponent::getProjectionMat() noexcept -> Math::mat4 {
+auto CameraComponent::getProjectionMat() const noexcept->Math::mat4 {
+  Math::mat4 projection;
   if (projectType == ProjectType::PERSPECTIVE) {
     projection = Math::perspective(fovy, aspect, near, far).m;
   } else if (projectType == ProjectType::ORTHOGONAL) {
-    projection = Math::orthographic(near, far).m;
+    projection = Math::ortho(-aspect * bottom_top, aspect * bottom_top,
+                             -bottom_top, bottom_top, near, far).m;
   }
   return projection;
 }
@@ -1089,8 +1103,12 @@ auto GFXManager::registerBufferResource(Core::GUID guid, void* data,
                                         RHI::BufferUsagesFlags usage) noexcept
     -> void {
   GFX::Buffer bufferResource = {};
-  bufferResource.buffer =
-      rhiLayer->getDevice()->createDeviceLocalBuffer(data, size, usage);
+  if (size > 0) {
+      bufferResource.buffer =
+          rhiLayer->getDevice()->createDeviceLocalBuffer(data, size, usage);
+  } else {
+      bufferResource.buffer = nullptr;
+  }
   Core::ResourceManager::get()->addResource(guid, std::move(bufferResource));
 }
 
@@ -1477,6 +1495,9 @@ auto GFXManager::registerTextureResource(
 auto GFXManager::registerTextureResource(char const* filepath) noexcept
     -> Core::GUID {
   std::filesystem::path path(filepath);
+  if (!std::filesystem::exists(path)) {
+    path = "content/textures/lost.png";
+  }
   if (path.extension() == ".dds") {
     std::filesystem::path current_path = std::filesystem::current_path();
     std::filesystem::path relative_path =
@@ -1484,35 +1505,41 @@ auto GFXManager::registerTextureResource(char const* filepath) noexcept
     std::unique_ptr<Image::Texture_Host> dds_tex = Image::DDS::fromDDS(path);
     Core::GUID img_guid =
         Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
-    Core::ORID img_orid =
-        Core::ResourceManager::get()->database.mapResourcePath(filepath);
+    Core::ORID img_orid = Core::requestORID();
     Core::ResourceManager::get()->database.registerResource(img_orid, img_guid);
     GFX::GFXManager::get()->registerTextureResource(img_guid, dds_tex.get());
     GFX::Texture* texture =
         Core::ResourceManager::get()->getResource<GFX::Texture>(img_guid);
     texture->orid = img_orid;
     texture->guid = img_guid;
-    texture->resourcePath = relative_path.string();
+    uint32_t relative_length = relative_path.string().length();
+    texture->resourcePath =
+        (relative_length == 0) ? path.string() : relative_path.string();
     texture->serialize();
+    texture->texture->setName("external_image::" +
+                              texture->resourcePath.value());
     return img_guid;
   } else {
     std::filesystem::path current_path = std::filesystem::current_path();
     std::filesystem::path relative_path =
         std::filesystem::relative(path, current_path);
     std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> img =
-        ImageLoader::load_rgba8(std::filesystem::path(filepath));
+        ImageLoader::load_rgba8(path);
     Core::GUID img_guid =
         Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
-    Core::ORID img_orid =
-        Core::ResourceManager::get()->database.mapResourcePath(filepath);
+    Core::ORID img_orid = Core::requestORID();
     Core::ResourceManager::get()->database.registerResource(img_orid, img_guid);
     GFX::GFXManager::get()->registerTextureResource(img_guid, img.get());
     GFX::Texture* texture =
         Core::ResourceManager::get()->getResource<GFX::Texture>(img_guid);
     texture->orid = img_orid;
     texture->guid = img_guid;
-    texture->resourcePath = relative_path.string();
+    uint32_t relative_length = relative_path.string().length();
+    texture->resourcePath =
+        (relative_length == 0) ? path.string() : relative_path.string();
     texture->serialize();
+    texture->texture->setName("external_image::" +
+                              texture->resourcePath.value());
     return img_guid;
   }
 }
@@ -1568,7 +1595,14 @@ auto GFXManager::requestOfflineTextureResource(Core::ORID orid) noexcept
     guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
     GFX::Texture texture;
     texture.deserialize(rhiLayer->getDevice(), orid);
-    if (texture.resourcePath.value() == "USE_PATH_ARRAY") {
+    if (texture.resourcePath.has_value() == false ||
+        !std::filesystem::exists(texture.resourcePath.value()))
+    {
+      std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> img =
+          ImageLoader::load_rgba8(std::filesystem::path("content/textures/lost.png"));
+      GFX::GFXManager::get()->registerTextureResource(guid, img.get());
+    }
+    else if (texture.resourcePath.value() == "USE_PATH_ARRAY") {
       GFX::GFXManager::get()->registerTextureResourceCubemap(
           guid, std::array<char const*, 6>{
                     texture.resourcePathArray.value()[0].c_str(),
@@ -1578,17 +1612,26 @@ auto GFXManager::requestOfflineTextureResource(Core::ORID orid) noexcept
                     texture.resourcePathArray.value()[4].c_str(),
                     texture.resourcePathArray.value()[5].c_str()});
     } else {
-      std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> img =
-          ImageLoader::load_rgba8(
-              std::filesystem::path(texture.resourcePath.value()));
-      GFX::GFXManager::get()->registerTextureResource(guid, img.get());
+      std::filesystem::path filepath(texture.resourcePath.value());
+      if (filepath.extension() == ".dds") {
+        std::unique_ptr<Image::Texture_Host> dds_tex =
+            Image::DDS::fromDDS(filepath);
+        GFX::GFXManager::get()->registerTextureResource(guid, dds_tex.get());
+      } else {
+        std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> img =
+            ImageLoader::load_rgba8(
+                std::filesystem::path(texture.resourcePath.value()));
+        GFX::GFXManager::get()->registerTextureResource(guid, img.get());      
+      }
     }
     Core::ResourceManager::get()->database.registerResource(orid, guid);
     GFX::Texture* texture_ptr =
         Core::ResourceManager::get()->getResource<GFX::Texture>(guid);
     texture_ptr->orid = orid;
     texture_ptr->texture->setName(texture.name);
-    texture_ptr->resourcePath = texture.resourcePath.value();
+    texture_ptr->resourcePath = texture.resourcePath.has_value()
+                                    ? texture.resourcePath.value()
+                                    : "content/textures/lost.png";
     texture_ptr->resourcePathArray = texture.resourcePathArray;
     texture_ptr->name = texture.name;
   }
@@ -1646,6 +1689,30 @@ auto GFXManager::requestOfflineMaterialResource(Core::ORID orid) noexcept
     Core::ResourceManager::get()->addResource(guid, std::move(material));
   }
   return guid;
+}
+
+auto GFXManager::registerDefualtSamplers() noexcept -> void {
+  // create all default samplers
+  commonSampler.defaultSampler =
+      Core::ResourceManager::get()->requestRuntimeGUID<GFX::Sampler>();
+  registerSamplerResource(commonSampler.defaultSampler,
+                          RHI::SamplerDescriptor{
+                              RHI::AddressMode::REPEAT,
+                              RHI::AddressMode::REPEAT,
+                              RHI::AddressMode::REPEAT,
+                          });
+  commonSampler.clamp_nearest =
+      Core::ResourceManager::get()->requestRuntimeGUID<GFX::Sampler>();
+  registerSamplerResource(GFX::GFXManager::get()->commonSampler.clamp_nearest,
+                          RHI::SamplerDescriptor{});
+  Core::ResourceManager::get()
+      ->getResource<GFX::Sampler>(
+          GFX::GFXManager::get()->commonSampler.defaultSampler)
+      ->sampler->setName("DefaultSampler");
+  Core::ResourceManager::get()
+      ->getResource<GFX::Sampler>(
+          GFX::GFXManager::get()->commonSampler.clamp_nearest)
+      ->sampler->setName("ClampNearestSampler");
 }
 
 #pragma endregion

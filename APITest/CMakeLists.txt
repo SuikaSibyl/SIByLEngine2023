@@ -20,4 +20,6 @@ set_target_properties(
 target_link_libraries(${PROJECT_NAME}
         PUBLIC
         yaml
-        imgui)
+        imgui
+        HSL
+        Math)

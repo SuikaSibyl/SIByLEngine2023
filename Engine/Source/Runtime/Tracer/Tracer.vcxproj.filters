@@ -27,16 +27,10 @@
     <ClCompile Include="Public\Sampler\Tracer.Sampler.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Core\SE.Tracer-Ray.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="Public\Shape\Tracer.Shape.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Shape\Tracer.Shape-Sphere.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Camera\SE.Tracer-Camera.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Medium\Tracer.Medium.ixx">
@@ -318,16 +312,10 @@
     <ClCompile Include="Private\Primitives\Tracer.Primitives-GeometricPrimitive.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Public\Core\SE.Tracer-Interactable.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="Private\Core\Tracer.Interactable.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Integrator\Tracer.Integrator-Utility.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Core\SE.Tracer-Base.ixx">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Private\Core\Tracer.Base.cpp">
@@ -340,12 +328,6 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Shape\Tracer.Shape-Triangle.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\SE.Tracer.ixx">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Public\Camera\SE.Tracer-Camera.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Public\Core\Tracer.Ray.ixx">

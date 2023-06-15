@@ -362,4 +362,16 @@ inline auto solveLinearSystem2x2(float const A[2][2], const float B[2],
   if (std::isnan(*x0) || std::isnan(*x1)) return false;
   return true;
 }
+
+
+const inline double FEQ_EPS = 1e-6;
+const inline double FEQ_EPS2 = 1e-12;
+
+inline bool float_equal(double a, double b, double e = FEQ_EPS) {
+  return fabs(a - b) < e;
+}
+inline bool float_equal2(double a, double b, double e = FEQ_EPS2) {
+  return fabs(a - b) < e;
+}
+
 }  // namespace SIByL::Math

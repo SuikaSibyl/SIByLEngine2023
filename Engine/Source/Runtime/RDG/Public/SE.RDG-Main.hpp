@@ -254,6 +254,7 @@ SE_EXPORT struct Resource {
 SE_EXPORT struct TextureResource : public Resource {
   RHI::TextureDescriptor desc;
   GFX::Texture* texture;
+  std::string name;
 
   struct ConsumeHistory {
     size_t passID;
@@ -393,7 +394,7 @@ SE_EXPORT struct RenderData {
   }
   inline auto getMat4(std::string const& name) const noexcept -> Math::mat4 {
     auto const& iter = mat4s.find(name);
-    if (iter == mat4s.end()) return 0;
+    if (iter == mat4s.end()) return Math::mat4();
     return iter->second;
   }
 
@@ -756,7 +757,7 @@ SE_EXPORT struct Graph {
   std::string output_pass;
   std::string output_resource;
 
-  Math::ivec3 standardSize = {512, 512, 1};
+  Math::ivec3 standardSize = {1280, 720, 1};
 
   size_t resourceID = 0;
   std::unordered_map<size_t, std::unique_ptr<TextureResource>> textureResources;

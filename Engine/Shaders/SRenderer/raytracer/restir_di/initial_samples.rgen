@@ -1,0 +1,51 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+
+#include "../../../Utility/random.h"
+#include "../../../Utility/sampling.h"
+
+#include "../include/common_trace.h"
+#include "../include/common_rgen.h"
+
+#include "../../include/common/common_random.h"
+#include "../../include/common/common_space_filling_curve.h"
+#include "../../include/plugins/material/lambertian_common.h"
+
+#include "restir_di_layout.h"
+#include "restir_di_helper.h"
+
+const uint ReSTIRDI_TILE_SIZE_IN_PIXELS = 16;
+
+void main() {
+    const ReSTIR_DI_ResamplingRuntimeParameters params = gUniform.runtimeParams;
+
+    const uvec2 GlobalIndex = uvec2(gl_LaunchIDEXT.xy);
+    const uvec2 pixelPosition = ReservoirPosToPixelPos(GlobalIndex, params);
+
+    RandomSamplerState rng = InitRandomSampler(pixelPosition, gUniform.frameIndex, 1);
+    RandomSamplerState tileRng = InitRandomSampler(pixelPosition / ReSTIRDI_TILE_SIZE_IN_PIXELS, gUniform.frameIndex, 1);
+    
+    const GBufferSurface surface = GetGBufferSurface(ivec2(pixelPosition), false);
+
+    const ReSTIR_DI_SampleParameters sampleParams = ReSTIR_DI_InitSampleParameters(
+        gUniform.numPrimaryRegirSamples,
+        gUniform.numPrimaryLocalLightSamples,
+        gUniform.numPrimaryInfiniteLightSamples,
+        gUniform.numPrimaryEnvironmentSamples,
+        gUniform.numPrimaryBrdfSamples,
+        gUniform.brdfCutoff,
+        0.001f);
+
+    DILightSample lightSample;
+    DIReservoir reservoir;
+    //  = RTXDI_SampleLightsForSurface(rng, tileRng, surface,
+    //     sampleParams, params, lightSample);
+
+    if (bool(gUniform.enableInitialVisibility) && IsValidReservoir(reservoir)) {
+        if (!GetConservativeVisibility(surface, lightSample)) {
+            StoreVisibilityInReservoir(reservoir, vec3(0), true);
+        }
+    }
+
+    StoreReservoir(reservoir, params, GlobalIndex, gUniform.initialOutputBufferIndex);
+}

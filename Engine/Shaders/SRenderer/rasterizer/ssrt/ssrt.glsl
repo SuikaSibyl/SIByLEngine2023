@@ -60,9 +60,26 @@ float minimumDepthPlane(vec2 ray, int level, vec2 cell_count) {
     return texelFetch(hi_z, ivec2(ray.xy * cell_count), level).r;
 }
 
+vec3 SS2WS(in const vec2 xy, in const float z) {
+    const vec4 posInCS =  vec4((xy/gUniform.view_size)*2-1.0f, z, 1) * vec4(1,1,1,1);
+    vec4 posInVS = gUniform.InvProjMat * posInCS;
+    posInVS /= posInVS.w;
+    const vec4 posInWS = transpose(gUniform.TransInvViewMat) * vec4(posInVS.xyz, 1.0);
+    return posInWS.xyz;
+}
+
+vec3 SS2VS(in const vec2 xy, in const float z) {
+    const vec4 posInCS =  vec4((xy/gUniform.view_size)*2-1.0f, z, 1) * vec4(1,1,1,1);
+    vec4 posInVS = gUniform.InvProjMat * posInCS;
+    posInVS /= posInVS.w;
+    return posInVS.xyz * vec3(1,-1,1);
+}
+
 struct SSRay {
     vec3 rayPosInTS;
     vec3 rayDirInTS;
+    vec3 rayPosInVS;
+    vec3 rayDirInVS;
     float maxDistance;
     float minDistance;
 };
@@ -336,139 +353,20 @@ bool FindIntersection_Linear(
     setup(m0, m1, dda, tr);
     ivec2 n;
 
-    // float ray_z_debug = 0;
-    // // float l = ScanDDA2(m0, m1, debugPack);
-    // float l = 0.f;
-    // DDA2D_Linear dda;
-    // Trace2D_Linear tr;
-    // setup(m0, m1, dda, tr);
-    // ivec2 n;
-    // vec3 pos_prev = samplePosInTS;
-    // vec2 uv_prev = tr.ro;
-    // const vec3 dir_norm = vReflDirInTS * maxTraceDistance / tr.t1;
-
-    // float t_prev = 0.f;
-    // ivec2 prev_mp = dda.mp;
-    // {
-    //     float ot = dda.t;
-    //     int s;
-    //     while (true) {
-    //         bool go = traverse(dda, tr, debugPack);
-
-    //         vec3 pos = samplePosInTS + (dda.t + t_prev) * .5 * dir_norm;
-    //         // vec2 uv = pos.xy * .5 + pos_prev.xy * .5;
-    //         vec2 uv = tr.ro + tr.rd * (dda.t + t_prev) * .5;
-    //         // float z = minimumDepthPlane(pos.xy, level, cellCount);
-    //         float z = pos.z;
-    //         // float z = minimumDepthPlane((uv) / cellCount, 4, cellCount);
-    //         // float z = texelFetch(hi_z, dda.mp, 4).r;
-    //         // pos_prev = pos;
-    //         t_prev = dda.t;
-    //         uv_prev = uv;
-
-    //         if(debugPack.qi == prev_mp) {
-    //             ray_z_debug = z;
-    //         }
-    //         prev_mp = dda.mp;
-    //         if(!go) break;
-    //         s = nextIsect(dda, tr);
-    //     }
-    //     n = ivec2(0);
-    //     n[s] = -tr.sd[s]; // avoid negating zeroes
-    //     l = vec2(ot, dda.t).y;
-    // }
-    
     return false;
-	// return vec2(ot, dda.t);
-
-
-    // // dp is the vector that moves the current ray to its next position by adding it to the current position of the ray.
-    // vec3 dp = vReflectionEndPosInTS.xyz - samplePosInTS.xyz;
-    // ivec2 sampleScreenPos = ivec2(samplePosInTS.xy * gUniform.view_size.xy);
-    // ivec2 endPosScreenPos = ivec2(vReflectionEndPosInTS.xy * gUniform.view_size.xy);
-    // ivec2 dp2 = endPosScreenPos - sampleScreenPos;
-    // const int max_dist = max(abs(dp2.x), abs(dp2.y));
-    // dp /= max_dist;
-    
-    // vec4 rayPosInTS = vec4(samplePosInTS.xyz + dp, 0);
-    // vec4 vRayDirInTS = vec4(dp.xyz, 0);
-	// vec4 rayStartPos = rayPosInTS;
-
-    // int hitIndex = -1;
-    // for(int i = 0;i<=max_dist && i<gUniform.max_iteration; i += 4)  {
-    //     float depth0 = 0;
-    //     float depth1 = 0;
-    //     float depth2 = 0;
-    //     float depth3 = 0;
-
-    //     vec4 rayPosInTS0 = rayPosInTS+vRayDirInTS*0;
-    //     vec4 rayPosInTS1 = rayPosInTS+vRayDirInTS*1;
-    //     vec4 rayPosInTS2 = rayPosInTS+vRayDirInTS*2;
-    //     vec4 rayPosInTS3 = rayPosInTS+vRayDirInTS*3;
-
-    //     depth3 = texture(hi_z, rayPosInTS3.xy).x;
-    //     depth2 = texture(hi_z, rayPosInTS2.xy).x;
-    //     depth1 = texture(hi_z, rayPosInTS1.xy).x;
-    //     depth0 = texture(hi_z, rayPosInTS0.xy).x;
-
-    //     {   float thickness = rayPosInTS3.z - depth3;
-    //         hitIndex = (thickness>=0 
-    //         && thickness < gUniform.max_thickness
-    //         && abs(samplePosInTS.z - depth3)>gUniform.min_thickness) ? (i+3) : hitIndex;
-    //     } {
-    //         float thickness = rayPosInTS2.z - depth2;
-    //         hitIndex = (thickness>=0 
-    //         && thickness < gUniform.max_thickness
-    //         && abs(samplePosInTS.z - depth2)>gUniform.min_thickness
-    //         ) ? (i+2) : hitIndex;
-    //         uv = vec4(rayPosInTS2.xyz, depth2);
-    //     } {
-    //         float thickness = rayPosInTS1.z - depth1;
-    //         hitIndex = (thickness>=0 
-    //         && thickness < gUniform.max_thickness
-    //         && abs(samplePosInTS.z - depth1)>gUniform.min_thickness
-    //         ) ? (i+1) : hitIndex;
-    //         uv = vec4(rayPosInTS1.xyz, depth1);
-    //     } {
-    //         float thickness = rayPosInTS0.z - depth0;
-    //         hitIndex = (thickness>=0 
-    //         && thickness < gUniform.max_thickness
-    //         && abs(samplePosInTS.z - depth0)>gUniform.min_thickness
-    //         ) ? (i+0) : hitIndex;
-    //         uv = vec4(rayPosInTS0.xyz, depth0);
-    //     }
-
-    //     if(hitIndex != -1) break;
-
-    //     rayPosInTS = rayPosInTS3 + vRayDirInTS;
-    // }
-
-    // bool intersected = hitIndex >= 0;
-    // intersection = rayStartPos.xyz + vRayDirInTS.xyz * hitIndex;
-
-    // const vec2 cellCount = getCellCount(0); 
-    // const vec2 oldCellIdx = getCell(intersection.xy, cellCount);    
-    // iter = hitIndex;
-    // return intersected;
 }
-
-// vec3 packNormal(in const vec3 normal) {
-//     return 0.5 * vec3(normal + 1.0);
-// }
-
-// vec3 unpackNormal(in const vec3 normal) {
-//     return normalize(normal * 2.0 - 1.0);
-// }
 
 struct RayStartInfo {
     vec4 samplePosInCS;
     vec4 samplePosInVS;
     vec3 samplePosInTS;
+    vec3 samplePosInWS;
+    vec3 sampleNormalInVS;
+    vec3 sampleNormalInWS;
 };
 
 bool unpackVSInfo(
     in const uvec2 tid,
-    out vec3 sampleNormalInVS,
     out RayStartInfo rayStartInfo
 ) {
     // Unpack the depth from the texture.
@@ -476,9 +374,9 @@ bool unpackVSInfo(
     if(sampleDepth == 1) return false;
 
     // Unpack the normal from the texture.
-    vec3 sampleNormalInWS = unpackNormal(texelFetch(ws_normal, ivec2(tid), 0).xyz);
-    sampleNormalInVS = normalize((gUniform.TransInvViewMat * vec4(sampleNormalInWS, 0)).xyz);
-    sampleNormalInVS.y = -sampleNormalInVS.y;
+    rayStartInfo.sampleNormalInWS = unpackNormal(texelFetch(ws_normal, ivec2(tid), 0).xyz);
+    rayStartInfo.sampleNormalInVS = normalize((gUniform.TransInvViewMat * vec4(rayStartInfo.sampleNormalInWS, 0)).xyz);
+    rayStartInfo.sampleNormalInVS.y = -rayStartInfo.sampleNormalInVS.y;
     
     // From the depth, compute the position in clip space.
     rayStartInfo.samplePosInCS =  vec4(((vec2(tid)+0.5)/gUniform.view_size)*2-1.0f, sampleDepth, 1);
@@ -492,12 +390,13 @@ bool unpackVSInfo(
     rayStartInfo.samplePosInTS = rayStartInfo.samplePosInCS.xyz;
     rayStartInfo.samplePosInTS.xy *= vec2(0.5f, -0.5f);
     rayStartInfo.samplePosInTS.xy += vec2(0.5f, 0.5f);
+    // World space
+    rayStartInfo.samplePosInWS = SS2WS((tid + 0.5), sampleDepth);
     return true;
 }
 
 bool unpackVSInfo_vec(
     in const vec2 uv,
-    out vec3 sampleNormalInVS,
     out RayStartInfo rayStartInfo
 ) {
     // Unpack the depth from the texture.
@@ -506,9 +405,9 @@ bool unpackVSInfo_vec(
     if(sampleDepth == 1) return false;
 
     // Unpack the normal from the texture.
-    vec3 sampleNormalInWS = unpackNormal(texelFetch(ws_normal, ivec2(tid), 0).xyz);
-    sampleNormalInVS = normalize((gUniform.TransInvViewMat * vec4(sampleNormalInWS, 0)).xyz);
-    sampleNormalInVS.y = -sampleNormalInVS.y;
+    rayStartInfo.sampleNormalInWS = unpackNormal(texelFetch(ws_normal, ivec2(tid), 0).xyz);
+    rayStartInfo.sampleNormalInVS = normalize((gUniform.TransInvViewMat * vec4(rayStartInfo.sampleNormalInWS, 0)).xyz);
+    rayStartInfo.sampleNormalInVS.y = -rayStartInfo.sampleNormalInVS.y;
     
     // From the depth, compute the position in clip space.
     rayStartInfo.samplePosInCS =  vec4(uv*2-1.0f, sampleDepth, 1);
@@ -522,6 +421,8 @@ bool unpackVSInfo_vec(
     rayStartInfo.samplePosInTS = rayStartInfo.samplePosInCS.xyz;
     rayStartInfo.samplePosInTS.xy *= vec2(0.5f, -0.5f);
     rayStartInfo.samplePosInTS.xy += vec2(0.5f, 0.5f);
+    // World space
+    rayStartInfo.samplePosInWS = SS2WS((tid + 0.5), sampleDepth);
     return true;
 }
 
@@ -576,6 +477,8 @@ SSRay PrepareSSRT(
     // Compute the reflection direction in clip space.
     const float signRefl = vReflectionInVS.z < 0 ? -1 : 1;
     vec4 vReflectionEndPosInVS = startInfo.samplePosInVS + vReflectionInVS * 10 * signRefl;
+    vec4 vReflectionEndPosInWS = startInfo.samplePosInVS + vReflectionInVS * 10;
+    // transpose(gUniform.TransInvViewMat) * vec4(posInVS.xyz, 1.0);
     // vReflectionEndPosInVS /= (vReflectionEndPosInVS.z < 0 ? vReflectionEndPosInVS.z : 1);
     vec4 vReflectionEndPosInCS = gUniform.ProjMat * vec4(vReflectionEndPosInVS.xyz, 1);
     vReflectionEndPosInCS /= vReflectionEndPosInCS.w;
@@ -588,6 +491,8 @@ SSRay PrepareSSRT(
     outMaxDistance = min(outMaxDistance, outReflDirInTS.y<0 ? (-startInfo.samplePosInTS.y/outReflDirInTS.y)  : ((1-startInfo.samplePosInTS.y)/outReflDirInTS.y));
     outMaxDistance = min(outMaxDistance, outReflDirInTS.z<0 ? (-startInfo.samplePosInTS.z/outReflDirInTS.z) : ((1-startInfo.samplePosInTS.z)/outReflDirInTS.z));
     SSRay ray;
+    ray.rayPosInVS =  startInfo.samplePosInVS.xyz;
+    ray.rayDirInVS = normalize(vReflectionEndPosInWS.xyz - startInfo.samplePosInVS.xyz);
     ray.rayPosInTS = startInfo.samplePosInTS;
     ray.rayDirInTS = outReflDirInTS;
     ray.maxDistance = outMaxDistance;
@@ -662,20 +567,71 @@ bool FindIntersection_DDA(
         const float z_old = point.z;
         const float z_new = point_new.z;
         
-        if(iter > 1) {
-            // if(
-            //     (z_cell_prev != 1 && z_cell != 1) &&
-            //     (z_cell_prev - z_old) * (z_cell - z_old) < 0) {
-            //     // Find intersection
-            //     intersection = 0.5 * (point_new + point);
-            //     return true;
-            // }
-            if((z_cell - z_old) * (z_cell - z_new) < 0) {
-                // Find intersection
-                intersection = 0.5 * (point_new + point);
-                return true;
-            }
+        if((z_cell - z_old) * (z_cell - z_new) < 0) {
+            // Find intersection
+            intersection = 0.5 * (point_new + point);
+            return true;
         }
+
+        // update cell_z
+        z_cell_prev = z_cell;
+        z_cell = texelFetch(hi_z, dda.mp, 0).r;
+        point = point_new;
+        iter++;
+    }
+    
+    return false;
+}
+
+bool FindIntersection_DDA_Connected(
+    in const SSRay ray,
+    out vec3 intersection,
+    inout SSRTConfig config
+) {
+    const vec2 cellCount = getCellCount(0);
+
+    const vec3 vReflectionEndPosInTS = ray.rayPosInTS + ray.rayDirInTS * ray.maxDistance;
+    const vec2 m0 = getCellCoord(ray.rayPosInTS.xy, cellCount);
+    const vec2 m1 = getCellCoord(vReflectionEndPosInTS.xy, cellCount);
+
+    // DDA setup
+    DDA2D_Linear dda;
+    Trace2D_Linear tr;
+    setup(m0, m1, dda, tr);
+    nextIsect(dda, tr);
+    
+    const vec3 dir_norm = ray.rayDirInTS * abs(ray.maxDistance / tr.t1);
+    
+    int iter = 0;
+    float z_cell = texelFetch(hi_z, dda.mp, 0).r;
+    float z_cell_prev = z_cell;
+    vec3 point = ray.rayPosInTS + dda.t * dir_norm;
+
+    while (traverse(dda, tr)) {
+        if(iter > gUniform.max_iteration) break;
+        
+        // take one step forward
+        nextIsect(dda, tr);
+
+        if(dda.mp.x < 0 || dda.mp.x >= cellCount.x || dda.mp.y < 0 || dda.mp.y >= cellCount.y) {
+            return false;
+        }
+
+        const vec3 point_new = ray.rayPosInTS + dda.t * dir_norm;
+        const float z_old = point.z;
+        const float z_new = point_new.z;
+        
+        if((z_cell - z_old) * (z_cell - z_new) < 0) {
+            // Find intersection
+            intersection = 0.5 * (point_new + point);
+            return true;
+        }
+        if(z_old >= z_cell && z_new >= z_cell) {
+            // Find intersection
+            intersection = 0.5 * (point_new + point);
+            return true;
+        }
+
         // update cell_z
         z_cell_prev = z_cell;
         z_cell = texelFetch(hi_z, dda.mp, 0).r;
@@ -726,13 +682,6 @@ bool FindOcclusion_DDA(
         const float z_new = point_new.z;
         
         if(iter > 1) {
-            // if(
-            //     (z_cell_prev != 1 && z_cell != 1) &&
-            //     (z_cell_prev - z_old) * (z_cell - z_old) < 0) {
-            //     // Find intersection
-            //     intersection = 0.5 * (point_new + point);
-            //     return true;
-            // }
             if((z_cell - z_old) * (z_cell - z_new) < 0) {
                 // Find intersection
                 const float a = abs(z_cell - z_old);
@@ -745,6 +694,182 @@ bool FindOcclusion_DDA(
         z_cell_prev = z_cell;
         z_cell = texelFetch(hi_z, dda.mp, 0).r;
         point = point_new;
+        iter++;
+    }
+    
+    return false;
+}
+
+vec3[4] FetchRectPointsSS(ivec2 center) {
+    vec2 toUV = vec2(1./gUniform.view_size);
+    vec4 zQuad = textureGather(hi_z, vec2(center * toUV));
+    vec3 points[4];
+    points[0] = vec3(center.xy + vec2(-0.5, -0.5), zQuad.w) * vec3(toUV, 1);
+    points[1] = vec3(center.xy + vec2(-0.5, +0.5), zQuad.x) * vec3(toUV, 1);
+    points[2] = vec3(center.xy + vec2(+0.5, -0.5), zQuad.z) * vec3(toUV, 1);
+    points[3] = vec3(center.xy + vec2(+0.5, +0.5), zQuad.y) * vec3(toUV, 1);
+    return points;
+}
+
+bool FindIntersection_DDA_Trianglulate_Safe(
+    in const SSRay ray,
+    out vec3 intersection,
+    inout SSRTConfig config
+) {
+    const vec3 roWS = ray.rayPosInVS;
+    const vec3 rdWS = ray.rayDirInVS;
+
+    const vec2 cellCount = getCellCount(0);
+
+    const vec3 vReflectionEndPosInTS = ray.rayPosInTS + ray.rayDirInTS * ray.maxDistance;
+    const vec2 m0 = getCellCoord(ray.rayPosInTS.xy, cellCount) - vec2(0.5);
+    const vec2 m1 = getCellCoord(vReflectionEndPosInTS.xy, cellCount) - vec2(0.5);
+
+    // DDA setup
+    DDA2D_Linear dda;
+    Trace2D_Linear tr;
+    setup(m0, m1, dda, tr);
+    nextIsect(dda, tr);
+    
+    // const vec3 dir_norm = ray.rayDirInTS * abs(ray.maxDistance / tr.t1);
+    
+    // float z_cell = texelFetch(hi_z, dda.mp, 0).r;
+    // float z_cell_prev = z_cell;
+    // vec3 point = ray.rayPosInTS + dda.t * dir_norm;
+    ivec2 center = dda.mp;
+    nextIsect(dda, tr);
+    int iter = 2;
+
+    while (traverse(dda, tr)) {
+        if(iter > gUniform.max_iteration) break;
+        
+        if(center.x < 1 || center.x >= cellCount.x || center.y < 1 || center.y >= cellCount.y) {
+            return false;
+        }
+
+        // The depth value of the pixel:
+        const float z = texelFetch(hi_z, center, 0).r;
+        const bool is_valid = (z < 1.0) ? true : false;
+        // The position of the pixel in world space:
+        const vec3 posInWS_0 = is_valid ? SS2VS(center + vec2(0.5, 0.5), z) : vec3(0.0);
+        // Fetch right pixel
+        const bool is_valid_right = (center.x + 1 < cellCount.x) ? true : false;
+        const float z_right = is_valid_right ? texelFetch(hi_z, center + ivec2(1, 0), 0).r : 0.0;
+        const vec3 posInWS_1 = is_valid_right ? SS2VS(center + vec2(1.5, 0.5), z_right) : posInWS_0;
+        // Fetch bottom pixel
+        const bool is_valid_down = (center.y + 1 < cellCount.y) ? true : false;
+        const float z_down = is_valid_down ? texelFetch(hi_z, center + ivec2(0, 1), 0).r : 0.0;
+        const vec3 posInWS_2 = is_valid_down ? SS2VS(center + vec2(0.5, 1.5), z_down) : posInWS_0;
+        // Fetch right-bottom pixel
+        const bool is_valid_rd = (center.x + 1 < cellCount.x && center.y + 1 < cellCount.y) ? true : false;
+        const float z_rd = is_valid_rd ? texelFetch(hi_z, center + ivec2(1, 1), 0).r : 0.0;
+        const vec3 posInWS_3 = is_valid_rd ? SS2VS(center + vec2(1.5, 1.5), z_rd) : posInWS_0;
+        
+        vec3[4] points;
+        points[0] = posInWS_0;
+        points[1] = posInWS_1;
+        points[2] = posInWS_2;
+        points[3] = posInWS_3;
+
+        vec3 barycentricCoord;
+        bool hit = ray_triangle_intersection_pbrt(
+            roWS, rdWS, 0, k_inf, 
+            points[0], points[1], points[2], barycentricCoord);
+        if(hit) {
+            intersection = points[0] * barycentricCoord.x + 
+                points[1] * barycentricCoord.y +
+                points[2] * barycentricCoord.z;
+            intersection = vec3(vec2(center)/gUniform.view_size, 1);
+            return true; 
+        }
+        hit = ray_triangle_intersection_pbrt(
+            roWS, rdWS, 0, k_inf, 
+            points[2], points[1], points[3], barycentricCoord);
+        if(hit) {
+            intersection = points[0] * barycentricCoord.x + 
+                points[1] * barycentricCoord.y +
+                points[2] * barycentricCoord.z;
+            intersection = vec3(vec2(center)/gUniform.view_size, 1);
+            return true; 
+        }
+
+        center = dda.mp;
+        // take one step forward
+        nextIsect(dda, tr);
+
+        iter++;
+    }
+    
+    return false;
+}
+
+bool FindIntersection_DDA_Trianglulate(
+    in const SSRay ray,
+    out vec3 intersection,
+    inout SSRTConfig config
+) {
+    const vec2 cellCount = getCellCount(0);
+
+    const vec3 vReflectionEndPosInTS = ray.rayPosInTS + ray.rayDirInTS * ray.maxDistance;
+    const vec2 m0 = getCellCoord(ray.rayPosInTS.xy, cellCount) - vec2(0.5);
+    const vec2 m1 = getCellCoord(vReflectionEndPosInTS.xy, cellCount) - vec2(0.5);
+
+    // DDA setup
+    DDA2D_Linear dda;
+    Trace2D_Linear tr;
+    setup(m0, m1, dda, tr);
+    nextIsect(dda, tr);
+    
+    // const vec3 dir_norm = ray.rayDirInTS * abs(ray.maxDistance / tr.t1);
+    
+    // float z_cell = texelFetch(hi_z, dda.mp, 0).r;
+    // float z_cell_prev = z_cell;
+    // vec3 point = ray.rayPosInTS + dda.t * dir_norm;
+    ivec2 center = dda.mp + ivec2(1);
+    nextIsect(dda, tr);
+    int iter = 2;
+
+    while (traverse(dda, tr)) {
+        if(iter > gUniform.max_iteration) break;
+        
+        if(center.x < 1 || center.x >= cellCount.x || center.y < 1 || center.y >= cellCount.y) {
+            return false;
+        }
+
+        vec3[4] points = FetchRectPointsSS(center);
+
+        points[0] = vec3(0,0,1);
+        points[1] = vec3(1,0,1);
+        points[2] = vec3(0,1,1);
+        points[3] = vec3(1,1,1);
+
+        vec3 barycentricCoord;
+        bool hit = ray_triangle_intersection_pbrt(
+            ray.rayPosInTS, normalize(ray.rayDirInTS), 0, k_inf, 
+            points[0], points[1], points[2], barycentricCoord);
+        if(hit) {
+            intersection = points[0] + 
+                (points[1] - points[0]) * barycentricCoord.x +
+                (points[2] - points[0]) * barycentricCoord.y;
+            intersection = vec3(vec2(center)/gUniform.view_size, 1);
+            return true; 
+        }
+        hit = ray_triangle_intersection_pbrt(
+                    ray.rayPosInTS, normalize(ray.rayDirInTS), 0, k_inf, 
+                    points[2], points[1], points[3], barycentricCoord);
+        if(hit) {
+            intersection = points[0] + 
+                (points[1] - points[2]) * barycentricCoord.x +
+                (points[3] - points[2]) * barycentricCoord.y;
+            intersection = vec3(vec2(center)/gUniform.view_size, 1);
+            return true; 
+        }
+
+
+        center = dda.mp + ivec2(1);
+        // take one step forward
+        nextIsect(dda, tr);
+
         iter++;
     }
     

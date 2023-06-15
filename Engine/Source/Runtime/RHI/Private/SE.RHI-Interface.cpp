@@ -148,6 +148,18 @@ auto Device::createDeviceLocalBuffer(void* data, uint32_t size,
   }
   std::unique_ptr<RHI::CommandEncoder> commandEncoder =
       createCommandEncoder({nullptr});
+  commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+      (uint32_t)RHI::PipelineStages::HOST_BIT,
+      (uint32_t)RHI::PipelineStages::TRANSFER_BIT,
+      0,
+      // Optional (Memory Barriers)
+      {},
+      {RHI::BufferMemoryBarrierDescriptor{
+          stagingBuffer.get(),
+          (uint32_t)RHI::AccessFlagBits::HOST_WRITE_BIT,
+          (uint32_t)RHI::AccessFlagBits::TRANSFER_READ_BIT,
+      }},
+      {}});
   commandEncoder->copyBufferToBuffer(stagingBuffer.get(), 0, buffer.get(), 0,
                                      descriptor.size);
   std::unique_ptr<Fence> fence = createFence();

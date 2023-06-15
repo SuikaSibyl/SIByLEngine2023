@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.23)
 set(PROJECT_NAME RHI)
 set(CMAKE_CXX_STANDARD 20)
 # Add target library
-file(GLOB_RECURSE SRC_FILES "Private/*.cpp")
+file(GLOB_RECURSE SRC_FILES "Public/*.hpp" "Private/*.cpp")
 add_library(${PROJECT_NAME})
 target_sources(${PROJECT_NAME}
         PRIVATE

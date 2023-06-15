@@ -288,8 +288,8 @@ SE_EXPORT struct SRenderer {
   auto updateRDGData(RDG::Graph* graph) noexcept -> void;
 
   struct {
-    uint32_t width = 512;
-    uint32_t height = 512;
+    uint32_t width = 1280;
+    uint32_t height = 720;
     uint32_t batchIdx = 0;
     uint32_t allBatch = 0;
   } state;

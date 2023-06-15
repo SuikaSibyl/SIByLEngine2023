@@ -150,10 +150,10 @@ namespace SIByL
 				float y = pConst.debugPos.y;
 				float z = pConst.debugPos.z;
 				float w = pConst.debugPos.w;
-				ImGui::DragFloat("Debug x", &x, 1, 0, 512 - 1);
-				ImGui::DragFloat("Debug y", &y, 1, 0, 512 - 1);
-				ImGui::DragFloat("Debug z", &z, 1, 0, 512 - 1);
-				ImGui::DragFloat("Debug w", &w, 1, 0, 512 - 1);
+				ImGui::DragFloat("Debug x", &x, 1, 0, 1280 - 1);
+				ImGui::DragFloat("Debug y", &y, 1, 0, 720 - 1);
+				ImGui::DragFloat("Debug z", &z, 1, 0, 1280 - 1);
+				ImGui::DragFloat("Debug w", &w, 1, 0, 720 - 1);
 				pConst.debugPos.x = x;
 				pConst.debugPos.y = y;
 				pConst.debugPos.z = z;
