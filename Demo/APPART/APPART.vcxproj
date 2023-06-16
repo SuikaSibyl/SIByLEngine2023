@@ -169,9 +169,6 @@
     <ProjectReference Include="..\..\Engine\Source\Runtime\Math\Math.vcxproj">
       <Project>{0eec40c7-807a-4d99-99a6-e3d329aea25d}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\..\Engine\Source\Runtime\Parallelism\Parallelism.vcxproj">
-      <Project>{d44bc11a-922a-43b5-8641-480b82bb1815}</Project>
-    </ProjectReference>
     <ProjectReference Include="..\..\Engine\Source\Runtime\PhysicS\PhysicS.vcxproj">
       <Project>{4db202a0-5047-49be-962c-120efa8a5193}</Project>
     </ProjectReference>

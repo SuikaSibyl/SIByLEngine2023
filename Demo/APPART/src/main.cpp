@@ -26,7 +26,6 @@
 
 //#include "FLIPDemo.hpp"
 
-
 int main() {
   // application root, control all managers
   Application::Root root;

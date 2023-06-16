@@ -25,6 +25,7 @@
     <ClCompile Include="Public\Memory\SE.Core.Memory.cpp" />
     <ClCompile Include="Public\Print\SE.Core.Log.cpp" />
     <ClCompile Include="Public\Resource\SE.Core.Resource.cpp" />
+    <ClCompile Include="Private\SE.Core.Reflect.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\ThirdParty\yaml\yaml.vcxproj">
@@ -44,7 +45,10 @@
     <ClInclude Include="Public\Print\SE.Core.Log.hpp" />
     <ClInclude Include="Public\Resource\SE.Core.Resource.hpp" />
     <ClInclude Include="Public\SE.Core.hpp" />
+    <ClInclude Include="Public\SE.Core.Serialize.hpp" />
+    <ClInclude Include="Public\SE.Core.Reflect.hpp" />
     <ClInclude Include="Public\System\SE.Core.System.hpp" />
+    <ClInclude Include="Public\SE.Core.Utility.hpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
