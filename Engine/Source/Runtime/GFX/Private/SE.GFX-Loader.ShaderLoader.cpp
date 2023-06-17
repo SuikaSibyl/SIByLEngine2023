@@ -1,5 +1,5 @@
 #pragma once
-
+#include <filesystem>
 #include <SE.GFX-Loader.ShaderLoader.hpp>
 #include <Print/SE.Core.Log.hpp>
 #include <Memory/SE.Core.Memory.hpp>
@@ -8,7 +8,216 @@
 #include <functional>
 #include <spirv_cross/spirv_cross.hpp>
 #include <spirv_cross/spirv_glsl.hpp>
+#include <slang.h>
+#include <slang-com-ptr.h>
+#include <SE.Core.Utility.hpp>
+#include <SE.GFX-Main.hpp>
+#include <IO/SE.Core.IO.hpp>
 
+namespace SIByL::GFX::SLANG {
+using Slang::ComPtr;
+
+struct SlangSession {
+  SlangSession(
+      std::string const& filepath,
+      std::vector<std::pair<char const*, char const*>> const& macros = {});
+  auto load(std::vector<std::pair<std::string, RHI::ShaderStages>> const&
+                entrypoints) noexcept -> std::vector<Core::GUID>;
+  std::unordered_map<std::string, ShaderReflection::BindingInfo> bindingInfo;
+ private:
+  slang::SessionDesc sessionDesc = {};
+  slang::TargetDesc targetDesc = {};
+  slang::IModule* slangModule = nullptr;
+  ComPtr<slang::ISession> session;
+};
+
+struct SlangManager {
+  SINGLETON(SlangManager, {
+    SlangResult result =
+        slang::createGlobalSession(slangGlobalSession.writeRef());
+    if (result != 0)
+      Core::LogManager::Error("GFX::SLANG::Global session create failed.");
+  });
+  auto getGlobalSession() noexcept -> slang::IGlobalSession* {
+    return slangGlobalSession.get();
+  }
+  ComPtr<slang::IGlobalSession> slangGlobalSession;
+};
+
+inline void diagnoseIfNeeded(slang::IBlob* diagnosticsBlob) {
+  if (diagnosticsBlob != nullptr) {
+    Core::LogManager::Error(
+        std::string((const char*)diagnosticsBlob->getBufferPointer()));
+  }
+}
+
+SlangSession::SlangSession(
+    std::string const& filepath,
+    std::vector<std::pair<char const*, char const*>> const& macros) {
+  std::filesystem::path path(filepath);
+  SlangManager* manager = Singleton<SlangManager>::instance();
+  slang::IGlobalSession* globalSession = manager->getGlobalSession();
+  // set target to spirv glsl460
+  targetDesc.format = SLANG_SPIRV;
+  targetDesc.profile = globalSession->findProfile("glsl460");
+  sessionDesc.targets = &targetDesc;
+  sessionDesc.targetCount = 1;
+  // set search path
+  std::string parent_path = path.parent_path().string();
+  char const* search_path = parent_path.c_str();
+  sessionDesc.searchPaths = &search_path;
+  sessionDesc.searchPathCount = 1;
+  // push pre-defined macros
+  std::vector<slang::PreprocessorMacroDesc> macro_list;
+  for (auto const& macro : macros)
+    macro_list.emplace_back(
+        slang::PreprocessorMacroDesc{macro.first, macro.second});
+  sessionDesc.preprocessorMacros = macro_list.data();
+  sessionDesc.preprocessorMacroCount = macro_list.size();
+  // create slang session
+  SlangResult result =
+      globalSession->createSession(sessionDesc, session.writeRef());
+  if (result != 0) {
+    Core::LogManager::Error("GFX::SLANG::Session create failed.");
+    return;
+  }
+  // load module
+  ComPtr<slang::IBlob> diagnosticBlob;
+  std::string stem = path.stem().string();
+  slangModule = session->loadModule(stem.c_str(),
+                                    diagnosticBlob.writeRef());
+  diagnoseIfNeeded(diagnosticBlob);
+  if (!slangModule) return;
+
+  slang::ShaderReflection* shaderReflection = slangModule->getLayout();
+
+  unsigned parameterCount = shaderReflection->getParameterCount();
+  for (unsigned pp = 0; pp < parameterCount; pp++) {
+    ShaderReflection::BindingInfo bindinfo = {
+        ShaderReflection::ResourceType::Undefined, 0, 0};
+    slang::VariableLayoutReflection* parameter =
+        shaderReflection->getParameterByIndex(pp);
+    char const* parameterName = parameter->getName();
+    slang::ParameterCategory category = parameter->getCategory();
+    unsigned index = parameter->getBindingIndex();
+    unsigned space = parameter->getBindingSpace();
+    bindinfo.binding = index;
+    bindinfo.set = space;
+    slang::TypeLayoutReflection* typeLayout = parameter->getTypeLayout();
+    slang::TypeReflection::Kind kind = typeLayout->getKind();
+    slang::BindingType type = typeLayout->getDescriptorSetDescriptorRangeType(0, 0);
+    switch (type) {
+      case slang::BindingType::Unknown:
+        bindinfo.type = ShaderReflection::ResourceType::Undefined;
+        break;
+      case slang::BindingType::CombinedTextureSampler:
+        bindinfo.type = ShaderReflection::ResourceType::SampledImages;
+        break;
+      case slang::BindingType::RayTracingAccelerationStructure:
+        bindinfo.type = ShaderReflection::ResourceType::AccelerationStructure;
+        break;
+      case slang::BindingType::ConstantBuffer:
+        bindinfo.type = ShaderReflection::ResourceType::UniformBuffer;
+        break;
+      case slang::BindingType::Sampler:
+      case slang::BindingType::Texture:
+      case slang::BindingType::ParameterBlock:
+      case slang::BindingType::TypedBuffer:
+      case slang::BindingType::RawBuffer:
+      case slang::BindingType::InputRenderTarget:
+      case slang::BindingType::InlineUniformData:
+      case slang::BindingType::VaryingInput:
+      case slang::BindingType::VaryingOutput:
+      case slang::BindingType::ExistentialValue:
+      case slang::BindingType::PushConstant:
+      case slang::BindingType::MutableFlag:
+      case slang::BindingType::MutableTexture:
+      case slang::BindingType::MutableTypedBuffer:
+      case slang::BindingType::MutableRawBuffer:
+      case slang::BindingType::BaseMask:
+      case slang::BindingType::ExtMask:
+      default:
+        Core::LogManager::Error("SLANG :: Binding not valid");
+        break;
+    }
+    bindingInfo[std::string(parameterName)] = bindinfo;
+    float a = 1.f;
+    // ...
+  }
+}
+
+auto SlangSession::load(
+    std::vector<std::pair<std::string, RHI::ShaderStages>> const&
+        entrypoints) noexcept -> std::vector<Core::GUID> {
+  std::vector<Core::GUID> sms(entrypoints.size());
+  // add all entrypoints
+  std::vector<ComPtr<slang::IEntryPoint>> entryPointsPtrs(entrypoints.size());
+  std::vector<slang::IComponentType*> componentTypes;
+  componentTypes.push_back(slangModule);
+  for (size_t i = 0; i < entrypoints.size(); ++i) {
+    slangModule->findEntryPointByName(entrypoints[i].first.c_str(),
+                                      entryPointsPtrs[i].writeRef());
+    componentTypes.push_back(entryPointsPtrs[i]);
+    sms[i] = Core::INVALID_GUID;
+  }
+  // compile the session
+  ComPtr<slang::IBlob> diagnosticBlob;
+  ComPtr<slang::IComponentType> composedProgram;
+  SlangResult result = session->createCompositeComponentType(
+      componentTypes.data(), componentTypes.size(), composedProgram.writeRef(),
+      diagnosticBlob.writeRef());
+  diagnoseIfNeeded(diagnosticBlob);
+  if (result != 0) {
+    Core::LogManager::Error(
+        "GFX::SLANG::createCompositeComponentType() failed.");
+    return sms;
+  }
+  ComPtr<slang::IBlob> spirvCode;
+  for (size_t i = 0; i < entrypoints.size(); ++i) {
+    ComPtr<slang::IBlob> diagnosticsBlob;
+
+    SlangResult result = composedProgram->getEntryPointCode(
+        i, 0, spirvCode.writeRef(), diagnosticsBlob.writeRef());
+    diagnoseIfNeeded(diagnosticsBlob);
+    if (result != 0) {
+      Core::LogManager::Error("GFX::SLANG::getEntryPointCode() failed.");
+      return sms;
+    }
+    Core::Buffer spirvcode;
+    spirvcode.isReference = true;
+    spirvcode.data = (void*)(spirvCode->getBufferPointer());
+    spirvcode.size = spirvCode->getBufferSize();
+    Core::syncWriteFile((std::to_string(i) + ".spirv").c_str(), spirvcode);
+    // create shader module
+    Core::GUID guid =
+        Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+    RHI::ShaderModuleDescriptor desc;
+    desc.code = &spirvcode;
+    desc.name = "main";
+    desc.stage = entrypoints[i].second;
+    GFX::GFXManager::get()->registerShaderModuleResource(guid, desc);
+    sms[i] = guid;
+  }
+  for (size_t i = 0; i < entrypoints.size(); ++i) {
+    GFX::ShaderModule* sm =
+        Core::ResourceManager::get()->getResource<GFX::ShaderModule>(sms[i]);
+    sm->reflection.bindingInfo = bindingInfo;    
+  }
+  return sms;
+}
+}  // namespace SIByL::GFX::SLANG
+
+namespace SIByL::GFX {
+auto ShaderLoader_SLANG::load(
+    std::string const& filepath,
+    std::vector<std::pair<std::string, RHI::ShaderStages>> const&
+        entrypoints,
+    std::vector<std::pair<char const*, char const*>> const& macros) noexcept
+    -> std::vector<Core::GUID> {
+  SLANG::SlangSession session(filepath, macros);
+  return session.load(entrypoints);
+}
+}
 namespace SIByL::GFX {
 inline auto combineResourceFlags(ShaderReflection::ResourceFlags a,
                                  ShaderReflection::ResourceFlags b) noexcept
@@ -155,6 +364,7 @@ auto ShaderReflection::toBindGroupLayoutDescriptor(
 auto ShaderReflection::operator+(ShaderReflection const& reflection) const
     -> ShaderReflection {
   ShaderReflection added = *this;
+  added.bindingInfo = reflection.bindingInfo; // binding info lazy copy
   for (int set = 0; set < reflection.bindings.size(); ++set) {
     if (added.bindings.size() <= set) {
       added.bindings.resize(set + 1);
@@ -165,7 +375,12 @@ auto ShaderReflection::operator+(ShaderReflection const& reflection) const
         if (added.bindings[set].size() <= binding) {
           added.bindings[set].resize(binding + 1);
           added.bindings[set][binding] = reflection.bindings[set][binding];
-        } else {
+        } 
+        else if (reflection.bindings[set][binding].type ==
+                   ResourceType::Undefined) {
+            // SKIP
+        }
+        else {
           assert(added.bindings[set][binding].type ==
                  reflection.bindings[set][binding].type);
           added.bindings[set][binding].stages |=

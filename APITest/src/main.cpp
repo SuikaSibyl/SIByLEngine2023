@@ -3,6 +3,7 @@
 #include <functional>
 #include <SE.Core.Reflect.hpp>
 #include <SE.Core.Serialize.hpp>
+#include <array>
 
 using namespace SIByL;
 
@@ -32,6 +33,10 @@ auto Call(IObject* obj, uintptr_t method, Params&&... params) -> void {
 }
 
 int main() {
+  std::array<int, 3> test {1, 2, 3};
+  auto [a, b, c] = test;
+
+
   A obj;  // Create an instance of A
   IObject* objPtr = &obj;
   objPtr->call("bar");

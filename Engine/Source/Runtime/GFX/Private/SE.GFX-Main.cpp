@@ -1582,7 +1582,6 @@ auto GFXManager::registerShaderModuleResource(
     -> Core::GUID {
   Core::GUID guid =
       Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-  ;
   registerShaderModuleResource(guid, filepath, desc);
   return guid;
 }

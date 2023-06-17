@@ -206,6 +206,25 @@ auto PipelinePass::init(std::vector<GFX::ShaderModule*> shaderModules) noexcept
   pipelineLayout = device->createPipelineLayout(desc);
 }
 
+auto PipelinePass::updateBinding(RenderContext* context,
+                                 std::string const& name,
+                                 RHI::BindingResource const& resource) noexcept
+    -> void {
+  auto iter = reflection.bindingInfo.find(name);
+  if (iter == reflection.bindingInfo.end()) {
+    Core::LogManager::Error("RDG::Binding Name " + name + " not found");
+  }
+  std::vector<RHI::BindGroupEntry> set_entries = {
+      RHI::BindGroupEntry{iter->second.binding, resource}};
+  getBindGroup(context, iter->second.set)->updateBinding(set_entries);
+}
+auto PipelinePass::updateBindings(
+    RenderContext* context,
+    std::vector<std::pair<std::string, RHI::BindingResource>> const&
+        bindings) noexcept -> void {
+  for (auto& pair : bindings) updateBinding(context, pair.first, pair.second);
+}
+
 auto RenderPass::init(GFX::ShaderModule* vertex,
                       GFX::ShaderModule* fragment) noexcept -> void {
   PipelinePass::init(std::vector<GFX::ShaderModule*>{vertex, fragment});

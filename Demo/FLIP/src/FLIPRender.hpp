@@ -8,6 +8,7 @@
 #include <SE.RDG.hpp>
 #include <SE.RHI.hpp>
 #include <SE.SRenderer.hpp>
+#include <SE.GFX-Loader.ShaderLoader.hpp>
 #include <array>
 #include <cmath>
 #include <compare>
@@ -80,16 +81,18 @@ SE_EXPORT struct CellDrawPass : public RDG::FullScreenPass {
 
 SE_EXPORT struct CellQuadDrawPass : public RDG::RenderPass {
   Math::bounds2 tank_rect;
-  Core::GUID vert, frag;
 
   CellQuadDrawPass(Math::bounds2 tank_rect) : tank_rect(tank_rect) {
     Math::vec2 center = (tank_rect.pMin + tank_rect.pMax) / 2;
     Math::vec2 diag = (tank_rect.pMax - tank_rect.pMin) / 2;
     pConst.bounds = Math::vec4{center, diag};
-    vert = GFX::GFXManager::get()->registerShaderModuleResource(
-        "asset/cell_quad_draw_vert.spv", {nullptr, RHI::ShaderStages::VERTEX});
-    frag = GFX::GFXManager::get()->registerShaderModuleResource(
-        "asset/cell_quad_draw_frag.spv", {nullptr, RHI::ShaderStages::FRAGMENT});
+
+   auto [vert, frag] = GFX::ShaderLoader_SLANG::load<2u>(
+        "asset/cell_quad_draw.slang",
+        std::array<std::pair<std::string, RHI::ShaderStages>, 2>{
+            std::make_pair("vertexMain", RHI::ShaderStages::VERTEX),
+            std::make_pair("fragmentMain", RHI::ShaderStages::FRAGMENT),
+        });
     RDG::RenderPass::init(
         Core::ResourceManager::get()->getResource<GFX::ShaderModule>(vert),
         Core::ResourceManager::get()->getResource<GFX::ShaderModule>(frag));
@@ -157,11 +160,15 @@ SE_EXPORT struct CellQuadDrawPass : public RDG::RenderPass {
     GFX::Sampler* default_sampler =
         Core::ResourceManager::get()->getResource<GFX::Sampler>(
             GFX::GFXManager::get()->commonSampler.defaultSampler);
-    set_0_entries.push_back(RHI::BindGroupEntry{
-        1, RHI::BindingResource(cellTex->getSRV(0, 1, 0, 1),
-                                default_sampler->sampler.get())});
-    getBindGroup(context, 0)->updateBinding(set_0_entries);
-
+    //set_0_entries.push_back(RHI::BindGroupEntry{
+    //    1, RHI::BindingResource(cellTex->getSRV(0, 1, 0, 1),
+    //                            default_sampler->sampler.get())});
+    //getBindGroup(context, 0)->updateBinding(set_0_entries);
+    //updateBinding(context, "GlobalUniforms", set_0_entries[0].binding);
+    updateBinding(context, "GlobalUniforms", set_0_entries[0].resource);
+    updateBinding(
+        context, "in_color",
+        {cellTex->getSRV(0, 1, 0, 1), default_sampler->sampler.get()});
 
     RHI::RenderPassEncoder* encoder = beginPass(context, color);
     encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::VERTEX, 0,

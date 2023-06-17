@@ -6,6 +6,14 @@
 #define SLANG_CUDA_RTC 0
 #endif
 
+#if SLANG_CUDA_RTC
+
+#else
+
+#include <cstdint>
+
+#endif
+
 // Define SLANG_CUDA_ENABLE_HALF to use the cuda_fp16 include to add half support. 
 // For this to work NVRTC needs to have the path to the CUDA SDK.
 //
@@ -162,6 +170,8 @@ typedef int2 bool2;
 typedef int3 bool3;
 typedef int4 bool4; 
 
+#if SLANG_CUDA_RTC
+
 typedef signed char int8_t;
 typedef short int16_t;
 typedef int int32_t;
@@ -171,6 +181,8 @@ typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
 typedef unsigned int uint32_t;
 typedef unsigned long long uint64_t;
+
+#endif
 
 typedef long long longlong;
 typedef unsigned long long ulonglong;
@@ -370,6 +382,11 @@ SLANG_MAKE_VECTOR(ulonglong)
 SLANG_MAKE_VECTOR(__half)
 #endif
 
+SLANG_FORCE_INLINE SLANG_CUDA_CALL bool1 make_bool1(bool x) { return bool1{ x }; }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL bool2 make_bool2(bool x, bool y) { return bool2{ x, y }; }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL bool3 make_bool3(bool x, bool y, bool z) { return bool3{ x, y, z }; }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL bool4 make_bool4(bool x, bool y, bool z, bool w) { return bool4{ x, y, z, w }; }
+
 #if SLANG_CUDA_RTC
 #define SLANG_MAKE_VECTOR_FROM_SCALAR(T) \
     SLANG_FORCE_INLINE SLANG_CUDA_CALL T##1 make_##T##1(T x) { return T##1{x}; }\
@@ -396,6 +413,27 @@ SLANG_MAKE_VECTOR_FROM_SCALAR(double)
 SLANG_MAKE_VECTOR_FROM_SCALAR(__half)
 #endif
 
+#define SLANG_CUDA_VECTOR_ATOMIC_BINARY_IMPL(Fn,T,N) \
+    SLANG_FORCE_INLINE SLANG_CUDA_CALL T##N Fn(T##N* address, T##N val) \
+    {\
+        T##N result; \
+        for (int i = 0; i < N; i++) \
+            *_slang_vector_get_element_ptr(&result, i) = Fn(_slang_vector_get_element_ptr(address, i), _slang_vector_get_element(val, i)); \
+        return result; \
+    }\
+
+SLANG_CUDA_VECTOR_ATOMIC_BINARY_IMPL(atomicAdd, float, 2)
+SLANG_CUDA_VECTOR_ATOMIC_BINARY_IMPL(atomicAdd, float, 3)
+SLANG_CUDA_VECTOR_ATOMIC_BINARY_IMPL(atomicAdd, float, 4)
+SLANG_CUDA_VECTOR_ATOMIC_BINARY_IMPL(atomicAdd, int, 2)
+SLANG_CUDA_VECTOR_ATOMIC_BINARY_IMPL(atomicAdd, int, 3)
+SLANG_CUDA_VECTOR_ATOMIC_BINARY_IMPL(atomicAdd, int, 4)
+SLANG_CUDA_VECTOR_ATOMIC_BINARY_IMPL(atomicAdd, uint, 2)
+SLANG_CUDA_VECTOR_ATOMIC_BINARY_IMPL(atomicAdd, uint, 3)
+SLANG_CUDA_VECTOR_ATOMIC_BINARY_IMPL(atomicAdd, uint, 4)
+SLANG_CUDA_VECTOR_ATOMIC_BINARY_IMPL(atomicAdd, ulonglong, 2)
+SLANG_CUDA_VECTOR_ATOMIC_BINARY_IMPL(atomicAdd, ulonglong, 3)
+SLANG_CUDA_VECTOR_ATOMIC_BINARY_IMPL(atomicAdd, ulonglong, 4)
 
 template<typename T, int n>
 struct GetVectorTypeImpl {};
@@ -705,11 +743,43 @@ SLANG_FLOAT_MATRIX_OPS(__half)
 #undef SLANG_MATRIX_INT_NEG_OP
 #undef SLANG_FLOAT_MATRIX_MOD
 
+#define SLANG_SELECT_IMPL(T, N)\
+SLANG_FORCE_INLINE SLANG_CUDA_CALL Vector<T, N> _slang_select(bool##N condition, Vector<T, N> v0, Vector<T, N> v1) \
+{ \
+    Vector<T, N> result; \
+    for (int i = 0; i < N; i++) \
+    { \
+        *_slang_vector_get_element_ptr(&result, i) = _slang_vector_get_element(condition, i) ? _slang_vector_get_element(v0, i) : _slang_vector_get_element(v1, i); \
+    } \
+    return result; \
+}
+#define SLANG_SELECT_T(T)\
+    SLANG_SELECT_IMPL(T, 2)\
+    SLANG_SELECT_IMPL(T, 3)\
+    SLANG_SELECT_IMPL(T, 4)
+
+SLANG_SELECT_T(int)
+SLANG_SELECT_T(uint)
+SLANG_SELECT_T(short)
+SLANG_SELECT_T(ushort)
+SLANG_SELECT_T(char)
+SLANG_SELECT_T(uchar)
+SLANG_SELECT_T(float)
+SLANG_SELECT_T(double)
+
+template<typename T>
+SLANG_FORCE_INLINE SLANG_CUDA_CALL T _slang_select(bool condition, T v0, T v1)
+{
+    return condition ? v0 : v1;
+}
+
 //
 // Half support
 // 
 
 #if SLANG_CUDA_ENABLE_HALF
+SLANG_SELECT_T(__half)
+
 // Convenience functions ushort -> half
 
 SLANG_FORCE_INLINE SLANG_CUDA_CALL __half2 __ushort_as_half(const ushort2& i) { return __halves2half2(__ushort_as_half(i.x), __ushort_as_half(i.y)); }
@@ -908,115 +978,115 @@ SLANG_FORCE_INLINE SLANG_CUDA_CALL void surf3Dwrite_convert<float4>(float4 v, cu
 // ----------------------------- F32 -----------------------------------------
 
 // Unary 
-SLANG_CUDA_CALL float F32_ceil(float f) { return ::ceilf(f); }
-SLANG_CUDA_CALL float F32_floor(float f) { return ::floorf(f); }
-SLANG_CUDA_CALL float F32_round(float f) { return ::roundf(f); }
-SLANG_CUDA_CALL float F32_sin(float f) { return ::sinf(f); }
-SLANG_CUDA_CALL float F32_cos(float f) { return ::cosf(f); }
-SLANG_CUDA_CALL void F32_sincos(float f, float* s, float* c) { ::sincosf(f, s, c); }
-SLANG_CUDA_CALL float F32_tan(float f) { return ::tanf(f); }
-SLANG_CUDA_CALL float F32_asin(float f) { return ::asinf(f); }
-SLANG_CUDA_CALL float F32_acos(float f) { return ::acosf(f); }
-SLANG_CUDA_CALL float F32_atan(float f) { return ::atanf(f); }
-SLANG_CUDA_CALL float F32_sinh(float f) { return ::sinhf(f); }
-SLANG_CUDA_CALL float F32_cosh(float f) { return ::coshf(f); }
-SLANG_CUDA_CALL float F32_tanh(float f) { return ::tanhf(f); }
-SLANG_CUDA_CALL float F32_log2(float f) { return ::log2f(f); }
-SLANG_CUDA_CALL float F32_log(float f) { return ::logf(f); }
-SLANG_CUDA_CALL float F32_log10(float f) { return ::log10f(f); }
-SLANG_CUDA_CALL float F32_exp2(float f) { return ::exp2f(f); }
-SLANG_CUDA_CALL float F32_exp(float f) { return ::expf(f); }
-SLANG_CUDA_CALL float F32_abs(float f) { return ::fabsf(f); }
-SLANG_CUDA_CALL float F32_trunc(float f) { return ::truncf(f); }
-SLANG_CUDA_CALL float F32_sqrt(float f) { return ::sqrtf(f); }
-SLANG_CUDA_CALL float F32_rsqrt(float f) { return ::rsqrtf(f); }
-SLANG_CUDA_CALL float F32_sign(float f) { return ( f == 0.0f) ? f : (( f < 0.0f) ? -1.0f : 1.0f); } 
-SLANG_CUDA_CALL float F32_frac(float f) { return f - F32_floor(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_ceil(float f) { return ::ceilf(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_floor(float f) { return ::floorf(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_round(float f) { return ::roundf(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_sin(float f) { return ::sinf(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_cos(float f) { return ::cosf(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL void F32_sincos(float f, float* s, float* c) { ::sincosf(f, s, c); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_tan(float f) { return ::tanf(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_asin(float f) { return ::asinf(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_acos(float f) { return ::acosf(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_atan(float f) { return ::atanf(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_sinh(float f) { return ::sinhf(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_cosh(float f) { return ::coshf(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_tanh(float f) { return ::tanhf(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_log2(float f) { return ::log2f(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_log(float f) { return ::logf(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_log10(float f) { return ::log10f(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_exp2(float f) { return ::exp2f(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_exp(float f) { return ::expf(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_abs(float f) { return ::fabsf(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_trunc(float f) { return ::truncf(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_sqrt(float f) { return ::sqrtf(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_rsqrt(float f) { return ::rsqrtf(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_sign(float f) { return ( f == 0.0f) ? f : (( f < 0.0f) ? -1.0f : 1.0f); } 
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_frac(float f) { return f - F32_floor(f); }
 
-SLANG_CUDA_CALL bool F32_isnan(float f) { return isnan(f); }
-SLANG_CUDA_CALL bool F32_isfinite(float f) { return isfinite(f); }
-SLANG_CUDA_CALL bool F32_isinf(float f) { return isinf(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL bool F32_isnan(float f) { return isnan(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL bool F32_isfinite(float f) { return isfinite(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL bool F32_isinf(float f) { return isinf(f); }
 
 // Binary
-SLANG_CUDA_CALL float F32_min(float a, float b) { return ::fminf(a, b); }
-SLANG_CUDA_CALL float F32_max(float a, float b) { return ::fmaxf(a, b); }
-SLANG_CUDA_CALL float F32_pow(float a, float b) { return ::powf(a, b); }
-SLANG_CUDA_CALL float F32_fmod(float a, float b) { return ::fmodf(a, b); }
-SLANG_CUDA_CALL float F32_remainder(float a, float b) { return ::remainderf(a, b); }
-SLANG_CUDA_CALL float F32_atan2(float a, float b) { return float(::atan2(a, b)); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_min(float a, float b) { return ::fminf(a, b); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_max(float a, float b) { return ::fmaxf(a, b); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_pow(float a, float b) { return ::powf(a, b); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_fmod(float a, float b) { return ::fmodf(a, b); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_remainder(float a, float b) { return ::remainderf(a, b); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_atan2(float a, float b) { return float(::atan2(a, b)); }
 
-SLANG_CUDA_CALL float F32_frexp(float x, float* e)
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_frexp(float x, float* e)
 {
     int ei;
     float m = ::frexpf(x, &ei);
     *e = ei;
     return m;
 }
-SLANG_CUDA_CALL float F32_modf(float x, float* ip)
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_modf(float x, float* ip)
 {
     return ::modff(x, ip);
 }
 
-SLANG_CUDA_CALL uint32_t F32_asuint(float f) { Union32 u; u.f = f; return u.u; }
-SLANG_CUDA_CALL int32_t F32_asint(float f) { Union32 u; u.f = f; return u.i; }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL uint32_t F32_asuint(float f) { Union32 u; u.f = f; return u.u; }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL int32_t F32_asint(float f) { Union32 u; u.f = f; return u.i; }
 
 // Ternary
-SLANG_CUDA_CALL float F32_fma(float a, float b, float c) { return ::fmaf(a, b, c); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float F32_fma(float a, float b, float c) { return ::fmaf(a, b, c); }
 
 
 // ----------------------------- F64 -----------------------------------------
 
 // Unary 
-SLANG_CUDA_CALL double F64_ceil(double f) { return ::ceil(f); }
-SLANG_CUDA_CALL double F64_floor(double f) { return ::floor(f); }
-SLANG_CUDA_CALL double F64_round(double f) { return ::round(f); }
-SLANG_CUDA_CALL double F64_sin(double f) { return ::sin(f); }
-SLANG_CUDA_CALL double F64_cos(double f) { return ::cos(f); }
-SLANG_CUDA_CALL void F64_sincos(double f, double* s, double* c) { ::sincos(f, s, c); }
-SLANG_CUDA_CALL double F64_tan(double f) { return ::tan(f); }
-SLANG_CUDA_CALL double F64_asin(double f) { return ::asin(f); }
-SLANG_CUDA_CALL double F64_acos(double f) { return ::acos(f); }
-SLANG_CUDA_CALL double F64_atan(double f) { return ::atan(f); }
-SLANG_CUDA_CALL double F64_sinh(double f) { return ::sinh(f); }
-SLANG_CUDA_CALL double F64_cosh(double f) { return ::cosh(f); }
-SLANG_CUDA_CALL double F64_tanh(double f) { return ::tanh(f); }
-SLANG_CUDA_CALL double F64_log2(double f) { return ::log2(f); }
-SLANG_CUDA_CALL double F64_log(double f) { return ::log(f); }
-SLANG_CUDA_CALL double F64_log10(float f) { return ::log10(f); }
-SLANG_CUDA_CALL double F64_exp2(double f) { return ::exp2(f); }
-SLANG_CUDA_CALL double F64_exp(double f) { return ::exp(f); }
-SLANG_CUDA_CALL double F64_abs(double f) { return ::fabs(f); }
-SLANG_CUDA_CALL double F64_trunc(double f) { return ::trunc(f); }
-SLANG_CUDA_CALL double F64_sqrt(double f) { return ::sqrt(f); }
-SLANG_CUDA_CALL double F64_rsqrt(double f) { return ::rsqrt(f); }
-SLANG_CUDA_CALL double F64_sign(double f) { return (f == 0.0) ? f : ((f < 0.0) ? -1.0 : 1.0); }
-SLANG_CUDA_CALL double F64_frac(double f) { return f - F64_floor(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_ceil(double f) { return ::ceil(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_floor(double f) { return ::floor(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_round(double f) { return ::round(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_sin(double f) { return ::sin(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_cos(double f) { return ::cos(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL void F64_sincos(double f, double* s, double* c) { ::sincos(f, s, c); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_tan(double f) { return ::tan(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_asin(double f) { return ::asin(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_acos(double f) { return ::acos(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_atan(double f) { return ::atan(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_sinh(double f) { return ::sinh(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_cosh(double f) { return ::cosh(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_tanh(double f) { return ::tanh(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_log2(double f) { return ::log2(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_log(double f) { return ::log(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_log10(float f) { return ::log10(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_exp2(double f) { return ::exp2(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_exp(double f) { return ::exp(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_abs(double f) { return ::fabs(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_trunc(double f) { return ::trunc(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_sqrt(double f) { return ::sqrt(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_rsqrt(double f) { return ::rsqrt(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_sign(double f) { return (f == 0.0) ? f : ((f < 0.0) ? -1.0 : 1.0); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_frac(double f) { return f - F64_floor(f); }
 
-SLANG_CUDA_CALL bool F64_isnan(double f) { return isnan(f); }
-SLANG_CUDA_CALL bool F64_isfinite(double f) { return isfinite(f); }
-SLANG_CUDA_CALL bool F64_isinf(double f) { return isinf(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL bool F64_isnan(double f) { return isnan(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL bool F64_isfinite(double f) { return isfinite(f); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL bool F64_isinf(double f) { return isinf(f); }
 
 // Binary
-SLANG_CUDA_CALL double F64_min(double a, double b) { return ::fmin(a, b); }
-SLANG_CUDA_CALL double F64_max(double a, double b) { return ::fmax(a, b); }
-SLANG_CUDA_CALL double F64_pow(double a, double b) { return ::pow(a, b); }
-SLANG_CUDA_CALL double F64_fmod(double a, double b) { return ::fmod(a, b); }
-SLANG_CUDA_CALL double F64_remainder(double a, double b) { return ::remainder(a, b); }
-SLANG_CUDA_CALL double F64_atan2(double a, double b) { return ::atan2(a, b); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_min(double a, double b) { return ::fmin(a, b); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_max(double a, double b) { return ::fmax(a, b); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_pow(double a, double b) { return ::pow(a, b); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_fmod(double a, double b) { return ::fmod(a, b); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_remainder(double a, double b) { return ::remainder(a, b); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_atan2(double a, double b) { return ::atan2(a, b); }
 
-SLANG_CUDA_CALL double F64_frexp(double x, double* e)
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_frexp(double x, double* e)
 {
     int ei;
     double m = ::frexp(x, &ei);
     *e = ei;
     return m;
 }
-SLANG_CUDA_CALL double F64_modf(double x, double* ip)
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_modf(double x, double* ip)
 {
     return ::modf(x, ip);
 }
 
-SLANG_CUDA_CALL void F64_asuint(double d, uint32_t* low, uint32_t* hi)
+SLANG_FORCE_INLINE SLANG_CUDA_CALL void F64_asuint(double d, uint32_t* low, uint32_t* hi)
 {
     Union64 u;
     u.d = d;
@@ -1024,7 +1094,7 @@ SLANG_CUDA_CALL void F64_asuint(double d, uint32_t* low, uint32_t* hi)
     *hi = uint32_t(u.u >> 32);
 }
 
-SLANG_CUDA_CALL void F64_asint(double d, int32_t* low, int32_t* hi)
+SLANG_FORCE_INLINE SLANG_CUDA_CALL void F64_asint(double d, int32_t* low, int32_t* hi)
 {
     Union64 u;
     u.d = d;
@@ -1033,20 +1103,20 @@ SLANG_CUDA_CALL void F64_asint(double d, int32_t* low, int32_t* hi)
 }
 
 // Ternary
-SLANG_CUDA_CALL double F64_fma(double a, double b, double c) { return ::fma(a, b, c); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double F64_fma(double a, double b, double c) { return ::fma(a, b, c); }
 
 // ----------------------------- I32 -----------------------------------------
 
 // Unary
-SLANG_CUDA_CALL int32_t I32_abs(int32_t f) { return (f < 0) ? -f : f; }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL int32_t I32_abs(int32_t f) { return (f < 0) ? -f : f; }
 
 // Binary
-SLANG_CUDA_CALL int32_t I32_min(int32_t a, int32_t b) { return a < b ? a : b; }
-SLANG_CUDA_CALL int32_t I32_max(int32_t a, int32_t b) { return a > b ? a : b; }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL int32_t I32_min(int32_t a, int32_t b) { return a < b ? a : b; }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL int32_t I32_max(int32_t a, int32_t b) { return a > b ? a : b; }
 
-SLANG_CUDA_CALL float I32_asfloat(int32_t x) { Union32 u; u.i = x; return u.f; }
-SLANG_CUDA_CALL uint32_t I32_asuint(int32_t x) { return uint32_t(x); }
-SLANG_CUDA_CALL double I32_asdouble(int32_t low, int32_t hi )
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float I32_asfloat(int32_t x) { Union32 u; u.i = x; return u.f; }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL uint32_t I32_asuint(int32_t x) { return uint32_t(x); }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double I32_asdouble(int32_t low, int32_t hi )
 {
     Union64 u;
     u.u = (uint64_t(hi) << 32) | uint32_t(low);
@@ -1056,23 +1126,23 @@ SLANG_CUDA_CALL double I32_asdouble(int32_t low, int32_t hi )
 // ----------------------------- U32 -----------------------------------------
 
 // Unary 
-SLANG_CUDA_CALL uint32_t U32_abs(uint32_t f) { return f; }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL uint32_t U32_abs(uint32_t f) { return f; }
 
 // Binary
-SLANG_CUDA_CALL uint32_t U32_min(uint32_t a, uint32_t b) { return a < b ? a : b; }
-SLANG_CUDA_CALL uint32_t U32_max(uint32_t a, uint32_t b) { return a > b ? a : b; }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL uint32_t U32_min(uint32_t a, uint32_t b) { return a < b ? a : b; }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL uint32_t U32_max(uint32_t a, uint32_t b) { return a > b ? a : b; }
 
-SLANG_CUDA_CALL float U32_asfloat(uint32_t x) { Union32 u; u.u = x; return u.f; }
-SLANG_CUDA_CALL uint32_t U32_asint(int32_t x) { return uint32_t(x); } 
+SLANG_FORCE_INLINE SLANG_CUDA_CALL float U32_asfloat(uint32_t x) { Union32 u; u.u = x; return u.f; }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL uint32_t U32_asint(int32_t x) { return uint32_t(x); }
 
-SLANG_CUDA_CALL double U32_asdouble(uint32_t low, uint32_t hi)
+SLANG_FORCE_INLINE SLANG_CUDA_CALL double U32_asdouble(uint32_t low, uint32_t hi)
 {
     Union64 u;
     u.u = (uint64_t(hi) << 32) | low;
     return u.d;
 }
 
-SLANG_CUDA_CALL uint32_t U32_countbits(uint32_t v)
+SLANG_FORCE_INLINE SLANG_CUDA_CALL uint32_t U32_countbits(uint32_t v)
 {
     // https://docs.nvidia.com/cuda/cuda-math-api/group__CUDA__MATH__INTRINSIC__INT.html#group__CUDA__MATH__INTRINSIC__INT_1g43c9c7d2b9ebf202ff1ef5769989be46
     return __popc(v);
@@ -1081,19 +1151,19 @@ SLANG_CUDA_CALL uint32_t U32_countbits(uint32_t v)
 
 // ----------------------------- I64 -----------------------------------------
 
-SLANG_CUDA_CALL int64_t I64_abs(int64_t f) { return (f < 0) ? -f : f; }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL int64_t I64_abs(int64_t f) { return (f < 0) ? -f : f; }
 
-SLANG_CUDA_CALL int64_t I64_min(int64_t a, int64_t b) { return a < b ? a : b; }
-SLANG_CUDA_CALL int64_t I64_max(int64_t a, int64_t b) { return a > b ? a : b; }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL int64_t I64_min(int64_t a, int64_t b) { return a < b ? a : b; }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL int64_t I64_max(int64_t a, int64_t b) { return a > b ? a : b; }
 
 // ----------------------------- U64 -----------------------------------------
 
-SLANG_CUDA_CALL int64_t U64_abs(uint64_t f) { return f; }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL int64_t U64_abs(uint64_t f) { return f; }
 
-SLANG_CUDA_CALL int64_t U64_min(uint64_t a, uint64_t b) { return a < b ? a : b; }
-SLANG_CUDA_CALL int64_t U64_max(uint64_t a, uint64_t b) { return a > b ? a : b; }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL int64_t U64_min(uint64_t a, uint64_t b) { return a < b ? a : b; }
+SLANG_FORCE_INLINE SLANG_CUDA_CALL int64_t U64_max(uint64_t a, uint64_t b) { return a > b ? a : b; }
 
-SLANG_CUDA_CALL uint32_t U64_countbits(uint64_t v)
+SLANG_FORCE_INLINE SLANG_CUDA_CALL uint32_t U64_countbits(uint64_t v)
 {
     // https://docs.nvidia.com/cuda/cuda-math-api/group__CUDA__MATH__INTRINSIC__INT.html#group__CUDA__MATH__INTRINSIC__INT_1g43c9c7d2b9ebf202ff1ef5769989be46
     return __popcll(v);
@@ -2080,4 +2150,102 @@ __forceinline__ __device__ void *traceOptiXRay(
         r0, r1
     );
 }
+
 #endif
+
+static const int kSlangTorchTensorMaxDim = 5;
+
+// TensorView
+struct TensorView
+{
+    uint8_t* data;
+    uint32_t strides[kSlangTorchTensorMaxDim];
+    uint32_t sizes[kSlangTorchTensorMaxDim];
+    uint32_t dimensionCount;
+
+    template<typename T>
+    __device__ T* data_ptr()
+    {
+        return reinterpret_cast<T*>(data);
+    }
+
+    template<typename T>
+    __device__ T* data_ptr_at(uint32_t index)
+    {
+        uint64_t offset = strides[0] * index;
+        return reinterpret_cast<T*>(data + offset);
+    }
+
+    template<typename T>
+    __device__ T* data_ptr_at(uint2 index)
+    {
+        uint64_t offset = strides[0] * index.x + strides[1] * index.y;
+        return reinterpret_cast<T*>(data + offset);
+    }
+
+    template<typename T>
+    __device__ T* data_ptr_at(uint3 index)
+    {
+        uint64_t offset = strides[0] * index.x + strides[1] * index.y + strides[2] * index.z;
+        return reinterpret_cast<T*>(data + offset);
+    }
+
+    template<typename T>
+    __device__ T* data_ptr_at(uint4 index)
+    {
+        uint64_t offset = strides[0] * index.x + strides[1] * index.y + strides[2] * index.z + strides[3] * index.w;
+        return reinterpret_cast<T*>(data + offset);
+    }
+
+    template<typename T>
+    __device__ T& load(uint32_t x)
+    {
+        return *reinterpret_cast<T*>(data + strides[0] * x);
+    }
+    template<typename T>
+    __device__ T& load(uint32_t x, uint32_t y)
+    {
+        return *reinterpret_cast<T*>(data + strides[0] * x + strides[1] * y);
+    }
+    template<typename T>
+    __device__ T& load(uint32_t x, uint32_t y, uint32_t z)
+    {
+        return *reinterpret_cast<T*>(data + strides[0] * x + strides[1] * y + strides[2] * z);
+    }
+    template<typename T>
+    __device__ T& load(uint32_t x, uint32_t y, uint32_t z, uint32_t w)
+    {
+        return *reinterpret_cast<T*>(data + strides[0] * x + strides[1] * y + strides[2] * z + strides[3] * w);
+    }
+    template<typename T>
+    __device__ T& load(uint32_t i0, uint32_t i1, uint32_t i2, uint32_t i3, uint32_t i4)
+    {
+        return *reinterpret_cast<T*>(data + strides[0] * i0 + strides[1] * i1 + strides[2] * i2 + strides[3] * i3 + strides[4] * i4);
+    }
+    template<typename T>
+    __device__ void store(uint32_t x, T val)
+    {
+        *reinterpret_cast<T*>(data + strides[0] * x) = val;
+    }
+    template<typename T>
+    __device__ void store(uint32_t x, uint32_t y, T val)
+    {
+        *reinterpret_cast<T*>(data + strides[0] * x + strides[1] * y) = val;
+    }
+    template<typename T>
+    __device__ void store(uint32_t x, uint32_t y, uint32_t z, T val)
+    {
+        *reinterpret_cast<T*>(data + strides[0] * x + strides[1] * y + strides[2] * z) = val;
+    }
+    template<typename T>
+    __device__ void store(uint32_t x, uint32_t y, uint32_t z, uint32_t w, T val)
+    {
+        *reinterpret_cast<T*>(
+            data + strides[0] * x + strides[1] * y + strides[2] * z + strides[3] * w) = val;
+    }
+    template<typename T>
+    __device__ void store(uint32_t i0, uint32_t i1, uint32_t i2, uint32_t i3, uint32_t i4, T val)
+    {
+        *reinterpret_cast<T*>(data + strides[0] * i0 + strides[1] * i1 + strides[2] * i2 + strides[3] * i3 + strides[4] * i4) = val;
+    }
+};

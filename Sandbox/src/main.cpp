@@ -203,7 +203,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		editorLayer->getWidget<Editor::ViewportWidget>()->setTarget("Main Viewport", pipeline->getOutput());
 		editorLayer->onDrawGui();
-		imguiLayer->render();
+		imguiLayer->render(multiFrameFlights->getRenderFinishedSeamaphore());
 
 
 		multiFrameFlights->frameEnd();

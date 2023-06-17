@@ -1,0 +1,4 @@
+glslangValidator -H -V -o P:/GitProjects/SIByLEngine2022/Demo/FLIP/asset/test.spv P:/GitProjects/SIByLEngine2022/Demo/FLIP/asset/test.glsl
+glslangValidator -H -V -o test.spv test.vert
+
+./spirv-cross --version 330 --no-es 0.spv --output test.comp

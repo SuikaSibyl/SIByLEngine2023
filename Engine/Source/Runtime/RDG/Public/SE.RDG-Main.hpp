@@ -493,7 +493,13 @@ SE_EXPORT struct PipelinePass : public Pass {
       -> RHI::BindGroup* {
     return bindgroups[size][context->flightIdx].get();
   }
-
+  // Direct update binding with binding location find by string
+  auto updateBinding(RenderContext* context, std::string const& name,
+                     RHI::BindingResource const& resource) noexcept -> void;
+  auto updateBindings(
+      RenderContext* context,
+      std::vector<std::pair<std::string, RHI::BindingResource>> const&
+          bindings) noexcept -> void;
  protected:
   virtual auto init(std::vector<GFX::ShaderModule*> shaderModules) noexcept
       -> void;

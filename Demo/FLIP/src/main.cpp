@@ -34,8 +34,7 @@ struct FLIPApplication : public Application::ApplicationBase {
     // create optional layers: rhi, imgui, editor
     rhiLayer = std::make_unique<RHI::RHILayer>(RHI::RHILayerDescriptor{
         RHI::RHIBackend::Vulkan,
-        RHI::ContextExtensionsFlags(RHI::ContextExtension::RAY_TRACING |
-                                    RHI::ContextExtension::BINDLESS_INDEXING |
+        RHI::ContextExtensionsFlags(RHI::ContextExtension::BINDLESS_INDEXING |
                                     RHI::ContextExtension::ATOMIC_FLOAT),
         mainWindow.get(), true});
     GFX::GFXManager::get()->rhiLayer = rhiLayer.get();
