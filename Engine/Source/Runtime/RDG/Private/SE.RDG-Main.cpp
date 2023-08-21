@@ -73,6 +73,7 @@ auto Graph::addPass(std::unique_ptr<Pass>&& pass,
   pass->identifier = identifier;
   pass->subgraphStack = subgraphStack;
   pass->generateMarker();
+  dag.adj[passID] = {};
   passes[passID++] = std::move(pass);
 }
 
@@ -81,9 +82,9 @@ auto Graph::addSubgraph(std::unique_ptr<Subgraph>&& subgraph,
   uint32_t id = subgraphID++;
   subgraphNameList[id] = identifier;
   subgraph->identifier = identifier;
+  subgraph->onRegister(this);
   subgraphsAlias[identifier] = subgraph->alias();
   subgraphStack.push_back(id);
-  subgraph->onRegister(this);
   subgraphStack.pop_back();
   subgraph->generateMarker();
   subgraphs[identifier] = std::move(subgraph);
@@ -208,8 +209,7 @@ auto PipelinePass::init(std::vector<GFX::ShaderModule*> shaderModules) noexcept
 
 auto PipelinePass::updateBinding(RenderContext* context,
                                  std::string const& name,
-                                 RHI::BindingResource const& resource) noexcept
-    -> void {
+                                 RHI::BindingResource const& resource) noexcept -> void {
   auto iter = reflection.bindingInfo.find(name);
   if (iter == reflection.bindingInfo.end()) {
     Core::LogManager::Error("RDG::Binding Name " + name + " not found");
@@ -225,24 +225,60 @@ auto PipelinePass::updateBindings(
   for (auto& pair : bindings) updateBinding(context, pair.first, pair.second);
 }
 
-auto RenderPass::init(GFX::ShaderModule* vertex,
-                      GFX::ShaderModule* fragment) noexcept -> void {
+auto RenderPass::init(GFX::ShaderModule* vertex, GFX::ShaderModule* fragment,
+    std::optional<RenderPipelineDescCallback> callback) noexcept -> void {
   PipelinePass::init(std::vector<GFX::ShaderModule*>{vertex, fragment});
   RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
+  RHI::RenderPipelineDescriptor pipelineDesc = RHI::RenderPipelineDescriptor{
+      pipelineLayout.get(),
+      RHI::VertexState{// vertex shader
+                       vertex->shaderModule.get(),
+                       "main",
+                       // vertex attribute layout
+                       {}},
+      RHI::PrimitiveState{RHI::PrimitiveTopology::TRIANGLE_LIST,
+                          RHI::IndexFormat::UINT16_t},
+      pReflection.getDepthStencilState(),
+      RHI::MultisampleState{},
+      RHI::FragmentState{// fragment shader
+                         fragment->shaderModule.get(), "main",
+                         pReflection.getColorTargetState()}};
+  if (callback.has_value()) {
+    callback.value()(pipelineDesc);
+  }
   for (int i = 0; i < MULTIFRAME_FLIGHTS_COUNT; ++i) {
-    pipelines[i] = device->createRenderPipeline(RHI::RenderPipelineDescriptor{
-        pipelineLayout.get(),
-        RHI::VertexState{// vertex shader
-                         vertex->shaderModule.get(),
-                         "main",
-                         // vertex attribute layout
-                         {}},
-        RHI::PrimitiveState{RHI::PrimitiveTopology::TRIANGLE_LIST,
-                            RHI::IndexFormat::UINT16_t},
-        pReflection.getDepthStencilState(), RHI::MultisampleState{},
-        RHI::FragmentState{// fragment shader
-                           fragment->shaderModule.get(), "main",
-                           pReflection.getColorTargetState()}});
+    pipelines[i] = device->createRenderPipeline(pipelineDesc);
+  }
+}
+
+auto RenderPass::init(GFX::ShaderModule* vertex,
+    GFX::ShaderModule* geometry,
+    GFX::ShaderModule* fragment,
+    std::optional<RenderPipelineDescCallback> callback) noexcept -> void {
+  PipelinePass::init(
+      std::vector<GFX::ShaderModule*>{vertex, geometry, fragment});
+  RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
+
+  RHI::RenderPipelineDescriptor pipelineDesc = RHI::RenderPipelineDescriptor{
+      pipelineLayout.get(),
+      RHI::VertexState{// vertex shader
+                       vertex->shaderModule.get(),
+                       "main",
+                       // vertex attribute layout
+                       {}},
+      RHI::PrimitiveState{RHI::PrimitiveTopology::TRIANGLE_LIST,
+                          RHI::IndexFormat::UINT16_t},
+      pReflection.getDepthStencilState(),
+      RHI::MultisampleState{},
+      RHI::FragmentState{// fragment shader
+                         fragment->shaderModule.get(), "main",
+                         pReflection.getColorTargetState()}};
+  pipelineDesc.geometry = {geometry->shaderModule.get()};
+  if (callback.has_value()) {
+    callback.value()(pipelineDesc);
+  }
+  for (int i = 0; i < MULTIFRAME_FLIGHTS_COUNT; ++i) {
+    pipelines[i] = device->createRenderPipeline(pipelineDesc);
   }
 }
 
@@ -558,9 +594,6 @@ auto Graph::build() noexcept -> bool {
       } else if (internal.second.type == ResourceInfo::Type::Buffer) {
         size_t rid = internal.second.prev->devirtualizeID;
         internal.second.devirtualizeID = rid;
-        bufferResources[rid] = std::make_unique<BufferResource>();
-        Core::GUID guid =
-            Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
         RHI::BufferDescriptor desc =
             toBufferDescriptor(internal.second.info.buffer);
         bufferResources[rid]->desc.usage |= desc.usage;
@@ -589,9 +622,6 @@ auto Graph::build() noexcept -> bool {
       } else if (internal.second.type == ResourceInfo::Type::Buffer) {
         size_t rid = internal.second.prev->devirtualizeID;
         internal.second.devirtualizeID = rid;
-        bufferResources[rid] = std::make_unique<BufferResource>();
-        Core::GUID guid =
-            Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
         RHI::BufferDescriptor desc =
             toBufferDescriptor(internal.second.info.buffer);
         bufferResources[rid]->desc.usage |= desc.usage;
@@ -645,7 +675,7 @@ auto Graph::build() noexcept -> bool {
             .setLayout(RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL)
             .setAccess(uint32_t(RHI::AccessFlagBits::SHADER_READ_BIT))
             .setSubresource(0, res.second->desc.mipLevelCount, 0,
-                            res.second->desc.size.depthOrArrayLayers);
+                            res.second->desc.arrayLayerCount);
     res.second->cosumeHistories.push_back({size_t(-1), {final_consume}});
 
     if (res.second->texture == nullptr) {
@@ -676,25 +706,403 @@ auto Graph::build() noexcept -> bool {
   generateBufferBarriers();
 }
 
+inline auto AccessIsWrite(RHI::AccessFlagBits bit) noexcept -> bool {
+  switch (bit) {
+    case SIByL::RHI::AccessFlagBits::INDIRECT_COMMAND_READ_BIT:
+    case SIByL::RHI::AccessFlagBits::INDEX_READ_BIT:
+    case SIByL::RHI::AccessFlagBits::VERTEX_ATTRIBUTE_READ_BIT:
+    case SIByL::RHI::AccessFlagBits::UNIFORM_READ_BIT:
+    case SIByL::RHI::AccessFlagBits::INPUT_ATTACHMENT_READ_BIT:
+    case SIByL::RHI::AccessFlagBits::SHADER_READ_BIT:
+    case SIByL::RHI::AccessFlagBits::COLOR_ATTACHMENT_READ_BIT:
+    case SIByL::RHI::AccessFlagBits::DEPTH_STENCIL_ATTACHMENT_READ_BIT:
+    case SIByL::RHI::AccessFlagBits::TRANSFER_READ_BIT:
+    case SIByL::RHI::AccessFlagBits::HOST_READ_BIT:
+    case SIByL::RHI::AccessFlagBits::MEMORY_READ_BIT:
+    case SIByL::RHI::AccessFlagBits::TRANSFORM_FEEDBACK_COUNTER_READ_BIT:
+    case SIByL::RHI::AccessFlagBits::CONDITIONAL_RENDERING_READ_BIT:
+    case SIByL::RHI::AccessFlagBits::COLOR_ATTACHMENT_READ_NONCOHERENT_BIT:
+    case SIByL::RHI::AccessFlagBits::ACCELERATION_STRUCTURE_READ_BIT:
+    case SIByL::RHI::AccessFlagBits::FRAGMENT_DENSITY_MAP_READ_BIT:
+    case SIByL::RHI::AccessFlagBits::FRAGMENT_SHADING_RATE_ATTACHMENT_READ_BIT:
+    case SIByL::RHI::AccessFlagBits::COMMAND_PREPROCESS_READ_BIT:
+    case SIByL::RHI::AccessFlagBits::NONE:
+      return false;
+    case SIByL::RHI::AccessFlagBits::SHADER_WRITE_BIT:
+    case SIByL::RHI::AccessFlagBits::COLOR_ATTACHMENT_WRITE_BIT:
+    case SIByL::RHI::AccessFlagBits::DEPTH_STENCIL_ATTACHMENT_WRITE_BIT:
+    case SIByL::RHI::AccessFlagBits::TRANSFER_WRITE_BIT:
+    case SIByL::RHI::AccessFlagBits::HOST_WRITE_BIT:
+    case SIByL::RHI::AccessFlagBits::MEMORY_WRITE_BIT:
+    case SIByL::RHI::AccessFlagBits::TRANSFORM_FEEDBACK_WRITE_BIT:
+    case SIByL::RHI::AccessFlagBits::TRANSFORM_FEEDBACK_COUNTER_WRITE_BIT:
+    case SIByL::RHI::AccessFlagBits::ACCELERATION_STRUCTURE_WRITE_BIT:
+    case SIByL::RHI::AccessFlagBits::COMMAND_PREPROCESS_WRITE_BIT:
+      return true;
+    default:
+      return false;
+  }
+}
+
+inline auto ExtractWriteAccessFlags(RHI::AccessFlags flag) noexcept
+    -> RHI::AccessFlags {
+  RHI::AccessFlags eflag = 0;
+  for (int i = 0; i < 32; ++i) {
+    const uint32_t bit = flag & (0x1 << i);
+    if (bit != 0 && AccessIsWrite(RHI::AccessFlagBits(bit))) {
+      eflag |= bit;
+    }
+  }
+  return eflag;
+}
+
+inline auto ExtractReadAccessFlags(RHI::AccessFlags flag) noexcept
+    -> RHI::AccessFlags {
+  RHI::AccessFlags eflag = 0;
+  for (int i = 0; i < 32; ++i) {
+    const uint32_t bit = flag & (0x1 << i);
+    if (bit != 0 && !AccessIsWrite(RHI::AccessFlagBits(bit))) {
+      eflag |= bit;
+    }
+  }
+  return eflag;
+}
+
+struct BufferResourceVirtualMachine {
+  struct BufferSubresourceRange {
+    uint64_t range_beg;
+    uint64_t range_end;
+    auto operator==(BufferSubresourceRange const& x) noexcept -> bool {
+      return range_beg == x.range_beg && range_end == x.range_end;
+    }
+  };
+
+  struct BufferSubresourceState {
+    RHI::PipelineStageFlags stageMask;
+    RHI::AccessFlags access;
+    auto operator==(BufferSubresourceState const& x) noexcept -> bool {
+      return stageMask == x.stageMask && access == x.access;
+    }
+  };
+
+  struct BufferSubresourceEntry {
+    BufferSubresourceRange range;
+    BufferSubresourceState state;
+  };
+
+  BufferResourceVirtualMachine(
+      RHI::Buffer* buff,
+      std::vector<BufferResource::ConsumeHistory> const& cosumeHistories)
+      : buffer(buff) {
+
+    // init state
+    write_states.emplace_back(
+        BufferSubresourceEntry{BufferSubresourceRange{0, buffer->size()},
+                               BufferSubresourceState{0, 0}});
+    read_states.emplace_back(
+        BufferSubresourceEntry{BufferSubresourceRange{0, buffer->size()},
+                               BufferSubresourceState{0, 0}});
+    for (auto const& hentry : cosumeHistories) {
+      for (auto const& subentry : hentry.entries) {
+        updateSubresource(
+            BufferSubresourceRange{subentry.offset, subentry.offset + subentry.size},
+            BufferSubresourceState{
+                subentry.stages, subentry.access});
+      }
+    }
+  }
+
+  auto valid(BufferSubresourceRange const& x) noexcept -> bool {
+    return (x.range_beg < x.range_beg);
+  }
+
+  auto intersect(BufferSubresourceRange const& x,
+                 BufferSubresourceRange const& y) noexcept
+      -> std::optional<BufferSubresourceRange> {
+    BufferSubresourceRange isect;
+    isect.range_beg = std::max(x.range_beg, y.range_beg);
+    isect.range_end = std::min(x.range_end, y.range_end);
+    if (valid(isect))
+      return isect;
+    else
+      return std::nullopt;
+  }
+
+  auto diff(BufferSubresourceRange const& x,
+            BufferSubresourceRange const& y) noexcept
+      -> std::vector<BufferSubresourceRange> {
+    std::vector<BufferSubresourceRange> diffs;
+    if (x.range_beg == y.range_beg && x.range_end == y.range_end) {
+    // do nothing
+    } else if (x.range_beg == y.range_beg) {
+    diffs.emplace_back(
+        BufferSubresourceRange{y.range_end, x.range_end});
+    } else if (x.range_end == y.range_end) {
+    diffs.emplace_back(BufferSubresourceRange{x.range_beg, y.range_beg});
+    } else {
+    diffs.emplace_back(BufferSubresourceRange{x.range_beg, y.range_beg});
+    diffs.emplace_back(BufferSubresourceRange{y.range_end, x.range_end});
+    }
+    return diffs;
+  }
+
+  auto toBarrierDescriptor(BufferSubresourceRange const& range,
+                           BufferSubresourceState const& prev,
+                           BufferSubresourceState const& next) {
+    RHI::BarrierDescriptor desc = RHI::BarrierDescriptor {
+      prev.stageMask, next.stageMask, uint32_t(RHI::DependencyType::NONE),
+          std::vector<RHI::MemoryBarrier*>{},
+          std::vector<RHI::BufferMemoryBarrierDescriptor>{
+              RHI::BufferMemoryBarrierDescriptor{
+                  buffer, prev.access, next.access, range.range_beg,
+                  range.range_end - range.range_beg}},
+        std::vector<RHI::TextureMemoryBarrierDescriptor>{}};
+    return desc;
+  }
+
+  auto updateSubresource(BufferSubresourceRange const& range,
+                         BufferSubresourceState const& state) noexcept
+      -> std::vector<RHI::BarrierDescriptor> {
+    std::vector<RHI::BarrierDescriptor> barriers;
+    std::vector<BufferSubresourceEntry> addedEntries;
+
+    // First check write access
+    RHI::AccessFlags write_access = ExtractWriteAccessFlags(state.access);
+    if (write_access != 0) {
+      BufferSubresourceState target_state;
+      target_state.stageMask = state.stageMask;
+      target_state.access = write_access;
+      // Write - Write hazard
+      for (auto iter = write_states.begin();;) {
+        if (iter == write_states.end()) break;
+        if (iter->range == range) {
+          if (iter->state.access != 0)
+            barriers.emplace_back(
+                toBarrierDescriptor(range, iter->state, target_state));
+          break;
+        }
+        std::optional<BufferSubresourceRange> isect =
+            intersect(iter->range, range);
+        if (isect.has_value()) {
+          BufferSubresourceRange const& isect_range = isect.value();
+          if (iter->state.access != 0)
+            barriers.emplace_back(
+                toBarrierDescriptor(isect_range, iter->state, target_state));
+          iter++;
+        } else {
+          iter++;
+        }
+      }
+      // Read - Write hazard
+      for (auto iter = read_states.begin();;) {
+        if (iter == read_states.end()) break;
+        if (iter->range == range) {
+          if (iter->state.access != 0)
+            barriers.emplace_back(
+                toBarrierDescriptor(range, iter->state, target_state));
+          break;
+        }
+        std::optional<BufferSubresourceRange> isect =
+            intersect(iter->range, range);
+        if (isect.has_value()) {
+          BufferSubresourceRange const& isect_range = isect.value();
+          if (iter->state.access != 0)
+            barriers.emplace_back(
+                toBarrierDescriptor(isect_range, iter->state, target_state));
+          iter++;
+        } else {
+          iter++;
+        }
+      }
+    }
+
+    // Then check read access
+    RHI::AccessFlags read_access = ExtractReadAccessFlags(state.access);
+    if (read_access != 0) {
+      BufferSubresourceState target_state;
+      target_state.stageMask = state.stageMask;
+      target_state.access = read_access;
+      // Write - Read hazard
+      for (auto iter = write_states.begin();;) {
+        if (iter == write_states.end()) break;
+        if (iter->range == range) {
+          if (iter->state.access != 0)
+            barriers.emplace_back(
+                toBarrierDescriptor(range, iter->state, target_state));
+          break;
+        }
+        std::optional<BufferSubresourceRange> isect =
+            intersect(iter->range, range);
+        if (isect.has_value()) {
+          BufferSubresourceRange const& isect_range = isect.value();
+          if (iter->state.access != 0)
+            barriers.emplace_back(
+                toBarrierDescriptor(isect_range, iter->state, target_state));
+          iter++;
+        } else {
+          iter++;
+        }
+      }
+    }
+
+    if (write_access != 0) {
+      // Update write state
+      for (auto iter = write_states.begin();;) {
+        if (iter == write_states.end()) break;
+        if (iter->range == range) {
+          iter->state.stageMask = state.stageMask;
+          iter->state.access = write_access;
+          break;
+        }
+        std::optional<BufferSubresourceRange> isect =
+            intersect(iter->range, range);
+        if (isect.has_value()) {
+          // isect ranges
+          BufferSubresourceRange const& isect_range = isect.value();
+          BufferSubresourceState isect_state;
+          isect_state.stageMask = state.stageMask;
+          isect_state.access = write_access;
+          addedEntries.emplace_back(
+              BufferSubresourceEntry{isect_range, isect_state});
+          // diff ranges
+          std::vector<BufferSubresourceRange> diff_ranges =
+              diff(iter->range, isect_range);
+          for (auto const& drange : diff_ranges) {
+            addedEntries.emplace_back(
+                BufferSubresourceEntry{drange, iter->state});
+          }
+          iter = write_states.erase(iter);
+        } else {
+          iter++;
+        }
+      }
+      // Clear read state
+      for (auto iter = read_states.begin();;) {
+        if (iter == read_states.end()) break;
+        if (iter->range == range) {
+          iter->state.stageMask = 0;
+          iter->state.access = 0;
+          break;
+        }
+        std::optional<BufferSubresourceRange> isect =
+            intersect(iter->range, range);
+        if (isect.has_value()) {
+          // isect ranges
+          BufferSubresourceRange const& isect_range = isect.value();
+          BufferSubresourceState isect_state;
+          isect_state.stageMask = 0;
+          isect_state.access = 0;
+          addedEntries.emplace_back(
+              BufferSubresourceEntry{isect_range, isect_state});
+          // diff ranges
+          std::vector<BufferSubresourceRange> diff_ranges =
+              diff(iter->range, isect_range);
+          for (auto const& drange : diff_ranges) {
+            addedEntries.emplace_back(
+                BufferSubresourceEntry{drange, iter->state});
+          }
+          iter = read_states.erase(iter);
+        } else {
+          iter++;
+        }
+      }
+    }
+
+    if (read_access != 0) {
+      // Update read state
+      for (auto iter = read_states.begin();;) {
+        if (iter == read_states.end()) break;
+        if (iter->range == range) {
+          iter->state.stageMask |= state.stageMask;
+          iter->state.access |= read_access;
+          break;
+        }
+        std::optional<BufferSubresourceRange> isect =
+            intersect(iter->range, range);
+        if (isect.has_value()) {
+          // isect ranges
+          BufferSubresourceRange const& isect_range = isect.value();
+          BufferSubresourceState isect_state = iter->state;
+          isect_state.stageMask |= state.stageMask;
+          isect_state.access |= read_access;
+          addedEntries.emplace_back(
+              BufferSubresourceEntry{isect_range, isect_state});
+          // diff ranges
+          std::vector<BufferSubresourceRange> diff_ranges =
+              diff(iter->range, isect_range);
+          for (auto const& drange : diff_ranges) {
+            addedEntries.emplace_back(
+                BufferSubresourceEntry{drange, iter->state});
+          }
+          iter = read_states.erase(iter);
+        } else {
+          iter++;
+        }
+      }
+      //// Clear write state
+      //for (auto iter = write_states.begin();;) {
+      //  if (iter == write_states.end()) break;
+      //  if (iter->range == range) {
+      //    iter->state.stageMask = 0;
+      //    iter->state.access = 0;
+      //    break;
+      //  }
+      //  std::optional<BufferSubresourceRange> isect =
+      //      intersect(iter->range, range);
+      //  if (isect.has_value()) {
+      //    // isect ranges
+      //    BufferSubresourceRange const& isect_range = isect.value();
+      //    BufferSubresourceState isect_state;
+      //    isect_state.stageMask = 0;
+      //    isect_state.access = 0;
+      //    addedEntries.emplace_back(
+      //        BufferSubresourceEntry{isect_range, isect_state});
+      //    // diff ranges
+      //    std::vector<BufferSubresourceRange> diff_ranges =
+      //        diff(iter->range, isect_range);
+      //    for (auto const& drange : diff_ranges) {
+      //      addedEntries.emplace_back(
+      //          BufferSubresourceEntry{drange, iter->state});
+      //    }
+      //    iter = write_states.erase(iter);
+      //  } else {
+      //    iter++;
+      //  }
+      //}
+    }
+
+    //tryMerge();
+    return barriers;
+  }
+
+  RHI::Buffer* buffer;
+  std::vector<BufferSubresourceEntry> write_states;
+  std::vector<BufferSubresourceEntry> read_states;
+};
+
 auto Graph::generateBufferBarriers() noexcept -> void {
   for (auto& res : bufferResources) {
     if (res.second->cosumeHistories.size() == 0) continue;
 
-    auto prev_ch = res.second->cosumeHistories.back().entries[0];
-    auto curr_ch = prev_ch;
-
+    // deal with all max-possbiel notations
+    for (auto& hentry : res.second->cosumeHistories) {
+      for (auto& subentry : hentry.entries) {
+        if (subentry.size == MaxPossible64)
+          subentry.size = res.second->buffer->buffer->size();
+      }
+    }
+    BufferResourceVirtualMachine vm(res.second->buffer->buffer.get(),
+                                    res.second->cosumeHistories);
     for (auto const& hentry : res.second->cosumeHistories) {
-      curr_ch = hentry.entries[0];
-      RHI::BarrierDescriptor desc =
-          RHI::BarrierDescriptor{prev_ch.stages,
-                                 curr_ch.stages,
-                                 uint32_t(RHI::DependencyType::NONE),
-                                 {},
-                                 {},
-                                 {}};
-      desc.bufferMemoryBarriers.push_back(RHI::BufferMemoryBarrierDescriptor{
-          res.second->buffer->buffer.get(), prev_ch.access, curr_ch.access});
-      barriers[hentry.passID].emplace_back(desc);
+      for (auto const& subentry : hentry.entries) {
+        std::vector<RHI::BarrierDescriptor> decses = vm.updateSubresource(
+            BufferResourceVirtualMachine::BufferSubresourceRange{
+                subentry.offset, subentry.offset + subentry.size},
+            BufferResourceVirtualMachine::BufferSubresourceState{
+                subentry.stages, subentry.access});
+        for (auto const& desc : decses)
+          barriers[hentry.passID].emplace_back(desc);
+      }
     }
   }
 }

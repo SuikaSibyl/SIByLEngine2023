@@ -51,51 +51,45 @@ SE_EXPORT struct SRenderer {
 
   /** standard material data */
   struct MaterialData {
-    Math::vec4 albedo_tint;
-    Math::vec2 uv_tiling = {1.f, 1.f};
-    Math::vec2 uv_scaling = {1.f, 1.f};
-    uint32_t mat_type = 0;
-    uint32_t basecolor_opacity_tex;
-    uint32_t normal_bump_tex;
-    uint32_t roughness_metalic_ao_tex;
-    uint32_t padding_0;
-    uint32_t padding_1;
-    uint32_t padding_2;
+    Math::vec3 baseOrDiffuseColor;
+    uint32_t flags;
+    Math::vec3 specularColor;
     uint32_t bsdf_id = 1;
+    Math::vec3 emissiveColor;
+    uint32_t domain = 1;
+
+    float opacity;
+    float roughness;
+    float metalness;
+    float normalTextureScale;
+
+    float occlusionStrength;
+    float alphaCutoff;
+    float transmissionFactor;
+    int baseOrDiffuseTextureIndex;
+
+    int metalRoughOrSpecularTextureIndex;
+    int emissiveTextureIndex;
+    int normalTextureIndex;
+    int occlusionTextureIndex;
+
+    int transmissionTextureIndex;
+    int padding1;
+    int padding2;
+    int padding3;
   };
 
-  /** standard light data */
-
-  struct AreaLightData {
-    uint32_t lightType;
-    Math::vec3 intensity;
-    uint32_t index;  // geometry index (type 0/1) or texture index (type 2)
-    uint32_t sample_dist_size_0;  // sample distribution unit size
-    uint32_t
-        sample_dist_offset_pmf_0;  // sample distribution offset for pmf start
-    uint32_t
-        sample_dist_offset_cdf_0;  // sample distribution offset for cdf start
-    float total_value;
-    uint32_t
-        sample_dist_size_1;  // (another dim of) sample distribution unit size
-    uint32_t sample_dist_offset_pmf_1;  // (another dim of) sample distribution
-                                        // offset for pmf start
-    uint32_t sample_dist_offset_cdf_1;  // (another dim of) sample distribution
-                                        // offset for cdf start
-  };
-
-  struct AnalyticLightData {
-    uint32_t lightType;
-    Math::vec3 intensity;
-    uint32_t index;  // geometry index (type 0/1) or texture index (type 2)
-    Math::vec3 position;
-    float pmf;
-    Math::vec3 direction;
-  };
-
-  union LightData {
-    AreaLightData areaData;
-    AnalyticLightData analyticData;
+  struct PolymorphicLightInfo {
+    Math::vec3 center;
+    uint32_t colorTypeAndFlags;
+    uint32_t databyte0;    // geometry id / direction1(oct-encoded)
+    uint32_t databyte1;    // index id / direction2(oct-encoded)
+    uint32_t scalars;      // 2x float16
+    uint32_t logRadiance;  // uint16
+    uint32_t iesProfileIndex;
+    uint32_t primaryAxis;              // oct-encoded
+    uint32_t cosConeAngleAndSoftness;  // 2x float16
+    uint32_t shadowMapIndex;           // shadow map index
   };
 
   /** mesh / geometry draw call data */
@@ -119,16 +113,13 @@ SE_EXPORT struct SRenderer {
    */
   struct CameraData {
     Math::mat4 viewMat;  ///< Camera view matrix.
-    Math::mat4
-        prevViewMat;     ///< Camera view matrix associated to previous frame.
+    Math::mat4 invViewMat;     ///< Inversed camera view matrix.
     Math::mat4 projMat;  ///< Camera projection matrix.
+    Math::mat4 invProjMat;  ///< Camera projection matrix.
     Math::mat4 viewProjMat;          ///< Camera view-projection matrix.
     Math::mat4 invViewProj;          ///< Camera inverse view-projection matrix.
     Math::mat4 viewProjMatNoJitter;  ///< Camera view-projection matrix. No
                                      ///< jittering is applied!
-    Math::mat4 prevViewProjMatNoJitter;  ///< Camera view-projection matrix
-                                         ///< associated to previous frame. No
-                                         ///< jittering is applied!
     Math::mat4 projMatNoJitter;  ///< Camera projection matrix. No jittering is
                                  ///< applied!
 
@@ -170,6 +161,10 @@ SE_EXPORT struct SRenderer {
     float ISOSpeed;        ///< Camera film speed based on ISO standards.
     float _padding1;
     float _padding2;
+
+    Math::vec2 clipToWindowScale;
+    Math::vec2 clipToWindowBias;
+
   };
 
   /** global uniforms data for render descriptor set */
@@ -207,6 +202,7 @@ SE_EXPORT struct SRenderer {
     std::unique_ptr<RHI::Buffer> position_buffer = nullptr;
     std::unique_ptr<RHI::Buffer> index_buffer = nullptr;
     std::unique_ptr<RHI::Buffer> material_buffer = nullptr;
+    std::unique_ptr<RHI::Buffer> back_material_buffer = nullptr;
     std::unique_ptr<RHI::Buffer> light_buffer = nullptr;
     std::unique_ptr<RHI::Buffer> back_light_buffer = nullptr;
     std::unique_ptr<RHI::Buffer> sample_dist_buffer = nullptr;
@@ -220,7 +216,7 @@ SE_EXPORT struct SRenderer {
     std::vector<uint32_t> index_buffer_cpu = {};     // index buffer cpu
     std::vector<GeometryDrawData> geometry_buffer_cpu = {};  // geometries data
     std::vector<MaterialData> material_buffer_cpu = {};      // material data
-    std::vector<LightData> light_buffer_cpu = {};            // light data
+    std::vector<PolymorphicLightInfo> light_buffer_cpu = {};  // light data
     RHI::TLASDescriptor tlas_desc = {};
     std::shared_ptr<RHI::TLAS> tlas = {};
     std::shared_ptr<RHI::TLAS> back_tlas = {};
@@ -283,7 +279,8 @@ SE_EXPORT struct SRenderer {
   auto packScene(GFX::Scene& scene) noexcept -> void;
   /** update main camera for the scene */
   auto updateCamera(GFX::TransformComponent const& transform,
-                           GFX::CameraComponent const& camera) noexcept -> void;
+                    GFX::CameraComponent const& camera,
+                    Math::ivec2 const& viewport) noexcept -> void;
   /** update render data for the graph */
   auto updateRDGData(RDG::Graph* graph) noexcept -> void;
 

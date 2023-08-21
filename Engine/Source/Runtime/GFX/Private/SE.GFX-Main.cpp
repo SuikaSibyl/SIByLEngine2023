@@ -83,18 +83,22 @@ auto TransformComponent::deserialize(void* compAoS,
 auto to_string(LightComponent::LightType type) noexcept
     -> std::string {
   switch (type) {
-    case SIByL::GFX::LightComponent::LightType::DIFFUSE_AREA_LIGHT:
-      return "Diffuse Area Light";
-    case SIByL::GFX::LightComponent::LightType::CUBEMAP_ENV_MAP:
-      return "Cubemap Env Map";
-    case SIByL::GFX::LightComponent::LightType::SPHERICAL_COORD_ENV_MAP:
-      return "Spherical Coord Env Map";
     case SIByL::GFX::LightComponent::LightType::DIRECTIONAL:
       return "Directional Light";
     case SIByL::GFX::LightComponent::LightType::POINT:
       return "Point Light";
     case SIByL::GFX::LightComponent::LightType::SPOT:
       return "Spot Light";
+    case SIByL::GFX::LightComponent::LightType::TRIANGLE:
+      return "Triangle Area Light";
+    case SIByL::GFX::LightComponent::LightType::RECTANGLE:
+      return "Rectangle Area Light";
+    case SIByL::GFX::LightComponent::LightType::MESH_PRIMITIVE:
+      return "Mesh Primitive Light";
+    case SIByL::GFX::LightComponent::LightType::ENVIRONMENT:
+      return "Environment Map";
+    case SIByL::GFX::LightComponent::LightType::VPL:
+      return "Virtual Point Light";
     default:
       return "Unknown Type";
   }
@@ -592,6 +596,7 @@ auto Texture::serialize() noexcept -> void {
 auto Texture::deserialize(RHI::Device* device, Core::ORID ORID) noexcept
     -> void {
   orid = ORID;
+  if (orid == Core::INVALID_ORID) return;
   std::filesystem::path metadata_path =
       "./bin/" + std::to_string(ORID) + ".meta";
   Core::Buffer metadata;
@@ -614,14 +619,34 @@ auto Texture::deserialize(RHI::Device* device, Core::ORID ORID) noexcept
   }
 }
 
+auto findDimension(RHI::TextureDimension dim, uint32_t arraySize) noexcept
+    -> RHI::TextureViewDimension {
+  RHI::TextureViewDimension dimension;
+  switch (dim) {
+    case SIByL::RHI::TextureDimension::TEX1D:
+      dimension = (arraySize > 1) ? RHI::TextureViewDimension::TEX1D_ARRAY
+                                  : RHI::TextureViewDimension::TEX1D;
+      break;
+    case SIByL::RHI::TextureDimension::TEX2D:
+      dimension = (arraySize > 1) ? RHI::TextureViewDimension::TEX2D_ARRAY
+                                  : RHI::TextureViewDimension::TEX2D;
+      break;
+    case SIByL::RHI::TextureDimension::TEX3D:
+      dimension = (arraySize > 1) ? RHI::TextureViewDimension::TEX3D_ARRAY
+                                  : RHI::TextureViewDimension::TEX3D;
+      break;
+    default:
+      break;
+  }
+  return dimension;
+}
+
 auto Texture::getUAV(uint32_t mipLevel, uint32_t firstArraySlice,
                      uint32_t arraySize) noexcept -> RHI::TextureView* {
   ViewIndex idx = {RHI::TextureViewType::UAV, mipLevel, 0, firstArraySlice,
                    arraySize};
   RHI::TextureViewDimension dimension =
-      (arraySize > 1) ? RHI::TextureViewDimension::TEX2D_ARRAY
-                      : RHI::TextureViewDimension::TEX2D;
-
+      findDimension(texture->dimension(), arraySize);
   auto find = viewPool.find(idx);
   if (find == viewPool.end()) {
     viewPool[idx] = texture->createView(RHI::TextureViewDescriptor{
@@ -637,9 +662,7 @@ auto Texture::getRTV(uint32_t mipLevel, uint32_t firstArraySlice,
   ViewIndex idx = {RHI::TextureViewType::RTV, mipLevel, 0, firstArraySlice,
                    arraySize};
   RHI::TextureViewDimension dimension =
-      (arraySize > 1) ? RHI::TextureViewDimension::TEX2D_ARRAY
-                      : RHI::TextureViewDimension::TEX2D;
-
+      findDimension(texture->dimension(), arraySize);
   auto find = viewPool.find(idx);
   if (find == viewPool.end()) {
     viewPool[idx] = texture->createView(RHI::TextureViewDescriptor{
@@ -655,9 +678,7 @@ auto Texture::getDSV(uint32_t mipLevel, uint32_t firstArraySlice,
   ViewIndex idx = {RHI::TextureViewType::DSV, mipLevel, 0, firstArraySlice,
                    arraySize};
   RHI::TextureViewDimension dimension =
-      (arraySize > 1) ? RHI::TextureViewDimension::TEX2D_ARRAY
-                      : RHI::TextureViewDimension::TEX2D;
-
+      findDimension(texture->dimension(), arraySize);
   auto find = viewPool.find(idx);
   if (find == viewPool.end()) {
     viewPool[idx] = texture->createView(RHI::TextureViewDescriptor{
@@ -674,9 +695,7 @@ auto Texture::getSRV(uint32_t mostDetailedMip, uint32_t mipCount,
   ViewIndex idx = {RHI::TextureViewType::RTV, mostDetailedMip, mipCount,
                    firstArraySlice, arraySize};
   RHI::TextureViewDimension dimension =
-      (arraySize > 1) ? RHI::TextureViewDimension::TEX2D_ARRAY
-                      : RHI::TextureViewDimension::TEX2D;
-
+      findDimension(texture->dimension(), arraySize);
   uint32_t aspect = (uint32_t)RHI::TextureAspect::COLOR_BIT;
   if (RHI::hasDepthBit(texture->format()))
     aspect = (uint32_t)RHI::TextureAspect::DEPTH_BIT;
@@ -781,14 +800,25 @@ auto Material::serialize() noexcept -> void {
           Core::ResourceManager::get()->getResource<GFX::Texture>(entry.guid);
       out << YAML::BeginMap;
       out << YAML::Key << "Name" << YAML::Value << name;
-      out << YAML::Key << "ORID" << YAML::Value << texture->orid;
+      out << YAML::Key << "ORID" << YAML::Value
+          << ((texture != nullptr) ? texture->orid : 0);
       out << YAML::Key << "flags" << YAML::Value << entry.flags;
       out << YAML::EndMap;
     }
   }
   out << YAML::EndSeq;
+  // output data
+  out << YAML::Key << "BaseOrDiffuseColor" << YAML::Value << baseOrDiffuseColor;
+  out << YAML::Key << "SpecularColor" << YAML::Value << specularColor;
+  out << YAML::Key << "EmissiveColor" << YAML::Value << emissiveColor;
+  out << YAML::Key << "Roughness" << YAML::Value << roughness;
+  out << YAML::Key << "Metalness" << YAML::Value << metalness;
+  out << YAML::Key << "Eta" << YAML::Value << eta;
   // output emissive
   out << YAML::Key << "Emissive" << YAML::Value << isEmissive;
+  // output emissive
+  out << YAML::Key << "AlphaState" << YAML::Value << uint32_t(alphaState);
+  out << YAML::Key << "AlphaThreshold" << YAML::Value << alphaThreshold;
   // output tail
   out << YAML::Key << "End" << YAML::Value << "TRUE";
   out << YAML::EndMap;
@@ -839,6 +869,7 @@ auto Material::loadPath() noexcept -> void {
   for (auto node : texture_nodes) {
     std::string tex_name = node["Name"].as<std::string>();
     Core::ORID orid = node["ORID"].as<Core::ORID>();
+    if (orid == 0) continue;
     uint32_t flags = node["flags"].as<uint32_t>();
     if (flags & uint32_t(TexFlag::VideoClip)) {
       textures[tex_name] = {
@@ -852,6 +883,36 @@ auto Material::loadPath() noexcept -> void {
     }
   }
   isEmissive = data["Emissive"].as<bool>();
+  if (data["AlphaThreshold"]) {
+    alphaThreshold = data["AlphaThreshold"].as<float>();
+  }
+  else {
+    alphaThreshold = 1.f;
+  }
+  if (data["AlphaState"]) {
+    alphaState = AlphaState(data["AlphaState"].as<uint32_t>());
+  } else {
+    alphaState = AlphaState::Opaque;
+  }
+
+  if (data["BaseOrDiffuseColor"]) {
+    baseOrDiffuseColor = data["BaseOrDiffuseColor"].as<Math::vec3>();
+  }
+  if (data["SpecularColor"]) {
+    specularColor = data["SpecularColor"].as<Math::vec3>();
+  }
+  if (data["Eta"]) {
+    eta = data["Eta"].as<float>();
+  }
+  if (data["EmissiveColor"]) {
+    emissiveColor = data["EmissiveColor"].as<Math::vec3>();
+  }
+  if (data["Roughness"]) {
+    roughness = data["Roughness"].as<float>();
+  }
+  if (data["Metalness"]) {
+    metalness = data["Metalness"].as<float>();
+  }
 }
 
 #pragma endregion
@@ -966,6 +1027,7 @@ auto MeshRenderer::serialize(void* pemitter, Core::EntityHandle const& handle)
     emitter << YAML::Key << "MeshRendererComponent";
     emitter << YAML::Value << YAML::BeginSeq;
     for (auto& material : renderer->materials) {
+      if (material == nullptr) continue;
       emitter << YAML::BeginMap;
       emitter << YAML::Key << "ORID" << YAML::Value << material->ORID;
       emitter << YAML::EndMap;
@@ -1010,8 +1072,15 @@ auto LightComponent::serialize(void* pemitter, Core::EntityHandle const& handle)
     if (lightComponent->texture) {
       emitter << YAML::Key << "Texture" << YAML::Value
               << lightComponent->texture->orid;
-    }
-    emitter << YAML::Key << "Texture" << YAML::Value << Core::INVALID_ORID;
+    } else
+      emitter << YAML::Key << "Texture" << YAML::Value << Core::INVALID_ORID;
+
+    emitter << YAML::Key << "Pack0" << YAML::Value
+            << lightComponent->packed_data_0;
+    emitter << YAML::Key << "Pack1" << YAML::Value
+            << lightComponent->packed_data_1;
+
+
     emitter << YAML::EndMap;
   }
 }
@@ -1033,6 +1102,14 @@ auto LightComponent::deserialize(void* compAoS,
           Core::ResourceManager::get()->getResource<GFX::Texture>(guid);
     } else {
       lightComponent->texture = nullptr;
+    }
+    if (lightComponentAoS["Pack0"]) {
+      lightComponent->packed_data_0 =
+          lightComponentAoS["Pack0"].as<Math::vec4>();
+    }
+    if (lightComponentAoS["Pack1"]) {
+      lightComponent->packed_data_1 =
+          lightComponentAoS["Pack1"].as<Math::vec4>();
     }
   }
 }
@@ -1139,6 +1216,7 @@ auto GFXManager::registerTextureResource(
   textureResource.texture =
       rhiLayer->getDevice()->createTexture(RHI::TextureDescriptor{
           {(uint32_t)image->width, (uint32_t)image->height, 1},
+          1,
           1,
           1,
           RHI::TextureDimension::TEX2D,
@@ -1346,6 +1424,7 @@ auto GFXManager::registerTextureResourceCubemap(
           {(uint32_t)images[0]->width, (uint32_t)images[0]->height, 6},
           1,
           1,
+          1,
           RHI::TextureDimension::TEX2D,
           RHI::TextureFormat::RGBA8_UNORM,
           (uint32_t)RHI::TextureUsage::COPY_DST |
@@ -1445,7 +1524,7 @@ auto GFXManager::registerTextureResource(
       {RHI::TextureMemoryBarrierDescriptor{
           textureResource.texture.get(),
           RHI::ImageSubresourceRange{aspectMask, 0, desc.mipLevelCount, 0,
-                                     uint32_t(desc.size.depthOrArrayLayers)},
+                                     uint32_t(desc.arrayLayerCount)},
           (uint32_t)RHI::AccessFlagBits::NONE, targetAccessFlags,
           RHI::TextureLayout::UNDEFINED, targetLayout}}});
   rhiLayer->getDevice()->getGraphicsQueue()->submit(
@@ -1460,17 +1539,17 @@ auto GFXManager::registerTextureResource(
               RHI::TextureFlags::CUBE_COMPATIBLE))  // if host visible we do not
                                                     // create view
     if (desc.size.depthOrArrayLayers != 1) {
-      textureResource.viewArrays.resize(6);
-      for (int i = 0; i < desc.size.depthOrArrayLayers; ++i) {
-        viewDesc.baseArrayLayer = i;
-        textureResource.viewArrays[i] =
-            textureResource.texture->createView(viewDesc);
-      }
-      viewDesc.dimension = RHI::TextureViewDimension::TEX2D_ARRAY;
-      viewDesc.baseArrayLayer = 0;
-      viewDesc.arrayLayerCount = desc.size.depthOrArrayLayers;
-      textureResource.originalView =
-          textureResource.texture->createView(viewDesc);
+      //textureResource.viewArrays.resize(6);
+      //for (int i = 0; i < desc.size.depthOrArrayLayers; ++i) {
+      //  viewDesc.baseArrayLayer = i;
+      //  textureResource.viewArrays[i] =
+      //      textureResource.texture->createView(viewDesc);
+      //}
+      //viewDesc.dimension = RHI::TextureViewDimension::TEX2D_ARRAY;
+      //viewDesc.baseArrayLayer = 0;
+      //viewDesc.arrayLayerCount = desc.size.depthOrArrayLayers;
+      //textureResource.originalView =
+      //    textureResource.texture->createView(viewDesc);
     } else
       textureResource.originalView =
           textureResource.texture->createView(viewDesc);
@@ -1588,6 +1667,7 @@ auto GFXManager::registerShaderModuleResource(
 
 auto GFXManager::requestOfflineTextureResource(Core::ORID orid) noexcept
     -> Core::GUID {
+  if (orid == Core::INVALID_ORID) return Core::INVALID_GUID;
   Core::GUID guid = Core::ResourceManager::get()->database.findResource(orid);
   // if not loaded
   if (guid == Core::INVALID_GUID) {
@@ -1699,6 +1779,8 @@ auto GFXManager::registerDefualtSamplers() noexcept -> void {
                               RHI::AddressMode::REPEAT,
                               RHI::AddressMode::REPEAT,
                               RHI::AddressMode::REPEAT,
+                              RHI::FilterMode::LINEAR,
+                              RHI::FilterMode::LINEAR
                           });
   commonSampler.clamp_nearest =
       Core::ResourceManager::get()->requestRuntimeGUID<GFX::Sampler>();

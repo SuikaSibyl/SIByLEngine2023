@@ -20,72 +20,25 @@ namespace SIByL::SRP
 		};
 
 		UDPTPass() {
-			udpt_rgen = GFX::GFXManager::get()->registerShaderModuleResource("../Engine/Binaries/Runtime/spirv/SRenderer/raytracer/udpt/udpt_rgen.spv", { nullptr, RHI::ShaderStages::RAYGEN });
+			auto [rgen] = GFX::ShaderLoader_SLANG::load<1u>(
+				"../Engine/Shaders/SRenderer/raytracer/"
+				"udpt.slang",
+				std::array<
+					std::pair<std::string, RHI::ShaderStages>, 1>{
+					std::make_pair("UDPTRgen",
+									RHI::ShaderStages::RAYGEN),
+				});
 
-			GFX::SBTsDescriptor sbt = RTCommon::get()->getSBTDescriptor();
-			sbt.rgenSBT = GFX::SBTsDescriptor::RayGenerationSBT{ { Core::ResourceManager::get()->getResource<GFX::ShaderModule>(udpt_rgen) } };
+            GFX::SBTsDescriptor sbt = RTCommon::get()->getSBTDescriptor();
+            sbt.rgenSBT = GFX::SBTsDescriptor::RayGenerationSBT{
+                {Core::ResourceManager::get()
+                        ->getResource<GFX::ShaderModule>(rgen)}};
 
 			RayTracingPass::init(sbt, 3);
 		}
 
 		virtual auto reflect() noexcept -> RDG::PassReflection override {
 			RDG::PassReflection reflector;
-			
-			reflector.addInput("DI")
-				.isTexture()
-				.withUsages((uint32_t)RHI::TextureUsage::TEXTURE_BINDING)
-				.consume(RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::TextureBinding }
-					.setSubresource(0, 1, 0, 1)
-					.addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT));
-
-			reflector.addInput("BaseColor")
-				.isTexture()
-				.withUsages((uint32_t)RHI::TextureUsage::TEXTURE_BINDING)
-				.consume(RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::TextureBinding }
-					.setSubresource(0, 1, 0, 1)
-					.addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT));
-			
-			reflector.addInput("HiZ")
-				.isTexture()
-				.withUsages((uint32_t)RHI::TextureUsage::TEXTURE_BINDING)
-				.consume(RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::TextureBinding }
-					.setSubresource(0, RDG::MaxPossible, 0, 1)
-					.addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT));
-
-			reflector.addInput("NormalWS")
-				.isTexture()
-				.withUsages((uint32_t)RHI::TextureUsage::TEXTURE_BINDING)
-				.consume(RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::TextureBinding }
-					.setSubresource(0, 1, 0, 1)
-					.addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT));
-
-			reflector.addInput("ImportanceMIP")
-				.isTexture()
-				.withUsages((uint32_t)RHI::TextureUsage::TEXTURE_BINDING)
-				.consume(RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::TextureBinding }
-					.setSubresource(0, RDG::MaxPossible, 0, 1)
-					.addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT));
-
-			reflector.addInput("BoundingBoxMIP")
-				.isTexture()
-				.withUsages((uint32_t)RHI::TextureUsage::TEXTURE_BINDING)
-				.consume(RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::TextureBinding }
-					.setSubresource(0, RDG::MaxPossible, 0, 1)
-					.addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT));
-
-			reflector.addInput("BBNCPackMIP")
-				.isTexture()
-				.withUsages((uint32_t)RHI::TextureUsage::TEXTURE_BINDING)
-				.consume(RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::TextureBinding }
-					.setSubresource(0, RDG::MaxPossible, 0, 1)
-					.addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT));
-
-			reflector.addInput("NormalConeMIP")
-				.isTexture()
-				.withUsages((uint32_t)RHI::TextureUsage::TEXTURE_BINDING)
-				.consume(RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::TextureBinding }
-					.setSubresource(0, RDG::MaxPossible, 0, 1)
-					.addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT));
 
 			reflector.addOutput("Color")
 				.isTexture()
@@ -97,6 +50,11 @@ namespace SIByL::SRP
 
 			return reflector;
 		}
+
+		virtual auto renderUI() noexcept -> void override {
+
+		}
+
 
 		virtual auto execute(RDG::RenderContext* context, RDG::RenderData const& renderData) noexcept -> void override {
 

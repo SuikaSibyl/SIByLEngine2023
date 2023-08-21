@@ -1,20 +1,25 @@
 #include "SE.SRenderer-GeometryInspectorPass.hpp"
+#include <Config/SE.Core.Config.hpp>
 
 namespace SIByL {
 GeometryInspectorPass::GeometryInspectorPass() {
-  vert = GFX::GFXManager::get()->registerShaderModuleResource(
-      "../Engine/Binaries/Runtime/spirv/SRenderer/rasterizer/"
-      "mesh_inspector/mesh_inspector_vert.spv",
-      {nullptr, RHI::ShaderStages::VERTEX});
-  frag = GFX::GFXManager::get()->registerShaderModuleResource(
-      "../Engine/Binaries/Runtime/spirv/SRenderer/rasterizer/"
-      "mesh_inspector/mesh_inspector_frag.spv",
-      {nullptr, RHI::ShaderStages::FRAGMENT});
+  auto [vert, frag] = GFX::ShaderLoader_SLANG::load(
+      "../Engine/Shaders/SRenderer/rasterizer/"
+      "mesh_inspector.slang",
+      std::array<std::pair<std::string, RHI::ShaderStages>, 2>{
+          std::make_pair("vertexMain", RHI::ShaderStages::VERTEX),
+          std::make_pair("fragmentMain", RHI::ShaderStages::FRAGMENT),
+      });
   RDG::RenderPass::init(
       Core::ResourceManager::get()->getResource<GFX::ShaderModule>(vert),
       Core::ResourceManager::get()->getResource<GFX::ShaderModule>(frag));
   geo_vis_buffer =
       GFX::GFXManager::get()->createStructuredUniformBuffer<GeoVisUniform>();
+
+  std::string const& engine_path =
+      Core::RuntimeConfig::get()->string_property("engine_path");
+  matcapGuid = GFX::GFXManager::get()->registerTextureResource(
+      (engine_path + "/Binaries/Runtime/textures/matcap.png").c_str());
 }
 
 auto GeometryInspectorPass::reflect() noexcept -> RDG::PassReflection {
@@ -44,6 +49,29 @@ auto GeometryInspectorPass::reflect() noexcept -> RDG::PassReflection {
 }
 
 auto GeometryInspectorPass::renderUI() noexcept -> void {
+  {  // Select an item type
+    const char* item_names[] = {"BaseColor",
+                                "Metalness",
+                                "Anisotropy",
+                                "Roughness",
+                                "FlatNormal",
+                                "GeometryNormal",
+                                "ShadingNormal",
+                                "NormalMap",
+                                "Opacity",
+                                "Emission",
+                                "SpecularF0",
+                                "VertexColor",
+                                "Matcap",
+                                "MatcapSurface",
+                                "VertexNormal",
+                                "UVChecker"};
+    int debug_mode = int(geo_vis.showEnum);
+    ImGui::Combo("Mode", &debug_mode, item_names, IM_ARRAYSIZE(item_names),
+                 IM_ARRAYSIZE(item_names));
+    geo_vis.showEnum = ShowEnum(debug_mode);
+  }
+
   // wireframe
   bool use_wireframe = geo_vis.use_wireframe == 1;
   ImGui::Checkbox("Use Wireframe", &use_wireframe);
@@ -71,18 +99,31 @@ auto GeometryInspectorPass::execute(
           false, 0, RHI::LoadOp::LOAD, RHI::StoreOp::DONT_CARE, false},
   };
 
-  RHI::RenderPassEncoder* encoder = beginPass(context, color);
-
   std::vector<RHI::BindGroupEntry>* set_0_entries =
       renderData.getBindGroupEntries("CommonScene");
 
+  //GFX::GFXManager::get()->
+  GFX::Texture* matcap_tex =
+      Core::ResourceManager::get()->getResource<GFX::Texture>(matcapGuid);
+  GFX::Sampler* default_sampler =
+      Core::ResourceManager::get()->getResource<GFX::Sampler>(
+          GFX::GFXManager::get()->commonSampler.defaultSampler);
+
   geo_vis_buffer.setStructure(geo_vis, context->flightIdx);
   std::vector<RHI::BindGroupEntry> set_1_entries =
-      std::vector<RHI::BindGroupEntry>{RHI::BindGroupEntry{
-          0, geo_vis_buffer.getBufferBinding(context->flightIdx)}};
+      std::vector<RHI::BindGroupEntry>{
+          RHI::BindGroupEntry{
+              0, geo_vis_buffer.getBufferBinding(context->flightIdx)},
+          RHI::BindGroupEntry{
+              1, RHI::BindingResource{matcap_tex->getSRV(0, 1, 0, 1),
+                                      default_sampler->sampler.get()}}};
 
   getBindGroup(context, 0)->updateBinding(*set_0_entries);
   getBindGroup(context, 1)->updateBinding(set_1_entries);
+
+
+
+  RHI::RenderPassEncoder* encoder = beginPass(context, color);
 
   renderData.getDelegate("IssueAllDrawcalls")(
       prepareDelegateData(context, renderData));

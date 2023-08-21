@@ -207,6 +207,8 @@ SE_EXPORT struct GameObjectInspector : public CustomInspector {
   struct IComponentOperator {
     virtual auto addComponent(Core::Entity&) -> void = 0;
     virtual auto getComponent(Core::Entity&) -> void* = 0;
+    virtual auto removeComponent(Core::Entity&) -> void = 0;
+    virtual auto initComponent(Core::Entity& entity) -> bool = 0;
   };
   template <class T>
   struct ComponentOperator : IComponentOperator {
@@ -215,6 +217,12 @@ SE_EXPORT struct GameObjectInspector : public CustomInspector {
     }
     virtual auto getComponent(Core::Entity& entity) -> void* override {
       return (void*)entity.getComponent<T>();
+    }
+    virtual auto removeComponent(Core::Entity& entity) -> void override {
+      entity.removeComponent<T>();
+    }
+    virtual auto initComponent(Core::Entity& entity) -> bool override {
+      return initComponentOnRegister<T>(entity, *(T*)getComponent(entity));
     }
   };
   std::vector<std::pair<std::string, std::unique_ptr<IComponentOperator>>>

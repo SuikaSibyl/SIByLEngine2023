@@ -30,10 +30,10 @@ inline auto mod(float a, float b) noexcept -> float {
   return std::fmod(a, b);
 }
 
-SE_EXPORT inline auto log2(float x) noexcept -> float {
-  float const invLog2 = 1.442695040888963387004650940071f;
-  return std::log(x) * invLog2;
-}
+//SE_EXPORT inline auto log2(float x) noexcept -> float {
+//  float const invLog2 = 1.442695040888963387004650940071f;
+//  return std::log(x) * invLog2;
+//}
 
 SE_EXPORT inline auto ctz(uint32_t value) noexcept -> uint32_t {
   unsigned long trailing_zero = 0;

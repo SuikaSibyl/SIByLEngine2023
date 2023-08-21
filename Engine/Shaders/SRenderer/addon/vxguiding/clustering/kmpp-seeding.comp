@@ -1,0 +1,98 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_KHR_shader_subgroup_arithmetic : enable
+#extension GL_KHR_shader_subgroup_shuffle : enable
+#extension GL_KHR_shader_subgroup_ballot : enable
+
+#include "common-glsl.h"
+#include "kmpp-seeding.h"
+#include "../../../include/common/glsl_compatible.hlsli"
+#include "../../../include/common/random.hlsli"
+
+float ComputeDistance(in vec3 a, in vec3 b) {
+    return distance(a, b);
+}
+
+layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
+void main() {
+    const uint tid = gl_GlobalInvocationID.x;
+    const uint sgid = gl_SubgroupInvocationID;
+    const uint sg = gl_SubgroupID;
+    const int element_count = counter[0];
+    RandomSamplerState RNG = InitRandomSampler(uvec2(0, tid), 0);
+    const int rnd_element = clamp(int(GetNextRandom(RNG) * element_count), 0, element_count-1);
+    const uint compactID = compactIndex[rnd_element];
+    const vec3 element = vec3(ReconstructIndex(int(compactID), 64));
+
+    if(tid == 0) {
+        // random choose the first seed
+        const uint compactID = compactIndex[rnd_element];
+        current_center = element;
+        seeds[0] = rnd_element;
+    }
+    if(sg == 0) {
+        // reset the prob tree
+        warp_prob[sgid] = 0;
+    }
+    memoryBarrierShared();
+    barrier();
+
+    float dist = 100000000.f;
+
+    for(int seed_id = 1; seed_id < 32; ++seed_id) {
+        // calculate the distance to the nearest center
+        const vec3 cluster_element = current_center;
+        const float d = ComputeDistance(element, cluster_element);
+        dist = min(dist, d);
+
+        // 
+        float weight = dist * dist;
+        const float warp_weight_sum = subgroupAdd(weight);
+        if(sgid == 0) warp_prob[sg] = warp_weight_sum;
+    
+        memoryBarrierShared();
+        barrier();
+
+        if(sg == 0) weight = warp_prob[sgid];
+
+        // build up the sum of prob tree
+        // store 5 floats per thread instead of 64 floats per thread ...
+        // not sure wheter using shared memory is faster or not
+        float prob0_hierarchy[6];
+        for(int i=0; i<5; ++i) {
+            const float weight_neighbor = subgroupShuffleXor(weight, 1 << i);
+            const float weight_sum = weight + weight_neighbor;
+            prob0_hierarchy[4 - i] = (weight_sum == 0) ? 0.5f : weight / weight_sum;
+            weight = weight_sum;
+        }
+
+        // sample the tree
+        float rnd = GetNextRandom(RNG);
+        int nid = 0;
+        for(int i=0; i<5; ++i) {
+            const float prob0 = prob0_hierarchy[i];
+            if (rnd < prob0) {
+                rnd /= prob0;
+            } else {
+                nid += (16 >> i);
+                rnd = (rnd - prob0) / (1 - prob0);
+            }
+            prob0_hierarchy[i+1] = subgroupShuffle(prob0_hierarchy[i+1], nid);
+        }
+
+        if(tid == 0)
+            selected_cluster = nid;
+
+        memoryBarrierShared();
+        barrier();
+
+        int selected_subid = subgroupBroadcast(nid, 0);
+        if(sg == selected_cluster && sgid == selected_subid) {
+            seeds[seed_id] = rnd_element;
+            current_center = element;
+        }
+
+        memoryBarrierShared();
+        barrier();
+    }
+}

@@ -36,7 +36,13 @@ auto flatten_bfs(DAG const& g, size_t output) noexcept
     reverse.adj.erase(node);
   };
 
-  waitingList.push(output);
+  for (auto& node : g.adj) {
+    if (node.second.size() == 0) {
+      waitingList.push(node.first);
+      break;
+    }
+  }
+  //waitingList.push(output);
   while (!waitingList.empty()) {
     size_t front = waitingList.front();
     waitingList.pop();

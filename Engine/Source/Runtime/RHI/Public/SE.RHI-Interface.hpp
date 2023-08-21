@@ -132,6 +132,7 @@ SE_EXPORT enum struct ContextExtension {
   SHADER_NON_SEMANTIC_INFO = 1 << 5,
   BINDLESS_INDEXING = 1 << 6,
   ATOMIC_FLOAT = 1 << 7,
+  CONSERVATIVE_RASTERIZATION = 1 << 8,
 };
 
 SE_EXPORT enum struct PowerPreference {
@@ -449,6 +450,8 @@ SE_EXPORT struct BufferDescriptor {
   MemoryPropertiesFlags memoryProperties = 0;
   /** If true creates the buffer in an already mapped state. */
   bool mappedAtCreation = false;
+  /** buffer alignment (-1 means dont care) */
+  int minimumAlignment = -1;
 };
 
 // Buffers Interface
@@ -489,7 +492,6 @@ SE_EXPORT enum struct TextureFormat {
   BGRA8_UNORM_SRGB,
   // Packed 32-bit formats
   RGB9E5_UFLOAT,
-  RGB10A2_UNORM,
   RG11B10_UFLOAT,
   // 64-bit formats
   RG32_UINT,
@@ -510,6 +512,8 @@ SE_EXPORT enum struct TextureFormat {
   DEPTH32_FLOAT,
   //
   COMPRESSION,
+  //
+  RGB10A2_UNORM,
   // "depth32float-stencil8" feature
   DEPTH32STENCIL8,
   // Compressed
@@ -645,6 +649,7 @@ SE_EXPORT enum struct TextureFlags {
 SE_EXPORT struct TextureDescriptor {
   Extend3D size;
   uint32_t mipLevelCount = 1;
+  uint32_t arrayLayerCount = 1;
   uint32_t sampleCount = 1;
   TextureDimension dimension = TextureDimension::TEX2D;
   TextureFormat format;
@@ -658,13 +663,19 @@ SE_EXPORT struct TextureDescriptor {
   TextureFlags flags = TextureFlags::NONE;
 };
 
+SE_EXPORT struct Color {
+  double r, g, b, a;
+};
+
 SE_EXPORT enum struct TextureViewDimension {
   TEX1D,
+  TEX1D_ARRAY,
   TEX2D,
   TEX2D_ARRAY,
   CUBE,
   CUBE_ARRAY,
   TEX3D,
+  TEX3D_ARRAY,
 };
 
 /** Determine how a texture is used in command. */
@@ -674,6 +685,19 @@ SE_EXPORT enum struct TextureAspect {
   COLOR_BIT = 1 << 0,
   STENCIL_BIT = 1 << 1,
   DEPTH_BIT = 1 << 2,
+};
+
+SE_EXPORT struct ImageSubresourceRange {
+  TextureAspectFlags aspectMask;
+  uint32_t baseMipLevel;
+  uint32_t levelCount;
+  uint32_t baseArrayLayer;
+  uint32_t layerCount;
+};
+
+SE_EXPORT struct TextureClearDescriptor {
+  std::vector<ImageSubresourceRange> subresources;
+  Color clearColor;
 };
 
 /* get aspect from texture format */
@@ -831,12 +855,15 @@ SE_EXPORT enum struct ShaderStages {
   VERTEX = 1 << 0,
   FRAGMENT = 1 << 1,
   COMPUTE = 1 << 2,
-  RAYGEN = 1 << 3,
-  MISS = 1 << 4,
-  CLOSEST_HIT = 1 << 5,
-  INTERSECTION = 1 << 6,
-  ANY_HIT = 1 << 7,
-  CALLABLE = 1 << 8,
+  GEOMETRY = 1 << 3,
+  RAYGEN = 1 << 4,
+  MISS = 1 << 5,
+  CLOSEST_HIT = 1 << 6,
+  INTERSECTION = 1 << 7,
+  ANY_HIT = 1 << 8,
+  CALLABLE = 1 << 9,
+  TASK = 1 << 10,
+  MESH = 1 << 11,
 };
 
 SE_EXPORT enum struct BindingResourceType {
@@ -939,6 +966,8 @@ SE_EXPORT struct BindGroupLayoutEntry {
 
   /* A unique identifier for a resource binding within the BindGroupLayout */
   uint32_t binding;
+  /* Array of elements binded on the binding position */
+  uint32_t array_size = 1;
   /** indicates whether it will be accessible from the associated shader stage
    */
   ShaderStagesFlags visibility;
@@ -976,10 +1005,13 @@ SE_EXPORT struct BufferBinding {
 };
 
 SE_EXPORT struct BindingResource {
+  BindingResource() = default;
   BindingResource(TextureView* view, Sampler* sampler)
       : type(BindingResourceType::SAMPLER),
         textureView(view),
         sampler(sampler) {}
+  BindingResource(Sampler* sampler)
+      : type(BindingResourceType::SAMPLER), sampler(sampler){}
   BindingResource(TextureView* view)
       : type(BindingResourceType::TEXTURE_VIEW), textureView(view) {}
   BindingResource(BufferBinding const& buffer)
@@ -989,11 +1021,15 @@ SE_EXPORT struct BindingResource {
       : type(BindingResourceType::BINDLESS_TEXTURE),
         bindlessTextures(bindlessTextures),
         sampler(sampler) {}
+  BindingResource(std::vector<TextureView*> const& storageTextures)
+      : type(BindingResourceType::TEXTURE_VIEW),
+        storageArray(storageTextures) {}
   BindingResource(TLAS* tlas) : tlas(tlas) {}
   BindingResourceType type;
   Sampler* sampler = nullptr;
   TextureView* textureView = nullptr;
   std::vector<TextureView*> bindlessTextures = {};
+  std::vector<TextureView*> storageArray = {};
   ExternalTexture* externalTexture = nullptr;
   std::optional<BufferBinding> bufferBinding;
   TLAS* tlas = nullptr;
@@ -1190,6 +1226,27 @@ SE_EXPORT struct FragmentState : public ProgrammableStage {
 SE_EXPORT using StencilValue = uint32_t;
 SE_EXPORT using DepthBias = int32_t;
 
+/** Could specify features in rasterization stage.
+* Like: Conservative rasterization. */
+SE_EXPORT struct RasterizeState {
+  // The mode of conservative rasterization.
+  // Read the article from NV for more information and understanding:
+  // @url: https://developer.nvidia.com/content/dont-be-conservative-conservative-rasterization
+  enum struct ConservativeMode {
+    DISABLED,
+    OVERESTIMATE,
+    UNDERESTIMATE,
+  } mode = ConservativeMode::DISABLED;
+  // extraPrimitiveOverestimationSize is the extra size in pixels to increase
+  // the generating primitive during conservative rasterization at each of its
+  // edges in X and Y equally in screen space beyond the base overestimation
+  // specified in
+  // VkPhysicalDeviceConservativeRasterizationPropertiesEXT::primitiveOverestimationSize.
+  // If conservativeRasterizationMode is not
+  // VK_CONSERVATIVE_RASTERIZATION_MODE_OVERESTIMATE_EXT, this value is ignored.
+  float extraPrimitiveOverestimationSize = 0.f;
+};
+
 SE_EXPORT enum struct StencilOperation {
   KEEP,
   ZERO,
@@ -1369,11 +1426,19 @@ SE_EXPORT struct RenderPipeline {
 
 /** Describes a render pipeline by configuring each of the render stages. */
 SE_EXPORT struct RenderPipelineDescriptor : public PipelineDescriptorBase {
-  VertexState vertex;
-  PrimitiveState primitive = {};
-  DepthStencilState depthStencil;
-  MultisampleState multisample = {};
-  FragmentState fragment;
+  // required structures
+  // --------------------------------------------------------------
+  VertexState vertex;                   // vertex shader stage
+  PrimitiveState primitive = {};        // vertex primitive config
+  DepthStencilState depthStencil;       // OM pipeline config
+  MultisampleState multisample = {};    // multisample config
+  FragmentState fragment;               // fragment shader stage
+  // optional structures
+  // --------------------------------------------------------------
+  ProgrammableStage geometry;           // geometry shader stage
+  ProgrammableStage task;               // task shader stage
+  ProgrammableStage mesh;               // mesh shader stage
+  RasterizeState rasterize;             // rasterize pipeline stage
 };
 
 // Pipelines Interface
@@ -1441,6 +1506,11 @@ SE_EXPORT struct CommandEncoder {
   /** Encode a command into the CommandEncoder that fills a sub-region of a
    * Buffer with zeros. */
   virtual auto clearBuffer(Buffer* buffer, size_t offset, size_t size) noexcept
+      -> void = 0;
+  /** Encode a command into the CommandEncoder that fills a sub-region of a
+   * texture with any color. */
+  virtual auto clearTexture(Texture* texture,
+                            TextureClearDescriptor const& desc) noexcept
       -> void = 0;
   /** Encode a command into the CommandEncoder that fills a sub-region of a
    * Buffer with a value. */
@@ -1537,10 +1607,6 @@ SE_EXPORT struct ImageCopyTextureTagged : public ImageCopyTexture {
 SE_EXPORT struct ImageCopyExternalImage {
   Origin2D origin = {};
   bool flipY = false;
-};
-
-SE_EXPORT struct Color {
-  double r, g, b, a;
 };
 
 // Command Encoding Interface
@@ -1652,8 +1718,9 @@ SE_EXPORT struct RenderCommandsMixin {
                            uint32_t firstIndex = 0, int32_t baseVertex = 0,
                            uint32_t firstInstance = 0) noexcept -> void = 0;
   /** Draws primitives using parameters read from a GPUBuffer. */
-  virtual auto drawIndirect(Buffer* indirectBuffer,
-                            uint64_t indirectOffset) noexcept -> void = 0;
+  virtual auto drawIndirect(Buffer* indirectBuffer, uint64_t indirectOffset,
+                            uint32_t drawCount, uint32_t stride) noexcept
+      -> void = 0;
   /** Draws indexed primitives using parameters read from a GPUBuffer. */
   virtual auto drawIndexedIndirect(Buffer* indirectBuffer, uint64_t offset,
                                    uint32_t drawCount, uint32_t stride) noexcept
@@ -2054,17 +2121,11 @@ SE_EXPORT struct BufferMemoryBarrierDescriptor {
   Buffer* buffer;
   AccessFlags srcAccessMask;
   AccessFlags dstAccessMask;
+  uint64_t offset = 0;
+  uint64_t size = uint64_t(-1); // default: the whole buffer
   // only if queue transition is need
   Queue* srcQueue = nullptr;
   Queue* dstQueue = nullptr;
-};
-
-SE_EXPORT struct ImageSubresourceRange {
-  TextureAspectFlags aspectMask;
-  uint32_t baseMipLevel;
-  uint32_t levelCount;
-  uint32_t baseArrayLayer;
-  uint32_t layerCount;
 };
 
 SE_EXPORT struct TextureMemoryBarrierDescriptor {

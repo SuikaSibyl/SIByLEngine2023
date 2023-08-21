@@ -2,7 +2,8 @@
 #extension GL_GOOGLE_include_directive : enable
 
 #include "../include/common_vert.h"
-#include "../include/common_indirect.h"
+#include "../../include/common/glsl_compatible.hlsli"
+#include "../../include/common/indirect_draw.hlsli"
 
 layout(binding = 0, set = 1, scalar) readonly buffer _DrawIndexedIndirectBuffers { DrawIndexedIndirectEX indirect_draws[]; };
 

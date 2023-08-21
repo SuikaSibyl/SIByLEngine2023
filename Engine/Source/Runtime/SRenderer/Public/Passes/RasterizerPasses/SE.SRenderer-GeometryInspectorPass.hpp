@@ -20,7 +20,31 @@ namespace SIByL {
 SE_EXPORT struct GeometryInspectorPass : public RDG::RenderPass {
   GeometryInspectorPass();
 
+  enum struct ShowEnum : uint32_t {
+      BaseColor,
+      Metalness,
+      Anisotropy,
+      Roughness,
+      FlatNormal,
+      GeometryNormal,
+      ShadingNormal,
+      NormalMap,
+      Opacity,
+      Emission,
+      SpecularF0,
+      VertexColor,
+      Matcap,
+      MatcapSurface,
+      VertexNormal,
+      UVChecker,
+  };
+
   struct alignas(64) GeoVisUniform {
+    ShowEnum showEnum = ShowEnum::BaseColor;
+    int uv_checker_resource = -1;
+    int matcap_resource = -1;
+    int padding = 0;
+    // wireframe settings
     Math::vec3 wireframe_color = Math::vec3(1);
     uint32_t use_wireframe = false;
     float wireframe_smoothing = 1.f;
@@ -33,6 +57,7 @@ SE_EXPORT struct GeometryInspectorPass : public RDG::RenderPass {
   virtual auto execute(RDG::RenderContext* context,
                        RDG::RenderData const& renderData) noexcept -> void;
 
-  Core::GUID vert, frag;
+ private:
+  Core::GUID matcapGuid;
 };
 }  // namespace SIByL

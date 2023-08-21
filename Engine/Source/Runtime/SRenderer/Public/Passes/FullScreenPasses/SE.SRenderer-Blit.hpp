@@ -7,11 +7,20 @@
 
 namespace SIByL {
 SE_EXPORT struct BlitPass : public RDG::FullScreenPass {
+  enum struct SourceType {
+      UINT,
+      FLOAT,
+      FLOAT2,
+      FLOAT3,
+      FLOAT4,
+  };
+
   struct Descriptor {
     uint32_t src_mip;
     uint32_t src_array;
     uint32_t dst_mip;
     uint32_t dst_array;
+    SourceType sourceType = SourceType::FLOAT4;
   } desc;
 
   BlitPass(Descriptor const& desc);

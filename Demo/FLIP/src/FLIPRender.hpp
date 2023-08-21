@@ -160,11 +160,7 @@ SE_EXPORT struct CellQuadDrawPass : public RDG::RenderPass {
     GFX::Sampler* default_sampler =
         Core::ResourceManager::get()->getResource<GFX::Sampler>(
             GFX::GFXManager::get()->commonSampler.defaultSampler);
-    //set_0_entries.push_back(RHI::BindGroupEntry{
-    //    1, RHI::BindingResource(cellTex->getSRV(0, 1, 0, 1),
-    //                            default_sampler->sampler.get())});
-    //getBindGroup(context, 0)->updateBinding(set_0_entries);
-    //updateBinding(context, "GlobalUniforms", set_0_entries[0].binding);
+    
     updateBinding(context, "GlobalUniforms", set_0_entries[0].resource);
     updateBinding(
         context, "in_color",

@@ -247,14 +247,14 @@ SE_EXPORT struct Material : public Core::Resource {
     uint32_t flags = 0;
   };
   /** add a const data entry to the template */
-  auto addConstantData(std::string const& name,
-                              RHI::DataFormat format) noexcept -> Material&;
+  auto addConstantData(std::string const& name, RHI::DataFormat format) noexcept
+      -> Material&;
   /** add a texture entry to the template */
-  auto addTexture(std::string const& name,
-                         TextureEntry const& entry) noexcept -> Material&;
+  auto addTexture(std::string const& name, TextureEntry const& entry) noexcept
+      -> Material&;
   /** register from a template */
-  auto registerFromTemplate(
-      MaterialTemplate const& mat_template) noexcept -> void;
+  auto registerFromTemplate(MaterialTemplate const& mat_template) noexcept
+      -> void;
   /** get name */
   virtual auto getName() const noexcept -> char const* override {
     return name.c_str();
@@ -276,8 +276,24 @@ SE_EXPORT struct Material : public Core::Resource {
   std::string name = "New Material";
   /** emission */
   bool isEmissive = false;
+  /** alpha test info */
+  enum struct AlphaState {
+    Opaque,
+    DitherDiscard,
+    AlphaCutoff,
+  } alphaState = AlphaState::Opaque;
+  float alphaThreshold = 1.f;
+  /** Data */
+  Math::vec3 baseOrDiffuseColor = Math::vec3(1.f);
+  Math::vec3 specularColor = Math::vec3(1.f);
+  Math::vec3 emissiveColor = Math::vec3(0.f);
+  float roughness = 1.f;
+  float metalness = 0.f;
+  float eta = 1.2f;
   /** resource path */
   std::string path;
+  /** is dirty */
+  bool isDirty = false;
 };
 
 SE_EXPORT struct TagComponent {
@@ -427,16 +443,27 @@ SE_EXPORT struct LightComponent {
   LightComponent() = default;
   /* light type */
   enum struct LightType {
-    DIFFUSE_AREA_LIGHT,
-    CUBEMAP_ENV_MAP,
-    SPHERICAL_COORD_ENV_MAP,
+    // singular lights
     DIRECTIONAL,
     POINT,
     SPOT,
+    // area lights
+    TRIANGLE,
+    RECTANGLE,
+    MESH_PRIMITIVE,
+    // environment mao
+    ENVIRONMENT,
+    // virtual light
+    VPL,
     MAX_ENUM,
   } type;
   /* light intensity to scale the light */
   Math::vec3 intensity = Math::vec3(1, 1, 1);
+  /* packed data associated with light */
+  Math::vec4 packed_data_0;
+  Math::vec4 packed_data_1;
+  /* */
+  bool isDirty = false;
   /** texture guid */
   GFX::Texture* texture = nullptr;
   /** serialize */
@@ -778,5 +805,16 @@ auto GFXManager::createStructuredArrayMultiStorageBuffer(
   view.buffer = Core::ResourceManager::get()->getResource<GFX::Buffer>(guid);
   view.size = array_size;
   return view;
+}
+}
+
+namespace SIByL::Core {
+SE_EXPORT template <>
+inline auto initComponentOnRegister<GFX::MeshRenderer>(Core::Entity& entity, GFX::MeshRenderer& component) noexcept
+    -> bool {
+  GFX::MeshReference* reference = entity.getComponent<GFX::MeshReference>();
+  if (reference == nullptr) return false;
+  component.materials.resize(reference->mesh->submeshes.size());
+  return true;
 }
 }

@@ -5,8 +5,8 @@ SceneNodes:
     components:
       TagComponent: Camera Object
       Transform:
-        translation: [0.181854084, 4.18125391, -8.01631927]
-        eulerAngles: [-10.4333048, 180.147522, 0]
+        translation: [0.0312532224, 4.0157361, -7.49839067]
+        eulerAngles: [-10.5134792, -179.327789, 0]
         scale: [4.10000086, 1, 1]
       CameraComponent:
         fovy: 60
@@ -21,10 +21,10 @@ SceneNodes:
       TagComponent: DirectionalLight
       Transform:
         translation: [0, 0, 0]
-        eulerAngles: [0, 38.7999992, 0]
-        scale: [0.999843776, 0.99998945, 0.999833882]
+        eulerAngles: [0, -0, 0]
+        scale: [0.999841154, 0.999995828, 0.999841154]
       LightComponent:
-        Type: 3
+        Type: 0
         Intensity: [1, 1, 1]
         Texture: 18446744073709551615
   - uid: 2

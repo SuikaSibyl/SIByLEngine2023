@@ -105,8 +105,49 @@ SlangSession::SlangSession(
     bindinfo.set = space;
     slang::TypeLayoutReflection* typeLayout = parameter->getTypeLayout();
     slang::TypeReflection::Kind kind = typeLayout->getKind();
+    switch (kind) {
+      case slang::TypeReflection::Kind::None:
+        break;
+      case slang::TypeReflection::Kind::Struct:
+        break;
+      case slang::TypeReflection::Kind::Array:
+        break;
+      case slang::TypeReflection::Kind::Matrix:
+        break;
+      case slang::TypeReflection::Kind::Vector:
+        break;
+      case slang::TypeReflection::Kind::Scalar:
+        break;
+      case slang::TypeReflection::Kind::ConstantBuffer:
+        break;
+      case slang::TypeReflection::Kind::Resource:
+        break;
+      case slang::TypeReflection::Kind::SamplerState:
+        break;
+      case slang::TypeReflection::Kind::TextureBuffer:
+        break;
+      case slang::TypeReflection::Kind::ShaderStorageBuffer:
+        break;
+      case slang::TypeReflection::Kind::ParameterBlock:
+        break;
+      case slang::TypeReflection::Kind::GenericTypeParameter:
+        break;
+      case slang::TypeReflection::Kind::Interface:
+        break;
+      case slang::TypeReflection::Kind::OutputStream:
+        break;
+      case slang::TypeReflection::Kind::Specialized:
+        break;
+      case slang::TypeReflection::Kind::Feedback:
+        break;
+      default:
+        break;
+    }
     slang::BindingType type = typeLayout->getDescriptorSetDescriptorRangeType(0, 0);
     switch (type) {
+      case slang::BindingType::PushConstant:
+        bindinfo.type = ShaderReflection::ResourceType::Undefined;
+        break;
       case slang::BindingType::Unknown:
         bindinfo.type = ShaderReflection::ResourceType::Undefined;
         break;
@@ -119,21 +160,28 @@ SlangSession::SlangSession(
       case slang::BindingType::ConstantBuffer:
         bindinfo.type = ShaderReflection::ResourceType::UniformBuffer;
         break;
-      case slang::BindingType::Sampler:
+      case slang::BindingType::RawBuffer:
+      case slang::BindingType::MutableRawBuffer:
+        bindinfo.type = ShaderReflection::ResourceType::StorageBuffer;
+        break;
+      case slang::BindingType::MutableTexture:
+        bindinfo.type = ShaderReflection::ResourceType::StorageImages;
+        break;
       case slang::BindingType::Texture:
+        bindinfo.type = ShaderReflection::ResourceType::ReadonlyImage;
+        break;
+      case slang::BindingType::Sampler:
+        bindinfo.type = ShaderReflection::ResourceType::Sampler;
+        break;
       case slang::BindingType::ParameterBlock:
       case slang::BindingType::TypedBuffer:
-      case slang::BindingType::RawBuffer:
       case slang::BindingType::InputRenderTarget:
       case slang::BindingType::InlineUniformData:
       case slang::BindingType::VaryingInput:
       case slang::BindingType::VaryingOutput:
       case slang::BindingType::ExistentialValue:
-      case slang::BindingType::PushConstant:
       case slang::BindingType::MutableFlag:
-      case slang::BindingType::MutableTexture:
       case slang::BindingType::MutableTypedBuffer:
-      case slang::BindingType::MutableRawBuffer:
       case slang::BindingType::BaseMask:
       case slang::BindingType::ExtMask:
       default:
@@ -155,8 +203,14 @@ auto SlangSession::load(
   std::vector<slang::IComponentType*> componentTypes;
   componentTypes.push_back(slangModule);
   for (size_t i = 0; i < entrypoints.size(); ++i) {
-    slangModule->findEntryPointByName(entrypoints[i].first.c_str(),
-                                      entryPointsPtrs[i].writeRef());
+    SlangInt32 w = slangModule->getDefinedEntryPointCount();
+    SlangResult result = slangModule->findEntryPointByName(
+        entrypoints[i].first.c_str(), entryPointsPtrs[i].writeRef());
+    if (result != 0) {
+      Core::LogManager::Error(
+          "GFX::SLANG::cannot find entrypoint \"" + entrypoints[i].first + "\"");
+      return sms;
+    }
     componentTypes.push_back(entryPointsPtrs[i]);
     sms[i] = Core::INVALID_GUID;
   }
@@ -283,15 +337,18 @@ auto SPIRV_TO_Reflection(Core::Buffer* code, RHI::ShaderStages stage) noexcept
     unsigned set =
         glsl.get_decoration(resource.id, spv::DecorationDescriptorSet);
     unsigned binding = glsl.get_decoration(resource.id, spv::DecorationBinding);
+    spirv_cross::SPIRType type = glsl.get_type(resource.type_id);
+    uint32_t array_dim = type.array.size();
+    uint32_t array_size = array_dim>=1 ? type.array[0]:1;
     ShaderReflection::ResourceFlags flag =
         uint32_t(ShaderReflection::ResourceFlag::None);
     if (glsl.get_decoration(resource.id, spv::DecorationNonReadable))
       flag |= uint32_t(ShaderReflection::ResourceFlag::NotReadable);
     if (glsl.get_decoration(resource.id, spv::DecorationNonWritable))
       flag |= uint32_t(ShaderReflection::ResourceFlag::NotWritable);
-    addResourceEntry(
-        {ShaderReflection::ResourceType::StorageImages, flag, uint32_t(stage)},
-        set, binding);
+    addResourceEntry({ShaderReflection::ResourceType::StorageImages, flag,
+                      uint32_t(stage), array_size},
+                     set, binding);
   }
   // Get all sampled images in the shader.
   for (auto& resource : resources.sampled_images) {
@@ -306,6 +363,39 @@ auto SPIRV_TO_Reflection(Core::Buffer* code, RHI::ShaderStages stage) noexcept
       flag |= uint32_t(ShaderReflection::ResourceFlag::NotWritable);
     addResourceEntry(
         {ShaderReflection::ResourceType::SampledImages, flag, uint32_t(stage)},
+        set, binding);
+  }
+  // Get all separate images in the shader.
+  for (auto& resource : resources.separate_images) {
+    unsigned set =
+        glsl.get_decoration(resource.id, spv::DecorationDescriptorSet);
+    unsigned binding = glsl.get_decoration(resource.id, spv::DecorationBinding);
+    spirv_cross::SPIRType type = glsl.get_type(resource.type_id);
+    uint32_t array_dim = type.array.size();
+    uint32_t array_size = array_dim >= 1 ? type.array[0] : 1;
+    ShaderReflection::ResourceFlags flag =
+        uint32_t(ShaderReflection::ResourceFlag::None);
+    if (glsl.get_decoration(resource.id, spv::DecorationNonReadable))
+      flag |= uint32_t(ShaderReflection::ResourceFlag::NotReadable);
+    if (glsl.get_decoration(resource.id, spv::DecorationNonWritable))
+      flag |= uint32_t(ShaderReflection::ResourceFlag::NotWritable);
+    addResourceEntry({ShaderReflection::ResourceType::ReadonlyImage, flag,
+                      uint32_t(stage), array_size},
+                     set, binding);
+  }
+  // Get all separate images in the shader.
+  for (auto& resource : resources.separate_samplers) {
+    unsigned set =
+        glsl.get_decoration(resource.id, spv::DecorationDescriptorSet);
+    unsigned binding = glsl.get_decoration(resource.id, spv::DecorationBinding);
+    ShaderReflection::ResourceFlags flag =
+        uint32_t(ShaderReflection::ResourceFlag::None);
+    if (glsl.get_decoration(resource.id, spv::DecorationNonReadable))
+      flag |= uint32_t(ShaderReflection::ResourceFlag::NotReadable);
+    if (glsl.get_decoration(resource.id, spv::DecorationNonWritable))
+      flag |= uint32_t(ShaderReflection::ResourceFlag::NotWritable);
+    addResourceEntry(
+        {ShaderReflection::ResourceType::Sampler, flag, uint32_t(stage)},
         set, binding);
   }
   // Get all accleration structures in the shader.
@@ -348,15 +438,27 @@ auto ShaderReflection::toBindGroupLayoutDescriptor(
       descriptor.entries.push_back(RHI::BindGroupLayoutEntry{
           i, bind.stages,
           RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}});
-    else if (bind.type == ResourceType::StorageImages)
-      descriptor.entries.push_back(RHI::BindGroupLayoutEntry{
-          i, bind.stages, RHI::StorageTextureBindingLayout{}});
+    else if (bind.type == ResourceType::StorageImages) {
+      RHI::BindGroupLayoutEntry entry{i, bind.stages,
+                                      RHI::StorageTextureBindingLayout{}};
+      entry.array_size = bind.arraySize;
+      descriptor.entries.emplace_back(entry);
+    }
     else if (bind.type == ResourceType::AccelerationStructure)
       descriptor.entries.push_back(RHI::BindGroupLayoutEntry{
           i, bind.stages, RHI::AccelerationStructureBindingLayout{}});
     else if (bind.type == ResourceType::SampledImages)
       descriptor.entries.push_back(RHI::BindGroupLayoutEntry{
           i, bind.stages, RHI::BindlessTexturesBindingLayout{}});
+    else if (bind.type == ResourceType::ReadonlyImage) {
+      RHI::BindGroupLayoutEntry entry{i, bind.stages,
+                                      RHI::TextureBindingLayout{}};
+      entry.array_size = bind.arraySize;
+      descriptor.entries.emplace_back(entry);
+    }
+    else if (bind.type == ResourceType::Sampler)
+      descriptor.entries.push_back(RHI::BindGroupLayoutEntry{
+          i, bind.stages, RHI::SamplerBindingLayout{}});
   }
   return descriptor;
 }
@@ -364,7 +466,8 @@ auto ShaderReflection::toBindGroupLayoutDescriptor(
 auto ShaderReflection::operator+(ShaderReflection const& reflection) const
     -> ShaderReflection {
   ShaderReflection added = *this;
-  added.bindingInfo = reflection.bindingInfo; // binding info lazy copy
+  added.bindingInfo.insert(reflection.bindingInfo.begin(),
+                           reflection.bindingInfo.end());
   for (int set = 0; set < reflection.bindings.size(); ++set) {
     if (added.bindings.size() <= set) {
       added.bindings.resize(set + 1);
@@ -379,6 +482,9 @@ auto ShaderReflection::operator+(ShaderReflection const& reflection) const
         else if (reflection.bindings[set][binding].type ==
                    ResourceType::Undefined) {
             // SKIP
+        } else if (added.bindings[set][binding].type ==
+                   ResourceType::Undefined) {
+          added.bindings[set][binding] = reflection.bindings[set][binding];
         }
         else {
           assert(added.bindings[set][binding].type ==

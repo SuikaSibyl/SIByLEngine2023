@@ -991,6 +991,8 @@ SE_EXPORT struct RenderPipeline_VK : public RenderPipeline {
     // multisample
     VkPipelineMultisampleStateCreateInfo multisampleState = {};
     VkPipelineRasterizationStateCreateInfo rasterizationState = {};
+    VkPipelineRasterizationConservativeStateCreateInfoEXT
+        conservativeRasterizationState = {};
     VkPipelineDepthStencilStateCreateInfo depthStencilState = {};
     std::vector<VkPipelineColorBlendAttachmentState>
         colorBlendAttachmentStates = {};
@@ -1128,6 +1130,11 @@ SE_EXPORT struct CommandEncoder_VK : public CommandEncoder {
   /** Encode a command into the CommandEncoder that fills a sub-region of a
    * Buffer with zeros. */
   virtual auto clearBuffer(Buffer* buffer, size_t offset, size_t size) noexcept
+      -> void override;
+  /** Encode a command into the CommandEncoder that fills a sub-region of a
+   * texture with any color. */
+  virtual auto clearTexture(Texture* texture,
+                            TextureClearDescriptor const& desc) noexcept
       -> void override;
   /** Encode a command into the CommandEncoder that fills a sub-region of a
    * Buffer with a value. */
@@ -1280,8 +1287,9 @@ SE_EXPORT struct RenderPassEncoder_VK : public RenderPassEncoder {
                            uint32_t firstInstance = 0) noexcept
       -> void override;
   /** Draws primitives using parameters read from a GPUBuffer. */
-  virtual auto drawIndirect(Buffer* indirectBuffer,
-                            uint64_t indirectOffset) noexcept -> void override;
+  virtual auto drawIndirect(Buffer* indirectBuffer, uint64_t indirectOffset,
+                            uint32_t drawCount, uint32_t stride) noexcept
+      -> void override;
   /** Draws indexed primitives using parameters read from a GPUBuffer. */
   virtual auto drawIndexedIndirect(Buffer* indirectBuffer, uint64_t offset,
                                    uint32_t drawCount, uint32_t stride) noexcept
@@ -1456,6 +1464,7 @@ SE_EXPORT struct TLAS_VK : public TLAS {
 SE_EXPORT struct RayTracingExtension_VK : public RayTracingExtension {
   /** device ray tracing properties */
   VkPhysicalDeviceRayTracingPipelinePropertiesKHR vkRayTracingProperties;
+  VkPhysicalDeviceAccelerationStructurePropertiesKHR vASProperties;
 };
 
 SE_EXPORT struct RayTracingPipeline_VK : public RayTracingPipeline {

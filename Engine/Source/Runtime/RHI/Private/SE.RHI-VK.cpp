@@ -371,6 +371,11 @@ auto setupExtensions(Context_VK* context, ContextExtensionsFlags& ext) -> void {
     context->getDeviceExtensions().emplace_back(
         VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME);
   }
+  if (ext &
+      (ContextExtensionsFlags)ContextExtension::CONSERVATIVE_RASTERIZATION) {
+    context->getDeviceExtensions().emplace_back(
+        VK_EXT_CONSERVATIVE_RASTERIZATION_EXTENSION_NAME);
+  }
   if (ext & (ContextExtensionsFlags)ContextExtension::ATOMIC_FLOAT) {
     context->getDeviceExtensions().emplace_back(
         VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME);
@@ -1134,10 +1139,20 @@ auto Device_VK::createBuffer(BufferDescriptor const& desc) noexcept
     allocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                               VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
   }
-  if (vmaCreateBuffer(allocator, &bufferInfo, &allocInfo,
-                      &buffer->getVkBuffer(), &buffer->getVMAAllocation(),
-                      nullptr) != VK_SUCCESS) {
-    Core::LogManager::Log("VULKAN :: failed to create vertex buffer!");
+  if (desc.minimumAlignment == -1) {
+    // do not use alignment
+    if (vmaCreateBuffer(allocator, &bufferInfo, &allocInfo,
+                        &buffer->getVkBuffer(), &buffer->getVMAAllocation(),
+                        nullptr) != VK_SUCCESS) {
+      Core::LogManager::Log("VULKAN :: failed to create a device buffer!");
+    }
+  } else {
+    // use alignment
+    if (vmaCreateBufferWithAlignment(allocator, &bufferInfo, &allocInfo, desc.minimumAlignment,
+                        &buffer->getVkBuffer(), &buffer->getVMAAllocation(),
+                        nullptr) != VK_SUCCESS) {
+      Core::LogManager::Log("VULKAN :: failed to create a device buffer with alignment!");
+    }
   }
 #else
   if (vkCreateBuffer(device, &bufferInfo, nullptr, &buffer->getVkBuffer()) !=
@@ -1408,13 +1423,9 @@ Texture_VK::Texture_VK(Device_VK* device, TextureDescriptor const& desc)
   imageInfo.imageType = getVkImageType(desc.dimension);
   imageInfo.extent.width = static_cast<uint32_t>(desc.size.width);
   imageInfo.extent.height = static_cast<uint32_t>(desc.size.height);
-  imageInfo.extent.depth = (desc.dimension == TextureDimension::TEX2D)
-                               ? 1
-                               : desc.size.depthOrArrayLayers;
+  imageInfo.extent.depth = desc.size.depthOrArrayLayers;
   imageInfo.mipLevels = desc.mipLevelCount;
-  imageInfo.arrayLayers = (desc.dimension == TextureDimension::TEX2D)
-                              ? desc.size.depthOrArrayLayers
-                              : 1;
+  imageInfo.arrayLayers = desc.arrayLayerCount;
   imageInfo.format = getVkFormat(desc.format);
   imageInfo.tiling = hasBit(desc.flags, RHI::TextureFlags::HOSTI_VISIBLE)
                          ? VK_IMAGE_TILING_LINEAR
@@ -2040,6 +2051,12 @@ inline auto getVkShaderStageFlags(ShaderStagesFlags flags) noexcept
     ret |= VkShaderStageFlagBits::VK_SHADER_STAGE_VERTEX_BIT;
   if (flags & (uint32_t)ShaderStages::FRAGMENT)
     ret |= VkShaderStageFlagBits::VK_SHADER_STAGE_FRAGMENT_BIT;
+  if (flags & (uint32_t)ShaderStages::GEOMETRY)
+    ret |= VkShaderStageFlagBits::VK_SHADER_STAGE_GEOMETRY_BIT;
+  if (flags & (uint32_t)ShaderStages::TASK)
+    ret |= VkShaderStageFlagBits::VK_SHADER_STAGE_TASK_BIT_EXT;
+  if (flags & (uint32_t)ShaderStages::MESH)
+    ret |= VkShaderStageFlagBits::VK_SHADER_STAGE_MESH_BIT_EXT;
   if (flags & (uint32_t)ShaderStages::COMPUTE)
     ret |= VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT;
   if (flags & (uint32_t)ShaderStages::RAYGEN)
@@ -2068,7 +2085,7 @@ BindGroupLayout_VK::BindGroupLayout_VK(Device_VK* device,
     bindings[i].descriptorCount =
         bindings[i].descriptorType == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
             ? 200
-            : 1;
+            : desc.entries[i].array_size;
     bindings[i].stageFlags = getVkShaderStageFlags(desc.entries[i].visibility);
     bindings[i].pImmutableSamplers = nullptr;
     bindingFlags[i] = 0;
@@ -2231,6 +2248,9 @@ inline auto getVkShaderStageFlagBits(ShaderStages flag) noexcept
     case SIByL::RHI::ShaderStages::VERTEX:
       return VkShaderStageFlagBits::VK_SHADER_STAGE_VERTEX_BIT;
       break;
+    case SIByL::RHI::ShaderStages::GEOMETRY:
+      return VkShaderStageFlagBits::VK_SHADER_STAGE_GEOMETRY_BIT;
+      break;
     case SIByL::RHI::ShaderStages::RAYGEN:
       return VkShaderStageFlagBits::VK_SHADER_STAGE_RAYGEN_BIT_KHR;
       break;
@@ -2249,9 +2269,18 @@ inline auto getVkShaderStageFlagBits(ShaderStages flag) noexcept
     case SIByL::RHI::ShaderStages::ANY_HIT:
       return VkShaderStageFlagBits::VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
       break;
-    default:
+    case SIByL::RHI::ShaderStages::TASK:
+      return VkShaderStageFlagBits::VK_SHADER_STAGE_TASK_BIT_EXT;
+      break;
+    case SIByL::RHI::ShaderStages::MESH:
+      return VkShaderStageFlagBits::VK_SHADER_STAGE_MESH_BIT_EXT;
+      break;
+    default: {
+      Core::LogManager::Error(
+          "RHI :: Vulkan :: Unkown shader stage while creating shader module");
       return VkShaderStageFlagBits::VK_SHADER_STAGE_ALL;
       break;
+    }
       break;
   }
 }
@@ -2919,6 +2948,10 @@ RenderPipeline_VK::RenderPipeline_VK(Device_VK* device,
   if (desc.fragment.module)
     fixedFunctionSetttings.shaderStages.push_back(
         static_cast<ShaderModule_VK*>(desc.fragment.module)->shaderStageInfo);
+  if (desc.geometry.module)
+    fixedFunctionSetttings.shaderStages.push_back(
+        static_cast<ShaderModule_VK*>(desc.geometry.module)->shaderStageInfo);
+
 
   fillFixedFunctionSettingDynamicInfo(fixedFunctionSetttings);
   fillFixedFunctionSettingVertexInfo(desc.vertex, fixedFunctionSetttings);
@@ -2954,6 +2987,22 @@ RenderPipeline_VK::RenderPipeline_VK(Device_VK* device,
   pipelineInfo.layout =
       static_cast<PipelineLayout_VK*>(fixedFunctionSetttings.pipelineLayout)
           ->pipelineLayout;
+
+  // conservative rasterization
+  if (desc.rasterize.mode != RasterizeState::ConservativeMode::DISABLED) {
+    fixedFunctionSetttings.conservativeRasterizationState.sType =
+        VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_CONSERVATIVE_STATE_CREATE_INFO_EXT;
+    fixedFunctionSetttings.conservativeRasterizationState
+        .extraPrimitiveOverestimationSize =
+        desc.rasterize.extraPrimitiveOverestimationSize;
+    fixedFunctionSetttings.conservativeRasterizationState
+        .conservativeRasterizationMode =
+        desc.rasterize.mode == RasterizeState::ConservativeMode::UNDERESTIMATE
+            ? VK_CONSERVATIVE_RASTERIZATION_MODE_UNDERESTIMATE_EXT
+            : VK_CONSERVATIVE_RASTERIZATION_MODE_OVERESTIMATE_EXT;
+    fixedFunctionSetttings.rasterizationState.pNext =
+        &fixedFunctionSetttings.conservativeRasterizationState;
+  }
 }
 
 auto RenderPipeline_VK::combineRenderPass(RenderPass_VK* renderpass) noexcept
@@ -3418,8 +3467,10 @@ auto CommandEncoder_VK::pipelineBarrier(BarrierDescriptor const& desc) noexcept
         desc.bufferMemoryBarriers[i];
     bmb.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
     bmb.buffer = static_cast<Buffer_VK*>(descriptor.buffer)->getVkBuffer();
-    bmb.offset = 0;
-    bmb.size = static_cast<Buffer_VK*>(descriptor.buffer)->size();
+    bmb.offset = descriptor.offset;
+    bmb.size = (descriptor.size == uint64_t(-1))
+                   ? static_cast<Buffer_VK*>(descriptor.buffer)->size()
+                   : descriptor.size;
     bmb.srcAccessMask = getVkAccessFlags(descriptor.srcAccessMask);
     bmb.dstAccessMask = getVkAccessFlags(descriptor.dstAccessMask);
     bmb.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -3480,6 +3531,38 @@ auto CommandEncoder_VK::clearBuffer(Buffer* buffer, size_t offset,
   vkCmdFillBuffer(commandBuffer->commandBuffer,
                   static_cast<Buffer_VK*>(buffer)->getVkBuffer(), offset, size,
                   fillValueU32);
+}
+
+auto CommandEncoder_VK::clearTexture(
+    Texture* texture,
+    TextureClearDescriptor const& desc) noexcept -> void {
+  std::vector<VkImageSubresourceRange> subresourceRanges;
+  for (auto const& subresource : desc.subresources) {
+    VkImageSubresourceRange subresourceRange = {};
+    subresourceRange.aspectMask =
+        getVkImageAspectFlags(subresource.aspectMask);  // Assuming a color texture
+    subresourceRange.baseMipLevel =
+        subresource.baseMipLevel;       // Assuming mip level 0
+    subresourceRange.levelCount =
+        subresource.levelCount;         // Only clearing one level
+    subresourceRange.baseArrayLayer =
+        subresource.baseArrayLayer;     // Assuming layer 0
+    subresourceRange.layerCount =
+        subresource.layerCount;         // Only clearing one layer
+    subresourceRanges.emplace_back(subresourceRange);
+  }
+  
+  VkClearColorValue clearColor = {};  // Set the clear color value
+  clearColor.float32[0] = desc.clearColor.r;       // Red component
+  clearColor.float32[1] = desc.clearColor.g;       // Green component
+  clearColor.float32[2] = desc.clearColor.b;       // Blue component
+  clearColor.float32[3] = desc.clearColor.a;       // Alpha component
+
+  vkCmdClearColorImage(commandBuffer->commandBuffer,
+                       static_cast<Texture_VK*>(texture)->getVkImage(),
+                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor,
+                       subresourceRanges.size(),
+                       subresourceRanges.data());
 }
 
 auto CommandEncoder_VK::fillBuffer(Buffer* buffer, size_t offset, size_t size,
@@ -3660,7 +3743,11 @@ auto ComputePassEncoder_VK::dispatchWorkgroups(
 }
 
 auto ComputePassEncoder_VK::dispatchWorkgroupsIndirect(
-    Buffer* indirectBuffer, uint64_t indirectOffset) noexcept -> void {}
+    Buffer* indirectBuffer, uint64_t indirectOffset) noexcept -> void {
+  vkCmdDispatchIndirect(commandBuffer->commandBuffer,
+                        static_cast<Buffer_VK*>(indirectBuffer)->getVkBuffer(),
+                        indirectOffset);
+}
 
 auto ComputePassEncoder_VK::end() noexcept -> void {
   computePipeline = nullptr;
@@ -3781,8 +3868,13 @@ auto RenderPassEncoder_VK::drawIndexed(uint32_t indexCount,
 }
 
 auto RenderPassEncoder_VK::drawIndirect(Buffer* indirectBuffer,
-                                        uint64_t indirectOffset) noexcept
-    -> void {}
+                                        uint64_t indirectOffset,
+                                        uint32_t drawCount,
+                                        uint32_t stride) noexcept -> void {
+  vkCmdDrawIndirect(commandBuffer->commandBuffer,
+                    static_cast<Buffer_VK*>(indirectBuffer)->getVkBuffer(),
+                    indirectOffset, drawCount, stride);
+}
 
 auto RenderPassEncoder_VK::drawIndexedIndirect(Buffer* indirectBuffer,
                                                uint64_t offset,
@@ -4038,11 +4130,17 @@ BLAS_VK::BLAS_VK(Device_VK* device, BLASDescriptor const& descriptor)
       device->getVkDevice(), &createInfo, nullptr, &blas);
   buildInfo.dstAccelerationStructure = blas;
   // 5. Allocate scratch space.
+  RayTracingExtension_VK* rtEXT =
+      static_cast<RayTracingExtension_VK*>(device->getRayTracingExtension());
+  uint32_t minOffsetAlignment =
+      rtEXT->vASProperties.minAccelerationStructureScratchOffsetAlignment;
+
   std::unique_ptr<Buffer> scratchBuffer = device->createBuffer(BufferDescriptor{
       sizeInfo.buildScratchSize,
       (uint32_t)BufferUsage::SHADER_DEVICE_ADDRESS |
           (uint32_t)BufferUsage::STORAGE,
-      BufferShareMode::EXCLUSIVE, (uint32_t)MemoryProperty::DEVICE_LOCAL_BIT});
+      BufferShareMode::EXCLUSIVE, (uint32_t)MemoryProperty::DEVICE_LOCAL_BIT,
+      false, int(minOffsetAlignment)});
   buildInfo.scratchData.deviceAddress =
       getBufferVkDeviceAddress(device, scratchBuffer.get());
   // 6. Call vkCmdBuildAccelerationStructuresKHR() with a populated
@@ -4377,13 +4475,20 @@ TLAS_VK::TLAS_VK(Device_VK* device, TLASDescriptor const& descriptor)
       device->getVkDevice(), &createInfo, nullptr, &tlas);
   buildInfo.dstAccelerationStructure = tlas;
   // Allocate the scratch buffer holding temporary build data.
+  RayTracingExtension_VK* rtEXT =
+      static_cast<RayTracingExtension_VK*>(device->getRayTracingExtension());
+  uint32_t minOffsetAlignment =
+      rtEXT->vASProperties.minAccelerationStructureScratchOffsetAlignment;
+
   std::unique_ptr<Buffer> scratchBuffer = device->createBuffer(BufferDescriptor{
       sizeInfo.buildScratchSize,
       (uint32_t)BufferUsage::SHADER_DEVICE_ADDRESS |
           (uint32_t)BufferUsage::STORAGE,
-      BufferShareMode::EXCLUSIVE, (uint32_t)MemoryProperty::DEVICE_LOCAL_BIT});
+      BufferShareMode::EXCLUSIVE, (uint32_t)MemoryProperty::DEVICE_LOCAL_BIT,
+      false, int(minOffsetAlignment)});
   buildInfo.scratchData.deviceAddress =
       getBufferVkDeviceAddress(device, scratchBuffer.get());
+
   // Create a one-element array of pointers to range info objects.
   VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
   // Build the TLAS.
@@ -4790,10 +4895,13 @@ auto Device_VK::initRayTracingExt() noexcept -> void {
   raytracingExt = std::make_unique<RayTracingExtension_VK>();
   raytracingExt->vkRayTracingProperties.sType =
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
+  raytracingExt->vASProperties.sType = 
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR;
   // fetch properties
   VkPhysicalDeviceProperties2 prop2{
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
   prop2.pNext = &raytracingExt->vkRayTracingProperties;
+  raytracingExt->vkRayTracingProperties.pNext = &raytracingExt->vASProperties;
   vkGetPhysicalDeviceProperties2(getAdapterVk()->getVkPhysicalDevice(), &prop2);
 }
 
@@ -4857,8 +4965,12 @@ auto BindGroup_VK::updateBinding(
       ++bufferCounts;
     else if (entry.resource.textureView)
       ++imageCounts;
+    else if (entry.resource.storageArray.size() > 0)
+      imageCounts += entry.resource.storageArray.size();
     else if (entry.resource.tlas)
       ++accStructCounts;
+    else if (entry.resource.sampler)
+      ++imageCounts;
   }
   std::vector<VkWriteDescriptorSet> descriptorWrites = {};
   std::vector<VkDescriptorBufferInfo> bufferInfos(bufferCounts);
@@ -4869,9 +4981,20 @@ auto BindGroup_VK::updateBinding(
   uint32_t bufferIndex = 0;
   uint32_t imageIndex = 0;
   uint32_t accStructIndex = 0;
+  std::vector<BindGroupLayoutEntry> const& layout_entries =
+      layout->getBindGroupLayoutDescriptor().entries;
+  std::function<std::optional<VkDescriptorType>(uint32_t)> getType =
+      [&layout_entries](uint32_t binding) -> std::optional<VkDescriptorType> {
+    for (auto& iter : layout_entries) {
+      if (iter.binding == binding) return getVkDecriptorType(iter);
+    }
+    return std::nullopt;
+  };
   for (auto& entry : entries) {
     if (entry.resource.bufferBinding.has_value()) {
       VkDescriptorBufferInfo& bufferInfo = bufferInfos[bufferIndex++];
+      std::optional<VkDescriptorType> type = getType(entry.binding);
+      if (!type.has_value()) continue;
       bufferInfo.buffer =
           static_cast<Buffer_VK*>(entry.resource.bufferBinding.value().buffer)
               ->getVkBuffer();
@@ -4883,13 +5006,14 @@ auto BindGroup_VK::updateBinding(
       descriptorWrite.dstSet = set;
       descriptorWrite.dstBinding = entry.binding;
       descriptorWrite.dstArrayElement = 0;
-      descriptorWrite.descriptorType = getVkDecriptorType(
-          layout->getBindGroupLayoutDescriptor().entries[entry.binding]);
+      descriptorWrite.descriptorType = type.value();
       descriptorWrite.descriptorCount = 1;
       descriptorWrite.pBufferInfo = &bufferInfo;
       descriptorWrite.pImageInfo = nullptr;
       descriptorWrite.pTexelBufferView = nullptr;
     } else if (entry.resource.sampler && entry.resource.textureView) {
+      std::optional<VkDescriptorType> type = getType(entry.binding);
+      if (!type.has_value()) continue;
       VkDescriptorImageInfo& imageInfo = imageInfos[imageIndex++];
       imageInfo.imageView =
           static_cast<TextureView_VK*>(entry.resource.textureView)->imageView;
@@ -4902,13 +5026,14 @@ auto BindGroup_VK::updateBinding(
       descriptorWrite.dstSet = set;
       descriptorWrite.dstBinding = entry.binding;
       descriptorWrite.dstArrayElement = 0;
-      descriptorWrite.descriptorType = getVkDecriptorType(
-          layout->getBindGroupLayoutDescriptor().entries[entry.binding]);
+      descriptorWrite.descriptorType = type.value();
       descriptorWrite.descriptorCount = 1;
       descriptorWrite.pBufferInfo = nullptr;
       descriptorWrite.pImageInfo = &imageInfo;
       descriptorWrite.pTexelBufferView = nullptr;
     } else if (entry.resource.textureView) {
+      std::optional<VkDescriptorType> type = getType(entry.binding);
+      if (!type.has_value()) continue;
       VkDescriptorImageInfo& imageInfo = imageInfos[imageIndex++];
       imageInfo.sampler = {};
       imageInfo.imageView =
@@ -4920,13 +5045,39 @@ auto BindGroup_VK::updateBinding(
       descriptorWrite.dstSet = set;
       descriptorWrite.dstBinding = entry.binding;
       descriptorWrite.dstArrayElement = 0;
-      descriptorWrite.descriptorType = getVkDecriptorType(
-          layout->getBindGroupLayoutDescriptor().entries[entry.binding]);
+      descriptorWrite.descriptorType = type.value();
       descriptorWrite.descriptorCount = 1;
       descriptorWrite.pBufferInfo = nullptr;
       descriptorWrite.pImageInfo = &imageInfo;
       descriptorWrite.pTexelBufferView = nullptr;
+    } else if (entry.resource.storageArray.size() > 0) {
+      std::optional<VkDescriptorType> type = getType(entry.binding);
+      if (!type.has_value()) continue;
+      VkDescriptorImageInfo* imageInfoStart=nullptr;
+      for (int i = 0; i < entry.resource.storageArray.size(); ++i) {
+        VkDescriptorImageInfo& imageInfo = imageInfos[imageIndex++];
+        if (i == 0) imageInfoStart=&imageInfo;
+        imageInfo.sampler = {};
+        imageInfo.imageView =
+            static_cast<TextureView_VK*>(entry.resource.storageArray[i])
+                ->imageView;
+        imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+      }
+      descriptorWrites.push_back(VkWriteDescriptorSet{});
+      VkWriteDescriptorSet& descriptorWrite = descriptorWrites.back();
+      descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      descriptorWrite.dstSet = set;
+      descriptorWrite.dstBinding = entry.binding;
+      descriptorWrite.dstArrayElement = 0;
+      descriptorWrite.descriptorType = type.value();
+      descriptorWrite.descriptorCount = entry.resource.storageArray.size();
+      descriptorWrite.pBufferInfo = nullptr;
+      descriptorWrite.pImageInfo = imageInfoStart;
+      descriptorWrite.pTexelBufferView = nullptr;
+
     } else if (entry.resource.tlas) {
+      std::optional<VkDescriptorType> type = getType(entry.binding);
+      if (!type.has_value()) continue;
       VkWriteDescriptorSetAccelerationStructureKHR& descASInfo =
           accelerationStructureInfos[accStructIndex++];
       descASInfo.sType =
@@ -4940,14 +5091,15 @@ auto BindGroup_VK::updateBinding(
       descriptorWrite.dstSet = set;
       descriptorWrite.dstBinding = entry.binding;
       descriptorWrite.dstArrayElement = 0;
-      descriptorWrite.descriptorType = getVkDecriptorType(
-          layout->getBindGroupLayoutDescriptor().entries[entry.binding]);
+      descriptorWrite.descriptorType = type.value();
       descriptorWrite.descriptorCount = 1;
       descriptorWrite.pBufferInfo = nullptr;
       descriptorWrite.pImageInfo = nullptr;
       descriptorWrite.pTexelBufferView = nullptr;
       descriptorWrite.pNext = &descASInfo;
     } else if (entry.resource.bindlessTextures.size() != 0) {
+      std::optional<VkDescriptorType> type = getType(entry.binding);
+      if (!type.has_value()) continue;
       bindlessImageInfos.push_back(std::vector<VkDescriptorImageInfo>(
           entry.resource.bindlessTextures.size()));
       std::vector<VkDescriptorImageInfo>& bindelessImageInfo =
@@ -4967,13 +5119,30 @@ auto BindGroup_VK::updateBinding(
         descriptorWrite.dstSet = set;
         descriptorWrite.dstBinding = entry.binding;
         descriptorWrite.dstArrayElement = i;
-        descriptorWrite.descriptorType = getVkDecriptorType(
-            layout->getBindGroupLayoutDescriptor().entries[entry.binding]);
+        descriptorWrite.descriptorType = type.value();
         descriptorWrite.descriptorCount = 1;
         descriptorWrite.pBufferInfo = nullptr;
         descriptorWrite.pImageInfo = &imageInfo;
         descriptorWrite.pTexelBufferView = nullptr;
       }
+    } else if (entry.resource.sampler) {
+      // bind a sampler state
+      std::optional<VkDescriptorType> type = getType(entry.binding);
+      if (!type.has_value()) continue;
+      VkDescriptorImageInfo& imageInfo = imageInfos[imageIndex++];
+      imageInfo.sampler =
+          static_cast<Sampler_VK*>(entry.resource.sampler)->textureSampler;
+      descriptorWrites.push_back(VkWriteDescriptorSet{});
+      VkWriteDescriptorSet& descriptorWrite = descriptorWrites.back();
+      descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      descriptorWrite.dstSet = set;
+      descriptorWrite.dstBinding = entry.binding;
+      descriptorWrite.dstArrayElement = 0;
+      descriptorWrite.descriptorType = type.value();
+      descriptorWrite.descriptorCount = 1;
+      descriptorWrite.pBufferInfo = nullptr;
+      descriptorWrite.pImageInfo = &imageInfo;
+      descriptorWrite.pTexelBufferView = nullptr;
     }
   }
   vkUpdateDescriptorSets(device->getVkDevice(), descriptorWrites.size(),

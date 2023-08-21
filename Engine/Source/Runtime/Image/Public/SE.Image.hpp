@@ -55,6 +55,7 @@ SE_EXPORT struct Texture_Host {
     return RHI::TextureDescriptor{
         extend,
         mip_levels,
+        array_layers,
         1,
         dimension,
         format,
@@ -95,6 +96,14 @@ SE_EXPORT struct PNG {
       -> void;
 };
 
+SE_EXPORT struct TGA {
+  static auto fromTGA(std::filesystem::path const& path) noexcept
+      -> std::unique_ptr<Image<COLOR_R8G8B8A8_UINT>>;
+  static auto writeTGA(std::filesystem::path const& path, uint32_t width,
+                       uint32_t height, uint32_t channel, float* data) noexcept
+      -> void;
+};
+
 SE_EXPORT struct PPM {
   static auto toPPM(Image<COLOR_R8G8B8_UINT> const& i) noexcept -> Core::Buffer;
   static auto writePPM(char const* path, uint32_t width, uint32_t height,
@@ -110,6 +119,12 @@ SE_EXPORT struct HDR {
   // static auto toHDR(Image<COLOR_R8G8B8_UINT> const& i) noexcept ->
   // Core::Buffer;
   static auto writeHDR(std::filesystem::path const& path, uint32_t width,
+                       uint32_t height, uint32_t channel, float* data) noexcept
+      -> void;
+};
+
+SE_EXPORT struct EXR {
+  static auto writeEXR(std::filesystem::path const& path, uint32_t width,
                        uint32_t height, uint32_t channel, float* data) noexcept
       -> void;
 };
@@ -132,19 +147,6 @@ SE_EXPORT struct DDS {
 namespace SIByL {
 SE_EXPORT struct ImageLoader {
   static auto load_rgba8(std::filesystem::path const& path) noexcept
-      -> std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> {
-    if (path.extension() == ".jpg" || path.extension() == ".JPG" ||
-        path.extension() == ".JPEG")
-      return Image::JPEG::fromJPEG(path);
-    else if (path.extension() == ".png" || path.extension() == ".PNG")
-      return Image::PNG::fromPNG(path);
-    else {
-      Core::LogManager::Error(
-          std::format("Image :: Image Loader failed when loading {0}, \
-					as format extension {1} not supported. ",
-                      path.string(), path.extension().string()));
-    }
-    return nullptr;
-  }
+      -> std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>>;
 };
 }  // namespace SIByL

@@ -1,0 +1,51 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_KHR_shader_subgroup_basic : enable
+#extension GL_KHR_shader_subgroup_clustered : enable
+#extension GL_KHR_shader_subgroup_shuffle: enable
+#extension GL_KHR_shader_subgroup_ballot: enable
+
+#include "tree-top-level-constr.h"
+
+layout(push_constant) uniform PushConsts {
+  ivec2 map_size;
+};
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+void main() {
+    const uvec3 workGroupID = uvec3(gl_WorkGroupID);
+    const int sgInvocationID = int(gl_SubgroupInvocationID);
+    const uvec2 spixelID = uvec2(
+        workGroupID.x * int(gl_NumSubgroups) + int(gl_SubgroupID), 
+        workGroupID.y);
+    const uint spixelIDFlatten = spixelID.y * map_size.x + spixelID.x;
+
+    // Each warp (32 threads) processes a spixel and build a top level tree.
+    const int cluster_node_id = cluster[sgInvocationID];
+    float cluster_intensity = cluster_node_id != -1
+                                ? nodes[cluster_node_id].intensity
+                                : 0.f;
+    const uint visibility_pack = imageLoad(visibilityIMG, ivec2(spixelID)).r;
+
+    if((visibility_pack & (0x1 << sgInvocationID)) == 0)
+        cluster_intensity = 0.f;
+        
+    float importance = cluster_intensity;
+
+    const uint offset = spixelIDFlatten * 64;
+    tltree[offset + 32 + sgInvocationID] = importance;
+    importance = subgroupClusteredAdd(importance, 2);
+    importance = subgroupShuffle(importance, sgInvocationID << 1);
+    if(sgInvocationID < 16) tltree[offset + 16 + sgInvocationID] = importance;
+    importance = subgroupClusteredAdd(importance, 2);
+    importance = subgroupShuffle(importance, sgInvocationID << 1);
+    if(sgInvocationID < 8) tltree[offset + 8 + sgInvocationID] = importance;
+    importance = subgroupClusteredAdd(importance, 2);
+    importance = subgroupShuffle(importance, sgInvocationID << 1);
+    if(sgInvocationID < 4) tltree[offset + 4 + sgInvocationID] = importance;
+    importance = subgroupClusteredAdd(importance, 2);
+    importance = subgroupShuffle(importance, sgInvocationID << 1);
+    if(sgInvocationID < 2) tltree[offset + 2 + sgInvocationID] = importance;
+    importance = subgroupClusteredAdd(importance, 2);
+    if(sgInvocationID < 1) tltree[offset + 1 + sgInvocationID] = importance;
+}

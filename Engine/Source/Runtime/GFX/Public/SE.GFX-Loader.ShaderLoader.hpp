@@ -20,6 +20,8 @@ SE_EXPORT struct ShaderReflection {
     StorageBuffer,
     StorageImages,
     SampledImages,
+    ReadonlyImage,
+    Sampler,
     AccelerationStructure,
   };
   enum struct ResourceFlag : uint32_t {
@@ -32,6 +34,7 @@ SE_EXPORT struct ShaderReflection {
     ResourceType type = ResourceType::Undefined;
     ResourceFlags flags = 0;
     RHI::ShaderStagesFlags stages = 0;
+    uint32_t arraySize = 1;
   };
   struct PushConstantEntry {
     uint32_t index = -1;

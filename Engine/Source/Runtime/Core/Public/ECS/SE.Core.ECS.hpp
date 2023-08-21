@@ -303,6 +303,11 @@ SE_EXPORT struct Entity {
   EntityHandle handle;
 };
 
+template <class T>
+auto initComponentOnRegister(Core::Entity& entity, T& component) noexcept -> bool {
+  return true;
+}
+
 namespace Internal {
 template <class T>
 inline auto getEntitiesHaveComponent(ComponentManager* manager) noexcept

@@ -5,8 +5,8 @@ SceneNodes:
     components:
       TagComponent: Camera Object
       Transform:
-        translation: [2.58963132, 3.11107826, 8.37983036]
-        eulerAngles: [-15.8184004, 43.6483803, 0]
+        translation: [4.78046894, 3.76827836, 9.60819149]
+        eulerAngles: [-16.4258842, 36.1130257, 0]
         scale: [4.10000086, 1, 1]
       CameraComponent:
         fovy: 60
@@ -24,12 +24,13 @@ SceneNodes:
         eulerAngles: [12.6059237, -83.3581467, 0.00110459153]
         scale: [0.999844551, 0.999989808, 0.999824047]
       LightComponent:
-        Type: 3
-        Intensity: [1, 1, 1]
+        Type: 0
+        Intensity: [3, 3, 3]
         Texture: 18446744073709551615
-  - uid: 3
+  - uid: 2
     parent: 18446744073709551615
     children:
+      - 3
       - 4
       - 5
       - 6
@@ -47,15 +48,14 @@ SceneNodes:
       - 18
       - 19
       - 20
-      - 21
     components:
       TagComponent: breakfast.fbx
       Transform:
         translation: [0, 0, 0]
         eulerAngles: [0, -0, 0]
         scale: [1, 1, 1]
-  - uid: 4
-    parent: 3
+  - uid: 3
+    parent: 2
     components:
       TagComponent: broom_polySurface335
       Transform:
@@ -69,8 +69,8 @@ SceneNodes:
         - ORID: 1680874863151786180
         - ORID: 1680874863151050079
         - ORID: 1680874863153064679
-  - uid: 5
-    parent: 3
+  - uid: 4
+    parent: 2
     components:
       TagComponent: broom_polySurface366
       Transform:
@@ -83,8 +83,8 @@ SceneNodes:
       MeshRendererComponent:
         - ORID: 1680874863151050079
         - ORID: 1680874863154879226
-  - uid: 6
-    parent: 3
+  - uid: 5
+    parent: 2
     components:
       TagComponent: broom_polySurface380breakfast_room_Mesh
       Transform:
@@ -96,8 +96,8 @@ SceneNodes:
         CPF: 0
       MeshRendererComponent:
         - ORID: 1680874863153064679
-  - uid: 7
-    parent: 3
+  - uid: 6
+    parent: 2
     components:
       TagComponent: broom_polySurface522
       Transform:
@@ -111,8 +111,8 @@ SceneNodes:
         - ORID: 1680874863151786180
         - ORID: 1680874863151050079
         - ORID: 1680874863153064679
-  - uid: 8
-    parent: 3
+  - uid: 7
+    parent: 2
     components:
       TagComponent: broom_polySurface414
       Transform:
@@ -124,8 +124,8 @@ SceneNodes:
         CPF: 0
       MeshRendererComponent:
         - ORID: 1680874863151604906
-  - uid: 9
-    parent: 3
+  - uid: 8
+    parent: 2
     components:
       TagComponent: broom_breakfast_room_MeshpolySurface416
       Transform:
@@ -137,8 +137,8 @@ SceneNodes:
         CPF: 0
       MeshRendererComponent:
         - ORID: 1680874863151604906
-  - uid: 10
-    parent: 3
+  - uid: 9
+    parent: 2
     components:
       TagComponent: broom_polySurface332
       Transform:
@@ -152,8 +152,8 @@ SceneNodes:
         - ORID: 1680874863151786180
         - ORID: 1680874863151050079
         - ORID: 1680874863153064679
-  - uid: 11
-    parent: 3
+  - uid: 10
+    parent: 2
     components:
       TagComponent: broom_breakfast_room_MeshpolySurface427
       Transform:
@@ -165,8 +165,8 @@ SceneNodes:
         CPF: 0
       MeshRendererComponent:
         - ORID: 1680874865299728860
-  - uid: 12
-    parent: 3
+  - uid: 11
+    parent: 2
     components:
       TagComponent: broom_polySurface337
       Transform:
@@ -180,8 +180,8 @@ SceneNodes:
         - ORID: 1680874863151786180
         - ORID: 1680874863153064679
         - ORID: 1680874863151050079
-  - uid: 13
-    parent: 3
+  - uid: 12
+    parent: 2
     components:
       TagComponent: broom_polySurface491
       Transform:
@@ -196,8 +196,8 @@ SceneNodes:
         - ORID: 1680874865299429737
         - ORID: 1680874865300687787
         - ORID: 1680874865300512588
-  - uid: 14
-    parent: 3
+  - uid: 13
+    parent: 2
     components:
       TagComponent: broom_polySurface426
       Transform:
@@ -210,8 +210,8 @@ SceneNodes:
       MeshRendererComponent:
         - ORID: 1680874866376295296
         - ORID: 1680874866372291660
-  - uid: 15
-    parent: 3
+  - uid: 14
+    parent: 2
     components:
       TagComponent: broom_polySurface422
       Transform:
@@ -225,8 +225,8 @@ SceneNodes:
         - ORID: 1680874867446093403
         - ORID: 1680874867449872834
         - ORID: 1680874867446630638
-  - uid: 16
-    parent: 3
+  - uid: 15
+    parent: 2
     components:
       TagComponent: broom_polySurface246
       Transform:
@@ -238,8 +238,8 @@ SceneNodes:
         CPF: 0
       MeshRendererComponent:
         - ORID: 1680874867449872834
-  - uid: 17
-    parent: 3
+  - uid: 16
+    parent: 2
     components:
       TagComponent: broom_polySurface373
       Transform:
@@ -253,8 +253,8 @@ SceneNodes:
         - ORID: 1680874863153064679
         - ORID: 1680874863151786180
         - ORID: 1680874863151050079
-  - uid: 18
-    parent: 3
+  - uid: 17
+    parent: 2
     components:
       TagComponent: broom_polySurface476
       Transform:
@@ -267,8 +267,8 @@ SceneNodes:
       MeshRendererComponent:
         - ORID: 1680874863151050079
         - ORID: 1680874863154879226
-  - uid: 19
-    parent: 3
+  - uid: 18
+    parent: 2
     components:
       TagComponent: broom_polySurface375
       Transform:
@@ -282,8 +282,8 @@ SceneNodes:
         - ORID: 1680874863153064679
         - ORID: 1680874863151786180
         - ORID: 1680874863151050079
-  - uid: 20
-    parent: 3
+  - uid: 19
+    parent: 2
     components:
       TagComponent: broom_polySurface429
       Transform:
@@ -298,8 +298,8 @@ SceneNodes:
         - ORID: 1680874865300687787
         - ORID: 1680874865299429737
         - ORID: 1680874865300512588
-  - uid: 21
-    parent: 3
+  - uid: 20
+    parent: 2
     components:
       TagComponent: broom_polySurface440
       Transform:

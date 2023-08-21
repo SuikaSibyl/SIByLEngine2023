@@ -19,11 +19,15 @@
 #include <SE.Editor.DebugDraw.hpp>
 #include <SE.Application.hpp>
 #include <SE.SRenderer.hpp>
+#include "CustomPipeline.hpp"
 
+#include <SE.Addon.VPL.hpp>
+#include <SE.Addon.SLC.hpp>
 #include <Plugins/SE.SRendererExt.GeomTab.hpp>
 #include <Pipeline/SE.SRendere-RTGIPipeline.hpp>
 #include <Pipeline/SE.SRendere-ForwardPipeline.hpp>
 #include <Pipeline/SE.SRendere-SSRXPipeline.hpp>
+#include <Pipeline/SE.SRendere-UDPTPipeline.hpp>
 #include <Pipeline/SE.SRendere-GeoInspectPipeline.hpp>
 #include <Passes/FullScreenPasses/ScreenSpace/SE.SRenderer-BarGTPass.hpp>
 
@@ -40,6 +44,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 					RHI::ContextExtension::RAY_TRACING
 					| RHI::ContextExtension::BINDLESS_INDEXING
 					| RHI::ContextExtension::FRAGMENT_BARYCENTRIC
+					| RHI::ContextExtension::CONSERVATIVE_RASTERIZATION
 					| RHI::ContextExtension::ATOMIC_FLOAT),
 				mainWindow.get(),
 				true
@@ -56,7 +61,9 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		RHI::Device* device = rhiLayer->getDevice();
 		RHI::SwapChain* swapchain = rhiLayer->getSwapChain();
 
-		GFX::GFXManager::get()->config.meshLoaderConfig = SRenderer::meshLoadConfig;
+        GFX::GFXManager::get()->config.meshLoaderConfig =
+                    SRenderer::meshLoadConfig;
+
 		scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/test_scene.scene");
 
 		GFX::GFXManager::get()->commonSampler.defaultSampler = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Sampler>();
@@ -71,17 +78,22 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.clamp_nearest)->sampler->setName("ClampNearestSampler");
         
 		InvalidScene();
+		device->waitIdle();
 
-		pipeline1 = std::make_unique<SRP::BarGTPipeline>();
-        pipeline2 = std::make_unique<SRP::SSRXPipeline>();
-        rtgi_pipeline = std::make_unique<SRP::RTGIPipeline>();
+		pipeline1 = std::make_unique<CustomPipeline>();
+		pipeline2 = std::make_unique<Addon::SLC::SLCTestPipeline>();
+		rtgi_pipeline = std::make_unique<SemiNEEPipeline>();
         geoinsp_pipeline = std::make_unique<SRP::GeoInspectPipeline>();
+		vxgi_pipeline = std::make_unique<SSPGPipeline>();
+        vxdi_pipeline = std::make_unique<VXGuidingPipeline>();
 		pipeline1->build();
 		pipeline2->build();
 		rtgi_pipeline->build();
         geoinsp_pipeline->build();
+		vxgi_pipeline->build();
+        vxdi_pipeline->build();
 
-		pipeline = rtgi_pipeline.get();
+		pipeline = geoinsp_pipeline.get();
 
 		Editor::DebugDraw::Init(pipeline->getOutput(), nullptr);
 
@@ -109,6 +121,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		if (scene.isDirty == true) {
           device->waitIdle();
           InvalidScene();
+          device->waitIdle();
           scene.isDirty = false;
 		}
 
@@ -125,7 +138,12 @@ struct SandBoxApplication :public Application::ApplicationBase {
                                       ->getWidget<Editor::ViewportWidget>()
                                       ->camera = &camera;
 					cameraController.bindTransform(scene.getGameObject(entity)->getEntity().getComponent<GFX::TransformComponent>());
-					srenderer->updateCamera(*(scene.getGameObject(entity)->getEntity().getComponent<GFX::TransformComponent>()), camera);
+                                  srenderer->updateCamera(
+                                      *(scene.getGameObject(entity)
+                                            ->getEntity()
+                                            .getComponent<
+                                                GFX::TransformComponent>()),
+                                      camera, {width, height});
 					break;
 				}
 			}
@@ -145,6 +163,54 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		GFX::GFXManager::get()->onUpdate();
 		//decoder.readFrame();
 
+                // GUI Recording
+                imguiLayer->startGuiRecording();
+                bool show_demo_window = true;
+                ImGui::ShowDemoWindow(&show_demo_window);
+
+                ImGui::Begin("Pipeline Choose");
+                {  // Select an item type
+                        const char* item_names[] = {
+                            "RayTracing", "Forward", "RTGI Pipeline",  "Geo Inspector",
+                            "VXGI Inspector", "VXDI Inspector"};
+                        static int pipeline_id = 3;
+                        ImGui::Combo("Mode", &pipeline_id, item_names,
+                                     IM_ARRAYSIZE(item_names),
+                                     IM_ARRAYSIZE(item_names));
+                        if (pipeline_id == 0) {
+                                pipeline = pipeline1.get();
+                                editorLayer
+                                    ->getWidget<Editor::RDGViewerWidget>()
+                                    ->pipeline = pipeline;
+                        } else if (pipeline_id == 1) {
+                                pipeline = pipeline2.get();
+                                editorLayer
+                                    ->getWidget<Editor::RDGViewerWidget>()
+                                    ->pipeline = pipeline;
+                        } else if (pipeline_id == 2) {
+                                pipeline = rtgi_pipeline.get();
+                                editorLayer
+                                    ->getWidget<Editor::RDGViewerWidget>()
+                                    ->pipeline = pipeline;
+                        } else if (pipeline_id == 3) {
+                                pipeline = geoinsp_pipeline.get();
+                                editorLayer
+                                    ->getWidget<Editor::RDGViewerWidget>()
+                                    ->pipeline = pipeline;
+                        } else if (pipeline_id == 4) {
+                                pipeline = vxgi_pipeline.get();
+                                editorLayer
+                                    ->getWidget<Editor::RDGViewerWidget>()
+                                    ->pipeline = pipeline;
+                        } else if (pipeline_id == 5) {
+                                pipeline = vxdi_pipeline.get();
+                                editorLayer
+                                    ->getWidget<Editor::RDGViewerWidget>()
+                                    ->pipeline = pipeline;
+                        }
+                }
+                ImGui::End();
+
 
 		srenderer->invalidScene(scene);
 		std::vector<RDG::Graph*> graphs = pipeline->getActiveGraphs();
@@ -158,7 +224,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		pipeline->execute(commandEncoder.get());
 
-		//Editor::DebugDraw::DrawAABB(srenderer->statisticsData.aabb, 5., 5.);
+		Editor::DebugDraw::DrawAABB(srenderer->statisticsData.aabb, 5., 5.);
 		auto editor_graphs = Editor::DebugDraw::get()->pipeline->getActiveGraphs();
 		for (auto* graph : editor_graphs)
 			srenderer->updateRDGData(graph);
@@ -168,38 +234,6 @@ struct SandBoxApplication :public Application::ApplicationBase {
 			multiFrameFlights->getImageAvailableSeamaphore(),
 			multiFrameFlights->getRenderFinishedSeamaphore(),
 			multiFrameFlights->getFence());
-
-		// GUI Recording
-		imguiLayer->startGuiRecording();
-		bool show_demo_window = true;
-		ImGui::ShowDemoWindow(&show_demo_window);
-
-		ImGui::Begin("Pipeline Choose");
-		{	// Select an item type
-            const char* item_names[] = {"RayTracing", "Forward",
-                                        "RTGI Pipeline",
-                                        "Geo Inspector"};
-			static int pipeline_id = 2;
-			ImGui::Combo("Mode", &pipeline_id, item_names, IM_ARRAYSIZE(item_names), IM_ARRAYSIZE(item_names));
-			if (pipeline_id == 0) {
-				pipeline = pipeline1.get();
-				editorLayer->getWidget<Editor::RDGViewerWidget>()->pipeline = pipeline;
-			}
-			else if (pipeline_id == 1) {
-				pipeline = pipeline2.get();
-				editorLayer->getWidget<Editor::RDGViewerWidget>()->pipeline = pipeline;
-            } else if (pipeline_id == 2) {
-                pipeline = rtgi_pipeline.get();
-                editorLayer
-                    ->getWidget<Editor::RDGViewerWidget>()
-                    ->pipeline = pipeline;
-            } else if (pipeline_id == 3) {
-                pipeline = geoinsp_pipeline.get();
-                editorLayer->getWidget<Editor::RDGViewerWidget>()->pipeline =
-                    pipeline;
-            }
-		}
-		ImGui::End();
 
 		editorLayer->getWidget<Editor::ViewportWidget>()->setTarget("Main Viewport", pipeline->getOutput());
 		editorLayer->onDrawGui();
@@ -223,6 +257,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
         pipeline2 = nullptr;
         rtgi_pipeline = nullptr;
         geoinsp_pipeline = nullptr;
+        vxdi_pipeline = nullptr;
+        vxgi_pipeline = nullptr;
 
 		Editor::DebugDraw::Destroy();
 
@@ -249,6 +285,8 @@ private:
 	std::unique_ptr<RDG::Pipeline> pipeline2 = nullptr;
     std::unique_ptr<RDG::Pipeline> rtgi_pipeline = nullptr;
     std::unique_ptr<RDG::Pipeline> geoinsp_pipeline = nullptr;
+    std::unique_ptr<RDG::Pipeline> vxgi_pipeline = nullptr;
+    std::unique_ptr<RDG::Pipeline> vxdi_pipeline = nullptr;
     
 	// the embedded scene, which should be removed in the future
 	GFX::Scene scene;

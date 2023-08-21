@@ -9,11 +9,32 @@
 #include "../../../../Application/Public/SE.Application.Config.h"
 
 namespace SIByL {
+std::string to_string(BlitPass::SourceType type) {
+  switch (type) {
+    case SIByL::BlitPass::SourceType::UINT:
+      return "uint";
+    case SIByL::BlitPass::SourceType::FLOAT:
+      return "float";
+    case SIByL::BlitPass::SourceType::FLOAT2:
+      return "float2";
+    case SIByL::BlitPass::SourceType::FLOAT3:
+      return "float3";
+    case SIByL::BlitPass::SourceType::FLOAT4:
+      return "float4";
+    default:
+      return "undefined";
+  }
+}
+
 BlitPass::BlitPass(Descriptor const& desc) : desc(desc) {
-  frag = GFX::GFXManager::get()->registerShaderModuleResource(
-      "../Engine/Binaries/Runtime/spirv/SRenderer/rasterizer/fullscreen_pass/"
-      "blit_image_frag.spv",
-      {nullptr, RHI::ShaderStages::FRAGMENT});
+  std::string type_string = to_string(desc.sourceType);
+  auto [frag] = GFX::ShaderLoader_SLANG::load(
+      "../Engine/Shaders/SRenderer/fullscreen/"
+      "blit.slang",
+      std::array<std::pair<std::string, RHI::ShaderStages>, 1>{
+          std::make_pair("fragmentMain", RHI::ShaderStages::FRAGMENT),
+      },
+      {std::make_pair("RESOURCE_TYPE", type_string.c_str())});
   RDG::FullScreenPass::init(
       Core::ResourceManager::get()->getResource<GFX::ShaderModule>(frag));
 }

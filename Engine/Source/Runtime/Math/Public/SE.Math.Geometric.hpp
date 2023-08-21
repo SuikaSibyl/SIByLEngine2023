@@ -67,6 +67,7 @@ struct Vector2 {
   auto operator/=(Vector2<T> const& v) -> Vector2<T>&;
 };
 
+SE_EXPORT using bvec2 = Vector2<bool>;
 SE_EXPORT using vec2 = Vector2<float>;
 SE_EXPORT using ivec2 = Vector2<int32_t>;
 SE_EXPORT using uvec2 = Vector2<uint32_t>;
@@ -111,8 +112,8 @@ inline auto ceil(Vector2<T> const& v) noexcept -> Vector2<T> {
 }
 
 SE_EXPORT template <class T>
-inline auto dot(Vector2<T> const& x, Vector2<T>& y) noexcept -> T {
-  T result;
+inline auto dot(Vector2<T> const& x, Vector2<T> const& y) noexcept -> T {
+  T result = 0;
   for (size_t i = 0; i < 2; ++i) {
     result += x[i] * y[i];
   }
@@ -120,12 +121,12 @@ inline auto dot(Vector2<T> const& x, Vector2<T>& y) noexcept -> T {
 }
 
 SE_EXPORT template <class T>
-inline auto absDot(Vector2<T> const& x, Vector2<T>& y) noexcept -> T {
+inline auto absDot(Vector2<T> const& x, Vector2<T> const& y) noexcept -> T {
   return std::abs(dot(x, y));
 }
 
 SE_EXPORT template <class T>
-inline auto cross(Vector2<T> const& x, Vector2<T>& y) noexcept -> T {
+inline auto cross(Vector2<T> const& x, Vector2<T> const& y) noexcept -> T {
   return x[0] * y[1] - x[1] * y[0];
 }
 
@@ -353,6 +354,55 @@ auto Vector2<T>::operator!=(Vector2<T> const& v) const -> bool {
   return !(*this == v);
 }
 
+template <class T>
+auto operator>=(Vector2<T> const& v1, Vector2<T> const& v2) -> Vector2<bool> {
+  Vector2<bool> res;
+  for (size_t i = 0; i < 2; i++) {
+    res.data[i] = v1.data[i] >= v2.data[i];
+  }
+  return res;
+}
+template <class T>
+auto operator>(Vector2<T> const& v1, Vector2<T> const& v2) -> Vector2<bool> {
+  Vector2<bool> res;
+  for (size_t i = 0; i < 2; i++) {
+    res.data[i] = v1.data[i] > v2.data[i];
+  }
+  return res;
+}
+template <class T>
+auto operator<=(Vector2<T> const& v1, Vector2<T> const& v2) -> Vector2<bool> {
+  Vector2<bool> res;
+  for (size_t i = 0; i < 2; i++) {
+    res.data[i] = v1.data[i] <= v2.data[i];
+  }
+  return res;
+}
+template <class T>
+auto operator<(Vector2<T> const& v1, Vector2<T> const& v2) -> Vector2<bool> {
+  Vector2<bool> res;
+  for (size_t i = 0; i < 2; i++) {
+    res.data[i] = v1.data[i] < v2.data[i];
+  }
+  return res;
+}
+template <class T>
+auto operator==(Vector2<T> const& v1, Vector2<T> const& v2) -> Vector2<bool> {
+  Vector2<bool> res;
+  for (size_t i = 0; i < 2; i++) {
+    res.data[i] = v1.data[i] == v2.data[i];
+  }
+  return res;
+}
+template <class T>
+auto operator!=(Vector2<T> const& v1, Vector2<T> const& v2) -> Vector2<bool> {
+  Vector2<bool> res;
+  for (size_t i = 0; i < 2; i++) {
+    res.data[i] = v1.data[i] != v2.data[i];
+  }
+  return res;
+}
+
 SE_EXPORT template <class T>
 struct Vector3 {
   union {
@@ -375,6 +425,7 @@ struct Vector3 {
   Vector3() : x(0), y(0), z(0) {}
   Vector3(T const& _v) : x(_v), y(_v), z(_v) {}
   Vector3(Vector2<T> const& _v) : x(_v.x), y(_v.y), z(0) {}
+  Vector3(Vector2<T> const& _v, T const& _z) : x(_v.x), y(_v.y), z(_z) {}
   Vector3(T const& _x, T const& _y, T const& _z = 0) : x(_x), y(_y), z(_z) {}
 
   auto lengthSquared() const -> float;
@@ -409,6 +460,7 @@ struct Vector3 {
   auto operator*=(Vector3<T> const& v) -> Vector3<T>&;
 };
 
+SE_EXPORT using bvec3 = Vector3<bool>;
 SE_EXPORT using vec3 = Vector3<float>;
 SE_EXPORT using dvec3 = Vector3<double>;
 SE_EXPORT using ivec3 = Vector3<int32_t>;
@@ -765,6 +817,7 @@ struct Vector4 {
   auto operator!=(Vector4<T> const& v) const -> bool;
 };
 
+SE_EXPORT using bvec4 = Vector4<bool>;
 SE_EXPORT using vec4 = Vector4<float>;
 SE_EXPORT using ivec4 = Vector4<int32_t>;
 SE_EXPORT using uvec4 = Vector4<uint32_t>;

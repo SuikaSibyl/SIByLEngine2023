@@ -1,0 +1,5 @@
+// #define PAL_PER_DISTRIBUTION 16
+// #define SAMPLES_PER_DISTRIBUTION 64
+// #define MINIMUM_TILE_SIZE 8
+
+#define TILE_SIZE 16

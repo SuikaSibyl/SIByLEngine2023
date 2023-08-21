@@ -1,7 +1,112 @@
 #include "../Public/Core/SE.SRenderer-SRenderer.hpp"
+#include <SE.Math.ShaderCommon.hpp>
+#include "../../../../Shaders/SRenderer/include/common/light.hlsli"
+#include "../../../../Shaders/SRenderer/include/common/octahedral.hlsli"
+#include "../../../../Shaders/SRenderer/include/common/packing.hlsli"
 #include <Config/SE.Core.Config.hpp>
 
 namespace SIByL {
+
+namespace Impl_Light {
+using namespace Math;
+
+void packLightColor(Math::vec3 radiance,
+                    SRenderer::PolymorphicLightInfo& lightInfo) {
+  float intensity = std::max(radiance.r, std::max(radiance.g, radiance.b));
+  if (intensity > 0.0) {
+    float logRadiance = Math::saturate(
+        (log2(intensity) - kPolymorphicLightMinLog2Radiance) /
+        (kPolymorphicLightMaxLog2Radiance - kPolymorphicLightMinLog2Radiance));
+    uint32_t packedRadiance =
+        std::min(uint32_t(std::ceil(logRadiance * 65534.0)) + 1, 0xffffu);
+    float unpackedRadiance = unpackLightRadiance(packedRadiance);
+
+    float3 normalizedRadiance = saturate(radiance / unpackedRadiance);
+
+    lightInfo.logRadiance = lightInfo.logRadiance & ~0xffffu;
+    lightInfo.logRadiance |= packedRadiance;
+    lightInfo.colorTypeAndFlags = lightInfo.colorTypeAndFlags & ~0xffffffu;
+    lightInfo.colorTypeAndFlags |= Pack_R8G8B8_UFLOAT(normalizedRadiance);
+  }
+}
+
+float3 unpackLightColor(in_ref(SRenderer::PolymorphicLightInfo) lightInfo) {
+  float3 color = Unpack_R8G8B8_UFLOAT(lightInfo.colorTypeAndFlags & 0xffffffu);
+  float radiance = unpackLightRadiance(lightInfo.logRadiance & 0xffff);
+  return color * float3(radiance);
+}
+
+uint32_t asuint(float x) {
+  union FloatUIntUnion {
+    float floatValue;
+    uint32_t uintValue;
+  } parser;
+  parser.floatValue = x;
+  return parser.uintValue;
+}
+
+std::vector<SRenderer::PolymorphicLightInfo> createPolymorphicLights(
+    GFX::LightComponent const& light_component,
+    Math::mat4 const& objMat) {
+  std::vector<SRenderer::PolymorphicLightInfo> lights;
+  switch (light_component.type) {
+    case GFX::LightComponent::LightType::DIRECTIONAL: {
+      SRenderer::PolymorphicLightInfo polymorphic;
+      polymorphic.colorTypeAndFlags =
+          (uint32_t)PolymorphicLightType::kDirectional
+          << kPolymorphicLightTypeShift;
+      packLightColor(light_component.intensity, polymorphic);
+      float3 lightColor = unpackLightColor(polymorphic);
+      Math::vec3 direction = Math::Transform(objMat) * Math::vec3(0, 0, 1);
+      polymorphic.databyte0 =
+          UnitVectorToUnorm32Octahedron(float3(normalize(direction)));
+      lights.emplace_back(polymorphic);
+    } break;
+    case GFX::LightComponent::LightType::POINT: {
+      SRenderer::PolymorphicLightInfo polymorphic;
+      polymorphic.colorTypeAndFlags =
+          (uint32_t)PolymorphicLightType::kPoint
+          << kPolymorphicLightTypeShift;
+      packLightColor(light_component.intensity, polymorphic);
+      Math::vec4 pos = objMat * Math::vec4(0, 0, 0, 1);
+      polymorphic.center = {pos.x, pos.y, pos.z};
+      float3 lightColor = unpackLightColor(polymorphic);
+      Math::vec3 direction = Math::Transform(objMat) * Math::vec3(0, 0, 1);
+      polymorphic.databyte0 =
+          UnitVectorToUnorm32Octahedron(float3(normalize(direction)));
+      lights.emplace_back(polymorphic);
+    } break;
+    case GFX::LightComponent::LightType::SPOT: {
+      SRenderer::PolymorphicLightInfo polymorphic;
+      polymorphic.colorTypeAndFlags = (uint32_t)PolymorphicLightType::kSpot
+                                      << kPolymorphicLightTypeShift;
+      packLightColor(light_component.intensity, polymorphic);
+      Math::vec4 pos = objMat * Math::vec4(0, 0, 0, 1);
+      polymorphic.center = {pos.x, pos.y, pos.z};
+      float3 lightColor = unpackLightColor(polymorphic);
+      Math::vec3 direction = Math::Transform(objMat) * Math::vec3(0, 0, 1);
+      polymorphic.databyte0 =
+          UnitVectorToUnorm32Octahedron(float3(normalize(direction)));
+      polymorphic.databyte1 = asuint(light_component.packed_data_0.x);
+      polymorphic.scalars = asuint(light_component.packed_data_0.y);
+      lights.emplace_back(polymorphic);
+    } break;
+    case GFX::LightComponent::LightType::TRIANGLE: {
+    } break;
+    case GFX::LightComponent::LightType::RECTANGLE: {
+    } break;
+    case GFX::LightComponent::LightType::MESH_PRIMITIVE: {
+    } break;
+    case GFX::LightComponent::LightType::ENVIRONMENT: {
+    } break;
+    case GFX::LightComponent::LightType::VPL: {
+    } break;
+    default:
+      break;
+  }
+  return lights;
+}
+}
 
 #pragma region SRENDERER_IMPL
 
@@ -212,32 +317,35 @@ auto invalid_game_object(GFX::GameObject* gameobject, GFX::Scene& scene,
         srenderer->sceneDataPack.mesh_ref_record.find(gameobject->entity);
     {  // add mesh reference if not exist now
       if (meshRefRecord == srenderer->sceneDataPack.mesh_ref_record.end()) {
+        // 
         state.invalidGeometryBuffer = true;
-      }
-      for (auto idx : meshRefRecord->second.geometry_indices) {
-        if (srenderer->sceneDataPack.geometry_buffer_cpu[idx]
-                .geometryTransform != objectTransform) {
-          transformChanged = true;
-          state.dirtyGeometryBuffer = true;
-          state.invalidAccumulation = true;
-          srenderer->sceneDataPack.geometry_buffer_cpu[idx].geometryTransform =
-              objectTransform;
-          srenderer->sceneDataPack.geometry_buffer_cpu[idx]
-              .geometryTransformInverse = Math::inverse(objectTransform);
-          srenderer->sceneDataPack.geometry_buffer_cpu[idx].oddNegativeScaling =
-              oddScaling >= 0 ? 1.f : -1.f;
+      } else {
+        // has
+        for (auto idx : meshRefRecord->second.geometry_indices) {
+          if (srenderer->sceneDataPack.geometry_buffer_cpu[idx]
+                  .geometryTransform != objectTransform) {
+            transformChanged = true;
+            state.dirtyGeometryBuffer = true;
+            state.invalidAccumulation = true;
+            srenderer->sceneDataPack.geometry_buffer_cpu[idx]
+                .geometryTransform = objectTransform;
+            srenderer->sceneDataPack.geometry_buffer_cpu[idx]
+                .geometryTransformInverse = Math::inverse(objectTransform);
+            srenderer->sceneDataPack.geometry_buffer_cpu[idx]
+                .oddNegativeScaling = oddScaling >= 0 ? 1.f : -1.f;
+          }
         }
+        meshRefRecord->second.blasInstance.transform = objectTransform;
+        srenderer->sceneDataPack.tlas_desc.instances.push_back(
+            meshRefRecord->second.blasInstance);
       }
-      meshRefRecord->second.blasInstance.transform = objectTransform;
-      srenderer->sceneDataPack.tlas_desc.instances.push_back(
-          meshRefRecord->second.blasInstance);
     }
   }
   // light processing
   if (lightComponenet) {
     // if light is diffuse area light
     if (lightComponenet->type ==
-        GFX::LightComponent::LightType::DIFFUSE_AREA_LIGHT) {
+        GFX::LightComponent::LightType::MESH_PRIMITIVE) {
       auto meshRefRecord =
           srenderer->sceneDataPack.mesh_ref_record.find(gameobject->entity);
       if (meshRefRecord != srenderer->sceneDataPack.mesh_ref_record.end()) {
@@ -248,13 +356,14 @@ auto invalid_game_object(GFX::GameObject* gameobject, GFX::Scene& scene,
             srenderer->sceneDataPack.light_comp_record.end()) {
         }
         for (size_t index : entityLightCompRecord->second.lightIndices) {
-          if (srenderer->sceneDataPack.light_buffer_cpu[index]
-                  .areaData.intensity != lightComponenet->intensity) {
-            state.invalidAccumulation = true;
-            state.invalidLightBuffer = true;
-            srenderer->sceneDataPack.light_buffer_cpu[index]
-                .areaData.intensity = lightComponenet->intensity;
-          }
+            // TODO
+          //if (srenderer->sceneDataPack.light_buffer_cpu[index]
+          //        .areaData.intensity != lightComponenet->intensity) {
+          //  state.invalidAccumulation = true;
+          //  state.invalidLightBuffer = true;
+          //  srenderer->sceneDataPack.light_buffer_cpu[index]
+          //      .areaData.intensity = lightComponenet->intensity;
+          //}
           // if transform changed, we need to recompute surface area thing
           if (transformChanged &&
               entityLightCompRecord->second.scaling != scaling) {
@@ -329,32 +438,29 @@ auto invalid_game_object(GFX::GameObject* gameobject, GFX::Scene& scene,
           }
         }
       }
-    } else if (lightComponenet->type ==
-               GFX::LightComponent::LightType::DIRECTIONAL) {
+    } 
+    else if (lightComponenet->type ==
+               GFX::LightComponent::LightType::ENVIRONMENT) {
+      lightComponenet->texture;
+    } else {
       auto entityLightCompRecord =
           srenderer->sceneDataPack.light_comp_record.find(gameobject->entity);
       if (entityLightCompRecord ==
           srenderer->sceneDataPack.light_comp_record.end()) {
+        
       }
       for (size_t index : entityLightCompRecord->second.lightIndices) {
-        srenderer->raCommon.mainDirectionalLight =
-            RACommon::DirectionalLightInfo{objectTransform, uint32_t(index)};
-
-        if (srenderer->sceneDataPack.light_buffer_cpu[index]
-                .areaData.intensity != lightComponenet->intensity) {
-          state.invalidAccumulation = true;
-          state.invalidLightBuffer = true;
-          srenderer->sceneDataPack.light_buffer_cpu[index].areaData.intensity =
-              lightComponenet->intensity;
+        if (lightComponenet->type ==
+            GFX::LightComponent::LightType::DIRECTIONAL) {
+          srenderer->raCommon.mainDirectionalLight =
+              RACommon::DirectionalLightInfo{objectTransform, uint32_t(index)};
         }
-        Math::vec3 direction =
-            Math::Transform(objectTransform) * Math::vec3(0, 0, 1);
-        srenderer->sceneDataPack.light_buffer_cpu[index]
-            .analyticData.direction = direction;
+
+        std::vector<SRenderer::PolymorphicLightInfo> polylights =
+            Impl_Light::createPolymorphicLights(*lightComponenet,
+                                                objectTransform);
+        srenderer->sceneDataPack.light_buffer_cpu[index] = polylights[0];
       }
-    } else if (lightComponenet->type ==
-               GFX::LightComponent::LightType::CUBEMAP_ENV_MAP) {
-      lightComponenet->texture;
     }
   }
 }
@@ -372,16 +478,17 @@ auto invalidSceneLightingSetting(SRenderer* srenderer) noexcept -> void {
       if (lightCompRecord.second.tableDists.size() == 0) {
         continue;
       } else {
-        light.areaData.sample_dist_size_0 =
-            lightCompRecord.second.tableDists[i].pmf.size();
-        light.areaData.sample_dist_offset_pmf_0 =
-            srenderer->sceneDataPack.sample_dist_buffer_cpu.size();
-        srenderer->sceneDataPack.sample_dist_buffer_cpu.insert(
-            srenderer->sceneDataPack.sample_dist_buffer_cpu.end(),
-            lightCompRecord.second.tableDists[i].pmf.begin(),
-            lightCompRecord.second.tableDists[i].pmf.end());
-        light.areaData.sample_dist_offset_cdf_0 =
-            srenderer->sceneDataPack.sample_dist_buffer_cpu.size();
+        // TODO
+        //light.areaData.sample_dist_size_0 =
+        //    lightCompRecord.second.tableDists[i].pmf.size();
+        //light.areaData.sample_dist_offset_pmf_0 =
+        //    srenderer->sceneDataPack.sample_dist_buffer_cpu.size();
+        //srenderer->sceneDataPack.sample_dist_buffer_cpu.insert(
+        //    srenderer->sceneDataPack.sample_dist_buffer_cpu.end(),
+        //    lightCompRecord.second.tableDists[i].pmf.begin(),
+        //    lightCompRecord.second.tableDists[i].pmf.end());
+        //light.areaData.sample_dist_offset_cdf_0 =
+        //    srenderer->sceneDataPack.sample_dist_buffer_cpu.size();
         srenderer->sceneDataPack.sample_dist_buffer_cpu.insert(
             srenderer->sceneDataPack.sample_dist_buffer_cpu.end(),
             lightCompRecord.second.tableDists[i].cdf.begin(),
@@ -411,8 +518,8 @@ auto invalidSceneLightingSetting(SRenderer* srenderer) noexcept -> void {
   for (auto& lightCompRecord : srenderer->sceneDataPack.light_comp_record) {
     for (uint32_t subLightIdx : lightCompRecord.second.lightIndices) {
       auto& light = srenderer->sceneDataPack.light_buffer_cpu[subLightIdx];
-      light.areaData.total_value =
-          srenderer->sceneDataPack.lightTableDist.pmf[i++];
+      //light.areaData.total_value =
+      //    srenderer->sceneDataPack.lightTableDist.pmf[i++];
     }
   }
 }
@@ -430,17 +537,43 @@ auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
     invalid_game_object(scene.getGameObject(go_handle.first), scene, this,
                         packstate);
   }
+  // for all materials
+  bool invalid_material_buffer = false;
+  for (auto& iter : sceneDataPack.material_record) {
+    if (iter.first->isDirty) {
+      MaterialData& matData = sceneDataPack.material_buffer_cpu[iter.second];
+      GFX::Material* mat = iter.first;
+      matData.bsdf_id = mat->BxDF;
+      matData.alphaCutoff = mat->alphaThreshold;
+      matData.roughness = mat->roughness;
+      matData.metalness = mat->metalness;
+      matData.baseOrDiffuseColor = mat->baseOrDiffuseColor;
+      matData.specularColor = mat->specularColor;
+      matData.emissiveColor = mat->emissiveColor;
+      matData.transmissionFactor = mat->eta;
+      iter.first->isDirty = false;
+      invalid_material_buffer = true;
+    }
+  }
+  if (invalid_material_buffer) {
+    sceneDataPack.back_material_buffer = std::move(sceneDataPack.material_buffer);
+    sceneDataPack.material_buffer = device->createDeviceLocalBuffer(
+        sceneDataPack.material_buffer_cpu.data(),
+        sceneDataPack.material_buffer_cpu.size() * sizeof(MaterialData),
+        (uint32_t)RHI::BufferUsage::STORAGE);
+  }
 
   sceneDataPack.back_tlas = sceneDataPack.tlas;
 
   // if (packstate.invalidTLAS)
   if (sceneDataPack.tlas_desc.instances.size() != 0)
-    sceneDataPack.tlas = device->createTLAS(sceneDataPack.tlas_desc);
+    if (device->getRayTracingExtension())
+      sceneDataPack.tlas = device->createTLAS(sceneDataPack.tlas_desc);
 
   sceneDataPack.back_light_buffer = std::move(sceneDataPack.light_buffer);
   sceneDataPack.light_buffer = device->createDeviceLocalBuffer(
       sceneDataPack.light_buffer_cpu.data(),
-      sceneDataPack.light_buffer_cpu.size() * sizeof(LightData),
+      sceneDataPack.light_buffer_cpu.size() * sizeof(PolymorphicLightInfo),
       (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
           (uint32_t)RHI::BufferUsage::STORAGE);
 
@@ -454,6 +587,9 @@ auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
                                sceneDataPack.light_buffer->size()}}};
   commonDescData.set1_flights_resources[fid][0] = {
       0, RHI::BindingResource{sceneDataPack.tlas.get()}};
+  commonDescData.set0_flights_resources[fid][4] = {
+      4, RHI::BindingResource{{sceneDataPack.material_buffer.get(), 0,
+                               sceneDataPack.material_buffer->size()}}};
 
   sceneDataBuffers.scene_info_buffer.setStructure(
       sceneDataPack.sceneInfoUniform, fid);
@@ -538,10 +674,11 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
 
     if (lightComponenet && !meshref) {
       if (lightComponenet->type ==
-          GFX::LightComponent::LightType::CUBEMAP_ENV_MAP) {
+          GFX::LightComponent::LightType::ENVIRONMENT) {
         sceneDataPack.sceneInfoUniform.env_map =
             packTexture(this, lightComponenet->texture->guid);
-      } else if (lightComponenet->type ==
+      }
+      else if (lightComponenet->type ==
                  GFX::LightComponent::LightType::DIRECTIONAL) {
         sceneDataPack.light_comp_record[go->entity] =
             SceneDataPack::EntityLightRecord{};
@@ -552,11 +689,25 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
             objectMat, uint32_t(sceneDataPack.light_buffer_cpu.size())};
         entityLightCompRecord->second.lightIndices.push_back(
             sceneDataPack.light_buffer_cpu.size());
-        sceneDataPack.light_buffer_cpu.push_back(LightData{
-            .analyticData = AnalyticLightData{
-                uint32_t(GFX::LightComponent::LightType::
-                             DIRECTIONAL),  // type 0, sphere area light
-                lightComponenet->intensity, 0, Math::vec3{}, 0, Math::vec3{}}});
+
+        std::vector<SRenderer::PolymorphicLightInfo> polylights =
+            Impl_Light::createPolymorphicLights(*lightComponenet, objectMat);
+        sceneDataPack.light_buffer_cpu.push_back(polylights[0]);
+      } else if (lightComponenet->type ==
+                 GFX::LightComponent::LightType::SPOT ||
+                 lightComponenet->type ==
+                     GFX::LightComponent::LightType::POINT) {
+        sceneDataPack.light_comp_record[go->entity] =
+            SceneDataPack::EntityLightRecord{};
+        auto entityLightCompRecord =
+            sceneDataPack.light_comp_record.find(go->entity);
+
+        entityLightCompRecord->second.lightIndices.push_back(
+            sceneDataPack.light_buffer_cpu.size());
+
+        std::vector<SRenderer::PolymorphicLightInfo> polylights =
+            Impl_Light::createPolymorphicLights(*lightComponenet, objectMat);
+        sceneDataPack.light_buffer_cpu.push_back(polylights[0]);
       }
     }
     // if mesh reference is pointing to a triangle mesh
@@ -624,6 +775,7 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
       sceneDataPack.mesh_ref_record[go->entity] = {};
       meshRefRecord = sceneDataPack.mesh_ref_record.find(go->entity);
       {  // create mesh record
+        int mesh_primitive_type = meshref->customPrimitiveFlag;
         meshRefRecord->second.mesh = mesh;
         meshRefRecord->second.meshReference = meshref;
         uint32_t geometry_start = sceneDataPack.geometry_buffer_cpu.size();
@@ -659,18 +811,35 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
             if (baseTexGUID == 0) {
               baseTexGUID = GFX::GFXManager::get()->registerTextureResource("content/textures/white.png");
             }
-            matData.basecolor_opacity_tex = getTexID(baseTexGUID);
-            matData.normal_bump_tex = 0;
+            matData.baseOrDiffuseTextureIndex = getTexID(baseTexGUID);
+            matData.normalTextureIndex =
+                (normTexGUID == Core::INVALID_GUID || normTexGUID == 0)
+                    ? -1
+                    : getTexID(normTexGUID);
+            matData.alphaCutoff = mat->alphaThreshold;
+            matData.roughness = mat->roughness;
+            matData.metalness = mat->metalness;
+            matData.baseOrDiffuseColor = mat->baseOrDiffuseColor;
+            matData.specularColor = mat->specularColor;
+            matData.emissiveColor = mat->emissiveColor;
+            matData.transmissionFactor = mat->eta;
             sceneDataPack.material_buffer_cpu.push_back(matData);
             sceneDataPack.material_record[mat] = matID;
             findMat = sceneDataPack.material_record.find(mat);
           }
+
+          int primitiveType = meshref->customPrimitiveFlag;
+          if (mat->alphaState != GFX::Material::AlphaState::Opaque) {
+            primitiveType += 1;
+            mesh_primitive_type = primitiveType;
+          }
+
           GeometryDrawData geometrydata = iter;
           geometrydata.geometryTransform = objectMat;
           geometrydata.geometryTransformInverse = Math::inverse(objectMat);
           geometrydata.oddNegativeScaling = oddScaling >= 0 ? 1.f : -1.f;
           geometrydata.materialID = findMat->second;
-          geometrydata.primitiveType = meshref->customPrimitiveFlag;
+          geometrydata.primitiveType = primitiveType;
           geometrydata.lightID = lightComponenet ? 0 : 4294967295;
           uint32_t geometry_id = sceneDataPack.geometry_buffer_cpu.size();
           sceneDataPack.geometry_buffer_cpu.push_back(geometrydata);
@@ -694,7 +863,7 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
           }
         }
         meshRefRecord->second.blasInstance.instanceCustomIndex = geometry_start;
-        meshRefRecord->second.primitiveType = meshref->customPrimitiveFlag;
+        meshRefRecord->second.primitiveType = mesh_primitive_type;
       }
     }
     // if do not have according light record, add the record
@@ -703,7 +872,7 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
           sceneDataPack.light_comp_record.find(go->entity);
       if (entityLightCompRecord == sceneDataPack.light_comp_record.end()) {
         if (lightComponenet->type ==
-            GFX::LightComponent::LightType::CUBEMAP_ENV_MAP) {
+            GFX::LightComponent::LightType::ENVIRONMENT) {
           sceneDataPack.sceneInfoUniform.env_map =
               packTexture(this, lightComponenet->texture->guid);
         } else {
@@ -721,12 +890,13 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
                   sceneDataPack.light_buffer_cpu.size();
               entityLightCompRecord->second.lightIndices.push_back(
                   sceneDataPack.light_buffer_cpu.size());
-              sceneDataPack.light_buffer_cpu.push_back(LightData{
-                  1,  // type 1, sphere area light
-                  lightComponenet->intensity,
-                  geoidx,
-                  0,
-              });
+              // TODO
+              //sceneDataPack.light_buffer_cpu.push_back(LightData{
+              //    1,  // type 1, sphere area light
+              //    lightComponenet->intensity,
+              //    geoidx,
+              //    0,
+              //});
               // GFX::Mesh* meshPtr = meshRefRecord->second.meshReference->mesh;
               size_t primitiveNum = meshRefRecord->second.meshReference->mesh
                                         ->indexBuffer_host.size /
@@ -773,12 +943,13 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
                    meshref->customPrimitiveFlag == 3) {
             entityLightCompRecord->second.lightIndices.push_back(
                 sceneDataPack.light_buffer_cpu.size());
-            sceneDataPack.light_buffer_cpu.push_back(LightData{
-                0,  // type 0, sphere area light
-                lightComponenet->intensity,
-                meshRefRecord->second.geometry_indices[0],
-                0,
-            });
+            // TODO
+            //sceneDataPack.light_buffer_cpu.push_back(LightData{
+            //    0,  // type 0, sphere area light
+            //    lightComponenet->intensity,
+            //    meshRefRecord->second.geometry_indices[0],
+            //    0,
+            //});
             float const radius =
                 Math::length(Math::vec3(objectMat * Math::vec4(1, 0, 0, 1)) -
                              Math::vec3(objectMat * Math::vec4(0, 0, 0, 1)));
@@ -810,16 +981,17 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
         if (lightCompRecord.second.tableDists.size() == 0) {
           continue;
         } else {
-          light.areaData.sample_dist_size_0 =
-              lightCompRecord.second.tableDists[i].pmf.size();
-          light.areaData.sample_dist_offset_pmf_0 =
-              sceneDataPack.sample_dist_buffer_cpu.size();
-          sceneDataPack.sample_dist_buffer_cpu.insert(
-              sceneDataPack.sample_dist_buffer_cpu.end(),
-              lightCompRecord.second.tableDists[i].pmf.begin(),
-              lightCompRecord.second.tableDists[i].pmf.end());
-          light.areaData.sample_dist_offset_cdf_0 =
-              sceneDataPack.sample_dist_buffer_cpu.size();
+            // TODO
+          //light.areaData.sample_dist_size_0 =
+          //    lightCompRecord.second.tableDists[i].pmf.size();
+          //light.areaData.sample_dist_offset_pmf_0 =
+          //    sceneDataPack.sample_dist_buffer_cpu.size();
+          //sceneDataPack.sample_dist_buffer_cpu.insert(
+          //    sceneDataPack.sample_dist_buffer_cpu.end(),
+          //    lightCompRecord.second.tableDists[i].pmf.begin(),
+          //    lightCompRecord.second.tableDists[i].pmf.end());
+          //light.areaData.sample_dist_offset_cdf_0 =
+          //    sceneDataPack.sample_dist_buffer_cpu.size();
           sceneDataPack.sample_dist_buffer_cpu.insert(
               sceneDataPack.sample_dist_buffer_cpu.end(),
               lightCompRecord.second.tableDists[i].cdf.begin(),
@@ -848,8 +1020,9 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
     for (auto& lightCompRecord : sceneDataPack.light_comp_record) {
       for (uint32_t subLightIdx : lightCompRecord.second.lightIndices) {
         auto& light = sceneDataPack.light_buffer_cpu[subLightIdx];
-        if (light.areaData.lightType == 0)
-          light.areaData.total_value = sceneDataPack.lightTableDist.pmf[i++];
+        // TODO
+        //if (light.areaData.lightType == 0)
+        //  light.areaData.total_value = sceneDataPack.lightTableDist.pmf[i++];
       }
     }
   }
@@ -876,7 +1049,7 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
             (uint32_t)RHI::BufferUsage::STORAGE);
     sceneDataPack.light_buffer = device->createDeviceLocalBuffer(
         sceneDataPack.light_buffer_cpu.data(),
-        sceneDataPack.light_buffer_cpu.size() * sizeof(LightData),
+        sceneDataPack.light_buffer_cpu.size() * sizeof(PolymorphicLightInfo),
         (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
             (uint32_t)RHI::BufferUsage::STORAGE);
     sceneDataPack.sample_dist_buffer = device->createDeviceLocalBuffer(
@@ -911,7 +1084,8 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
         mesh.positionBuffer = sceneDataPack.position_buffer.get();
         mesh.indexBuffer = sceneDataPack.index_buffer.get();
       }
-      iter.second.blases = device->createBLAS(iter.second.blas_desc);
+      if (device->getRayTracingExtension())
+        iter.second.blases = device->createBLAS(iter.second.blas_desc);
     }
   }
   for (auto& iter : sceneDataPack.mesh_ref_record) {
@@ -997,7 +1171,8 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
 }
 
 auto SRenderer::updateCamera(GFX::TransformComponent const& transform,
-                                    GFX::CameraComponent const& camera) noexcept
+                             GFX::CameraComponent const& camera,
+                             Math::ivec2 const& viewport) noexcept
     -> void {
   RHI::MultiFrameFlights* multiFrameFlights =
       GFX::GFXManager::get()->rhiLayer->getMultiFrameFlights();
@@ -1015,7 +1190,9 @@ auto SRenderer::updateCamera(GFX::TransformComponent const& transform,
 
     camData.viewMat = Math::transpose(
         Math::lookAt(camData.posW, camData.target, Math::vec3(0, 1, 0)).m);
+    camData.invViewMat = Math::inverse(camData.viewMat);
     camData.projMat = Math::transpose(camera.getProjectionMat());
+    camData.invProjMat = Math::inverse(camData.projMat);
     raCommon.mainCameraInfo.view = Math::transpose(camData.viewMat);
 
     camData.viewProjMat = camData.viewMat * camData.projMat;
@@ -1038,6 +1215,12 @@ auto SRenderer::updateCamera(GFX::TransformComponent const& transform,
         camData.focalDistance * std::tan(Math::radians(camera.fovy) * 0.5f);
     camData.cameraV *= vlen;
 
+    camData.jitterX = 0;
+    camData.jitterY = 0;
+
+    camData.clipToWindowScale = float2(0.5f * viewport.x, -0.5f * viewport.y);
+    camData.clipToWindowBias = float2(0.f) + float2(viewport) * 0.5f;
+
     camData.rectArea =
         4 * ulen * vlen / (camData.focalDistance * camData.focalDistance);
   }
@@ -1053,6 +1236,17 @@ auto SRenderer::updateRDGData(RDG::Graph* graph) noexcept -> void {
   uint32_t flightIdx = GFX::GFXManager::get()
                            ->rhiLayer->getMultiFrameFlights()
                            ->getFlightIndex();
+  uint32_t prevFlightIdx = (flightIdx + 1) % 2;
+  graph->renderData.setBindingResource(
+      "GlobalUniforms",
+      sceneDataBuffers.global_uniform_buffer.getBufferBinding(flightIdx));
+  graph->renderData.setBindingResource(
+      "PrevGlobalUniforms",
+      sceneDataBuffers.global_uniform_buffer.getBufferBinding(prevFlightIdx));
+  graph->renderData.setBindingResource(
+      "PrevGeometryBuffer",
+      sceneDataBuffers.geometry_buffer.getBufferBinding(prevFlightIdx));
+
   graph->renderData.setBindGroupEntries(
       "CommonScene", &(commonDescData.set0_flights_resources[flightIdx]));
   graph->renderData.setBindGroupEntries(
@@ -1061,6 +1255,7 @@ auto SRenderer::updateRDGData(RDG::Graph* graph) noexcept -> void {
   graph->renderData.setUVec2("TargetSize", {state.width, state.height});
   graph->renderData.setPtr("CameraData", &(globalUniRecord.cameraData));
   graph->renderData.setMat4("ViewProj", globalUniRecord.cameraData.viewProjMat);
+  graph->renderData.setPtr("SceneAABB", &(statisticsData.aabb));
   graph->renderData.setDelegate(
       "IssueAllDrawcalls",
       [&, flightIdx = flightIdx](RDG::RenderData::DelegateData const& data) {

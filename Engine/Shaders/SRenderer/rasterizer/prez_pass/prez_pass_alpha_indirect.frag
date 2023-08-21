@@ -1,9 +1,8 @@
 #version 460
 #extension GL_GOOGLE_include_directive : enable
 
-#include "../../include/common_descriptor_sets.h"
+#include "../../include/scene_descriptor_sets.h"
 #include "../../../Utility/random.h"
-#include "../../include/plugins/material/lambertian_common.h"
 
 struct PushConstants { 
     uint rand_seed;
@@ -17,9 +16,9 @@ void main() {
     const uvec2 tid = uvec2(gl_FragCoord.xy);
     uint RNG = InitRNG(tid, pushConstants.rand_seed);
 
-    uint texID = lambertian_materials[matID].basecolor_opacity_tex;
+    uint texID = materials[matID].baseOrDiffuseTextureIndex;
     float alpha = texture(textures[texID], uv).w;
-
+    
     float rnd = UniformFloat(RNG);
 
     if(rnd > alpha) {

@@ -1,0 +1,89 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_shader_atomic_float: enable
+
+#include "common-glsl.h"
+
+layout(push_constant) uniform PushConsts {
+  bool notCluster;
+};
+
+layout(binding = 0, set = 0, r32ui) uniform uimage3D u_hashingCount;
+layout(binding = 1, set = 0, r32ui) uniform uimage3D u_hashingIndices;
+layout(binding = 2, set = 0) buffer AssociateBuffer { int clusters[]; };
+layout(binding = 3, set = 0) buffer CompactIndexBuffer { uint compactIndices[]; };
+layout(binding = 4, set = 0) buffer VXNormalBuffer { vec4 vxNormals[]; };
+
+layout(binding = 5, set = 0) buffer SVXInfoBuffer { svoxel_info svxInfo[]; };
+layout(binding = 6, set = 0) buffer SVXAccumInfoBuffer { svoxel_info accumSVXInfo[]; };
+layout(binding = 7, set = 0) buffer CounterBuffer { int counter[]; };
+layout(binding = 8, set = 0) buffer DebugBuffer { float debug[]; };
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+void main() {
+    const int counterCount = int(counter[0]);
+    const int compactID = int(gl_GlobalInvocationID.x);
+    if(compactID >= counterCount) return;
+
+    const int voxelID = int(compactIndices[compactID]);
+    const ivec3 voxelPos = ReconstructIndex(voxelID, 64);
+    const ivec3 gridPos = voxelPos / 8;
+
+    int clusterIDs[32];
+    int clusterCount = 0;
+
+    // load all cluster IDs from neighboring voxels
+    for (int i = -1; i <= 1; i++)
+        for (int j = -1; j <= 1; j++)
+            for (int k = -1; k <= 1; k++) {
+                ivec3 offset = ivec3(i, j, k);
+                ivec3 index = gridPos + offset;
+                if (all(greaterThanEqual(index, ivec3(0))) && all(lessThan(index, ivec3(8)))) {
+                    const uint count = min(imageLoad(u_hashingCount, index).x, 4);
+                    const uint indicesPack = imageLoad(u_hashingIndices, index).x;
+                    for(int x = 0; x < count; ++x) {
+                        clusterIDs[clusterCount++] = int((indicesPack >> (x * 8)) & 0xff);
+                    }
+                }
+            }
+
+    clusterCount = 32;
+    for(int i=0;i<32;++i){
+        clusterIDs[i] = i;
+    }
+    
+    // find the closet cluster ID
+    const float dist_normalizer = 1.0f / (1.732f * 8);
+    const vec3 normalColor = vxNormals[compactID].xyz;
+    const vec3 vPos = vec3(voxelPos);
+    int minidx = -1;
+    float dist = 999999.9999f;
+    int j=0;
+    for(int i = 0; i < clusterCount; ++i){
+        const int clusterID = clusterIDs[i];
+        const vec3 clusterColor = svxInfo[clusterID].color_info; // TODO
+        const vec3 clusterPos = svxInfo[clusterID].center;
+        const float cdist = distance(normalColor, clusterColor);
+        const float vddist = distance(vPos, clusterPos) * dist_normalizer;
+        const float wdist = cdist + vddist * 0.1f;
+        if(j<7) debug[8*compactID + (j++) + 1] = cdist;
+        if (wdist < dist) {
+            dist = wdist;
+            minidx = clusterID;
+        }
+    }
+    debug[8*compactID + 0] = j;
+    
+    if(minidx != -1) {
+        atomicAdd(accumSVXInfo[minidx].no_voxels, 1);
+        atomicAdd(accumSVXInfo[minidx].color_info.x, normalColor.x);
+        atomicAdd(accumSVXInfo[minidx].color_info.y, normalColor.y);
+        atomicAdd(accumSVXInfo[minidx].color_info.z, normalColor.z);
+        atomicAdd(accumSVXInfo[minidx].center.x, float(voxelPos.x));
+        atomicAdd(accumSVXInfo[minidx].center.y, float(voxelPos.y));
+        atomicAdd(accumSVXInfo[minidx].center.z, float(voxelPos.z));
+    }
+
+    clusters[compactID] = notCluster ? 0 : minidx;
+}

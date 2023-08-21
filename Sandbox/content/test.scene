@@ -2,30 +2,42 @@ SceneName: new scene
 SceneNodes:
   - uid: 0
     parent: 18446744073709551615
-    children:
-      - 1
     components:
-      TagComponent: Sponza.gltf
+      TagComponent: Camera Object
       Transform:
-        translation: [0, 0, -12.5]
-        eulerAngles: [0, 0, 0]
-        scale: [0.00200000009, 0.00200000009, 0.00200000009]
+        translation: [0.0312532224, 4.0157361, -7.49839067]
+        eulerAngles: [-10.5134792, -179.327789, 0]
+        scale: [4.10000086, 1, 1]
+      CameraComponent:
+        fovy: 60
+        aspect: 1.77777779
+        near: 0.100000001
+        far: 1000
+        ProjectType: 0
+        IsPrimary: true
   - uid: 1
-    parent: 0
+    parent: 18446744073709551615
     components:
-      TagComponent: ""
+      TagComponent: DirectionalLight
+      Transform:
+        translation: [0, 0, 0]
+        eulerAngles: [0, 23.7730312, 0]
+        scale: [0.999840319, 0.999995828, 0.999840319]
+      LightComponent:
+        Type: 3
+        Intensity: [1, 1, 1]
+        Texture: 18446744073709551615
+  - uid: 2
+    parent: 18446744073709551615
+    components:
+      TagComponent: box_4.obj
       Transform:
         translation: [0, 0, 0]
         eulerAngles: [0, 0, 0]
         scale: [1, 1, 1]
       MeshReference:
-        ORID: 1633895293614406492
-  - uid: 2
-    parent: 18446744073709551615
-    components:
-      TagComponent: New GameObject
-      Transform:
-        translation: [-0.14581123, -0.00725460472, 0.369184554]
-        eulerAngles: [-0.0480191782, -0.00010028221, 0]
-        scale: [1, 1, 1]
+        ORID: 1678436602536814691
+        CPF: 0
+      MeshRendererComponent:
+        - ORID: 1658390946990111580
 SceneEnd: TRUE

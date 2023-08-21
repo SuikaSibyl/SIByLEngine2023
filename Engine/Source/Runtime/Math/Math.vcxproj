@@ -147,6 +147,7 @@
     <ClInclude Include="Public\SE.Math.Geometric.hpp" />
     <ClInclude Include="Public\SE.Math.hpp" />
     <ClInclude Include="Public\SE.Math.Misc.hpp" />
+    <ClInclude Include="Public\SE.Math.ShaderCommon.hpp" />
     <ClInclude Include="Public\SE.Math.Spline.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

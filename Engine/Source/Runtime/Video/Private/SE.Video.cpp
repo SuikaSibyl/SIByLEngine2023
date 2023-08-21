@@ -143,6 +143,7 @@ auto VideoDecoder::open(char const* filepath) noexcept -> bool {
         RHI::TextureDescriptor{RHI::Extend3D{width, height, 1},
                                1,
                                1,
+                               1,
                                RHI::TextureDimension::TEX2D,
                                RHI::TextureFormat::RGBA8_UNORM,
                                uint32_t(RHI::TextureUsage::COPY_DST) |

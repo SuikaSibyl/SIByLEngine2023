@@ -53,6 +53,8 @@ auto drawFloatControl(std::string const& label, float& value, float resetValue,
   }
   // Second Column
   {
+    int width = (ImGui::GetContentRegionAvail().x - 50 + 5);
+    ImGui::PushItemWidth(width);
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0, 0});
 
     float lineHeight =
@@ -71,6 +73,32 @@ auto drawFloatControl(std::string const& label, float& value, float resetValue,
     ImGui::DragFloat("##x", &value, 0.1f);
     ImGui::SameLine();
     ImGui::PopStyleVar();
+    ImGui::PopItemWidth();
+  }
+  ImGui::Columns(1);
+  ImGui::PopID();
+}
+
+auto drawCustomColume(const std::string& label, float columeWidth,
+                      std::function<void()> const& func) noexcept -> void {
+  ImGuiIO& io = ImGui::GetIO();
+  auto boldFont = io.Fonts->Fonts[0];
+  ImGui::PushID(label.c_str());
+  ImGui::Columns(2);
+  // First Column
+  {
+    ImGui::SetColumnWidth(0, columeWidth);
+    ImGui::Text(label.c_str());
+    ImGui::NextColumn();
+  }
+  // Second Column
+  {
+    int width = (ImGui::GetContentRegionAvail().x - 20 + 5);
+    ImGui::PushItemWidth(width);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0, 0});
+    func();
+    ImGui::PopStyleVar();
+    ImGui::PopItemWidth();
   }
   ImGui::Columns(1);
   ImGui::PopID();
@@ -90,7 +118,8 @@ auto drawVec3Control(const std::string& label, Math::vec3& values,
   }
   // Second Column
   {
-    ImGui::PushMultiItemsWidths(3, ImGui::CalcItemWidth());
+    int width = (ImGui::GetContentRegionAvail().x - 120 + 19);
+    ImGui::PushMultiItemsWidths(3, width);
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0, 0});
 
     float lineHeight =
@@ -343,21 +372,49 @@ auto TextureElucidator::onDrawGui_GUID(Core::GUID guid) noexcept -> void {
 }
 
 auto TextureElucidator::onDrawGui_PTR(GFX::Texture* tex) noexcept -> void {
-  float const texw = (float)tex->texture->width();
-  float const texh = (float)tex->texture->height();
-  float const wa = std::max(1.f, ImGui::GetContentRegionAvail().x - 15) / texw;
-  float const ha = 1;
-  float a = std::min(1.f, std::min(wa, ha));
-  ImGui::Image(Editor::TextureUtils::getImGuiTexture(tex->guid)->getTextureID(),
-               {a * texw, a * texh}, {0, 0}, {1, 1});
-  ImGui::Text("Texture: ");
-  ImGui::Text((std::string("- GUID: ") + std::to_string(tex->guid)).c_str());
-  ImGui::Text((std::string("- name: ") + tex->texture->getName()).c_str());
-  ImGui::Text((std::string("- width: ") + std::to_string(tex->texture->width()))
-                  .c_str());
-  ImGui::Text(
-      (std::string("- height: ") + std::to_string(tex->texture->height()))
-          .c_str());
+    const ImGuiTreeNodeFlags treeNodeFlags =
+      ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed |
+      ImGuiTreeNodeFlags_FramePadding | ImGuiTreeNodeFlags_SpanAvailWidth |
+      ImGuiTreeNodeFlags_AllowItemOverlap;
+    ImVec2 contentRegionAvailable = ImGui::GetContentRegionAvail();
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{4, 4});
+    float lineHeight =
+        GImGui->Font->FontSize + GImGui->Style.FramePadding.y * 2.0f;
+    ImGui::Separator();
+    bool open = ImGui::TreeNodeEx(tex, treeNodeFlags, "Texture Resource");
+    ImGui::PopStyleVar();
+
+    if (open) {
+        if (ImGui::Button("capture")) {
+            captureImage(tex->guid);
+        }
+        float const texw = (float)tex->texture->width();
+        float const texh = (float)tex->texture->height();
+        float const wa =
+            std::max(1.f, ImGui::GetContentRegionAvail().x - 15) / texw;
+        float const ha = 1;
+        float a = std::min(1.f, std::min(wa, ha));
+        ImGui::Image(
+            Editor::TextureUtils::getImGuiTexture(tex->guid)->getTextureID(),
+            {a * texw, a * texh}, {0, 0}, {1, 1});
+        drawCustomColume("Texture", 100, [&]() {
+          char buffer[256];
+          memset(buffer, 0, sizeof(buffer));
+          strcpy_s(buffer, tex->texture->getName().c_str());
+          if (ImGui::InputText(" ", buffer, sizeof(buffer)))
+            tex->texture->setName(std::string(buffer));
+        });
+        drawCustomColume("GUID", 100,
+                         [&]() { ImGui::Text(std::to_string(tex->guid).c_str()); });
+        drawCustomColume("Size", 100, [&]() {
+          ImGui::Text((std::string("- width: ") +
+                       std::to_string(tex->texture->width()) +
+                       std::string("  |  - height: ") +
+                       std::to_string(tex->texture->height()))
+                          .c_str());
+        });
+        ImGui::TreePop();
+    }
 }
 
 auto MaterialElucidator::onDrawGui(Core::GUID guid) noexcept -> void {
@@ -372,24 +429,141 @@ auto MaterialElucidator::onDrawGui_GUID(Core::GUID guid) noexcept -> void {
 
 auto MaterialElucidator::onDrawGui_PTR(GFX::Material* material) noexcept
     -> void {
-  ImGui::BulletText(("Name: " + material->name).c_str());
-  ImGui::BulletText(("Path: " + material->path).c_str());
-  if (ImGui::TreeNode("Textures:")) {
-    uint32_t id = 0;
-    for (auto& [name, texture] : material->textures) {
-      ImGui::PushID(id);
-      if (ImGui::TreeNode(
-              (("Texture - " + std::to_string(id) + " - " + name).c_str()))) {
-        TextureElucidator::onDrawGui_GUID(texture.guid);
-        ImGui::TreePop();
-      }
-      ++id;
-      ImGui::PopID();
-    }
-    ImGui::TreePop();
+  const ImGuiTreeNodeFlags treeNodeFlags =
+      ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed |
+      ImGuiTreeNodeFlags_FramePadding | ImGuiTreeNodeFlags_SpanAvailWidth |
+      ImGuiTreeNodeFlags_AllowItemOverlap;
+  ImVec2 contentRegionAvailable = ImGui::GetContentRegionAvail();
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{4, 4});
+  float lineHeight =
+      GImGui->Font->FontSize + GImGui->Style.FramePadding.y * 2.0f;
+  ImGui::Separator();
+  bool open = ImGui::TreeNodeEx(material, treeNodeFlags, "Material Resource");
+  ImGui::PopStyleVar();
+
+  if (ImGui::Button("Save")) {
+    material->serialize();
   }
-  ImGui::BulletText(
-      ("Emissive: " + std::to_string(material->isEmissive)).c_str());
+
+  if (open && material == nullptr) {
+
+  }
+  else if (open && material != nullptr) {
+    drawCustomColume("Material", 150, [&]() {
+      char buffer[256];
+      memset(buffer, 0, sizeof(buffer));
+      strcpy_s(buffer, material->name.c_str());
+      if (ImGui::InputText(" ", buffer, sizeof(buffer)))
+        material->name = std::string(buffer);
+    });
+    drawCustomColume("BSDF Type", 150, [&]() {
+      const char* item_names[] = {
+          "Lambertian",
+          "Rough Plastic",
+      };
+      if (ImGui::Combo("##BSDFType", (int*)&material->BxDF, item_names,
+                       IM_ARRAYSIZE(item_names), IM_ARRAYSIZE(item_names))) {
+        material->isDirty = true;
+      }
+    });
+        drawCustomColume("Path", 150,
+                         [&]() { ImGui::Text(material->path.c_str()); });
+        drawCustomColume("Emissive", 150, [&]() {
+          ImGui::Checkbox("##Emissive", &material->isEmissive);
+        });
+        drawCustomColume("Alpha State", 150, [&]() {
+          const char* item_names[] = {
+              "Opaque",
+              "Dither Discard",
+              "Alpha Cut",
+          };
+          int alpha_state = int(material->alphaState);
+          ImGui::Combo("##AlphaState", &alpha_state, item_names,
+                       IM_ARRAYSIZE(item_names), IM_ARRAYSIZE(item_names));
+          material->alphaState = GFX::Material::AlphaState(alpha_state);
+        });
+        drawCustomColume("Alpha Threshold", 150, [&]() {
+          ImGui::DragFloat("##alphathresh", &material->alphaThreshold, 0.05f,
+                           0.f, 1.f);
+        });
+        ImGuiColorEditFlags misc_flags =
+            ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_NoDragDrop;
+        drawCustomColume("Diffuse Color", 150, [&]() {
+          if (ImGui::ColorEdit3("##Basecolor",
+                                (float*)&material->baseOrDiffuseColor,
+                                ImGuiColorEditFlags_NoInputs |
+                                    ImGuiColorEditFlags_NoLabel | misc_flags)) {
+            material->isDirty = true;
+          }
+        });
+        drawCustomColume("Specular Color", 150, [&]() {
+          if (ImGui::ColorEdit3("##SpecularColor",
+                                (float*)&material->specularColor,
+                                ImGuiColorEditFlags_NoInputs |
+                                    ImGuiColorEditFlags_NoLabel | misc_flags)) {
+            material->isDirty = true;
+          }
+        });
+        drawCustomColume("Emissive Color", 150, [&]() {
+          if (ImGui::ColorEdit3("##EmissiveColor",
+                                (float*)&material->emissiveColor,
+                                ImGuiColorEditFlags_NoInputs |
+                                    ImGuiColorEditFlags_NoLabel | misc_flags)) {
+            material->isDirty = true;
+          }
+        });
+        drawCustomColume("Eta", 150, [&]() {
+          if (ImGui::DragFloat("##eta", &material->eta, 0.05f, 1.f, 2.f)) {
+            material->isDirty = true;
+          }
+        });
+        drawCustomColume("Roughness", 150, [&]() {
+          if (ImGui::DragFloat("##roughness", &material->roughness, 0.05f, 0.f,
+                               1.f)) {
+            material->isDirty = true;
+          }
+        });
+
+      if (ImGui::TreeNode("Textures:")) {
+      uint32_t id = 0;
+      for (auto& [name, texture] : material->textures) {
+        ImGui::PushID(id);
+        if (ImGui::TreeNode(
+                (("Texture - " + std::to_string(id) + " - " + name).c_str()))) {
+          if (ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* payload =
+                    ImGui::AcceptDragDropPayload("ASSET")) {
+              const wchar_t* path = (const wchar_t*)payload->Data;
+              std::filesystem::path texturePath = path;
+              Core::GUID guid = GFX::GFXManager::get()->registerTextureResource(
+                  texturePath.string().c_str());
+              texture.guid = guid;
+              material->serialize();
+            }
+            ImGui::EndDragDropTarget();
+          }
+
+          ImGui::SameLine();
+          if (ImGui::Button("Remove")) {
+            texture.guid = Core::INVALID_GUID;
+            material->serialize();
+          }
+
+          if (texture.guid != Core::INVALID_GUID && texture.guid != 0) {
+            TextureElucidator::onDrawGui_GUID(texture.guid);
+          } else {
+            ImGui::Text("No Resource Binded");
+          }
+          ImGui::TreePop();
+        }
+        ++id;
+        ImGui::PopID();
+      }
+      ImGui::TreePop();
+        }
+
+        ImGui::TreePop();
+  }
 }
 
 auto VideoClipElucidator::onDrawGui(Core::GUID guid) noexcept -> void {
@@ -572,6 +746,7 @@ auto captureImage(Core::GUID src) noexcept -> void {
         {width, height, 1},
         1,
         1,
+        1,
         RHI::TextureDimension::TEX2D,
         format,
         (uint32_t)RHI::TextureUsage::COPY_DST |
@@ -670,8 +845,8 @@ auto captureImage(Core::GUID src) noexcept -> void {
                      ->texture->getMappedRange(0, width * height * pixelSize);
     if (tex->texture->format() == RHI::TextureFormat::RGBA32_FLOAT) {
       std::string filepath = mainWindow->saveFile(
-          "", Core::WorldTimePoint::get().to_string() + ".hdr");
-      Image::HDR::writeHDR(filepath, width, height, 4,
+          "", Core::WorldTimePoint::get().to_string() + ".exr");
+      Image::EXR::writeEXR(filepath, width, height, 4,
                            reinterpret_cast<float*>(data));
     } else if (tex->texture->format() == RHI::TextureFormat::RGBA8_UNORM) {
       std::string filepath = mainWindow->saveFile(
@@ -906,6 +1081,9 @@ auto ViewportWidget::onDrawGui() noexcept -> void {
         Editor::TextureUtils::getImGuiTexture(texture->guid)->getTextureID(),
         {(float)texture->texture->width(), (float)texture->texture->height()},
         {0, 0}, {1, 1});
+   } else {
+    ImGui::End();
+    return;
    }
 
    float width = (float)texture->texture->width();
@@ -1060,7 +1238,8 @@ auto ContentWidget::onDrawGui() noexcept -> void {
     return;
    }
 
-   if (modal_state.showModal) ImGui::OpenPopup("Warning");
+   if (modal_state.showModal)
+       ImGui::OpenPopup("Warning");
    if (ImGui::BeginPopupModal("Warning")) {
     ImGui::Text("Selected resource not registered in resource libarary!");
     if (ImGui::Button("OK", ImVec2(120, 0))) {
@@ -1082,6 +1261,7 @@ auto ContentWidget::onDrawGui() noexcept -> void {
         modal_state.showModal = false;
       }
     }
+    ImGui::EndPopup();
    }
 
    {
@@ -1239,14 +1419,14 @@ auto ContentWidget::onDrawGui() noexcept -> void {
                                  {thumbnailSize, thumbnailSize}, {0, 0},
                                  {1, 1});
 
-              // if (ImGui::BeginDragDropSource()) {
-              //	ImGui::Text("Dragged");
+               if (ImGui::BeginDragDropSource()) {
+              	ImGui::Text("Dragged");
 
-              //	const wchar_t* itemPath = relativePath.c_str();
-              //	ImGui::SetDragDropPayload("ASSET", itemPath,
-              //(wcslen(itemPath) + 1) * sizeof(wchar_t));
-              //	ImGui::EndDragDropSource();
-              //}
+              	const wchar_t* itemPath = directoryEntry.path().c_str();
+              	ImGui::SetDragDropPayload("ASSET", itemPath,
+                  (wcslen(itemPath) + 1) * sizeof(wchar_t));
+                    ImGui::EndDragDropSource();
+                  }
               ImGui::PopStyleColor();
               if (ImGui::IsItemHovered() &&
                   ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
@@ -1381,6 +1561,12 @@ auto GameObjectInspector::onDrawGui() noexcept -> void {
         if (pair.second.get()->getComponent(entity) == nullptr) {
           if (ImGui::MenuItem(pair.first.c_str())) {
             pair.second.get()->addComponent(entity);
+            if (pair.second.get()->initComponent(entity)) {
+
+            }
+            else {
+              pair.second.get()->removeComponent(entity);
+            }
             ImGui::CloseCurrentPopup();
           }
         }
@@ -1445,6 +1631,14 @@ auto SceneWidget::onDrawGui() noexcept -> void {
                                ->rhiLayer->getRHILayerDescriptor()
                                .windowBinded->openFile(".fbx");
         GFX::SceneNodeLoader_assimp::loadSceneNode(
+            path, *scene, GFX::GFXManager::get()->config.meshLoaderConfig);
+        save_scene();
+      }
+      if (ImGui::MenuItem("Mitsuba (.xml)")) {
+        std::string path = ImGuiLayer::get()
+                               ->rhiLayer->getRHILayerDescriptor()
+                               .windowBinded->openFile(".xml");
+        GFX::SceneNodeLoader_mitsuba::loadSceneNode(
             path, *scene, GFX::GFXManager::get()->config.meshLoaderConfig);
         save_scene();
       }
@@ -2015,10 +2209,31 @@ auto MeshRendererComponentFragment::elucidateComponent(
         go, "MeshRenderer", [](GFX::MeshRenderer* component) {
           uint32_t idx = 0;
           for (auto& material : component->materials) {
-            if (ImGui::TreeNode(
-                    ("Material ID: " + std::to_string(idx)).c_str())) {
-              MaterialElucidator::onDrawGui_PTR(material);
-              ImGui::TreePop();
+            if (material == nullptr) {
+              if (ImGui::TreeNode(
+                      ("Material ID: " + std::to_string(idx)).c_str())) {
+                if (ImGui::BeginDragDropTarget()) {
+                  if (const ImGuiPayload* payload =
+                          ImGui::AcceptDragDropPayload("ASSET")) {
+                    const wchar_t* path = (const wchar_t*)payload->Data;
+                    std::filesystem::path materialPath = path;
+                    Core::GUID guid =
+                        GFX::GFXManager::get()->registerMaterialResource(
+                            materialPath.string().c_str());
+                    component->materials[idx] =
+                        Core::ResourceManager::get()
+                            ->getResource<GFX::Material>(guid);
+                  }
+                  ImGui::EndDragDropTarget();
+                }
+                ImGui::TreePop();
+              }
+            } else {
+              if (ImGui::TreeNode(
+                      ("Material ID: " + std::to_string(idx)).c_str())) {
+                MaterialElucidator::onDrawGui_PTR(material);
+                ImGui::TreePop();
+              }
             }
             ++idx;
           }
@@ -2050,15 +2265,43 @@ auto LightComponentFragment::elucidateComponent(
             lightTypeNames.push_back('\0');
             inited = true;
           }
-          int item_current = static_cast<int>(component->type);
-          ImGui::Combo("Light Type", &item_current, lightTypeNames.c_str());
-          if (item_current != static_cast<int>(component->type))
-            component->type = GFX::LightComponent::LightType(item_current);
+          drawCustomColume("Type", 100, [&]() {
+            int item_current = static_cast<int>(component->type);
+            ImGui::Combo("##wwwww", &item_current, lightTypeNames.c_str());
+            if (item_current != static_cast<int>(component->type)) {
+              component->type = GFX::LightComponent::LightType(item_current);
+              component->isDirty = true;
+            }
+          });
           // set scale
           Math::vec3 intensity = component->intensity;
           drawVec3Control("Intensity", intensity, 0, 100);
           if (intensity != component->intensity)
             component->intensity = intensity;
+          switch (component->type) {
+            case GFX::LightComponent::LightType::DIRECTIONAL:
+            case GFX::LightComponent::LightType::POINT:
+              break;
+            case GFX::LightComponent::LightType::SPOT: {
+                drawCustomColume("Cosine Total Width", 200, [&]() {
+                if(ImGui::DragFloat("##Cosine Total Width",
+                                     &component->packed_data_0.x, 0.01, 0, 1)) {
+                  component->isDirty = true;
+              }
+              });
+              drawCustomColume("Cosine Falloff Start", 200, [&]() {
+                  if (ImGui::DragFloat(
+                      "##Cosine Falloff Start",
+                        &component->packed_data_0.y, 0.01, 0,
+                                       1)) {
+                    component->isDirty = true;
+                  }
+              });
+            }
+              break;
+            default:
+              break;
+          }
         });
    }
 }
@@ -2071,37 +2314,42 @@ auto CameraComponentFragment::elucidateComponent(
    if (cameraComp) {
     drawComponent<GFX::CameraComponent>(
         go, "CameraComponent", [](GFX::CameraComponent* component) {
-          if (component->projectType ==
-              GFX::CameraComponent::ProjectType::PERSPECTIVE) {
-            ImGui::BulletText("Project Type: PERSPECTIVE");
+            drawCustomColume("Project", 100, [&]() {
+              int item_current = static_cast<int>(component->projectType);
+              ImGui::Combo("##proj", &item_current, "Perspective\0Orthogonal\0");
+              if (item_current != static_cast<int>(component->projectType))
+                component->projectType =
+                    GFX::CameraComponent::ProjectType(item_current);
+            });
             bool isDirty = false;
-            float fovy = component->fovy;
-            drawFloatControl("FoV", fovy, 45);
-            if (fovy != component->fovy) {
-              component->fovy = fovy;
-              isDirty = true;
-            }
-            float near = component->near;
-            drawFloatControl("Near", near, 0.001);
-            if (near != component->near) {
-              component->near = near;
-              isDirty = true;
-            }
-            float far = component->far;
-            drawFloatControl("Far", far, 1000);
-            if (far != component->far) {
-              component->far = far;
-              isDirty = true;
-            }
-            bool isPrimary = component->isPrimaryCamera;
-            drawBoolControl("Is Primary", isPrimary, 100);
-            if (isPrimary != component->isPrimaryCamera) {
-              component->isPrimaryCamera = isPrimary;
-            }
-          } else if (component->projectType ==
-                     GFX::CameraComponent::ProjectType::ORTHOGONAL) {
-            ImGui::BulletText("Project Type: ORTHOGONAL");
-          }
+            drawCustomColume("FoV", 100, [&]() {
+              float fovy = component->fovy;
+              ImGui::DragFloat("##FoV", &fovy, 1);
+              if (fovy != component->fovy) {
+                component->fovy = fovy;
+                isDirty = true;
+              }
+            });
+            drawCustomColume("Near", 100, [&]() {
+              float near = component->near;
+              ImGui::DragFloat("##near", &near, 0.001f);
+              if (near != component->near) {
+                component->near = near;
+                isDirty = true;
+              }
+            });
+            drawCustomColume("Far", 100, [&]() {
+              float far = component->far;
+              ImGui::DragFloat("##far", &far, 10.f);
+              if (far != component->far) {
+                component->far = far;
+                isDirty = true;
+              }
+            });
+            drawCustomColume("Is Primary", 100, [&]() {
+              bool isPrimary = component->isPrimaryCamera;
+              ImGui::Checkbox("##primary", &component->isPrimaryCamera);
+            });
         });
    }
 }

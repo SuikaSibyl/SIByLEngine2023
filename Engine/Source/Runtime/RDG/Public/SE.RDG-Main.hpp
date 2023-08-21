@@ -38,6 +38,8 @@ SE_EXPORT enum struct ResourceFlag : uint32_t {
 };
 SE_EXPORT using ResourceFlags = uint32_t;
 
+SE_EXPORT inline uint64_t MaxPossible64 = uint64_t(-1);
+
 /**
  * Information that describe a buffer resource in RDG
  * @param * size		 : size of the buffer
@@ -56,6 +58,8 @@ SE_EXPORT struct BufferInfo {
   struct ConsumeEntry {
     RHI::AccessFlags access;
     RHI::PipelineStageFlags stages;
+    uint64_t offset = 0;
+    uint64_t size = MaxPossible64;
 
     inline auto addStage(RHI::PipelineStageFlags stage) noexcept
         -> ConsumeEntry& {
@@ -64,6 +68,12 @@ SE_EXPORT struct BufferInfo {
     }
     inline auto setAccess(uint32_t acc) noexcept -> ConsumeEntry& {
       access = acc;
+      return *this;
+    }
+    inline auto setSubresource(uint64_t offset, uint64_t size) noexcept
+        -> ConsumeEntry& {
+      this->offset = offset;
+      this->size = size;
       return *this;
     }
   };
@@ -197,9 +207,9 @@ SE_EXPORT struct TextureInfo {
       return RHI::Extend3D{uint32_t(size.absolute.x), uint32_t(size.absolute.y),
                            uint32_t(size.absolute.z)};
     else
-      return RHI::Extend3D{uint32_t(size.relative.x * ref.x),
-                           uint32_t(size.relative.y * ref.y),
-                           uint32_t(size.relative.z * ref.z)};
+      return RHI::Extend3D{uint32_t(std::ceil(size.relative.x * ref.x)),
+                           uint32_t(std::ceil(size.relative.y * ref.y)),
+                           uint32_t(std::ceil(size.relative.z * ref.z))};
   }
 
   std::vector<ConsumeEntry> consumeHistories;
@@ -209,12 +219,13 @@ SE_EXPORT inline auto toTextureDescriptor(TextureInfo const& info,
                                        Math::ivec3 ref_size) noexcept
     -> RHI::TextureDescriptor {
   RHI::Extend3D size = info.getSize(ref_size);
-  size.depthOrArrayLayers = info.layers;
   return RHI::TextureDescriptor{
       size,
       info.levels,
+      info.layers,
       info.samples,
-      RHI::TextureDimension::TEX2D,
+      size.depthOrArrayLayers == 1 ? RHI::TextureDimension::TEX2D
+                                   : RHI::TextureDimension::TEX3D,
       info.format,
       info.usages | (uint32_t)RHI::TextureUsage::TEXTURE_BINDING |
           (uint32_t)RHI::TextureUsage::COPY_SRC,
@@ -345,6 +356,19 @@ SE_EXPORT struct RenderData {
     return iter->second;
   }
 
+  inline auto setBindingResource(
+      std::string const& name,
+      RHI::BindingResource const& bindGroupEntry) noexcept
+      -> void {
+    bindingResources[name]=bindGroupEntry;
+  }
+  inline auto getBindingResource(std::string const& name) const noexcept
+      -> std::optional<RHI::BindingResource> {
+    auto const& iter = bindingResources.find(name);
+    if (iter == bindingResources.end()) return std::nullopt;
+    return iter->second;
+  }
+
   inline auto setBindGroupEntries(
       std::string const& name,
       std::vector<RHI::BindGroupEntry>* bindGroup) noexcept -> void {
@@ -402,6 +426,7 @@ SE_EXPORT struct RenderData {
   Pass* pass;
 
   std::unordered_map<std::string, std::vector<RHI::BindGroupEntry>*> bindGroups;
+  std::unordered_map<std::string, RHI::BindingResource> bindingResources;
   std::unordered_map<std::string, Math::uvec2> uvec2s;
   std::unordered_map<std::string, uint32_t> uints;
   std::unordered_map<std::string, std::function<void(DelegateData const&)>>
@@ -570,8 +595,14 @@ SE_EXPORT struct RenderPass : public PipelinePass {
     passEncoders[context->flightIdx]->setScissorRect(0, 0, width, height);
   }
 
-  virtual auto init(GFX::ShaderModule* vertex,
-                    GFX::ShaderModule* fragment) noexcept -> void;
+  using RenderPipelineDescCallback = std::function<void(RHI::RenderPipelineDescriptor&)>;
+  virtual auto init(GFX::ShaderModule* vertex, GFX::ShaderModule* fragment,
+                    std::optional<RenderPipelineDescCallback> callback =
+                        std::nullopt) noexcept -> void;
+  virtual auto init(GFX::ShaderModule* vertex, GFX::ShaderModule* geometry,
+                    GFX::ShaderModule* fragment,
+                    std::optional<RenderPipelineDescCallback> callback =
+                        std::nullopt) noexcept -> void;
 };
 
 SE_EXPORT struct FullScreenPass : public RenderPass {
@@ -607,6 +638,7 @@ SE_EXPORT struct ComputePass : public PipelinePass {
         context->cmdEncoder->beginComputePass(RHI::ComputePassDescriptor{});
     passEncoders[context->flightIdx]->setPipeline(
         pipelines[context->flightIdx].get());
+    prepareDispatch(context);
     return passEncoders[context->flightIdx].get();
   }
 

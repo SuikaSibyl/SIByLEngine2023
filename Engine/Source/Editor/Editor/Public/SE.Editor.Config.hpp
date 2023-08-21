@@ -49,6 +49,9 @@ SE_EXPORT struct Config {
         ->gameobjectInspector.registerComponent<GFX::MeshReference>(
             "Mesh Reference");
     layer->getWidget<Editor::SceneWidget>()
+        ->gameobjectInspector.registerComponent<GFX::MeshRenderer>(
+            "Mesh Renderer");
+    layer->getWidget<Editor::SceneWidget>()
         ->gameobjectInspector.registerComponent<GFX::LightComponent>(
             "Light Component");
 
@@ -76,7 +79,8 @@ SE_EXPORT struct Config {
     contentWidget->registerResource<GFX::Mesh>(
         contentWidget->icons.mesh, {".obj", ".fbx", ".gltf"}, nullptr);
     contentWidget->registerResource<GFX::Texture>(
-        contentWidget->icons.image, {".jpg", ".png"},
+        contentWidget->icons.image,
+        {".jpg", ".jpeg", ".png", ".PNG", ".tga", ".TGA"},
         std::bind(&GFX::GFXManager::requestOfflineTextureResource,
                   GFX::GFXManager::get(), std::placeholders::_1),
         [](char const* path) {

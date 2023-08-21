@@ -27,6 +27,7 @@
 #include <tinygltf/tiny_gltf.h>
 #include <SE.Image.hpp>
 #include <SE.GFX-Main.hpp>
+#include <tinyparser-mitsuba.h>
 
 namespace SIByL::GFX {
 static std::array<uint64_t, 24> primes = {3,  5,  7,  11, 13, 17, 19, 23,
@@ -75,6 +76,14 @@ struct ArrayAdapter {
 auto SceneNodeLoader_obj::loadSceneNode(
     std::filesystem::path const& path, GFX::Scene& gfxscene,
     MeshLoaderConfig meshConfig) noexcept -> void {
+  loadSceneNode(path, gfxscene, GFX::NULL_GO, meshConfig);
+}
+
+auto SceneNodeLoader_obj::loadSceneNode(std::filesystem::path const& path,
+    GFX::Scene& gfxscene,
+    GameObjectHandle parent,
+    MeshLoaderConfig meshConfig) noexcept
+    -> GameObjectHandle {
   // load obj file
   std::string inputfile = path.string();
   tinyobj::ObjReaderConfig reader_config;
@@ -85,7 +94,7 @@ auto SceneNodeLoader_obj::loadSceneNode(
     if (!reader.Error().empty()) {
       Core::LogManager::Error("TinyObjReader: " + reader.Error());
     }
-    return;
+    return GFX::NULL_GO;
   }
   if (!reader.Warning().empty()) {
     Core::LogManager::Warning("TinyObjReader: " + reader.Warning());
@@ -121,7 +130,7 @@ auto SceneNodeLoader_obj::loadSceneNode(
         Core::LogManager::Error(
             "GFX :: SceneNodeLoader_obj :: non-triangle geometry not "
             "supported when required TANGENT attribute now.");
-        return;
+        return GFX::NULL_GO;
       }
       Math::vec3 tangent;
       Math::vec3 bitangent;
@@ -187,7 +196,7 @@ auto SceneNodeLoader_obj::loadSceneNode(
               Core::LogManager::Error(
                   "GFX :: SceneNodeLoader_obj :: unwanted vertex format for "
                   "POSITION attributes.");
-              return;
+              return GFX::NULL_GO;
             }
           } else if (entry.info == MeshDataLayout::VertexInfo::NORMAL) {
             // Check if `normal_index` is zero or positive. negative = no
@@ -323,7 +332,7 @@ auto SceneNodeLoader_obj::loadSceneNode(
   meshResourceRef->ORID = orid;
   meshResourceRef->serialize();
   // bind scene
-  GameObjectHandle rootNode = gfxscene.createGameObject(GFX::NULL_GO);
+  GameObjectHandle rootNode = gfxscene.createGameObject(parent);
   gfxscene.getGameObject(rootNode)
       ->getEntity()
       .getComponent<TagComponent>()
@@ -332,6 +341,7 @@ auto SceneNodeLoader_obj::loadSceneNode(
       ->getEntity()
       .addComponent<MeshReference>()
       ->mesh = meshResourceRef;
+  return rootNode;
 }
 
 struct glTFLoaderEnv {
@@ -1385,5 +1395,264 @@ auto SceneNodeLoader_assimp::loadSceneNode(
   env.directory = directory;
   processAssimpNode(rootNode, scene->mRootNode, scene, env, gfxscene,
                     meshConfig);
+}
+
+struct MitsubaLoaderEnv {
+  std::string directory;
+  std::unordered_map<TPM_NAMESPACE::Object const*, Core::GUID> textures;
+  std::unordered_map<TPM_NAMESPACE::Object const*, Core::GUID> materials;
+};
+
+auto loadMaterialTextures(TPM_NAMESPACE::Object const* node,
+                          MitsubaLoaderEnv* env) noexcept -> Core::GUID {
+  if (env->textures.find(node) != env->textures.end()) {
+    return env->textures[node];
+  }
+  Core::LogManager::Assert(
+      node->type() == TPM_NAMESPACE::OT_TEXTURE,
+      "GFX :: Mitsuba Loader :: Try load texture node not actually texture.");
+  std::string filename = node->property("filename").getString();
+  std::string tex_path = env->directory + "\\" + filename;
+  Core::GUID guid =
+      GFX::GFXManager::get()->registerTextureResource(tex_path.c_str());
+  env->textures[node] = guid;
+  return guid;
+}
+
+auto loadMaterial(TPM_NAMESPACE::Object const* node,
+                  MitsubaLoaderEnv* env) noexcept -> Core::GUID {
+  if (env->materials.find(node) != env->materials.end()) {
+    return env->materials[node];
+  }
+  Core::LogManager::Assert(
+      node->type() == TPM_NAMESPACE::OT_BSDF,
+      "GFX :: Mitsuba Loader :: Try load material node not actually bsdf.");
+
+  TPM_NAMESPACE::Object const* mat_node = nullptr;
+  if (node->pluginType() == "dielectric") {
+    mat_node = node;
+  }
+  else if(node->pluginType() == "thindielectric") {
+    mat_node = node;
+  }
+  else if (node->pluginType() == "twosided") {
+    if (node->anonymousChildren().size() == 0) {
+      Core::LogManager::Error("Mitsuba Loader :: Material loading exception.");
+      return Core::INVALID_GUID;
+    }
+    mat_node = node->anonymousChildren()[0].get();
+  }
+  else if (node->pluginType() == "mask") {
+    if (node->anonymousChildren().size() == 0) {
+      Core::LogManager::Error("Mitsuba Loader :: Material loading exception.");
+      return Core::INVALID_GUID;
+    }
+    return loadMaterial(node->anonymousChildren()[0].get(), env);
+  }
+  else if (node->pluginType() == "bumpmap") {
+    if (node->anonymousChildren().size() == 0) {
+      Core::LogManager::Error("Mitsuba Loader :: Material loading exception.");
+      return Core::INVALID_GUID;
+    }
+    return loadMaterial(node->anonymousChildren()[0].get(), env);
+  }
+  else {
+    float a = 1.f;
+  }
+  std::string name = std::string(node->id());
+  GFX::Material gfxmat;
+  gfxmat.path = "content/materials/" +
+                Core::StringHelper::invalidFileFolderName(name) + ".mat";
+  gfxmat.ORID = Core::requestORID();
+  if (mat_node->pluginType() == "roughplastic") {
+    gfxmat.BxDF = 1;
+
+  } else if (mat_node->pluginType() == "diffuse") {
+    gfxmat.BxDF = 0;
+  } else {
+    gfxmat.BxDF = 0;
+  }
+  gfxmat.eta = mat_node->property("int_ior").getNumber(1.5f);
+
+  gfxmat.name = name;
+
+  for (auto const& child : mat_node->namedChildren()) {
+    if (child.first == "diffuse_reflectance" ||
+        child.first == "reflectance") {
+      gfxmat.textures["base_color"] = {
+          loadMaterialTextures(child.second.get(), env), 0};
+    } else {
+      float a = 1.f;
+    }
+  }
+  gfxmat.serialize();
+  Core::GUID matID =
+      GFX::GFXManager::get()->registerMaterialResource(gfxmat.path.c_str());
+  env->materials[node] = matID;
+  return matID;
+}
+
+auto loadMeshNode(TPM_NAMESPACE::Object const* node, GFX::Scene& gfxscene,
+                  GameObjectHandle const& gfxNode,
+                  MitsubaLoaderEnv* env,
+                  MeshLoaderConfig meshConfig = {}) noexcept -> void {
+  Core::LogManager::Assert(
+      node->type() == TPM_NAMESPACE::OT_SHAPE,
+      "GFX :: Mitsuba Loader :: Try load shape node not actually shape.");
+
+  if (node->pluginType() == "obj") {
+    std::string filename = node->property("filename").getString();
+    std::string obj_path = env->directory + "\\" + filename;
+    GameObjectHandle obj_node = SceneNodeLoader_obj::loadSceneNode(
+        obj_path, gfxscene, gfxNode, meshConfig);
+    GFX::MeshRenderer* renderer = gfxscene.getGameObject(obj_node)
+                                      ->getEntity()
+                                      .addComponent<GFX::MeshRenderer>();
+    TPM_NAMESPACE::Transform transform =
+        node->property("to_world").getTransform();
+    Math::mat4 transform_mat = {
+        transform.matrix[0], transform.matrix[1], transform.matrix[2], transform.matrix[3],
+        transform.matrix[4], transform.matrix[5], transform.matrix[6], transform.matrix[7],
+        transform.matrix[8], transform.matrix[9], transform.matrix[10], transform.matrix[11],
+        transform.matrix[12], transform.matrix[13], transform.matrix[14], transform.matrix[15]
+    };
+    Math::vec3 t, r, s;
+    Math::decompose(transform_mat, &t, &r, &s);
+    GFX::TransformComponent* transform_component =
+        gfxscene.getGameObject(obj_node)
+            ->getEntity()
+            .getComponent<GFX::TransformComponent>();
+    transform_component->translation = t;
+    transform_component->scale = s;
+    transform_component->eulerAngles = r;
+    if (node->anonymousChildren().size() > 0) {
+      TPM_NAMESPACE::Object* mat_node = node->anonymousChildren()[0].get();
+      Core::GUID mat = loadMaterial(mat_node, env);
+      renderer->materials.emplace_back(
+          Core::ResourceManager::get()->getResource<GFX::Material>(mat));
+    }
+  }
+  else {
+    Core::LogManager::Error("GFX :: Mitsuba Loader :: Unkown mesh type.");
+  }
+  //if (env->textures.find(node) != env->textures.end()) {
+  //  return env->textures[node];
+  //}
+  //Core::LogManager::Assert(
+  //    node->type() == TPM_NAMESPACE::OT_TEXTURE,
+  //    "GFX :: Mitsuba Loader :: Try load texture node not actually texture.");
+  //std::string filename = node->property("filename").getString();
+  //std::string tex_path = env->directory + "\\" + filename;
+  //Core::GUID guid =
+  //    GFX::GFXManager::get()->registerTextureResource(tex_path.c_str());
+  //env->textures[node] = guid;
+  //return guid;
+}
+
+static inline auto processMitsubaNode(
+    GameObjectHandle const& gfxNode, 
+    TPM_NAMESPACE::Object const* node,
+    MitsubaLoaderEnv* env,
+    GFX::Scene& gfxscene,
+    MeshLoaderConfig meshConfig = {}) noexcept
+    -> void {
+  switch (node->type()) {
+    case TPM_NAMESPACE::OT_SCENE:
+      break;
+    case TPM_NAMESPACE::OT_BSDF:
+      loadMaterial(node, env);
+      break;
+    case TPM_NAMESPACE::OT_FILM:
+      break;
+    case TPM_NAMESPACE::OT_INTEGRATOR:
+      break;
+    case TPM_NAMESPACE::OT_MEDIUM:
+      break;
+    case TPM_NAMESPACE::OT_PHASE:
+      break;
+    case TPM_NAMESPACE::OT_RFILTER:
+      break;
+    case TPM_NAMESPACE::OT_SAMPLER:
+      break;
+    case TPM_NAMESPACE::OT_SENSOR:
+      break;
+    case TPM_NAMESPACE::OT_SHAPE: 
+      loadMeshNode(node, gfxscene, gfxNode, env, meshConfig);
+      break;
+    case TPM_NAMESPACE::OT_SUBSURFACE:
+      break;
+    case TPM_NAMESPACE::OT_TEXTURE:
+      break;
+    case TPM_NAMESPACE::OT_VOLUME:
+      break;
+    case TPM_NAMESPACE::_OT_COUNT:
+      break;
+    default:
+      break;
+  }
+
+  //// process all meshes
+  //processAssimpMesh(gfxNode, node, scene, env, gfxscene, meshConfig);
+  //// process the meshes for all the following nodes
+  //for (unsigned int i = 0; i < node->mNumChildren; i++) {
+  //  GameObjectHandle subNode = gfxscene.createGameObject(gfxNode);
+  //  gfxscene.getGameObject(subNode)
+  //      ->getEntity()
+  //      .getComponent<TagComponent>()
+  //      ->name = std::string(node->mChildren[i]->mName.C_Str());
+  //  processAssimpNode(subNode, node->mChildren[i], scene, env, gfxscene,
+  //                    meshConfig);
+  //}
+}
+
+/** Load mitsuba file */
+auto SceneNodeLoader_mitsuba::loadSceneNode(
+    std::filesystem::path const& path,
+    GFX::Scene& gfxscene,
+    MeshLoaderConfig meshConfig) noexcept -> void {
+  // load mitsuba file
+  TPM_NAMESPACE::SceneLoader loader;
+  auto scene = loader.loadFromFile(path.string().c_str());
+
+  MitsubaLoaderEnv env;
+  GameObjectHandle rootNode = gfxscene.createGameObject(GFX::NULL_GO);
+  gfxscene.getGameObject(rootNode)
+      ->getEntity()
+      .getComponent<TagComponent>()
+      ->name = path.filename().string();
+  env.directory = path.parent_path().string();
+
+  for (auto& object : scene.anonymousChildren()) {
+    processMitsubaNode(rootNode, object.get(), &env, gfxscene, meshConfig);
+  }
+  for (auto& object : scene.namedChildren()) {
+    processMitsubaNode(rootNode, object.second.get(), &env, gfxscene, meshConfig);
+  }
+
+  float a = 1.f;
+  //Assimp::Importer importer;
+  //std::string path_str = path.string();
+  //const aiScene* scene =
+  //    importer.ReadFile(path_str, aiProcess_Triangulate | aiProcess_FlipUVs |
+  //                                    aiProcess_CalcTangentSpace);
+
+  //if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE ||
+  //    !scene->mRootNode) {
+  //  Core::LogManager::Error("Assimp: " +
+  //                          std::string(importer.GetErrorString()));
+  //  return;
+  //}
+  //std::string directory = path.parent_path().string();
+
+  //GameObjectHandle rootNode = gfxscene.createGameObject(GFX::NULL_GO);
+  //gfxscene.getGameObject(rootNode)
+  //    ->getEntity()
+  //    .getComponent<TagComponent>()
+  //    ->name = path.filename().string();
+
+  //AssimpLoaderEnv env;
+  //env.directory = directory;
+  //processAssimpNode(rootNode, scene->mRootNode, scene, env, gfxscene,
+  //                  meshConfig);
 }
 }  // namespace SIByL::GFX

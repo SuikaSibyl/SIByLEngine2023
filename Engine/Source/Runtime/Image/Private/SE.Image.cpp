@@ -9,6 +9,7 @@
 #include <stb_image_write.h>
 #include <filesystem>
 #include <ddspp.h>
+#include <tinyexr.h>
 
 namespace SIByL::Image {
 
@@ -55,6 +56,31 @@ auto PNG::writePNG(std::filesystem::path const& path, uint32_t width,
     -> void {
   stbi_write_png(path.string().c_str(), width, height, channel, data,
                  width * channel);
+}
+
+auto TGA::fromTGA(std::filesystem::path const& path) noexcept
+    -> std::unique_ptr<Image<COLOR_R8G8B8A8_UINT>> {
+  int texWidth, texHeight, texChannels;
+  stbi_uc* pixels = stbi_load(path.string().c_str(), &texWidth, &texHeight,
+                              &texChannels, STBI_rgb_alpha);
+  if (!pixels) {
+    Core::LogManager::Error("Image :: failed to load texture image!");
+    return nullptr;
+  }
+  std::unique_ptr<Image<COLOR_R8G8B8A8_UINT>> image =
+      std::make_unique<Image<COLOR_R8G8B8A8_UINT>>(texWidth, texHeight);
+  image->data =
+      Core::Buffer(texWidth * texHeight * sizeof(COLOR_R8G8B8A8_UINT));
+  memcpy(image->data.data, pixels,
+         texWidth * texHeight * sizeof(COLOR_R8G8B8A8_UINT));
+  stbi_image_free(pixels);
+  return std::move(image);
+}
+
+auto TGA::writeTGA(std::filesystem::path const& path, uint32_t width,
+                   uint32_t height, uint32_t channel, float* data) noexcept
+    -> void {
+  stbi_write_tga(path.string().c_str(), width, height, channel, data);
 }
 
 auto PPM::toPPM(Image<COLOR_R8G8B8_UINT> const& i) noexcept -> Core::Buffer {
@@ -150,6 +176,72 @@ auto HDR::writeHDR(std::filesystem::path const& path, uint32_t width,
     -> void {
   stbi_write_hdr(path.string().c_str(), width, height, channel,
                  reinterpret_cast<float*>(data));
+}
+
+auto EXR::writeEXR(std::filesystem::path const& path, uint32_t width,
+    uint32_t height, uint32_t channel, float* data) noexcept
+    -> void {
+  EXRHeader header;
+  InitEXRHeader(&header);
+  EXRImage image;
+  InitEXRImage(&image);
+
+  image.num_channels = 3;
+
+  std::vector<float> images[3];
+  images[0].resize(width * height);
+  images[1].resize(width * height);
+  images[2].resize(width * height);
+
+  // Split RGBRGBRGB... into R, G and B layer
+  for (int i = 0; i < width * height; i++) {
+    images[0][i] = data[4 * i + 0];
+    images[1][i] = data[4 * i + 1];
+    images[2][i] = data[4 * i + 2];
+  }
+
+  float* image_ptr[3];
+  image_ptr[0] = &(images[2].at(0));  // B
+  image_ptr[1] = &(images[1].at(0));  // G
+  image_ptr[2] = &(images[0].at(0));  // R
+
+  image.images = (unsigned char**)image_ptr;
+  image.width = width;
+  image.height = height;
+
+  header.num_channels = 3;
+  header.channels =
+      (EXRChannelInfo*)malloc(sizeof(EXRChannelInfo) * header.num_channels);
+  // Must be (A)BGR order, since most of EXR viewers expect this channel order.
+  strncpy(header.channels[0].name, "B", 255);
+  header.channels[0].name[strlen("B")] = '\0';
+  strncpy(header.channels[1].name, "G", 255);
+  header.channels[1].name[strlen("G")] = '\0';
+  strncpy(header.channels[2].name, "R", 255);
+  header.channels[2].name[strlen("R")] = '\0';
+
+  header.pixel_types = (int*)malloc(sizeof(int) * header.num_channels);
+  header.requested_pixel_types =
+      (int*)malloc(sizeof(int) * header.num_channels);
+  for (int i = 0; i < header.num_channels; i++) {
+    header.pixel_types[i] =
+        TINYEXR_PIXELTYPE_FLOAT;  // pixel type of input image
+    header.requested_pixel_types[i] =
+        TINYEXR_PIXELTYPE_HALF;  // pixel type of output image to be stored in
+                                 // .EXR
+  }
+
+  const char* err = NULL;  // or nullptr in C++11 or later.
+  int ret = SaveEXRImageToFile(&image, &header, path.string().c_str(), &err);
+  if (ret != TINYEXR_SUCCESS) {
+    Core::LogManager::Error("Save EXR err: " + std::string(err));
+    FreeEXRErrorMessage(err);  // free's buffer for an error message
+    return;
+  }
+  
+  free(header.channels);
+  free(header.pixel_types);
+  free(header.requested_pixel_types);
 }
 
 inline auto getRHIFormat(ddspp::DXGIFormat format) noexcept
@@ -422,5 +514,24 @@ auto DDS::fromDDS(std::filesystem::path const& path) noexcept
 
     return texture;
   }
+}
+}  // namespace SIByL::Image
+namespace SIByL {
+auto ImageLoader::load_rgba8(std::filesystem::path const& path) noexcept
+    -> std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> {
+  if (path.extension() == ".jpg" || path.extension() == ".JPG" ||
+      path.extension() == ".JPEG")
+    return Image::JPEG::fromJPEG(path);
+  else if (path.extension() == ".png" || path.extension() == ".PNG")
+    return Image::PNG::fromPNG(path);
+  else if (path.extension() == ".tga" || path.extension() == ".TGA")
+    return Image::TGA::fromTGA(path);
+  else {
+    Core::LogManager::Error(
+        std::format("Image :: Image Loader failed when loading {0}, \
+					as format extension {1} not supported. ",
+                    path.string(), path.extension().string()));
+  }
+  return nullptr;
 }
 }

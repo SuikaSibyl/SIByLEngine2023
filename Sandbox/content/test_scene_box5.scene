@@ -5,8 +5,8 @@ SceneNodes:
     components:
       TagComponent: Camera Object
       Transform:
-        translation: [0.181854084, 4.18125391, -8.01631927]
-        eulerAngles: [-10.4333048, 180.147522, 0]
+        translation: [-0.332181662, 3.94863009, -7.46233892]
+        eulerAngles: [-10.2442093, -179.493561, 0]
         scale: [4.10000086, 1, 1]
       CameraComponent:
         fovy: 60

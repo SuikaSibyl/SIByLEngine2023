@@ -38,5 +38,8 @@
     <ClInclude Include="Public\SE.Math.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="Public\SE.Math.ShaderCommon.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

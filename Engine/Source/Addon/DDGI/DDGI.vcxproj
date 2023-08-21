@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -142,6 +142,9 @@
     <ClInclude Include="Private\SE.Addon.DDGIVolume.hpp" />
     <ClInclude Include="Private\SE.Addon.DDGIVolumeDescGPU.hpp" />
     <ClInclude Include="Public\SE.Addon.DDGI.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Private\SE.Addon.DDGI.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

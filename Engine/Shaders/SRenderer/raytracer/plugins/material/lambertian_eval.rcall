@@ -19,7 +19,7 @@ void main()
     if (dot(frame[2], cBSDFEvalQuery.dir_in) < 0) {
         frame = -frame;
     }
-
+    
     // TODO :: MIPMAP stuff...
     cBSDFEvalQuery.bsdf = max(dot(frame[2], cBSDFEvalQuery.dir_out), 0) *
         texture(textures[lambertian_materials[cBSDFEvalQuery.mat_id].basecolor_opacity_tex], cBSDFEvalQuery.uv).rgb / k_pi;

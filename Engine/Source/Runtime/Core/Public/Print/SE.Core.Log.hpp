@@ -142,6 +142,8 @@ SE_EXPORT struct LogManager : public Manager {
   static inline auto Warning(std::string const& s) noexcept -> void;
   /** until to log a error log */
   static inline auto Error(std::string const& s) noexcept -> void;
+  /** until to log a assert error log */
+  static inline auto Assert(bool should_be_true, std::string const& s) noexcept -> void;
   /** until to log a custom log */
   static inline auto Correct(std::string const& s) noexcept -> void;
   /** a callback func for editor to get logged info */
@@ -277,6 +279,15 @@ inline auto LogManager::Warning(std::string const& s) noexcept -> void {
 
 inline auto LogManager::Error(std::string const& s) noexcept -> void {
 #ifdef _NEED_LOG
+  getLogger().error(s);
+  if (singleton->editorCallback) singleton->editorCallback("[E]" + s);
+#endif
+}
+
+inline auto LogManager::Assert(bool should_be_true,
+    std::string const& s) noexcept -> void {
+#ifdef _NEED_LOG
+  if (should_be_true) return;
   getLogger().error(s);
   if (singleton->editorCallback) singleton->editorCallback("[E]" + s);
 #endif
