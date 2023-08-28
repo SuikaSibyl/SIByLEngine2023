@@ -7,7 +7,7 @@
 #include "../../include/common/shading.hlsli"
 #include "gbuffer_interface.hlsli"
 
-Texture2D<float> t_PrevGBufferDepth;
+Texture2D<float4> t_PrevGBufferPosition;
 Texture2D<uint>  t_PrevGBufferNormals;
 Texture2D<uint>  t_PrevGBufferGeoNormals;
 Texture2D<uint>  t_PrevGBufferDiffuseAlbedo;
@@ -20,7 +20,7 @@ ShadingSurface GetPrevGBufferSurface(
     return GetGBufferSurface(
         pixelPosition,
         cameraData,
-        t_PrevGBufferDepth,
+        t_PrevGBufferPosition,
         t_PrevGBufferNormals,
         t_PrevGBufferGeoNormals,
         t_PrevGBufferDiffuseAlbedo,
@@ -30,8 +30,11 @@ ShadingSurface GetPrevGBufferSurface(
 float3 GetGeometryNormalPrev(in_ref(int2) pixelPosition) {
     return Unorm32OctahedronToUnitVector(t_PrevGBufferGeoNormals[pixelPosition]);
 }
+float3 GetNormalPrev(in_ref(int2) pixelPosition) {
+    return Unorm32OctahedronToUnitVector(t_PrevGBufferNormals[pixelPosition]);
+}
 float GetViewDepthPrev(in_ref(int2) pixelPosition) {
-    return t_PrevGBufferDepth[pixelPosition];
+    return t_PrevGBufferPosition[pixelPosition].w;
 }
 
 #endif // !_SRENDERER_GBUFFER_ADDON_PREV_INTERFACE_HEADER_

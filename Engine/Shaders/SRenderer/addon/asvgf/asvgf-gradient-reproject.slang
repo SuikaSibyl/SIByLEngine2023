@@ -1,26 +1,31 @@
-#define _GBUFFER_RW_ENABLE_ 1
-#include "../../vbuffer/vbuffer.hlsli"
-#include "../../gbuffer/gbuffer_interface.hlsli"
-#include "../../gbuffer/gbuffer_prev_interface.hlsli"
+#include "../vbuffer/vbuffer.hlsli"
+#define _GBUFFER_RW_ENABLE_
+#include "../gbuffer/gbuffer_interface.hlsli"
+#undef _GBUFFER_RW_ENABLE_
 #include "../../include/common/cpp_compatible.hlsli"
+#include "../gbuffer/gbuffer_prev_interface.hlsli"
 #include "asvgf.hlsli" // see description and copyright info here
+
+[[vk::push_constant]]
+cbuffer PushConstants {
+    uint sample_batch;
+    uint init_rand;
+};
 
 #define GROUP_SIZE_GRAD 8
 #define GROUP_SIZE_PIXELS (GROUP_SIZE_GRAD * GRAD_DWN)
 
-[[vk::push_constant]]
-cbuffer PushConstantBuffer {
-    int2 resolution;
-}
-
 RWTexture2D<uint> u_GradSamplePos;
 RWTexture2D<float2> u_HfSpecLum_prev;
-RWTexture2D<uint4> u_vBuffer;
+RWTexture2D<uint4> u_VBuffer;
+RWTexture2D<uint> u_RNGSeed;
+RWTexture2D<uint> u_IsCorrelated;
 
+const Texture2D<uint> u_RNGSeed_prev;
 const Texture2D<uint> u_GradSamplePos_prev;
 const Texture2D<uint> u_HF_prev;
 const Texture2D<uint> u_Spec_prev;
-const Texture2D<uint4> u_vBuffer_prev;
+const Texture2D<uint4> u_VBuffer_prev;
 
 /**
  * This shader tries to match the surfaces from the current frame with the
@@ -43,7 +48,7 @@ groupshared float4 s_reprojected_pixels[GROUP_SIZE_PIXELS][GROUP_SIZE_PIXELS];
  * @param p The current pixel position
  * @param local_pos The local position of the pixel in the group
  */
-void reproject_pixel(in_ref(int2) p, in_ref(int2) local_pos) {
+void reproject_pixel(in_ref(int2) p, in_ref(int2) local_pos, in_ref(int2) resolution) {
     // Initialize the shared memory unconditionally
     s_reprojected_pixels[local_pos.y][local_pos.x] = float4(0);
     // Compute the previous frame position of this surface
@@ -71,7 +76,7 @@ void reproject_pixel(in_ref(int2) p, in_ref(int2) local_pos) {
     
     const float dist_depth = abs(depth_curr - depth_prev + motion.z) / abs(depth_curr);
     const float dot_geo_normals = dot(geo_normal_curr, geo_normal_prev);
-    
+
     // Compare the surfaces
     if (dist_depth < 0.1 && dot_geo_normals > 0.9) {
         const float3 prev_hf = UnpackRGBE(u_HF_prev[pp]);
@@ -89,7 +94,7 @@ void reproject_pixel(in_ref(int2) p, in_ref(int2) local_pos) {
 // being visible or shadowed.
 float3 patch_position(in_ref(int2) found_pos_prev) {
     // Read the visibility buffer
-    const VBufferData vhit = UnpackVBufferData(u_vBuffer_prev[found_pos_prev]);
+    const VBufferData vhit = UnpackVBufferData(u_VBuffer_prev[found_pos_prev]);
     return GetVBufferPosition(vhit);
 }
 
@@ -105,13 +110,20 @@ void ComputeMain(
     // ------------------------------------------------------------------------------------------------
     int2 ipos = DTid.xy;
     int2 pos_grad = ipos / GRAD_DWN;
+    const int2 resolution = getViewportSize(globalUniform.cameraData);
+
+    if(init_rand == 1u) {
+        // Initialize the random number sequence
+        RandomSamplerState RNG = InitRandomSampler(ipos, sample_batch * 0);
+        u_RNGSeed[ipos] = RNG.state;
+    }
 
     // Read the previous frame's position and luminance
     // found by backward reprojection
-    reproject_pixel(ipos, GTid.xy);
+    reproject_pixel(ipos, GTid.xy, resolution);
     // barrier
     GroupMemoryBarrierWithGroupSync();
-
+    
     // Second pass: the first (GROUP_SIZE_GRAD)^2 pixels are looking for the brightest
     // matching pixels in each 3x3 square.
     // ------------------------------------------------------------------------------------------------
@@ -158,16 +170,17 @@ void ComputeMain(
     // ------------------------------------------------------------------------------------------------
     ipos += found_offset;
     const uint gradient_idx = PackStratumOffset(found_offset); /* current frame */
+
     // Store the gradient index offset
     u_GradSamplePos[pos_grad] = gradient_idx;
     u_HfSpecLum_prev[pos_grad] = found_prev_lum;
     
     // Patch the surface parameters
-    // imageStore(IMG_ASVGF_RNG_SEED_A, ipos, texelFetch(TEX_ASVGF_RNG_SEED_B, found_pos_prev, 0));
+    t_GBufferPosition[ipos].xyz = patch_position(found_pos_prev);
+    u_IsCorrelated[ipos] = 1u;
+    u_RNGSeed[ipos] = u_RNGSeed_prev[found_pos_prev];
     t_GBufferNormals[ipos] = t_PrevGBufferNormals[found_pos_prev];
     t_GBufferGeoNormals[ipos] = t_PrevGBufferGeoNormals[found_pos_prev];
     t_GBufferDiffuseAlbedo[ipos] = t_PrevGBufferDiffuseAlbedo[found_pos_prev];
     t_GBufferSpecularRough[ipos] = t_PrevGBufferSpecularRough[found_pos_prev];
-
-    // patch_position(ipos, found_pos_prev);
 }

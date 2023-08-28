@@ -75,9 +75,9 @@ VBuffer2GBufferPass::VBuffer2GBufferPass() {
 auto VBuffer2GBufferPass::reflect() noexcept -> RDG::PassReflection {
   RDG::PassReflection reflector;
   // Writeonly
-  reflector.addOutput("ViewDepth")
+  reflector.addOutput("Position")
       .isTexture().withSize(Math::vec3(1,1,1))
-      .withFormat(RHI::TextureFormat::R32_FLOAT)
+      .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
       .consume(RDG::TextureInfo::ConsumeEntry{
               RDG::TextureInfo::ConsumeType::StorageBinding}
@@ -136,7 +136,7 @@ auto VBuffer2GBufferPass::reflect() noexcept -> RDG::PassReflection {
 auto VBuffer2GBufferPass::execute(RDG::RenderContext* context,
                                    RDG::RenderData const& renderData) noexcept
     -> void {
-  GFX::Texture* viewDepth = renderData.getTexture("ViewDepth");
+  GFX::Texture* position = renderData.getTexture("Position");
   GFX::Texture* diffuseAlbedo = renderData.getTexture("DiffuseAlbedo");
   GFX::Texture* specularRough = renderData.getTexture("SpecularRough");
   GFX::Texture* normal = renderData.getTexture("Normal");
@@ -155,7 +155,7 @@ auto VBuffer2GBufferPass::execute(RDG::RenderContext* context,
       context,
       std::vector<std::pair<std::string, RHI::BindingResource>>{
           {"u_vBuffer", RHI::BindingResource{vbuffer->getUAV(0, 0, 1)}},
-          {"u_GBufferDepth", RHI::BindingResource{viewDepth->getUAV(0, 0, 1)}},
+          {"u_GBufferPosition", RHI::BindingResource{position->getUAV(0, 0, 1)}},
           {"u_GBufferNormals", RHI::BindingResource{normal->getUAV(0, 0, 1)}},
           {"u_GBufferGeoNormals", RHI::BindingResource{geometryNormal->getUAV(0, 0, 1)}},
           {"u_GBufferDiffuseAlbedo", RHI::BindingResource{diffuseAlbedo->getUAV(0, 0, 1)}},

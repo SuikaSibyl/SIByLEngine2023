@@ -12,31 +12,17 @@
 #define RESOURCE_TYPE RWTexture2D
 #endif
 
-RESOURCE_TYPE<float> t_GBufferDepth;
+RESOURCE_TYPE<float4> t_GBufferPosition;
 RESOURCE_TYPE<uint>  t_GBufferNormals;
 RESOURCE_TYPE<uint>  t_GBufferGeoNormals;
 RESOURCE_TYPE<uint>  t_GBufferDiffuseAlbedo;
 RESOURCE_TYPE<uint>  t_GBufferSpecularRough;
 RESOURCE_TYPE<float4> t_MotionVectors;
 
-float3 viewDepthToWorldPos(
-    in_ref(CameraData) cameraData,
-    int2 pixelPosition,
-    float viewDepth)
-{
-    float2 uv = (float2(pixelPosition) + 0.5) * getInvViewportSize(cameraData);
-    float4 clipPos = float4(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, 0.5, 1);
-    float4 viewPos = mul(clipPos, cameraData.invProjMat);
-    viewPos.xy /= viewPos.z;
-    viewPos.zw = 1.0;
-    viewPos.xyz *= viewDepth;
-    return mul(viewPos, cameraData.invViewMat).xyz;
-}
-
 ShadingSurface GetGBufferSurface(
     in_ref(int2) pixelPosition,
     in_ref(CameraData) cameraData,
-    Texture2D<float> depthTexture,
+    Texture2D<float4> positionTexture,
     Texture2D<uint> normalsTexture,
     Texture2D<uint> geoNormalsTexture,
     Texture2D<uint> diffuseAlbedoTexture,
@@ -47,19 +33,52 @@ ShadingSurface GetGBufferSurface(
     if (any(pixelPosition >= getViewportSize(cameraData)))
         return surface;
     // fetch view depth
-    surface.viewDepth = depthTexture[pixelPosition];
+    const float4 position = positionTexture[pixelPosition];
+    surface.viewDepth = position.w;
     if (surface.viewDepth == k_background_depth)
         return surface;
     // fetch further gbuffer data
-    surface.normal = Unorm32OctahedronToUnitVector(normalsTexture[pixelPosition]);
-    surface.geoNormal = Unorm32OctahedronToUnitVector(geoNormalsTexture[pixelPosition]);
+    surface.shadingNormal = Unorm32OctahedronToUnitVector(normalsTexture[pixelPosition]);
+    surface.geometryNormal = Unorm32OctahedronToUnitVector(geoNormalsTexture[pixelPosition]);
     surface.diffuseAlbedo = Unpack_R11G11B10_UFLOAT(diffuseAlbedoTexture[pixelPosition]).rgb;
     float4 specularRough = Unpack_R8G8B8A8_Gamma_UFLOAT(specularRoughTexture[pixelPosition]);
     surface.specularF0 = specularRough.rgb;
     surface.roughness = specularRough.a;
-    surface.worldPos = viewDepthToWorldPos(cameraData, pixelPosition, surface.viewDepth);
+    surface.worldPos = position.xyz;
     surface.viewDir = normalize(cameraData.posW.xyz - surface.worldPos);
-    surface.diffuseProbability = getSurfaceDiffuseProbability(surface);
+    surface.transmissionFactor = 1.0;
+    
+    return surface;
+}
+
+ShadingSurface GetGBufferSurface(
+    in_ref(int2) pixelPosition,
+    in_ref(CameraData) cameraData,
+    RWTexture2D<float4> positionTexture,
+    RWTexture2D<uint> normalsTexture,
+    RWTexture2D<uint> geoNormalsTexture,
+    RWTexture2D<uint> diffuseAlbedoTexture,
+    RWTexture2D<uint> specularRoughTexture)
+{
+    ShadingSurface surface = EmptyShadingSurface();
+    // outside gbuffer
+    if (any(pixelPosition >= getViewportSize(cameraData)))
+        return surface;
+    // fetch view depth
+    const float4 position = positionTexture[pixelPosition];
+    surface.viewDepth = position.w;
+    if (surface.viewDepth == k_background_depth)
+        return surface;
+    // fetch further gbuffer data
+    surface.shadingNormal = Unorm32OctahedronToUnitVector(normalsTexture[pixelPosition]);
+    surface.geometryNormal = Unorm32OctahedronToUnitVector(geoNormalsTexture[pixelPosition]);
+    surface.diffuseAlbedo = Unpack_R11G11B10_UFLOAT(diffuseAlbedoTexture[pixelPosition]).rgb;
+    float4 specularRough = Unpack_R8G8B8A8_Gamma_UFLOAT(specularRoughTexture[pixelPosition]);
+    surface.specularF0 = specularRough.rgb;
+    surface.roughness = specularRough.a;
+    surface.worldPos = position.xyz;
+    surface.viewDir = normalize(cameraData.posW.xyz - surface.worldPos);
+    surface.transmissionFactor = 1.0;
 
     return surface;
 }
@@ -81,7 +100,7 @@ ShadingSurface GetGBufferSurface(
     return GetGBufferSurface(
         pixelPosition,
         cameraData,
-        t_GBufferDepth,
+        t_GBufferPosition,
         t_GBufferNormals,
         t_GBufferGeoNormals,
         t_GBufferDiffuseAlbedo,
@@ -111,10 +130,13 @@ float3 convertMotionVectorToPixelSpace(
 }
 
 float3 GetGeometryNormal(in_ref(int2) pixelPosition) {
+    return Unorm32OctahedronToUnitVector(t_GBufferGeoNormals[pixelPosition]);
+}
+float3 GetNormal(in_ref(int2) pixelPosition) {
     return Unorm32OctahedronToUnitVector(t_GBufferNormals[pixelPosition]);
 }
 float GetViewDepth(in_ref(int2) pixelPosition) {
-    return t_GBufferDepth[pixelPosition];
+    return t_GBufferPosition[pixelPosition].w;
 }
 float4 GetSpecularRoughness(in_ref(int2) pixelPosition) {
     return Unpack_R8G8B8A8_Gamma_UFLOAT(t_GBufferSpecularRough[pixelPosition]);

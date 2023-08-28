@@ -1,12 +1,11 @@
-#include "../../gbuffer/gbuffer_interface.hlsli"
 #include "../../include/common/cpp_compatible.hlsli"
 #include "../../include/common/packing.hlsli"
+#include "../../include/common/math.hlsli"
 #include "asvgf.hlsli" // see description and copyright info here
 
 [[vk::push_constant]]
 cbuffer PushConstantBuffer {
     int2 resolution;
-    int iteration;
 }
 
 // output grad image
@@ -75,7 +74,7 @@ float2 get_lf_gradient(in_ref(int2) ipos) {
 #endif
 
 [shader("compute")]
-[numthreads(256, 1, 1)]
+[numthreads(16, 16, 1)]
 void ComputeMain(int3 DTid: SV_DispatchThreadID) {
     // Create the gradient image
     const int2 ipos = int2(DTid.xy);
@@ -118,5 +117,4 @@ void ComputeMain(int3 DTid: SV_DispatchThreadID) {
     // save the gradient to image
     u_grad_LF[ipos] = grad_lf;
 #endif
-
 }

@@ -57,7 +57,7 @@ float2 filter_image(
 }
 
 [shader("compute")]
-[numthreads(256, 1, 1)]
+[numthreads(16, 16, 1)]
 void ComputeMain(int3 DTid: SV_DispatchThreadID) {
     const int2 ipos = DTid.xy;
     const int2 grad_size = resolution / GRAD_DWN;

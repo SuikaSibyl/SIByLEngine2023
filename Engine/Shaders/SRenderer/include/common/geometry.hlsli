@@ -12,36 +12,9 @@ float3 to_local(in_ref(float3x3) frame, in_ref(float3) v) {
     return float3(dot(v, frame[0]), dot(v, frame[1]), dot(v, frame[2]));
 }
 
-/**
- * Create ONB (orthonormal bases bases) from normal.
- * Resulting w is parallel to normal.
- */
-void createONB(in_ref(float3) n, out_ref(float3) u, out_ref(float3) v, out_ref(float3) w) {
-    w = normalize(n);
-    u = cross(w, float3(0.0f, 1.0f, 0.0f));
-    if (abs(u.x)<0.001f && abs(u.y)<0.001f && abs(u.z)<0.001f)
-        u = cross(w, float3(1.0f, 0.0f, 0.0f));
-    u = normalize(u);
-    v = cross(w,u);
-}
-
 /** Compute bitangent according to tangent and normal */
 float3 computeBitangent(in float3 tangent, in float3 normal) {
     return cross(normal, tangent);
-}
-
-/**
-* Create ONB (orthonormal bases bases) from normal.
-* Resulting w is parallel to normal.
-*/
-float3x3 createONB(in float3 n) {
-    float3 w = normalize(n);
-    float3 u = cross(w, float3(0.0f, 1.0f, 0.0f));
-    if (abs(u.x)<0.001f && abs(u.y)<0.001f && abs(u.z)<0.001f)
-        u = cross(w, float3(1.0f, 0.0f, 0.0f));
-    u = normalize(u);
-    float3 v = cross(w,u);
-    return float3x3(u,v,w);
 }
 
 float3x3 buildTangentToWorld(in float4 tangentWS, in float3 normalWS) {
@@ -55,19 +28,36 @@ float3x3 buildTangentToWorld(in float4 tangentWS, in float3 normalWS) {
     return float3x3(T, B, N);
 }
 
-// /** Compute TBN matrix according to normal */
+/**
+ * Create a frame from normal.
+ * This is probably the most stable one I have ever seen.
+ * And the neumerical stability turns out to be very important here.
+ * The implementation is based on Frisvad's paper
+ * "Building an Orthonormal Basis from a 3D Unit Vector Without Normalization"
+ * @url: https://backend.orbit.dtu.dk/ws/portalfiles/portal/126824972/onb_frisvad_jgt2012_v2.pdf
+ * Learned it from lajolla renderer's code.
+ * @param n the input normal
+ * @return the created frame
+ */
 float3x3 createFrame(in float3 n) {
     if (n[2] < float(-1 + 1e-6)) {
-        return float3x3(float3(0, -1, 0),
-                    float3(-1, 0, 0),
-                    n);
+        return float3x3(float3(0, -1, 0), float3(-1, 0, 0), n);
     } else {
         const float a = 1 / (1 + n[2]);
         const float b = -n[0] * n[1] * a;
         return float3x3(float3(1 - n[0] * n[0] * a, b, -n[0]),
-                    float3(b, 1 - n[1] * n[1] * a, -n[1]),
-                    n);
+                    float3(b, 1 - n[1] * n[1] * a, -n[1]), n);
     }
+}
+
+/**
+ * Create ONB (orthonormal bases bases) from normal.
+ * Just a alias of createFrame.
+ * @param n the input normal
+ * @return the ONB matrix
+ */
+float3x3 createONB(in float3 n) {
+    return createFrame(n);
 }
 
 /************************************************************************

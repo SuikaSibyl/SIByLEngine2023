@@ -32,7 +32,7 @@ float4 fragmentMain(
     if (pConst.showEnum == ShowEnum::DiffuseAlbedo) {
         color = surface.diffuseAlbedo;
     } else if (pConst.showEnum == ShowEnum::GeometryNormal) {
-        color = surface.geoNormal * 0.5 + 0.5;
+        color = surface.geometryNormal * 0.5 + 0.5;
     } else if (pConst.showEnum == ShowEnum::ShadingNormal) {
         color = surface.normal * 0.5 + 0.5;
     } else if (pConst.showEnum == ShowEnum::MotionVector) {

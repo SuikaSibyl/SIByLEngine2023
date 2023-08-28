@@ -23,6 +23,9 @@ RWStructuredBuffer<float4> u_cluster_gathered;  // 32 * (32 * 32)
 RWStructuredBuffer<int> u_associate_buffer;
 Texture3D<int> u_inverse_index;
 
+RWStructuredBuffer<float4> u_RepresentPixel;
+RWStructuredBuffer<float4> u_RepresentVPL;
+
 uint PackInt2ToUInt(int2 xy) {
     return (uint(xy.x) << 16) | uint(xy.y);
 }
@@ -53,7 +56,8 @@ void ComputeMain(
     if (all(vpl_position == float4(0))) return;
 
     const int3 vxID = int3(WorldToVoxel(vpl_position.xyz, info) * info.volumeDimension);
-    const int clusterID = u_associate_buffer[u_inverse_index[vxID]];
+    const int compactID = u_inverse_index[vxID];
+    const int clusterID = u_associate_buffer[compactID];
     if (clusterID == -1) return;
 
     // virtual point llight injection

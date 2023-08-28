@@ -30,6 +30,13 @@ inline void packFloat4(float4 v, inout_ref(uint2) u) {
     packFloat2(float2(v.y, v.z), u.y);
 }
 
+inline uint2 PackFloat4ToUint2(float4 v) {
+    uint2 u;
+    packFloat2(float2(v.x, v.y), u.x);
+    packFloat2(float2(v.y, v.z), u.y);
+    return u;
+}
+
 inline float unpackFloatHigh(uint u) {
     uint h = (u >> 16) & 0xffff;
     return f16tof32(h);
@@ -187,97 +194,6 @@ inline float3 DecodeNormalizedVectorFromSnorm2x16(uint packedNormal) {
     return SignedOctahedronToUnitVector(octNormal);
 }
 
-// Transforms an RGB color in Rec.709 to CIE XYZ.
-inline float3 RGBToXYZInRec709(float3 c) {
-    static const float3x3 M = float3x3(
-        0.4123907992659595, 0.3575843393838780, 0.1804807884018343,
-        0.2126390058715104, 0.7151686787677559, 0.0721923153607337,
-        0.0193308187155918, 0.1191947797946259, 0.9505321522496608
-    );
-    return mul(M, c);
-}
-
-// Transforms an XYZ color to RGB in Rec.709.
-inline float3 XYZToRGBInRec709(float3 c) {
-    static const float3x3 M = float3x3(
-        3.240969941904522, -1.537383177570094, -0.4986107602930032,
-        -0.9692436362808803, 1.875967501507721, 0.04155505740717569,
-        0.05563007969699373, -0.2039769588889765, 1.056971514242878
-    );
-    return mul(M, c);
-}
-
-// Encode an RGB color into a 32-bit LogLuv HDR format.
-//
-// The supported luminance range is roughly 10^-6..10^6 in 0.17% steps.
-// The log-luminance is encoded with 14 bits and chroma with 9 bits each.
-// This was empirically more accurate than using 8 bit chroma.
-// Black (all zeros) is handled exactly.
-inline uint EncodeRGBToLogLuv(float3 color) {
-    // Convert RGB to XYZ.
-    float3 XYZ = RGBToXYZInRec709(color);
-
-    // Encode log2(Y) over the range [-20,20) in 14 bits (no sign bit).
-    // TODO: Fast path that uses the bits from the fp32 representation directly.
-    float logY = 409.6 * (log2(XYZ.y) + 20.0); // -inf if Y==0
-    uint Le = uint(clamp(logY, 0.0, 16383.0));
-
-    // Early out if zero luminance to avoid NaN in chroma computation.
-    // Note Le==0 if Y < 9.55e-7. We'll decode that as exactly zero.
-    if (Le == 0) return 0;
-
-    // Compute chroma (u,v) values by:
-    //  x = X / (X + Y + Z)
-    //  y = Y / (X + Y + Z)
-    //  u = 4x / (-2x + 12y + 3)
-    //  v = 9y / (-2x + 12y + 3)
-    //
-    // These expressions can be refactored to avoid a division by:
-    //  u = 4X / (-2X + 12Y + 3(X + Y + Z))
-    //  v = 9Y / (-2X + 12Y + 3(X + Y + Z))
-    //
-    float invDenom = 1.0 / (-2.0 * XYZ.x + 12.0 * XYZ.y + 3.0 * (XYZ.x + XYZ.y + XYZ.z));
-    float2 uv = float2(4.0, 9.0) * float2(XYZ.x, XYZ.y) * invDenom;
-
-    // Encode chroma (u,v) in 9 bits each.
-    // The gamut of perceivable uv values is roughly [0,0.62], so scale by 820 to get 9-bit values.
-    uint2 uve = uint2(clamp(820.0f * uv, 0.0, 511.0));
-
-    return (Le << 18) | (uve.x << 9) | uve.y;
-}
-
-// Decode an RGB color stored in a 32-bit LogLuv HDR format.
-//    See RTXDI_EncodeRGBToLogLuv() for details.
-inline float3 DecodeLogLuvToRGB(uint packedColor) {
-    // Decode luminance Y from encoded log-luminance.
-    uint Le = packedColor >> 18;
-    if (Le == 0) return float3(0, 0, 0);
-
-    float logY = (float(Le) + 0.5) / 409.6 - 20.0;
-    float Y = pow(2.0, logY);
-
-    // Decode normalized chromaticity xy from encoded chroma (u,v).
-    //
-    //  x = 9u / (6u - 16v + 12)
-    //  y = 4v / (6u - 16v + 12)
-    //
-    uint2 uve = uint2(packedColor >> 9, packedColor) & 0x1ff;
-    float2 uv = (float2(uve) + 0.5f) / 820.0f;
-
-    float invDenom = 1.0f / (6.0f * uv.x - 16.0f * uv.y + 12.0f);
-    float2 xy = float2(9.0, 4.0) * uv * invDenom;
-
-    // Convert chromaticity to XYZ and back to RGB.
-    //  X = Y / y * x
-    //  Z = Y / y * (1 - x - y)
-    //
-    float s = Y / xy.y;
-    float3 XYZ = float3(s * xy.x, Y, s * (1.f - xy.x - xy.y));
-
-    // Convert back to RGB and clamp to avoid out-of-gamut colors.
-    return max(XYZToRGBInRec709(XYZ), float3(0.0f));
-}
-
 /**
  * Pack a float3 into a 32-bit RGBE format.
  * Using a shared exponent allows for a wider range of values to be represented.
@@ -318,6 +234,101 @@ inline float3 UnpackRGBE(uint x) {
     v.g = float((x >> 9) & 0x1ff) * scale;
     v.b = float((x >> 18) & 0x1ff) * scale;
     return v;
+}
+
+/**
+ * Transforms an RGB color in Rec.709 to CIE XYZ.
+ * The code is adapted from the RTXDI project:
+ * @url: https://github.com/NVIDIAGameWorks/RTXDI/blob/main/rtxdi-sdk/include/rtxdi/RtxdiMath.hlsli#L233
+ */
+inline float3 RGBToXYZInRec709(float3 c) {
+    static const float3x3 M = float3x3(
+        0.4123907992659595, 0.3575843393838780, 0.1804807884018343,
+        0.2126390058715104, 0.7151686787677559, 0.0721923153607337,
+        0.0193308187155918, 0.1191947797946259, 0.9505321522496608
+    );
+    return mul(M, c);
+}
+
+/**
+ * Transforms an XYZ color to RGB in Rec.709.
+ * The code is adapted from the RTXDI project:
+ * @url: https://github.com/NVIDIAGameWorks/RTXDI/blob/main/rtxdi-sdk/include/rtxdi/RtxdiMath.hlsli#L233
+ */
+inline float3 XYZToRGBInRec709(float3 c) {
+    static const float3x3 M = float3x3(
+        3.240969941904522, -1.537383177570094, -0.4986107602930032,
+        -0.9692436362808803, 1.875967501507721, 0.04155505740717569,
+        0.05563007969699373, -0.2039769588889765, 1.056971514242878
+    );
+    return mul(M, c);
+}
+
+/**
+ * Encode an RGB color into a 32-bit LogLuv HDR format.
+ * The supported luminance range is roughly 10^-6..10^6 in 0.17% steps.
+ * The log-luminance is encoded with 14 bits and chroma with 9 bits each.
+ * This was empirically more accurate than using 8 bit chroma.
+ * Black (all zeros) is handled exactly.
+ * The code is adapted from the RTXDI project:
+ * @url: https://github.com/NVIDIAGameWorks/RTXDI/blob/main/rtxdi-sdk/include/rtxdi/RtxdiMath.hlsli#L233
+ */
+inline uint EncodeRGBToLogLuv(float3 color) {
+    // Convert RGB to XYZ.
+    float3 XYZ = RGBToXYZInRec709(color);
+    // Encode log2(Y) over the range [-20,20) in 14 bits (no sign bit).
+    // TODO: Fast path that uses the bits from the fp32 representation directly.
+    float logY = 409.6 * (log2(XYZ.y) + 20.0); // -inf if Y==0
+    uint Le = uint(clamp(logY, 0.0, 16383.0));
+    // Early out if zero luminance to avoid NaN in chroma computation.
+    // Note Le==0 if Y < 9.55e-7. We'll decode that as exactly zero.
+    if (Le == 0) return 0;
+    // Compute chroma (u,v) values by:
+    //  x = X / (X + Y + Z)
+    //  y = Y / (X + Y + Z)
+    //  u = 4x / (-2x + 12y + 3)
+    //  v = 9y / (-2x + 12y + 3)
+    //
+    // These expressions can be refactored to avoid a division by:
+    //  u = 4X / (-2X + 12Y + 3(X + Y + Z))
+    //  v = 9Y / (-2X + 12Y + 3(X + Y + Z))
+    //
+    float invDenom = 1.0 / (-2.0 * XYZ.x + 12.0 * XYZ.y + 3.0 * (XYZ.x + XYZ.y + XYZ.z));
+    float2 uv = float2(4.0, 9.0) * float2(XYZ.x, XYZ.y) * invDenom;
+    // Encode chroma (u,v) in 9 bits each.
+    // The gamut of perceivable uv values is roughly [0,0.62], so scale by 820 to get 9-bit values.
+    uint2 uve = uint2(clamp(820.0f * uv, 0.0, 511.0));
+    return (Le << 18) | (uve.x << 9) | uve.y;
+}
+
+/**
+ * Decode an RGB color stored in a 32-bit LogLuv HDR format.
+ * The code is adapted from the RTXDI project:
+ * @url: https://github.com/NVIDIAGameWorks/RTXDI/blob/main/rtxdi-sdk/include/rtxdi/RtxdiMath.hlsli#L233
+ */
+inline float3 DecodeLogLuvToRGB(uint packedColor) {
+    // Decode luminance Y from encoded log-luminance.
+    uint Le = packedColor >> 18;
+    if (Le == 0) return float3(0, 0, 0);
+    float logY = (float(Le) + 0.5) / 409.6 - 20.0;
+    float Y = pow(2.0, logY);
+    // Decode normalized chromaticity xy from encoded chroma (u,v).
+    //
+    //  x = 9u / (6u - 16v + 12)
+    //  y = 4v / (6u - 16v + 12)
+    //
+    uint2 uve = uint2(packedColor >> 9, packedColor) & 0x1ff;
+    float2 uv = (float2(uve) + 0.5f) / 820.0f;
+    float invDenom = 1.0f / (6.0f * uv.x - 16.0f * uv.y + 12.0f);
+    float2 xy = float2(9.0, 4.0) * uv * invDenom;
+    // Convert chromaticity to XYZ and back to RGB.
+    //  X = Y / y * x
+    //  Z = Y / y * (1 - x - y)
+    //
+    float s = Y / xy.y;
+    float3 XYZ = float3(s * xy.x, Y, s * (1.f - xy.x - xy.y));
+    // Convert back to RGB and clamp to avoid out-of-gamut colors.
+    return max(XYZToRGBInRec709(XYZ), float3(0.0f));
 }
 
 #endif // !_SRENDERER_COMMMON_PACKING_HEADER_

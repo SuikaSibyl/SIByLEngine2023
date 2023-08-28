@@ -21,6 +21,8 @@ SE_EXPORT struct GBufferInspectorPass : public RDG::FullScreenPass {
 SE_EXPORT struct GBufferUtils {
   static auto addGBufferInput(RDG::PassReflection& reflector,
                               uint32_t stages) noexcept -> void;
+  static auto addGBufferInputOutput(RDG::PassReflection& reflector,
+                              uint32_t stages) noexcept -> void;
   static auto addPrevGBufferInput(RDG::PassReflection& reflector,
                                   uint32_t stages) noexcept -> void;
   static auto addPrevGbufferInputOutput(RDG::PassReflection& reflector,
@@ -61,5 +63,13 @@ SE_EXPORT struct GBufferHolderSource : public RDG::DummyPass {
 SE_EXPORT struct GBufferHolderGraph : public RDG::Subgraph {
   virtual auto alias() noexcept -> RDG::AliasDict override;
   virtual auto onRegister(RDG::Graph* graph) noexcept -> void override;
+};
+
+SE_EXPORT struct GBufferShading : public RDG::RayTracingPass {
+  GBufferShading();
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept
+      -> void override;
 };
 }

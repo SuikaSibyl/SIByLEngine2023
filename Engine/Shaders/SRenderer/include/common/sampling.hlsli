@@ -6,6 +6,23 @@
 #include "random.hlsli"
 
 /**
+ * Uiform sample on 3D geometrics
+ */
+float3 RandomPointOnSphere(in_ref(float2) u) {
+    const float z = 1.0f - 2.0f * u.x;
+    float r = sqrt(max(0.0f, 1.0f - z * z));
+    float phi = k_2pi * u[1];
+    return float3(r * cos(phi), r * sin(phi), z);
+}
+
+float3 RandomPointOnHemiphere(in_ref(float2) u) {
+    const float z = u.x;
+    float r = sqrt(max(0.0f, 1.0f - u.x * u.x));
+    float phi = k_2pi * u[1];
+    return float3(r * cos(phi), r * sin(phi), z);
+}
+
+/**
  * Uniform Random in 3D geometics
  */
 

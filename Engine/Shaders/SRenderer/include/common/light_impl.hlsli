@@ -184,4 +184,20 @@ float3 EvaluateDirectLight(
     return lightSample.radiance * bsdf * visibility / lightSample.pdf;
 }
 
+float3 EvaluateDirectLight(
+    in_ref(Ray) previousRay,
+    in_ref(ShadingSurface) surface,
+    in_ref(PolymorphicLightInfo) light,
+    inout_ref(RandomSamplerState) RNG
+) {
+    const GeometryHit hit = CreateGeometryHit(surface);
+    const LightSample lightSample = SampleLight(hit, light);
+    Ray shadowRay = SpawnRay(surface, lightSample.wi);
+    shadowRay.tMax = distance(lightSample.position, surface.worldPos) - 0.01;
+    const bool occluded = TraceOccludeRay(shadowRay, RNG, SceneBVH);
+    const float visibility = occluded ? 0.0f : 1.0f;
+    const float3 bsdf = EvalBsdf(surface, -previousRay.direction, lightSample.wi);
+    return lightSample.radiance * bsdf * visibility / lightSample.pdf;
+}
+
 #endif // _SRENDERER_LIGHT_IMPL_HEADER_

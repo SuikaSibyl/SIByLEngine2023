@@ -90,7 +90,7 @@ void RgenMain() {
     const int vxg_type = (pConst.sampleStragegy >> 4) & 0x3;
     const bool power_mis = ((pConst.sampleStragegy >> 6) & 0x1) != 0;
     const VisibilityType visibility = VisibilityType((pConst.sampleStragegy >> 7) & 0x3);
-
+    
     // 1 spp : spawn a new BSDF ray.
     float2 uv = float2(GetNextRandom(RNG), GetNextRandom(RNG));
     if (sample_stragegy == 0) {
@@ -285,21 +285,30 @@ void RgenMain() {
             }
         }
         {
-            const float4 bsdfPos = u_position[pixel];
+            // const float4 bsdfPos = u_position[pixel];
+            // float bsdf_pdf;
+            // const float3 indirect = EvaluateVPLIndirectLight(
+            //     pixel, primaryRay, hit, bsdfPos, u_Color, bsdf_pdf);
+            // new BSDF ray
             float bsdf_pdf;
-            const float3 indirect = EvaluateVPLIndirectLight(
-                pixel, primaryRay, hit, bsdfPos, u_Color, bsdf_pdf);
+            Ray bsdfRay = SpawnBsdfRay(hit, -primaryRay.direction, RNG, bsdf_pdf);
+            float3 indirect = EvaluateIndirectLight(
+                primaryRay, bsdfRay,
+                double(bsdf_pdf),
+                hit, payload, RNG);
+
             if (any(indirect > 0)) {
                 float w1 = bsdf_pdf;
                 float w2 = 0;
                 {
                     // pdf of sample top level tree
-                    const int3 vxID = int3(WorldToVoxel(bsdfPos.xyz, info) * info.volumeDimension);
+                    // const int3 vxID = int3(WorldToVoxel(bsdfPos.xyz, info) * info.volumeDimension);
+                    const int3 vxID = int3(WorldToVoxel(payload.hit.position.xyz, info) * info.volumeDimension);
                     const int vxFlatten = FlatIndex(vxID, info.volumeDimension);
                     int compactID = u_inverseIndex[vxID];
                     if (compactID == -1) {
-                        u_Color[pixel] = float4(0, 1000, 1000, 1);
-                        return;
+                        // u_Color[pixel] = float4(0, 1000, 1000, 1);
+                        // return;
                     }
                     else {
                         const int clusterID = u_vxAssociate[compactID];

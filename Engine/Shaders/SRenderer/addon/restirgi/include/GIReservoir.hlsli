@@ -1,28 +1,24 @@
-/***************************************************************************
- # Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
- #
- # NVIDIA CORPORATION and its licensors retain all intellectual property
- # and proprietary rights in and to this software, related documentation
- # and any modifications thereto.  Any use, reproduction, disclosure or
- # distribution of this software and related documentation without an express
- # license agreement from NVIDIA CORPORATION is strictly prohibited.
- **************************************************************************/
+#include "../../../include/common/cpp_compatible.hlsli"
+#include "../../../include/common/packing.hlsli"
+#include "RuntimeParams.hlsli"
+
+/**
+ * This file is adapted from the original file in the RTXDI SDK.
+ * @url: https://github.com/NVIDIAGameWorks/RTXDI/blob/main/rtxdi-sdk/include/rtxdi/GIReservoir.hlsli#L145
+ * The copyright of original file is retained here:
+ * /***************************************************************************
+ *  # Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+ *  #
+ *  # NVIDIA CORPORATION and its licensors retain all intellectual property
+ *  # and proprietary rights in and to this software, related documentation
+ *  # and any modifications thereto.  Any use, reproduction, disclosure or
+ *  # distribution of this software and related documentation without an express
+ *  # license agreement from NVIDIA CORPORATION is strictly prohibited.
+ *  **************************************************************************
+ */
 
 #ifndef GI_RESERVOIR_HLSLI
 #define GI_RESERVOIR_HLSLI
-
-#include "GIParameters.hlsli"
-#include "RtxdiHelpers.hlsli"
-
-// Define this macro to 0 if your shader needs read-only access to the reservoirs, 
-// to avoid compile errors in the RTXDI_StoreReservoir function
-#ifndef RTXDI_ENABLE_STORE_RESERVOIR
-#define RTXDI_ENABLE_STORE_RESERVOIR 1
-#endif
-
-#ifndef RTXDI_GI_RESERVOIR_BUFFER
-#error "RTXDI_GI_RESERVOIR_BUFFER must be defined to point to a RWStructuredBuffer<RTXDI_PackedGIReservoir> type resource"
-#endif
 
 // This structure represents a indirect lighting reservoir that stores the radiance and weight
 // as well as its the position where the radiane come from.
@@ -42,6 +38,15 @@ struct GIReservoir {
     uint age;
 };
 
+struct PackedGIReservoir {
+    float3 position;
+    uint32_t packed_miscData_age_M; // See Reservoir.hlsli about the detail of the bit field.
+    uint32_t packed_radiance;       // Stored as 32bit LogLUV format.
+    float weight;
+    uint32_t packed_normal; // Stored as 2x 16-bit snorms in the octahedral mapping
+    float unused;
+};
+
 // Encoding helper constants for RTXDI_PackedGIReservoir
 static const uint RTXDI_PackedGIReservoir_MShift = 0;
 static const uint RTXDI_PackedGIReservoir_MaxM = 0x0ff;
@@ -56,32 +61,28 @@ static const uint RTXDI_PackedGIReservoir_MiscDataMask = 0xffff0000;
 
 // Converts a GIReservoir into its packed form.
 // This function should be used only when the application needs to store data with the given argument.
-// It can be retrieved when unpacking the GIReservoir, but RTXDI SDK doesn't use the filed at all. 
-PackedGIReservoir PackGIReservoir(const GIReservoir reservoir, const uint miscData) {
+// It can be retrieved when unpacking the GIReservoir, but RTXDI SDK doesn't use the filed at all.
+PackedGIReservoir PackGIReservoir(in_ref(GIReservoir) reservoir, const uint miscData) {
     PackedGIReservoir data;
-
     data.position = reservoir.position;
-    data.packed_normal = RTXDI_EncodeNormalizedVectorToSnorm2x16(reservoir.normal);
-
+    data.packed_normal = EncodeNormalizedVectorToSnorm2x16(reservoir.normal);
     data.packed_miscData_age_M =
         (miscData & RTXDI_PackedGIReservoir_MiscDataMask)
         | (min(reservoir.age, RTXDI_PackedGIReservoir_MaxAge) << RTXDI_PackedGIReservoir_AgeShift)
         | (min(reservoir.M, RTXDI_PackedGIReservoir_MaxM) << RTXDI_PackedGIReservoir_MShift);
-
     data.weight = reservoir.weightSum;
-    data.packed_radiance = RTXDI_EncodeRGBToLogLuv(reservoir.radiance);
+    data.packed_radiance = PackRGBE(reservoir.radiance);
     data.unused = 0;
-
     return data;
 }
 
 // Converts a PackedGIReservoir into its unpacked form.
 // This function should be used only when the application wants to retrieve the misc data stored in the gap field of the packed form.
-GIReservoir RTXDI_UnpackGIReservoir(PackedGIReservoir data, out uint miscData) {
+GIReservoir UnpackGIReservoir(PackedGIReservoir data, out uint miscData) {
     GIReservoir res;
     res.position = data.position;
-    res.normal = RTXDI_DecodeNormalizedVectorFromSnorm2x16(data.packed_normal);
-    res.radiance = RTXDI_DecodeLogLuvToRGB(data.packed_radiance);
+    res.normal = DecodeNormalizedVectorFromSnorm2x16(data.packed_normal);
+    res.radiance = UnpackRGBE(data.packed_radiance);
     res.weightSum = data.weight;
     res.M = (data.packed_miscData_age_M >> RTXDI_PackedGIReservoir_MShift) & RTXDI_PackedGIReservoir_MaxM;
     res.age = (data.packed_miscData_age_M >> RTXDI_PackedGIReservoir_AgeShift) & RTXDI_PackedGIReservoir_MaxAge;
@@ -89,79 +90,122 @@ GIReservoir RTXDI_UnpackGIReservoir(PackedGIReservoir data, out uint miscData) {
     return res;
 }
 
-// Converts a PackedGIReservoir into its unpacked form.
-GIReservoir RTXDI_UnpackGIReservoir(PackedGIReservoir data) {
+/** Converts a PackedGIReservoir into its unpacked form. */
+GIReservoir UnpackGIReservoir(PackedGIReservoir data) {
     uint miscFlags; // unused;
-    return RTXDI_UnpackGIReservoir(data, miscFlags);
+    return UnpackGIReservoir(data, miscFlags);
 }
 
-GIReservoir RTXDI_LoadGIReservoir(
-    RTXDI_ResamplingRuntimeParameters params,
-    uint2 reservoirPosition,
-    uint reservoirArrayIndex)
-{
-    uint pointer = RTXDI_ReservoirPositionToPointer(params, reservoirPosition, reservoirArrayIndex);
-    return RTXDI_UnpackGIReservoir(RTXDI_GI_RESERVOIR_BUFFER[pointer]);
-}
-
-GIReservoir RTXDI_LoadGIReservoir(
-    RTXDI_ResamplingRuntimeParameters params,
-    uint2 reservoirPosition,
-    uint reservoirArrayIndex,
-    out uint miscFlags)
-{
-    uint pointer = RTXDI_ReservoirPositionToPointer(params, reservoirPosition, reservoirArrayIndex);
-    return RTXDI_UnpackGIReservoir(RTXDI_GI_RESERVOIR_BUFFER[pointer], miscFlags);
-}
-
-#if RTXDI_ENABLE_STORE_RESERVOIR
-
-void RTXDI_StorePackedGIReservoir(
-    const PackedGIReservoir packedGIReservoir,
-    RTXDI_ResamplingRuntimeParameters params,
-    uint2 reservoirPosition,
-    uint reservoirArrayIndex)
-{
-    uint pointer = RTXDI_ReservoirPositionToPointer(params, reservoirPosition, reservoirArrayIndex);
-    RTXDI_GI_RESERVOIR_BUFFER[pointer] = packedGIReservoir;
-}
-
-void RTXDI_StoreGIReservoir(
-    const GIReservoir reservoir,
-    RTXDI_ResamplingRuntimeParameters params,
-    uint2 reservoirPosition,
-    uint reservoirArrayIndex)
-{
-    RTXDI_StorePackedGIReservoir(
-        PackGIReservoir(reservoir, 0), params, reservoirPosition, reservoirArrayIndex);
-}
-
-void RTXDI_StoreGIReservoir(
-    const GIReservoir reservoir,
-    const uint miscFlags,
-    RTXDI_ResamplingRuntimeParameters params,
-    uint2 reservoirPosition,
-    uint reservoirArrayIndex)
-{
-    RTXDI_StorePackedGIReservoir(
-        PackGIReservoir(reservoir, miscFlags), params, reservoirPosition, reservoirArrayIndex);
-}
-
-#endif // RTXDI_ENABLE_STORE_RESERVOIR
-
-GIReservoir RTXDI_EmptyGIReservoir() {
+/** Create an empty GIReservoir */
+GIReservoir EmptyGIReservoir() {
     GIReservoir s;
     s.position = float3(0.0, 0.0, 0.0);
     s.normal = float3(0.0, 0.0, 0.0);
     s.radiance = float3(0.0, 0.0, 0.0);
-    s.weightSum = 0.0;
-    s.M = 0;
-    s.age = 0;
+    s.weightSum = 0.0; s.M = 0; s.age = 0;
     return s;
 }
 
-bool RTXDI_IsValidGIReservoir(const GIReservoir reservoir) {
+// Creates a GI reservoir from a raw light sample.
+// Note: the original sample PDF can be embedded into sampleRadiance, 
+// in which case the samplePdf parameter should be set to 1.0.
+GIReservoir MakeGIReservoir(
+    in_ref(float3) samplePos,
+    in_ref(float3) sampleNormal,
+    in_ref(float3) sampleRadiance,
+    in_ref(float) samplePdf
+) {
+    GIReservoir reservoir;
+    reservoir.position = samplePos;
+    reservoir.normal = sampleNormal;
+    reservoir.radiance = sampleRadiance;
+    reservoir.weightSum = samplePdf > 0.0 ? 1.0 / samplePdf : 0.0;
+    reservoir.M = 1;
+    reservoir.age = 0;
+    return reservoir;
+}
+
+/** Tell whether a GIReservoir is valid */
+bool IsValidGIReservoir(in_ref(GIReservoir) reservoir) {
     return reservoir.M != 0;
+}
+
+GIReservoir LoadGIReservoir(
+    in_ref(GIResamplingRuntimeParameters) params,
+    in_ref(uint2) reservoirPosition,
+    in_ref(uint) reservoirArrayIndex,
+    in_ref(RWStructuredBuffer<PackedGIReservoir>) reservoir_buffer,
+) {
+    const uint pointer = ReservoirPositionToPointer(params, reservoirPosition, reservoirArrayIndex);
+    return UnpackGIReservoir(reservoir_buffer[pointer]);
+}
+
+GIReservoir LoadGIReservoir(
+    in_ref(GIResamplingRuntimeParameters) params,
+    in_ref(uint2) reservoirPosition,
+    in_ref(uint) reservoirArrayIndex,
+    in_ref(StructuredBuffer<PackedGIReservoir>) reservoir_buffer,
+) {
+    const uint pointer = ReservoirPositionToPointer(params, reservoirPosition, reservoirArrayIndex);
+    return UnpackGIReservoir(reservoir_buffer[pointer]);
+}
+
+GIReservoir LoadGIReservoir(
+    in_ref(GIResamplingRuntimeParameters) params,
+    in_ref(uint2) reservoirPosition,
+    in_ref(uint) reservoirArrayIndex,
+    in_ref(RWStructuredBuffer<PackedGIReservoir>) reservoir_buffer,
+    out_ref(uint) miscFlags
+) {
+    const uint pointer = ReservoirPositionToPointer(params, reservoirPosition, reservoirArrayIndex);
+    return UnpackGIReservoir(reservoir_buffer[pointer], miscFlags);
+}
+
+GIReservoir LoadGIReservoir(
+    in_ref(GIResamplingRuntimeParameters) params,
+    in_ref(uint2) reservoirPosition,
+    in_ref(uint) reservoirArrayIndex,
+    in_ref(StructuredBuffer<PackedGIReservoir>) reservoir_buffer,
+    out_ref(uint) miscFlags
+) {
+    const uint pointer = ReservoirPositionToPointer(params, reservoirPosition, reservoirArrayIndex);
+    return UnpackGIReservoir(reservoir_buffer[pointer], miscFlags);
+}
+
+void StorePackedGIReservoir(
+    in_ref(PackedGIReservoir) packedGIReservoir,
+    in_ref(GIResamplingRuntimeParameters) params,
+    in_ref(uint2) reservoirPosition,
+    in_ref(uint) reservoirArrayIndex,
+    in_ref(RWStructuredBuffer<PackedGIReservoir>) reservoir_buffer
+) {
+    const uint pointer = ReservoirPositionToPointer(params, reservoirPosition, reservoirArrayIndex);
+    reservoir_buffer[pointer] = packedGIReservoir;
+}
+
+void StoreGIReservoir(
+    in_ref(GIReservoir) reservoir,
+    in_ref(GIResamplingRuntimeParameters) params,
+    in_ref(uint2) reservoirPosition,
+    in_ref(uint) reservoirArrayIndex,
+    in_ref(RWStructuredBuffer<PackedGIReservoir>) reservoir_buffer
+) {
+    StorePackedGIReservoir(
+        PackGIReservoir(reservoir, 0), params, 
+        reservoirPosition, reservoirArrayIndex, reservoir_buffer);
+}
+
+void StoreGIReservoir(
+    in_ref(GIReservoir) reservoir,
+    in_ref(uint) miscFlags,
+    in_ref(GIResamplingRuntimeParameters) params,
+    in_ref(uint2) reservoirPosition,
+    in_ref(uint) reservoirArrayIndex,
+    in_ref(RWStructuredBuffer<PackedGIReservoir>) reservoir_buffer
+) {
+    StorePackedGIReservoir(
+        PackGIReservoir(reservoir, miscFlags), params, 
+        reservoirPosition, reservoirArrayIndex, reservoir_buffer);
 }
 
 #endif // GI_RESERVOIR_HLSLI

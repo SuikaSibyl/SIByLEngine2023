@@ -8,7 +8,7 @@
 #include "tree-top-level-constr.h"
 
 layout(push_constant) uniform PushConsts {
-  ivec2 map_size;
+  ivec3 map_size;
 };
 
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
@@ -25,10 +25,15 @@ void main() {
     float cluster_intensity = cluster_node_id != -1
                                 ? nodes[cluster_node_id].intensity
                                 : 0.f;
-    const uint visibility_pack = imageLoad(visibilityIMG, ivec2(spixelID)).r;
-
-    if((visibility_pack & (0x1 << sgInvocationID)) == 0)
-        cluster_intensity = 0.f;
+    if(map_size.z == 0) {
+        const uint visibility_pack = imageLoad(visibilityIMG, ivec2(spixelID)).r;
+        if((visibility_pack & (0x1 << sgInvocationID)) == 0)
+            cluster_intensity = 0.f;
+    }
+    else {
+        float avg_visibility = float(avg_visibility[spixelIDFlatten * 32 + sgInvocationID]) / 32;
+        cluster_intensity *= avg_visibility;
+    }
         
     float importance = cluster_intensity;
 

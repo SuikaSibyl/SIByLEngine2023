@@ -1,4 +1,5 @@
 #include "../../include/common/cylindrical.hlsli"
+#include "../../include/common/light_impl.hlsli"
 #include "../../include/common/random.hlsli"
 #include "../../include/common/sampling.hlsli"
 #include "../../include/common/vmf.hlsli"
@@ -7,7 +8,6 @@
 #include "../../raytracer/spt_interface.hlsli"
 #include "../vbuffer/vbuffer.hlsli"
 #include "include/pathguiding.hlsli"
-
 
 [[vk::push_constant]]
 cbuffer PushConstants {
@@ -60,16 +60,7 @@ void RgenMain() {
         }
         else {
             const PolymorphicLightInfo light = lights[0];
-            float3 lightColor = unpackLightColor(light);
-            float3 lightDir = Unorm32OctahedronToUnitVector(light.databyte0);
-
-            Ray shadowRay = SpawnRay(payload.hit, -lightDir);
-            bool occluded = TraceOccludeRay(shadowRay, RNG, SceneBVH);
-            float visibility = occluded ? 0.0f : 1.0f;
-
-            float3 second_bsdf = EvalBsdf(payload.hit, -secondaryRay.direction, -lightDir);
-
-            const float3 color = lightColor * second_bsdf * visibility;
+            const float3 color = EvaluateDirectLight(secondaryRay, payload.hit, light, RNG);
             const float irradiance = luminance(color);
             u_output[pixel] = float4(importance * scalar, irradiance, 0, 1);
         }

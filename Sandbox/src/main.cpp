@@ -82,8 +82,9 @@ struct SandBoxApplication :public Application::ApplicationBase {
 
 		pipeline1 = std::make_unique<CustomPipeline>();
 		pipeline2 = std::make_unique<Addon::SLC::SLCTestPipeline>();
-		rtgi_pipeline = std::make_unique<SemiNEEPipeline>();
-        geoinsp_pipeline = std::make_unique<SRP::GeoInspectPipeline>();
+        rtgi_pipeline = std::make_unique<RestirGIPipeline>();
+        geoinsp_pipeline = std::make_unique<GTPipeline>();
+        //geoinsp_pipeline = std::make_unique<SRP::GeoInspectPipeline>();
 		vxgi_pipeline = std::make_unique<SSPGPipeline>();
         vxdi_pipeline = std::make_unique<VXGuidingPipeline>();
 		pipeline1->build();

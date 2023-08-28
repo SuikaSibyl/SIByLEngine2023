@@ -378,6 +378,8 @@ SE_EXPORT struct VXTreeTopLevelPass : public RDG::ComputePass {
   virtual auto execute(RDG::RenderContext* context,
                        RDG::RenderData const& renderData) noexcept
       -> void override;
+  virtual auto renderUI() noexcept -> void override;
+  int visibility = 0;
 };
 
 SE_EXPORT struct SPixelClearPass : public RDG::ComputePass {
@@ -399,6 +401,16 @@ SE_EXPORT struct SPixelGatherPass : public RDG::ComputePass {
 
 SE_EXPORT struct SPixelVisibilityPass : public RDG::RayTracingPass {
   SPixelVisibilityPass();
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept
+      -> void override;
+  virtual auto renderUI() noexcept -> void override;
+  bool do_execute = false;
+};
+
+SE_EXPORT struct SPixelVisibilityEXPass : public RDG::ComputePass {
+  SPixelVisibilityEXPass();
   virtual auto reflect() noexcept -> RDG::PassReflection override;
   virtual auto execute(RDG::RenderContext* context,
                        RDG::RenderData const& renderData) noexcept

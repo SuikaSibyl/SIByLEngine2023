@@ -3034,6 +3034,13 @@ auto VXTreeTopLevelPass::reflect() noexcept -> RDG::PassReflection {
           RDG::BufferInfo::ConsumeEntry{}
               .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
               .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInputOutput("SPixelAvgVisibility")
+    .isBuffer().withSize(40 * 23 * sizeof(uint32_t) * 8)
+    .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+    .consume(RDG::BufferInfo::ConsumeEntry{}
+            .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+            .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+
   //reflector.addOutput("TopLevelProb")
   //    .isBuffer()
   //    .withSize(32 * sizeof(float) * 40 * 23)
@@ -3051,6 +3058,7 @@ auto VXTreeTopLevelPass::execute(
   GFX::Buffer* node = renderData.getBuffer("Node");
   GFX::Buffer* cr = renderData.getBuffer("ClusterRoots");
   GFX::Buffer* tlt = renderData.getBuffer("TopLevelTree");
+  GFX::Buffer* av = renderData.getBuffer("SPixelAvgVisibility");
   //GFX::Buffer* tlp = renderData.getBuffer("TopLevelProb");
   GFX::Texture* spvis = renderData.getTexture("SPixelVisibility");
 
@@ -3059,17 +3067,23 @@ auto VXTreeTopLevelPass::execute(
     RHI::BindGroupEntry{1, RHI::BindingResource{{cr->buffer.get(), 0, cr->buffer->size()}}},
     RHI::BindGroupEntry{2, RHI::BindingResource{{node->buffer.get(), 0, node->buffer->size()}}},
     RHI::BindGroupEntry{3, RHI::BindingResource{{spvis->getUAV(0, 0, 1)}}},
+    RHI::BindGroupEntry{4, RHI::BindingResource{{av->buffer.get(), 0, av->buffer->size()}}},
     //RHI::BindGroupEntry{4, RHI::BindingResource{{tlp->buffer.get(), 0, tlp->buffer->size()}}},
   });
 
-  Math::ivec2 map_size = {40, 23};
+  Math::ivec3 map_size = {40, 23, visibility};
   RHI::ComputePassEncoder* encoder = beginPass(context);
   encoder->pushConstants(&map_size, (uint32_t)RHI::ShaderStages::COMPUTE, 0,
-                         sizeof(Math::ivec2));
+                         sizeof(map_size));
   encoder->dispatchWorkgroups(5, 23, 1);
   encoder->end();
 }
 
+auto VXTreeTopLevelPass::renderUI() noexcept -> void {
+  const char* item_names[] = {"Binary", "Average"};
+  ImGui::Combo("Sample Mode", &visibility, item_names, IM_ARRAYSIZE(item_names),
+               IM_ARRAYSIZE(item_names));
+}
 
 VXTreeEncodePass::VXTreeEncodePass(VXGI::VXGISetting* setting)
     : voxel_setting(setting) {
@@ -3291,6 +3305,12 @@ auto SPixelClearPass::reflect() noexcept -> RDG::PassReflection {
           RDG::TextureInfo::ConsumeEntry{
               RDG::TextureInfo::ConsumeType::StorageBinding}
               .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addOutput("SPixelAvgVisibility")
+      .isBuffer().withSize(40 * 23 * sizeof(uint32_t) * 8)
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
   reflector.addOutput("SPixelCounter")
       .isTexture()
       .withSize(Math::ivec3(40, 23, 1))
@@ -3315,12 +3335,15 @@ auto SPixelClearPass::execute(
   GFX::Texture* spv = renderData.getTexture("SPixelVisibility");
   GFX::Texture* spc = renderData.getTexture("SPixelCounter");
   GFX::Buffer* cc = renderData.getBuffer("ClusterCounter");
+  GFX::Buffer* avgvis = renderData.getBuffer("SPixelAvgVisibility");
   updateBinding(context, "u_spixel_visibility",
                 RHI::BindingResource{{spv->getUAV(0, 0, 1)}});
   updateBinding(context, "u_spixel_counter",
                 RHI::BindingResource{{spc->getUAV(0, 0, 1)}});
   updateBinding(context, "u_cluster_counter",
       RHI::BindingResource{{cc->buffer.get(), 0, cc->buffer->size()}});
+  updateBinding(context, "u_spixel_avg_visibility",
+      RHI::BindingResource{{avgvis->buffer.get(), 0, avgvis->buffer->size()}});
 
   Math::ivec2 resolution = {40, 23};
   RHI::ComputePassEncoder* encoder = beginPass(context);
@@ -3569,6 +3592,130 @@ auto SPixelVisibilityPass::execute(RDG::RenderContext* context,
   encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::RAYGEN, 0,
                          sizeof(PushConstant));
   if (do_execute) encoder->traceRays(1280, 736, 1);
+  encoder->end();
+}
+
+SPixelVisibilityEXPass::SPixelVisibilityEXPass() {
+  auto [comp] = GFX::ShaderLoader_SLANG::load(
+      "../Engine/Shaders/SRenderer/addon/vxguiding/"
+      "visibility/cvis-visibility-check-comp.slang",
+      std::array<std::pair<std::string, RHI::ShaderStages>, 1>{
+          std::make_pair("ComputeMain", RHI::ShaderStages::COMPUTE),
+      });
+
+  RDG::ComputePass::init(
+      Core::ResourceManager::get()->getResource<GFX::ShaderModule>(comp));
+}
+
+auto SPixelVisibilityEXPass::reflect() noexcept -> RDG::PassReflection {
+  RDG::PassReflection reflector;
+  reflector.addInput("SPixelGathered")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("ClusterGathered")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("SPixelCounter")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("ClusterCounter")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("VBuffer")
+      .isTexture().withFormat(RHI::TextureFormat::RGBA32_UINT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInputOutput("SPixelVisibility")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addOutput("Debug")
+      .isTexture().withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+   reflector.addInputOutput("SPixelAvgVisibility")
+       .isBuffer().withSize(40 * 23 * sizeof(uint32_t) * 8)
+       .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+       .consume(RDG::BufferInfo::ConsumeEntry{}
+               .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT |
+                         (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+               .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  return reflector;
+}
+
+auto SPixelVisibilityEXPass::renderUI() noexcept -> void {
+  ImGui::Checkbox("Addition Check", &do_execute);
+}
+
+auto SPixelVisibilityEXPass::execute(
+    RDG::RenderContext* context,
+    RDG::RenderData const& renderData) noexcept
+    -> void {
+  GFX::Texture* spg = renderData.getTexture("SPixelGathered");
+  GFX::Texture* spv = renderData.getTexture("SPixelVisibility");
+  GFX::Texture* spc = renderData.getTexture("SPixelCounter");
+  GFX::Texture* vbuffer = renderData.getTexture("VBuffer");
+  GFX::Texture* debug = renderData.getTexture("Debug");
+  GFX::Buffer* cg = renderData.getBuffer("ClusterGathered");
+  GFX::Buffer* cc = renderData.getBuffer("ClusterCounter");
+  GFX::Buffer* av = renderData.getBuffer("SPixelAvgVisibility");
+
+  updateBinding(context, "u_spixel_gathered",
+                RHI::BindingResource{{spg->getUAV(0, 0, 1)}});
+  updateBinding(context, "u_spixel_visibility",
+                RHI::BindingResource{{spv->getUAV(0, 0, 1)}});
+  updateBinding(context, "u_spixel_counter",
+                RHI::BindingResource{{spc->getUAV(0, 0, 1)}});
+  updateBinding(context, "u_vBuffer",
+                RHI::BindingResource{{vbuffer->getUAV(0, 0, 1)}});
+  updateBinding(context, "u_Debug",
+                RHI::BindingResource{{debug->getUAV(0, 0, 1)}});
+  updateBinding(
+      context, "u_cluster_gathered",
+      RHI::BindingResource{{cg->buffer.get(), 0, cg->buffer->size()}});
+  updateBinding(
+      context, "u_cluster_counter",
+      RHI::BindingResource{{cc->buffer.get(), 0, cc->buffer->size()}});
+  updateBinding(
+      context, "u_spixel_avg_visibility",
+      RHI::BindingResource{{av->buffer.get(), 0, av->buffer->size()}});
+
+
+  std::vector<RHI::BindGroupEntry>* set_0_entries =
+      renderData.getBindGroupEntries("CommonScene");
+  getBindGroup(context, 0)->updateBinding(*set_0_entries);
+  std::vector<RHI::BindGroupEntry>* set_1_entries =
+      renderData.getBindGroupEntries("CommonRT");
+  getBindGroup(context, 1)->updateBinding(*set_1_entries);
+
+  RHI::ComputePassEncoder* encoder = beginPass(context);
+  struct PushConstant {
+    uint32_t width;
+    uint32_t height;
+    uint32_t map_width;
+    uint32_t map_height;
+    uint32_t sample_batch;
+  };
+  PushConstant pConst = {1280, 720, 40, 23, renderData.getUInt("AccumIdx")};
+  if (do_execute) {
+    encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::COMPUTE, 0,
+                           sizeof(PushConstant));
+    encoder->dispatchWorkgroups(1280 / 32, 736 / 8, 1);
+  }
   encoder->end();
 }
 

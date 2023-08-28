@@ -23,7 +23,7 @@ float3 unidirectional_path_tracing(in_ref(Ray) primaryRay, inout_ref(RandomSampl
     PrimaryPayload payload;
     payload.RND = RNG;
     // payload.occluded = false;
-
+    
     uint instanceMask = 0xff;
     uint rayFlags = RAY_FLAG_NONE;
     TraceRay(SceneBVH, rayFlags, instanceMask, 0, 0, 0, ray, payload);
@@ -39,6 +39,7 @@ float3 unidirectional_path_tracing(in_ref(Ray) primaryRay, inout_ref(RandomSampl
         const PolymorphicLightInfo light = lights[0];
         di += EvaluateDirectLight(primaryRay, payload.hit, light, RNG);
     }
+    float3 geometry_normal = payload.hit.geometryNormal;
 
     float bsdf_pdf;
     Ray bsdfRay = SpawnBsdfRay(payload.hit, -primaryRay.direction, RNG, bsdf_pdf);
@@ -60,7 +61,7 @@ float3 unidirectional_path_tracing(in_ref(Ray) primaryRay, inout_ref(RandomSampl
         return gi;
     }
     else {
-        return di + gi;
+        return geometry_normal * 0.5f + 0.5f;
     }
 }
 

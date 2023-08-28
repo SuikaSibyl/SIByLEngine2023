@@ -7,8 +7,9 @@
 #include "../include/common/math.hlsli"
 #include "../include/common/random.hlsli"
 #include "../include/common/raycast.hlsli"
+#include "../include/common/shading.hlsli"
+#include "../include/common/packing.hlsli"
 #include "../include/raytracer_descriptor_set.hlsli"
-
 
 #define PRIMITIVE_TRIANGLE 0
 #define PRIMITIVE_TRIANGLE_ALPHA 1
@@ -24,7 +25,7 @@
 struct GeometryHit {
     float3  position;
     uint    geometryID;
-    float3  flatNormal;
+    float3  shadingNormal;
     uint    primitiveID;
     float3  geometryNormal;
     uint    flags;
@@ -58,6 +59,20 @@ struct ShadowPayload {
     bool occluded;
     RandomSamplerState RND;
 };
+
+GeometryHit CreateGeometryHit(in_ref(ShadingSurface) surface) {
+    GeometryHit hit;
+    hit.geometryID = 0;
+    hit.primitiveID = 0;
+    hit.position = surface.worldPos;
+    hit.shadingNormal = surface.shadingNormal;
+    hit.geometryNormal = surface.geometryNormal;
+    hit.barycentric = float2(0);
+    hit.texcoord = float2(0);
+    hit.tangent = float4(0);
+    hit.flags = 0;
+    return hit;
+}
 
 /**********************************************************************
 ****                    Common Payloads Structures                 ****
@@ -191,14 +206,14 @@ struct BSDFSampleQuery {
     float3 dir_in;
     uint mat_id;
     float3 geometric_normal;
-    float3x3 frame;
+    float rnd_w;
     float2 uv;
     float2 rnd_uv;
-    float rnd_w;
-    float hitFrontface;
-    // output
+    // output - 4 floats
     float3 dir_out;
     float pdf_out;
+    // frame - 3x3 floats
+    float3x3 frame;
 };
 
 struct BSDFSamplePDFQuery {
@@ -234,8 +249,23 @@ Ray SpawnRay(
     in_ref(GeometryHit) isect,
     in_ref(float3) dir)
 {
-    const float3 offsetDir = faceforward(isect.flatNormal, -dir, isect.flatNormal);
+    const float3 offsetDir = faceforward(isect.geometryNormal, -dir, isect.geometryNormal);
     const float3 offsetedPosition = offsetPositionAlongNormal(isect.position, offsetDir);
+
+    Ray ray;
+    ray.origin = offsetedPosition;
+    ray.direction = dir;
+    ray.tMin = 0.000;
+    ray.tMax = k_inf;
+    return ray;
+}
+
+Ray SpawnRay(
+    in_ref(ShadingSurface) surface,
+    in_ref(float3) dir)
+{
+    const float3 offsetDir = faceforward(surface.geometryNormal, -dir, surface.geometryNormal);
+    const float3 offsetedPosition = offsetPositionAlongNormal(surface.worldPos, offsetDir);
 
     Ray ray;
     ray.origin = offsetedPosition;
@@ -251,7 +281,7 @@ Ray SpawnOcclusionRay(
     in_ref(float3) target_norm,
     in_ref(float3) dir)
 {
-    const float3 offsetDir = faceforward(isect.flatNormal, -dir, isect.flatNormal);
+    const float3 offsetDir = faceforward(isect.geometryNormal, -dir, isect.geometryNormal);
     const float3 offsetedPosition = offsetPositionAlongNormal(isect.position, offsetDir);
     const float3 offsetDirTarget = faceforward(target_norm, dir, target_norm);
     const float3 offsetedTarget = offsetPositionAlongNormal(target_pos, offsetDirTarget);
@@ -261,6 +291,20 @@ Ray SpawnOcclusionRay(
     ray.direction = dir;
     ray.tMin = 0.000;
     ray.tMax = length(offsetedTarget - offsetedPosition);
+    return ray;
+}
+
+Ray SetupVisibilityRay(
+    in_ref(ShadingSurface) surface,
+    in_ref(float3) samplePosition, 
+    float offset = 0.001
+) {
+    float3 L = samplePosition - surface.worldPos;
+    Ray ray;
+    ray.tMin = offset;
+    ray.tMax = max(offset, length(L) - offset * 2);
+    ray.direction = normalize(L);
+    ray.origin = surface.worldPos;
     return ray;
 }
 
@@ -301,9 +345,43 @@ float3 EvalBsdf(
     cBSDFEvalQuery.mat_id = materialID;
     cBSDFEvalQuery.geometric_normal = hit.geometryNormal;
     cBSDFEvalQuery.uv = hit.texcoord;
-    cBSDFEvalQuery.frame = createONB(hit.geometryNormal);
+    cBSDFEvalQuery.frame = createONB(hit.shadingNormal);
     cBSDFEvalQuery.hitFrontface = 1.f; //
     cBSDFEvalQuery.transport_mode = transport_mode;
+    CallShader(BSDF_EVAL_IDX(bsdf_type), cBSDFEvalQuery);
+    return cBSDFEvalQuery.bsdf;
+}
+
+/**
+ * Evaluate the BSDF.
+ * @param surface The shading surface.
+ * @param dir_in The direction of the incoming ray.
+ * @param dir_out The direction of the outgoing ray.
+ * @param transport_mode The transport mode.
+ * @return The evaluated BSDF value.
+ */
+float3 EvalBsdf(
+    in_ref(ShadingSurface) surface,
+    in_ref(float3) dir_in,
+    in_ref(float3) dir_out,
+    in const uint transport_mode = 0
+) {
+    BSDFEvalQuery cBSDFEvalQuery;
+    uint bsdf_type = surface.bsdfID;
+    cBSDFEvalQuery.dir_in = dir_in;
+    cBSDFEvalQuery.dir_out = dir_out;
+    cBSDFEvalQuery.mat_id = 0xFFFFFFFF;
+    cBSDFEvalQuery.geometric_normal = surface.geometryNormal;
+    cBSDFEvalQuery.frame = createONB(surface.shadingNormal);
+    cBSDFEvalQuery.transport_mode = transport_mode;
+    // pack shading surface data into query struct
+    // we can pack up to 6 floats into the query struct here:
+    // uv (2) bsdf (4)
+    cBSDFEvalQuery.uv.x = surface.roughness;                             // roughness
+    cBSDFEvalQuery.uv.y = asfloat(PackRGBE(surface.specularF0));         // specularF0
+    cBSDFEvalQuery.bsdf.x = asfloat(PackRGBE(surface.diffuseAlbedo));    // diffuseAlbedo
+    cBSDFEvalQuery.bsdf.y = surface.transmissionFactor;               // eta
+    // call shader
     CallShader(BSDF_EVAL_IDX(bsdf_type), cBSDFEvalQuery);
     return cBSDFEvalQuery.bsdf;
 }
@@ -327,12 +405,46 @@ float3 SampleBsdf(
     BSDFSampleQuery cBSDFSampleQuery;
     cBSDFSampleQuery.dir_in = dir_in;
     cBSDFSampleQuery.mat_id = materialID;
-    cBSDFSampleQuery.geometric_normal = hit.geometryNormal;
+    cBSDFSampleQuery.geometric_normal = hit.shadingNormal;
     cBSDFSampleQuery.uv = hit.texcoord;
-    cBSDFSampleQuery.frame = createONB(hit.geometryNormal);
+    cBSDFSampleQuery.frame = createONB(hit.shadingNormal);
     cBSDFSampleQuery.rnd_uv = rand.xy;
     cBSDFSampleQuery.rnd_w = rand.z;
-    cBSDFSampleQuery.hitFrontface = 1.f;
+    CallShader(BSDF_SAMPLE_IDX(bsdf_type), cBSDFSampleQuery);
+    pdf_out = cBSDFSampleQuery.pdf_out;
+    return cBSDFSampleQuery.dir_out;
+}
+
+/**
+ * Sample a direction from the BSDF.
+ * @param surface The shading surface hit.
+ * @param dir_in The direction of the incoming ray.
+ * @param rand The random number triple to generate sample.
+ * @param pdf_out The output pdf (in solid-angle measure).
+ * @return The sampled direction.
+ */
+float3 SampleBsdf(
+    in_ref(ShadingSurface) surface,
+    in_ref(float3) dir_in,
+    in_ref(float3) rand,
+    out_ref(float) pdf_out,
+) {
+    const uint bsdf_type = surface.bsdfID;
+    BSDFSampleQuery cBSDFSampleQuery;
+    cBSDFSampleQuery.dir_in = dir_in;
+    cBSDFSampleQuery.mat_id = 0xFFFFFFFF;
+    cBSDFSampleQuery.geometric_normal = surface.geometryNormal;
+    cBSDFSampleQuery.frame = createONB(surface.shadingNormal);
+    cBSDFSampleQuery.rnd_uv = rand.xy;
+    cBSDFSampleQuery.rnd_w = rand.z;
+    // pack shading surface data into query struct
+    // we can pack up to 6 floats into the query struct here:
+    // uv (2) dir_out (3) pdf_out (1)
+    cBSDFSampleQuery.uv.x = surface.roughness; // roughness
+    cBSDFSampleQuery.uv.y = asfloat(PackRGBE(surface.specularF0)); // specularF0
+    cBSDFSampleQuery.dir_out.x = asfloat(PackRGBE(surface.diffuseAlbedo)); // diffuseAlbedo
+    cBSDFSampleQuery.dir_out.y = surface.transmissionFactor; // eta
+    // call shader
     CallShader(BSDF_SAMPLE_IDX(bsdf_type), cBSDFSampleQuery);
     pdf_out = cBSDFSampleQuery.pdf_out;
     return cBSDFSampleQuery.dir_out;
@@ -358,7 +470,7 @@ float PdfBsdfSample(
     cBSDFSamplePDFQuery.mat_id = materialID;
     cBSDFSamplePDFQuery.geometric_normal = hit.geometryNormal;
     cBSDFSamplePDFQuery.uv = hit.texcoord;
-    cBSDFSamplePDFQuery.frame = createONB(hit.geometryNormal);
+    cBSDFSamplePDFQuery.frame = createONB(hit.shadingNormal);
     cBSDFSamplePDFQuery.hitFrontface = 1.f;
     CallShader(BSDF_PDF_IDX(bsdf_type), cBSDFSamplePDFQuery);
     return cBSDFSamplePDFQuery.pdf;
@@ -384,6 +496,25 @@ Ray SpawnBsdfRay(
 }
 
 /**
+ * Spawn a ray from a shading surface with a
+ * random direction sampled from the BSDF.
+ * @param surface The shading surface.
+ * @param dir_in The direction of the incoming ray.
+ * @param rand The random number triple to generate sample.
+ * @param pdf_out The output pdf (in solid-angle measure).
+ * @return The spawned ray.
+ */
+Ray SpawnBsdfRay(
+    in_ref(ShadingSurface) surface,
+    in_ref(float3) dir_in,
+    in_ref(float3) rand,
+    out_ref(float) pdf_out,
+) {
+    const float3 bsdf_direction = SampleBsdf(surface, dir_in, rand, pdf_out);
+    return SpawnRay(surface, bsdf_direction);
+}
+
+/**
  * Spawn a ray from a geometry hit 
  * with a random direction sampled from the BSDF.
  * @param hit The geometry hit.
@@ -402,6 +533,24 @@ Ray SpawnBsdfRay(
     return SpawnBsdfRay(hit, dir_in, bsdf_rnd, pdf_out);
 }
 
+/**
+ * Spawn a ray from a shading surface with a
+ * random direction sampled from the BSDF.
+ * @param surface The shading surface.
+ * @param dir_in The direction of the incoming ray.
+ * @param rand The random number triple to generate sample.
+ * @param pdf_out The output pdf (in solid-angle measure).
+ * @return The spawned ray.
+ */
+Ray SpawnBsdfRay(
+    in_ref(ShadingSurface) surface,
+    in_ref(float3) dir_in,
+    inout_ref(RandomSamplerState) RNG,
+    out_ref(float) pdf_out,
+) {
+    const float3 bsdf_rnd = float3(GetNextRandom(RNG), GetNextRandom(RNG), GetNextRandom(RNG));
+    return SpawnBsdfRay(surface, dir_in, bsdf_rnd, pdf_out);
+}
 void Intersection(
     in_ref(Ray) ray,
     in_ref(RaytracingAccelerationStructure) bvh,

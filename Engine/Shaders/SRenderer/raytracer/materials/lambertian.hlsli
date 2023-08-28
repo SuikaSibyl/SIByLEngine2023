@@ -11,16 +11,28 @@
  */
 [shader("callable")]
 void EvalLambertian(inout_ref(BSDFEvalQuery) cBSDFEvalQuery) {
+    if (dot(cBSDFEvalQuery.geometric_normal, cBSDFEvalQuery.dir_in) < 0 ||
+        dot(cBSDFEvalQuery.geometric_normal, cBSDFEvalQuery.dir_out) < 0) {
+        // No light below the surface
+        cBSDFEvalQuery.bsdf = float3(0);
+        return;
+    }
     // Making sure the shading frame is consistent with the view direction.
     float3x3 frame = cBSDFEvalQuery.frame;
-    // if (dot(frame[2], cBSDFEvalQuery.dir_in) < 0) {
-    //     frame = -frame;
-    // }
+    if (dot(frame[2], cBSDFEvalQuery.dir_in) < 0) {
+        frame = -frame;
+    }
     // Evaluate bsdf
-    const MaterialInfo material = materials[cBSDFEvalQuery.mat_id];
-    const float3 texAlbedo = textures[material.baseOrDiffuseTextureIndex]
-                                 .Sample(cBSDFEvalQuery.uv, 0) .xyz;
-    const float3 albedo = material.baseOrDiffuseColor * texAlbedo / k_pi;
+    float3 albedo;
+    if (cBSDFEvalQuery.mat_id == 0xFFFFFFFF) {
+        albedo = UnpackRGBE(asuint(cBSDFEvalQuery.bsdf.x)) / k_pi;
+    }
+    else {
+        const MaterialInfo material = materials[cBSDFEvalQuery.mat_id];
+        const float3 texAlbedo = textures[material.baseOrDiffuseTextureIndex]
+                                     .Sample(cBSDFEvalQuery.uv, 0) .xyz;
+        albedo = material.baseOrDiffuseColor * texAlbedo / k_pi;
+    }
     cBSDFEvalQuery.bsdf = saturate(dot(frame[2], cBSDFEvalQuery.dir_out)) * albedo;
 }
 
@@ -30,6 +42,13 @@ void EvalLambertian(inout_ref(BSDFEvalQuery) cBSDFEvalQuery) {
  */
 [shader("callable")]
 void SampleLambertian(inout_ref(BSDFSampleQuery) cBSDFSampleQuery) {
+    // Check the direction
+    if (dot(cBSDFSampleQuery.geometric_normal, cBSDFSampleQuery.dir_in) < 0) {
+        // No light below the surface
+        cBSDFSampleQuery.dir_out = float3(0);
+        cBSDFSampleQuery.pdf_out = 0.f;
+        return;
+    }
     // Making sure the shading frame is consistent with the view direction.
     float3x3 frame = cBSDFSampleQuery.frame;
     if (dot(frame[2], cBSDFSampleQuery.dir_in) < 0) {
@@ -50,6 +69,12 @@ void SampleLambertian(inout_ref(BSDFSampleQuery) cBSDFSampleQuery) {
  */
 [shader("callable")]
 void PdfLambertian(inout_ref(BSDFSamplePDFQuery) cBSDFSamplePDFQuery) {
+    if (dot(cBSDFSamplePDFQuery.geometric_normal, cBSDFSamplePDFQuery.dir_in) < 0 ||
+        dot(cBSDFSamplePDFQuery.geometric_normal, cBSDFSamplePDFQuery.dir_out) < 0) {
+        // No light below the surface
+        cBSDFSamplePDFQuery.pdf = 0.f;
+        return;
+    }
     // Making sure the shading frame is consistent with the view direction.
     float3x3 frame = cBSDFSamplePDFQuery.frame;
     if (dot(frame[2], cBSDFSamplePDFQuery.dir_in) < 0) {

@@ -9,6 +9,9 @@ namespace SIByL {
 SE_EXPORT struct BlitPass : public RDG::FullScreenPass {
   enum struct SourceType {
       UINT,
+      UINT2,
+      UINT3,
+      UINT4,
       FLOAT,
       FLOAT2,
       FLOAT3,

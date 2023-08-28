@@ -200,9 +200,8 @@ ShadingSurface fetchShadingSurfaceTrimesh(
     surface.roughness;
     surface.viewDir;
     surface.viewDepth;
-    surface.normal = shadingNormal;
-    surface.diffuseProbability;
-    surface.geoNormal = flatNormal;
+    surface.shadingNormal = shadingNormal;
+    surface.geometryNormal = flatNormal;
     surface.diffuseAlbedo = diffuseColor;
     surface.specularF0;
     return surface;

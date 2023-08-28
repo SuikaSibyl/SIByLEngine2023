@@ -175,7 +175,7 @@ void SphereClosestHit(
 
     payload.hit.position = hitPoint;
     payload.hit.geometryID = geometryID;
-    payload.hit.flatNormal = geometric_normal;
+    payload.hit.shadingNormal = geometric_normal;
     payload.hit.primitiveID = primitiveID;
     payload.hit.geometryNormal = geometric_normal;
     payload.hit.barycentric = float2(0, 0);

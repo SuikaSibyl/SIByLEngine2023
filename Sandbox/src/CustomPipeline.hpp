@@ -4,6 +4,7 @@
 #include <Passes/RasterizerPasses/SE.SRenderer-PreZPass.hpp>
 #include <Passes/FullScreenPasses/SE.SRenderer-AccumulatePass.hpp>
 #include <Passes/RasterizerPasses/SE.SRenderer-GeometryInspectorPass.hpp>
+#include <Passes/FullScreenPasses/SE.SRenderer-Blit.hpp>
 #include <SE.Addon.SemiNee.hpp>
 #include <SE.Addon.BitonicSort.hpp>
 #include <SE.Addon.VXGI.hpp>
@@ -13,6 +14,7 @@
 #include <SE.Addon.gSLICr.hpp>
 #include <SE.Addon.SSGuiding.hpp>
 #include <SE.Addon.ASVGF.hpp>
+#include <SE.Addon.RestirGI.hpp>
 
 namespace SIByL {
 SE_EXPORT struct CustomGraph : public RDG::Graph {
@@ -20,24 +22,154 @@ SE_EXPORT struct CustomGraph : public RDG::Graph {
     addPass(std::make_unique<Addon::VBuffer::RayTraceVBuffer>(), "VBuffer Pass");
     addPass(std::make_unique<Addon::VBuffer::VBuffer2GBufferPass>(), "VBuffer2GBuffer Pass");
     addEdge("VBuffer Pass", "VBuffer", "VBuffer2GBuffer Pass", "VBuffer");
-    // alternative: use rasterizer g-buffer
-    //addSubgraph(std::make_unique<PreZPass>(), "Pre-Z Pass");
-    //addPass(std::make_unique<Addon::RasterizedGBufferPass>(), "GBuffer Pass");
-    //addEdge("Pre-Z Pass", "Depth", "GBuffer Pass", "Depth");
-
+    
     // Hold history GBuffer
     addPass(std::make_unique<Addon::GBufferHolderSource>(), "GBufferPrev Pass");
+    // Hold history prelude
+    addPass(std::make_unique<Addon::ASVGF::Prelude>(), "ASVGF-Prelude Pass");
+    // ASVGF :: Gradient Reprojection
+    addPass(std::make_unique<Addon::ASVGF::GradientReprojection>(), "ASVGF-GradProj Pass");
+    addEdge("VBuffer Pass", "VBuffer", "ASVGF-GradProj Pass", "VBuffer");
+    addEdge("ASVGF-Prelude Pass", "GradSamplePosPrev", "ASVGF-GradProj Pass", "GradSamplePosPrev");
+    addEdge("ASVGF-Prelude Pass", "HFPrev", "ASVGF-GradProj Pass", "HFPrev");
+    addEdge("ASVGF-Prelude Pass", "SpecPrev", "ASVGF-GradProj Pass", "SpecPrev");
+    addEdge("ASVGF-Prelude Pass", "VBufferPrev", "ASVGF-GradProj Pass", "VBufferPrev");
+    addEdge("ASVGF-Prelude Pass", "RandPrev", "ASVGF-GradProj Pass", "RandPrev");
+    Addon::GBufferUtils::addGBufferEdges(this, "VBuffer2GBuffer Pass", "ASVGF-GradProj Pass");
+    Addon::GBufferUtils::addPrevGBufferEdges(this, "GBufferPrev Pass", "ASVGF-GradProj Pass");
+
+    // GBuffer Shading
+    addPass(std::make_unique<Addon::GBufferShading>(), "GBufferShading Pass");
+    Addon::GBufferUtils::addGBufferEdges(this, "ASVGF-GradProj Pass", "GBufferShading Pass");
+    addEdge("ASVGF-GradProj Pass", "RandSeed", "GBufferShading Pass", "RandSeed");
+    addEdge("ASVGF-GradProj Pass", "RandPrev", "GBufferShading Pass", "RandPrev");
+
+    // Now blit HF, Spec, GradSamplePos and VBuffer img for next frame
+    addPass(std::make_unique<BlitPass>(BlitPass::Descriptor{0, 0, 0, 0, 
+        BlitPass::SourceType::UINT}), "Blit Diffuse");
+    addEdge("GBufferShading Pass", "Diffuse", "Blit Diffuse", "Source");
+    addEdge("ASVGF-GradProj Pass", "HFPrev", "Blit Diffuse", "Target");
+    addPass(std::make_unique<BlitPass>(BlitPass::Descriptor{0, 0, 0, 0, 
+        BlitPass::SourceType::UINT}), "Blit Specular");
+    addEdge("GBufferShading Pass", "Specular", "Blit Specular", "Source");
+    addEdge("ASVGF-GradProj Pass", "SpecPrev", "Blit Specular", "Target");
+    addPass(std::make_unique<BlitPass>(BlitPass::Descriptor{0, 0, 0, 0, 
+        BlitPass::SourceType::UINT}), "Blit GradSamplePos");
+    addEdge("ASVGF-GradProj Pass", "GradSamplePos", "Blit GradSamplePos", "Source");
+    addEdge("ASVGF-GradProj Pass", "GradSamplePosPrev", "Blit GradSamplePos", "Target");
+    addPass(std::make_unique<BlitPass>(BlitPass::Descriptor{0, 0, 0, 0, 
+        BlitPass::SourceType::UINT4}), "Blit VBuffer");
+    addEdge("VBuffer Pass", "VBuffer", "Blit VBuffer", "Source");
+    addEdge("ASVGF-GradProj Pass", "VBufferPrev", "Blit VBuffer", "Target");
+    
+    // create gradient image
+    addPass(std::make_unique<Addon::ASVGF::GradientImagePass>(), "ASVGF-GradImg Pass");
+    addEdge("ASVGF-GradProj Pass", "GradSamplePos", "ASVGF-GradImg Pass", "GradSamplePos");
+    addEdge("ASVGF-GradProj Pass", "HfSpecLumPrev", "ASVGF-GradImg Pass", "HfSpecLumPrev");
+    addEdge("GBufferShading Pass", "Diffuse", "ASVGF-GradImg Pass", "HF");
+    addEdge("GBufferShading Pass", "Specular", "ASVGF-GradImg Pass", "Spec");
+
+    // atrous gradient image
+    addPass(std::make_unique<Addon::ASVGF::GradientAtrousPass>(0), "ASVGF-GradAtrous-0 Pass");
+    addEdge("ASVGF-GradImg Pass", "GradHFSpec", "ASVGF-GradAtrous-0 Pass", "GradHFSpecPing");
+    addEdge("ASVGF-GradImg Pass", "GradHFSpecBack", "ASVGF-GradAtrous-0 Pass", "GradHFSpecPong");
+    addPass(std::make_unique<Addon::ASVGF::GradientAtrousPass>(1), "ASVGF-GradAtrous-1 Pass");
+    addEdge("ASVGF-GradAtrous-0 Pass", "GradHFSpecPong", "ASVGF-GradAtrous-1 Pass", "GradHFSpecPing");
+    addEdge("ASVGF-GradAtrous-0 Pass", "GradHFSpecPing", "ASVGF-GradAtrous-1 Pass", "GradHFSpecPong");
+    addPass(std::make_unique<Addon::ASVGF::GradientAtrousPass>(2), "ASVGF-GradAtrous-2 Pass");
+    addEdge("ASVGF-GradAtrous-1 Pass", "GradHFSpecPong", "ASVGF-GradAtrous-2 Pass", "GradHFSpecPing");
+    addEdge("ASVGF-GradAtrous-1 Pass", "GradHFSpecPing", "ASVGF-GradAtrous-2 Pass", "GradHFSpecPong");
+
+    // temporal accumulate pass
+    addPass(std::make_unique<Addon::ASVGF::TemporalPass>(), "ASVGF-Temporal Pass");
+    Addon::GBufferUtils::addGBufferEdges(this, "GBufferShading Pass", "ASVGF-Temporal Pass");
+    Addon::GBufferUtils::addPrevGBufferEdges(this, "ASVGF-GradProj Pass", "ASVGF-Temporal Pass");
+    addEdge("ASVGF-GradAtrous-2 Pass", "GradHFSpecPong", "ASVGF-Temporal Pass", "GradHF");
+    addEdge("GBufferShading Pass", "Diffuse", "ASVGF-Temporal Pass", "HF");
+    addEdge("GBufferShading Pass", "Specular", "ASVGF-Temporal Pass", "Spec");
+
+    // blit pass - two moments and color history
+    addPass(std::make_unique<BlitPass>(BlitPass::Descriptor{0, 0, 0, 0, 
+        BlitPass::SourceType::FLOAT4}), "Blit MomentsHistlenHF");
+    addEdge("ASVGF-Temporal Pass", "MomentsHistlenHF", "Blit MomentsHistlenHF", "Source");
+    addEdge("ASVGF-Temporal Pass", "MomentsHistlenHFPrev", "Blit MomentsHistlenHF", "Target");
+    addPass(std::make_unique<BlitPass>(BlitPass::Descriptor{0, 0, 0, 0, 
+        BlitPass::SourceType::FLOAT4}), "Blit ColorHistlenSpec");
+    addEdge("ASVGF-Temporal Pass", "ColorHistlenSpec", "Blit ColorHistlenSpec", "Source");
+    addEdge("ASVGF-Temporal Pass", "ColorHistlenSpecPrev", "Blit ColorHistlenSpec", "Target");
+
+    // 
+    addPass(std::make_unique<Addon::ASVGF::AtrousPass>(0), "ASVGF-Atrous-0 Pass");
+    Addon::GBufferUtils::addGBufferEdges(this, "ASVGF-Temporal Pass", "ASVGF-Atrous-0 Pass");
+    addEdge("ASVGF-Temporal Pass", "Composite", "ASVGF-Atrous-0 Pass", "Composite");
+    addEdge("ASVGF-Temporal Pass", "MomentsHistlenHF", "ASVGF-Atrous-0 Pass", "MomentsHistlenHF");
+    addEdge("ASVGF-Temporal Pass", "AtrousHF", "ASVGF-Atrous-0 Pass", "AtrousHFPing");
+    addEdge("ASVGF-Temporal Pass", "AtrousSpec", "ASVGF-Atrous-0 Pass", "AtrousSpecPing");
+    addEdge("ASVGF-Temporal Pass", "AtrousMoments", "ASVGF-Atrous-0 Pass", "AtrousMomentPing");
+    addEdge("ASVGF-Temporal Pass", "AtrousHFBack", "ASVGF-Atrous-0 Pass", "AtrousHFPong");
+    addEdge("ASVGF-Temporal Pass", "AtrousSpecBack", "ASVGF-Atrous-0 Pass", "AtrousSpecPong");
+    addEdge("ASVGF-Temporal Pass", "AtrousMomentsBack", "ASVGF-Atrous-0 Pass", "AtrousMomentPong");
+    addEdge("ASVGF-GradProj Pass", "IsCorrelated", "ASVGF-Atrous-0 Pass", "IsCorrelated");
+
+    addPass(std::make_unique<BlitPass>(BlitPass::Descriptor{0, 0, 0, 0, 
+    BlitPass::SourceType::UINT}), "Blit HFFiltered");
+    addEdge("ASVGF-Atrous-0 Pass", "AtrousHFPong", "Blit HFFiltered", "Source");
+    addEdge("ASVGF-Temporal Pass", "HFFilteredPrev", "Blit HFFiltered", "Target");
+
+    addPass(std::make_unique<Addon::ASVGF::AtrousPass>(1), "ASVGF-Atrous-1 Pass");
+    Addon::GBufferUtils::addGBufferEdges(this, "ASVGF-Atrous-0 Pass", "ASVGF-Atrous-1 Pass");
+    addEdge("Blit HFFiltered", "Target", "ASVGF-Atrous-1 Pass", "AtrousHFPing");
+    addEdge("ASVGF-Temporal Pass", "Composite", "ASVGF-Atrous-1 Pass", "Composite");
+    addEdge("ASVGF-Temporal Pass", "MomentsHistlenHF", "ASVGF-Atrous-1 Pass", "MomentsHistlenHF");
+    addEdge("ASVGF-Atrous-0 Pass", "AtrousSpecPong", "ASVGF-Atrous-1 Pass", "AtrousSpecPing");
+    addEdge("ASVGF-Atrous-0 Pass", "AtrousMomentPong", "ASVGF-Atrous-1 Pass", "AtrousMomentPing");
+    addEdge("ASVGF-Atrous-0 Pass", "AtrousHFPing", "ASVGF-Atrous-1 Pass", "AtrousHFPong");
+    addEdge("ASVGF-Atrous-0 Pass", "AtrousSpecPing", "ASVGF-Atrous-1 Pass", "AtrousSpecPong");
+    addEdge("ASVGF-Atrous-0 Pass", "AtrousMomentPing", "ASVGF-Atrous-1 Pass", "AtrousMomentPong");
+    addEdge("ASVGF-Atrous-0 Pass", "IsCorrelated", "ASVGF-Atrous-1 Pass", "IsCorrelated");
+
+    addPass(std::make_unique<Addon::ASVGF::AtrousPass>(2), "ASVGF-Atrous-2 Pass");
+    Addon::GBufferUtils::addGBufferEdges(this, "ASVGF-Atrous-1 Pass", "ASVGF-Atrous-2 Pass");
+    addEdge("ASVGF-Temporal Pass", "Composite", "ASVGF-Atrous-2 Pass", "Composite");
+    addEdge("ASVGF-Temporal Pass", "MomentsHistlenHF", "ASVGF-Atrous-2 Pass", "MomentsHistlenHF");
+    addEdge("ASVGF-Atrous-1 Pass", "AtrousHFPong", "ASVGF-Atrous-2 Pass", "AtrousHFPing");
+    addEdge("ASVGF-Atrous-1 Pass", "AtrousSpecPong", "ASVGF-Atrous-2 Pass", "AtrousSpecPing");
+    addEdge("ASVGF-Atrous-1 Pass", "AtrousMomentPong", "ASVGF-Atrous-2 Pass", "AtrousMomentPing");
+    addEdge("ASVGF-Atrous-1 Pass", "AtrousHFPing", "ASVGF-Atrous-2 Pass", "AtrousHFPong");
+    addEdge("ASVGF-Atrous-1 Pass", "AtrousSpecPing", "ASVGF-Atrous-2 Pass", "AtrousSpecPong");
+    addEdge("ASVGF-Atrous-1 Pass", "AtrousMomentPing", "ASVGF-Atrous-2 Pass", "AtrousMomentPong");
+    addEdge("ASVGF-Atrous-1 Pass", "IsCorrelated", "ASVGF-Atrous-2 Pass", "IsCorrelated");
+
+    addPass(std::make_unique<Addon::ASVGF::AtrousPass>(3), "ASVGF-Atrous-3 Pass");
+    Addon::GBufferUtils::addGBufferEdges(this, "ASVGF-Atrous-2 Pass", "ASVGF-Atrous-3 Pass");
+    addEdge("ASVGF-Temporal Pass", "Composite", "ASVGF-Atrous-3 Pass", "Composite");
+    addEdge("ASVGF-Temporal Pass", "MomentsHistlenHF", "ASVGF-Atrous-3 Pass", "MomentsHistlenHF");
+    addEdge("ASVGF-Atrous-2 Pass", "AtrousHFPong", "ASVGF-Atrous-3 Pass", "AtrousHFPing");
+    addEdge("ASVGF-Atrous-2 Pass", "AtrousSpecPong", "ASVGF-Atrous-3 Pass", "AtrousSpecPing");
+    addEdge("ASVGF-Atrous-2 Pass", "AtrousMomentPong", "ASVGF-Atrous-3 Pass", "AtrousMomentPing");
+    addEdge("ASVGF-Atrous-2 Pass", "AtrousHFPing", "ASVGF-Atrous-3 Pass", "AtrousHFPong");
+    addEdge("ASVGF-Atrous-2 Pass", "AtrousSpecPing", "ASVGF-Atrous-3 Pass", "AtrousSpecPong");
+    addEdge("ASVGF-Atrous-2 Pass", "AtrousMomentPing", "ASVGF-Atrous-3 Pass", "AtrousMomentPong");
+    addEdge("ASVGF-Atrous-2 Pass", "IsCorrelated", "ASVGF-Atrous-3 Pass", "IsCorrelated");
 
     addPass(std::make_unique<Addon::GBufferTemporalInspectorPass>(), "GBuffer Inspect Pass");
     Addon::GBufferUtils::addGBufferEdges(this, "VBuffer2GBuffer Pass", "GBuffer Inspect Pass");
     Addon::GBufferUtils::addPrevGBufferEdges(this, "GBufferPrev Pass", "GBuffer Inspect Pass");
 
     // Blit history GBuffer
+    addPass(std::make_unique<Addon::ASVGF::DebugViewer>(), "ASVGF-Viewer Pass");
+    addEdge("GBufferShading Pass", "Diffuse", "ASVGF-Viewer Pass", "HF");
+
     addSubgraph(std::make_unique<Addon::GBufferHolderGraph>(), "GBuffer Blit Pass");
     Addon::GBufferUtils::addBlitPrevGBufferEdges(
         this, "VBuffer2GBuffer Pass", "GBuffer Inspect Pass", "GBuffer Blit Pass");
     
-    markOutput("GBuffer Inspect Pass", "Output");
+    //markOutput("GBuffer Inspect Pass", "Output");
+    addPass(std::make_unique<AccumulatePass>(), "Accum Pass");
+    addEdge("ASVGF-Atrous-3 Pass", "Composite", "Accum Pass", "Input");
+
+    markOutput("Accum Pass", "Output");
+
   }
 };
 
@@ -46,6 +178,65 @@ SE_EXPORT struct CustomPipeline : public RDG::SingleGraphPipeline {
   CustomGraph graph;
 };
 
+SE_EXPORT struct RestirGIGraph : public RDG::Graph {
+  RestirGIGraph() {    
+    restirgi_param = Addon::RestirGI::InitializeParameters(1280, 720);
+
+    addPass(std::make_unique<Addon::VBuffer::RayTraceVBuffer>(), "VBuffer Pass");
+    addPass(std::make_unique<Addon::VBuffer::VBuffer2GBufferPass>(), "VBuffer2GBuffer Pass");
+    addEdge("VBuffer Pass", "VBuffer", "VBuffer2GBuffer Pass", "VBuffer");
+    
+    // Hold history GBuffer
+    addPass(std::make_unique<Addon::GBufferHolderSource>(), "GBufferPrev Pass");
+    
+    addPass(std::make_unique<Addon::RestirGI::InitialSample>(&restirgi_param), "InitialSample Pass");
+    Addon::GBufferUtils::addGBufferEdges(this, "VBuffer2GBuffer Pass", "InitialSample Pass");
+
+    // Execute temporal resampling
+    addPass(std::make_unique<Addon::RestirGI::TemporalResampling>(&restirgi_param),
+            "TemporalResampling Pass");
+    Addon::GBufferUtils::addGBufferEdges(this, "VBuffer2GBuffer Pass", "TemporalResampling Pass");
+    Addon::GBufferUtils::addPrevGBufferEdges(this, "GBufferPrev Pass", "TemporalResampling Pass");
+    addEdge("InitialSample Pass", "GIReservoir", "TemporalResampling Pass", "GIReservoir");
+    
+    // Execute spatial resampling
+    addPass(std::make_unique<Addon::RestirGI::SpatialResampling>(&restirgi_param),
+            "SpatialResampling Pass");
+    Addon::GBufferUtils::addGBufferEdges(this, "VBuffer2GBuffer Pass", "SpatialResampling Pass");
+    addEdge("TemporalResampling Pass", "GIReservoir", "SpatialResampling Pass", "GIReservoir");
+
+    addPass(std::make_unique<Addon::RestirGI::FinalShading>(&restirgi_param),
+            "FinalShading Pass");
+    Addon::GBufferUtils::addGBufferEdges(this, "VBuffer2GBuffer Pass", "FinalShading Pass");
+    addEdge("SpatialResampling Pass", "GIReservoir", "FinalShading Pass", "GIReservoir");
+
+    //markOutput("TreeVisualize Pass", "Color");
+    addPass(std::make_unique<AccumulatePass>(), "Accum Pass");
+
+    addEdge("FinalShading Pass", "Diffuse", "Accum Pass", "Input");
+    //addEdge("InitialSample Pass", "DebugImage", "Accum Pass", "Input");
+
+    
+    addSubgraph(std::make_unique<Addon::GBufferHolderGraph>(), "GBuffer Blit Pass");
+    Addon::GBufferUtils::addBlitPrevGBufferEdges(
+        this, "VBuffer2GBuffer Pass", "TemporalResampling Pass", "GBuffer Blit Pass");
+    
+    markOutput("Accum Pass", "Output");
+
+    //addPass(std::make_unique<Addon::SemiNEE::TestQuadSamplePass>(),
+    //        "TestQuadSample Pass");
+    //addPass(std::make_unique<AccumulatePass>(), "Accumulate Pass");
+    //addEdge("TestQuadSample Pass", "Color", "Accumulate Pass", "Input");
+
+    //markOutput("Accumulate Pass", "Output");
+  }
+  Addon::RestirGI::GIResamplingRuntimeParameters restirgi_param;
+};
+
+SE_EXPORT struct RestirGIPipeline : public RDG::SingleGraphPipeline {
+  RestirGIPipeline() { pGraph = &graph; }
+  RestirGIGraph graph;
+};
 
 SE_EXPORT struct SemiNEEGraph : public RDG::Graph {
   SemiNEEGraph() {
@@ -527,7 +718,7 @@ SE_EXPORT struct VXGuidingGraph : public RDG::Graph {
             "VXInverseIndex");
     addEdge("VXClusterFindAssociate2 Pass", "AssociateBuffer",
             "VisibilityGather Pass", "VXClusterAssociation");
-    addPass(std::make_unique<Addon::VXGuiding::SPixelVisibilityPass>(),
+    addPass(std::make_unique<Addon::VXGuiding::SPixelVisibilityEXPass>(),
             "VisibilityAdditional Pass");
     addEdge("VisibilityGather Pass", "SPixelGathered", "VisibilityAdditional Pass",
             "SPixelGathered");
@@ -540,6 +731,7 @@ SE_EXPORT struct VXGuidingGraph : public RDG::Graph {
     addEdge("VisibilityGather Pass", "SPixelVisibility", "VisibilityAdditional Pass",
             "SPixelVisibility");
     addEdge("VBuffer Pass", "VBuffer", "VisibilityAdditional Pass", "VBuffer");
+    addEdge("VisibilityClear Pass", "SPixelAvgVisibility", "VisibilityAdditional Pass", "SPixelAvgVisibility");
 
 
     addPass(std::make_unique<Addon::VXGuiding::VXTreeEncodePass>(&setting),
@@ -595,6 +787,8 @@ SE_EXPORT struct VXGuidingGraph : public RDG::Graph {
     addEdge("TreeMerge Pass", "ClusterRoots", "TreeTopLevel Pass", "ClusterRoots");
     addEdge("VisibilityAdditional Pass", "SPixelVisibility", "TreeTopLevel Pass",
             "SPixelVisibility");
+    addEdge("VisibilityAdditional Pass", "SPixelAvgVisibility", "TreeTopLevel Pass",
+            "SPixelAvgVisibility");
 
     addPass(std::make_unique<Addon::VXGuiding::VXGuiderViewPass>(&setting),
             "GuiderViewer Pass");

@@ -1230,6 +1230,8 @@ auto SRenderer::updateCamera(GFX::TransformComponent const& transform,
   globalUniRecord = globalUni;
   sceneDataBuffers.global_uniform_buffer.setStructure(
       globalUni, multiFrameFlights->getFlightIndex());
+
+  state.allBatch++;
 }
 
 auto SRenderer::updateRDGData(RDG::Graph* graph) noexcept -> void {
@@ -1252,6 +1254,7 @@ auto SRenderer::updateRDGData(RDG::Graph* graph) noexcept -> void {
   graph->renderData.setBindGroupEntries(
       "CommonRT", &(commonDescData.set1_flights_resources[flightIdx]));
   graph->renderData.setUInt("AccumIdx", state.batchIdx++);
+  graph->renderData.setUInt("FrameIdx", state.allBatch);
   graph->renderData.setUVec2("TargetSize", {state.width, state.height});
   graph->renderData.setPtr("CameraData", &(globalUniRecord.cameraData));
   graph->renderData.setMat4("ViewProj", globalUniRecord.cameraData.viewProjMat);

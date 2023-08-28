@@ -47,7 +47,7 @@ void RgenMain() {
         false,
         globalUniform.cameraData
     );
-
+    
     const VBufferData vhit = UnpackVBufferData(u_vBuffer[pixelID]);
     if (IsInvalid(vhit)) {
         return;
@@ -76,7 +76,7 @@ void RgenMain() {
     if (TraceOccludeRay(visiblityRay, RNG, SceneBVH)) {
         visible = false;
     }
-
+        
     // Visibility injection
     if (visible)
         InterlockedOr(u_spixel_visibility[spixelID], uint(1 << clusterToCheck));

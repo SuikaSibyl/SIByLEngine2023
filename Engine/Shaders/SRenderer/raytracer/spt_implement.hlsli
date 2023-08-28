@@ -48,15 +48,15 @@ GeometryHit fetchTrimeshGeometryHit(
 
     float4x4 o2wn = ObjectToWorldNormal(geometry);
     const float3 flatNormal = normalize(mul(float4(objectSpaceFlatNormal, 0.0), o2wn).xyz);
-    hit.flatNormal = flatNormal;
+    hit.geometryNormal = flatNormal;
     
     float3 normals[3];
     normals[0] = fetchVertexNormal(index[0] + int(geometry.vertexOffset));
     normals[1] = fetchVertexNormal(index[1] + int(geometry.vertexOffset));
     normals[2] = fetchVertexNormal(index[2] + int(geometry.vertexOffset));
-    float3 geometryNormalOS = interpolate(normals, bary);
-    float3 geometryNormalWS = normalize(mul(float4(geometryNormalOS, 0.0), o2wn).xyz);
-    hit.geometryNormal = geometryNormalWS;
+    float3 vertexNormalOS = interpolate(normals, bary);
+    float3 gvertexNormalWS = normalize(mul(float4(vertexNormalOS, 0.0), o2wn).xyz);
+    hit.shadingNormal = gvertexNormalWS;
     
     float3 tangents[3];
     tangents[0] = fetchVertexTangent(index[0] + int(geometry.vertexOffset));
@@ -87,8 +87,8 @@ GeometryHit fetchTrimeshGeometryHit(
     in_ref(Ray) ray
 ) {
     GeometryHit hit = fetchTrimeshGeometryHit(geometryID, bary, primitiveID);
-    const float frontFace = (dot(hit.flatNormal, ray.direction) < 0) ? 1 : -1;
-    hit.flatNormal *= frontFace;
+    const float frontFace = (dot(hit.shadingNormal, ray.direction) < 0) ? 1 : -1;
+    hit.shadingNormal *= frontFace;
     hit.geometryNormal *= frontFace;
     return hit;
 }

@@ -47,7 +47,7 @@ void fragmentMain(
     in float3 bary: SV_Barycentrics,
     in float4 svPosition: SV_Position,
     // output
-    out float o_viewDepth: SV_Target0,
+    out float4 o_position: SV_Target0,
     out uint o_diffuseAlbedo: SV_Target1,
     out uint o_specularRough: SV_Target2,
     out uint o_normal: SV_Target3,
@@ -137,8 +137,8 @@ void fragmentMain(
     const Ray ray_y = generateRay(inUV + float2(0, 1), viewportSize, false, globalUniform.cameraData);
     const float half_cone_angle = sqrt(1.0 - square(min(dot(ray_0.direction, ray_x.direction), dot(ray_0.direction, ray_y.direction))));
     const float fwidth_depth = computeFWidthDepth(viewDistance * half_cone_angle, viewDirection, flatNormal);
-    
-    o_viewDepth = viewDepth;
+
+    o_position = float4(positionWS, viewDepth);
     o_diffuseAlbedo = Pack_R11G11B10_UFLOAT(diffuseAlbedo);
     o_specularRough = Pack_R8G8B8A8_Gamma_UFLOAT(float4(specularF0, roughness));
     o_normal = UnitVectorToUnorm32Octahedron(shadingNormal);

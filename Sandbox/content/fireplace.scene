@@ -24,7 +24,7 @@ SceneNodes:
         eulerAngles: [90, -9.56916324e-07, 22.3461571]
         scale: [0.99984169, 0.999998927, 0.999840081]
       LightComponent:
-        Type: 3
+        Type: 0
         Intensity: [5, 5, 5]
         Texture: 18446744073709551615
   - uid: 2

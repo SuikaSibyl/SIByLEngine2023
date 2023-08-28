@@ -3,7 +3,7 @@
 
 const Texture2D<uint4> u_vBuffer;
 
-RWTexture2D<float>  u_GBufferDepth;
+RWTexture2D<float4>  u_GBufferPosition;
 RWTexture2D<uint>   u_GBufferNormals;
 RWTexture2D<uint>   u_GBufferGeoNormals;
 RWTexture2D<uint>   u_GBufferDiffuseAlbedo;
@@ -19,18 +19,28 @@ void ComputeMain(int3 DTid: SV_DispatchThreadID) {
     if (any(pixel >= resolution)) return;
 
     // output data
-    float viewDepth = 0;
+    float viewDepth = k_background_depth;
     float3 motion = float3(0);
     float3 diffuseAlbedo = float3(0);
     float3 specularF0 = float3(0);
     float3 flatNormal = float3(0);
     float3 shadingNormal = float3(0);
     float3 emission = float3(0);
+    float3 positionWS = float3(0);
     float roughness = 1.f;
     float viewDistance = 0;
     float fwidth_depth = 0;
+    
+    const Ray primaryRay = generateRay(
+        pixel,
+        resolution,
+        false,
+        globalUniform.cameraData
+    );
 
     const VBufferData vhit = UnpackVBufferData(u_vBuffer[pixel]);
+    const GeometryHit hit = GetGeometryHit(vhit, primaryRay);
+
     if (!IsInvalid(vhit)) {
         const int geometryID = int(vhit.geometryID);
         const int primitiveID = int(vhit.primitiveID);
@@ -49,7 +59,7 @@ void ComputeMain(int3 DTid: SV_DispatchThreadID) {
 
         const float4x4 o2w = ObjectToWorld(geometry);
         const float3 positionOS = interpolate(vertexPositions, bary);
-        const float3 positionWS = mul(float4(positionOS, 1.0), o2w).xyz;
+        positionWS = mul(float4(positionOS, 1.0), o2w).xyz;
 
         float3 viewDirection = positionWS - globalUniform.cameraData.posW;
         viewDistance = length(viewDirection);
@@ -74,25 +84,16 @@ void ComputeMain(int3 DTid: SV_DispatchThreadID) {
         normals[0] = fetchVertexNormal(index[0] + int(geometry.vertexOffset));
         normals[1] = fetchVertexNormal(index[1] + int(geometry.vertexOffset));
         normals[2] = fetchVertexNormal(index[2] + int(geometry.vertexOffset));
-        float3 geometryNormalOS = interpolate(normals, bary);
-        float3 geometryNormalWS = normalize(mul(float4(geometryNormalOS, 0.0), o2wn).xyz);
-        geometryNormalWS = faceforward ? geometryNormalWS : -geometryNormalWS;
-
+        float3 vertexNormalOS = interpolate(normals, bary);
+        float3 vertexNormalWS = normalize(mul(float4(vertexNormalOS, 0.0), o2wn).xyz);
+        shadingNormal = faceforward ? vertexNormalWS : -vertexNormalWS;
+        
         float3 tangents[3];
         tangents[0] = fetchVertexTangent(index[0] + int(geometry.vertexOffset));
         tangents[1] = fetchVertexTangent(index[1] + int(geometry.vertexOffset));
         tangents[2] = fetchVertexTangent(index[2] + int(geometry.vertexOffset));
         float3 tangentOS = interpolate(tangents, bary);
         float4 tangentWS = float4(normalize(mul(float4(tangentOS, 0), o2w).xyz), geometry.oddNegativeScaling);
-
-        shadingNormal = geometryNormalWS;
-        float3 bitangent = cross(geometryNormalWS, tangentWS.xyz) * tangentWS.w;
-        float3x3 TBN = float3x3(tangentWS.xyz, bitangent, geometryNormalWS);
-        float3 normalMap = float3(0.5, 0.5, 1.0);
-        if (material.normalTextureIndex != -1) {
-            normalMap = textures[material.normalTextureIndex].Sample(uv).rgb;
-            shadingNormal = normalize(mul((normalMap * 2 - 1), TBN));
-        }
 
         // Grab material infomation
         diffuseAlbedo = textures[material.baseOrDiffuseTextureIndex].Sample(uv).rgb;
@@ -115,9 +116,9 @@ void ComputeMain(int3 DTid: SV_DispatchThreadID) {
         const float half_cone_angle = sqrt(1.0 - square(min(dot(ray_0.direction, ray_x.direction), dot(ray_0.direction, ray_y.direction))));
         fwidth_depth = computeFWidthDepth(viewDistance * half_cone_angle, viewDirection, flatNormal);
     }
-
+    
     // write to gbuffer
-    u_GBufferDepth[pixel] = viewDepth;
+    u_GBufferPosition[pixel] = float4(positionWS, viewDepth);
     u_GBufferDiffuseAlbedo[pixel] = Pack_R11G11B10_UFLOAT(diffuseAlbedo);
     u_GBufferSpecularRough[pixel] = Pack_R8G8B8A8_Gamma_UFLOAT(float4(specularF0, roughness));
     u_GBufferNormals[pixel] = UnitVectorToUnorm32Octahedron(shadingNormal);

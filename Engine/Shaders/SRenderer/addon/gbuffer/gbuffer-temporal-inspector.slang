@@ -43,11 +43,11 @@ float4 fragmentMain(
         if (!IsShadingSurfaceValid(surface))
             color = float3(0.0);
     } else if (pConst.showEnum == ShowEnum::GeometryNormal) {
-        color = surface.geoNormal * 0.5 + 0.5;
+        color = surface.geometryNormal * 0.5 + 0.5;
         if (!IsShadingSurfaceValid(surface))
             color = float3(0.0);
     } else if (pConst.showEnum == ShowEnum::ShadingNormal) {
-        color = surface.normal * 0.5 + 0.5;
+        color = surface.shadingNormal * 0.5 + 0.5;
         if (!IsShadingSurfaceValid(surface))
             color = float3(0.0);
     } else if (pConst.showEnum == ShowEnum::MotionVector) {

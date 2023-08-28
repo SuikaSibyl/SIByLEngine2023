@@ -53,13 +53,13 @@ static const float wavelet_kernel[2][2] = {
 
 /** Unpack the stratum offset from a packed offset. */
 int2 UnpackStratumOffset(uint packed_offset) {
-    return int2(packed_offset >> (STRATUM_OFFSET_SHIFT * 0),
-                packed_offset >> (STRATUM_OFFSET_SHIFT * 1)) & STRATUM_OFFSET_MASK;
+    return int2(int(packed_offset >> (STRATUM_OFFSET_SHIFT * 0)),
+                int(packed_offset >> (STRATUM_OFFSET_SHIFT * 1))) & STRATUM_OFFSET_MASK;
 }
 
 /** Pack the stratum offset tp a packed offset. */
 uint PackStratumOffset(in_ref(int2) found_offset) {
-    return (1 << 8)                                          /* mark sample as busy */
+    return (1 << 7)                                          /* mark sample as busy */
            | (found_offset.x << (STRATUM_OFFSET_SHIFT * 0))  /* encode pos in */
            | (found_offset.y << (STRATUM_OFFSET_SHIFT * 1)); /* current frame */
 }

@@ -13,6 +13,12 @@ std::string to_string(BlitPass::SourceType type) {
   switch (type) {
     case SIByL::BlitPass::SourceType::UINT:
       return "uint";
+    case SIByL::BlitPass::SourceType::UINT2:
+      return "uint2";
+    case SIByL::BlitPass::SourceType::UINT3:
+      return "uint3";
+    case SIByL::BlitPass::SourceType::UINT4:
+      return "uint4";
     case SIByL::BlitPass::SourceType::FLOAT:
       return "float";
     case SIByL::BlitPass::SourceType::FLOAT2:
