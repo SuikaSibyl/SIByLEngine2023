@@ -64,3 +64,12 @@ By default, Nvidia GPU with Turing or higher architecture is required to correct
 - `vma`: [Easy to integrate Vulkan memory allocation library](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator)
 - `vulkan`: [A low-overhead, cross-platform API, open standard for 3D graphics and computing](https://www.vulkan.org/)
 - `yaml-cpp`: [A YAML parser and emitter in C++](https://github.com/jbeder/yaml-cpp)
+
+## References
+I learned a lot from various renderers to build up this engine, here are some great references for those who might be interested.
+- [PBRT](https://github.com/mmp/pbrt-v3): Rendering bible.
+- [Lajolla Renderer](https://github.com/BachiLi/lajolla_public): Well-written offline renderer, learned so much from it.
+- [Hazel Engine](https://github.com/TheCherno/Hazel): Fancy usage of ImGui editor and good tutorial on engine development.
+- [Falcor](https://github.com/NVIDIAGameWorks/Falcor): Easy to use, I especially imitate its RDG interface.
+- [Unreal Engine](https://github.com/EpicGames/UnrealEngine): Needless to say.
+- [Unity](https://www.unrealengine.com/): The most commonly used engine for me, I am deeply influenced in many ways.
