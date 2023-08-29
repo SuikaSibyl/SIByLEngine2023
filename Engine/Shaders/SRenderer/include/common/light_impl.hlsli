@@ -2,6 +2,7 @@
 #define _SRENDERER_LIGHT_IMPL_HEADER_
 
 #include "../../raytracer/spt_interface.hlsli"
+#include "../../include/common/sampling.hlsli"
 #include "geometry.hlsli"
 #include "light.hlsli"
 
@@ -9,8 +10,27 @@ struct LightSample {
     float3 wi;
     float pdf;
     float3 radiance;
+    float pdf_direction;
     float3 position;
+    float3 normal;
 };
+
+struct LightRaySample {
+    Ray ray;
+    float3 radiance;
+    float pdf_position;
+    float3 normal;
+    float pdf_direction;
+};
+
+LightRaySample EmptyLightRaySample() {
+    LightRaySample sample;
+    sample.radiance = float3(0.f);
+    sample.pdf_position = 0.f;
+    sample.normal = float3(0.f);
+    sample.pdf_direction = 0.f;
+    return sample;
+}
 
 /**********************************************************************
 ** Directional Light
@@ -47,6 +67,28 @@ LightSample sample_li(
     sample.pdf = 1.f;
     sample.radiance = light.intensity;
     sample.position = hit.position + sample.wi * 1e5f;
+    return sample;
+}
+
+/**
+ * Sample a point light with a random point and direction
+ */
+LightRaySample sample_le(
+    in_ref(DirectionalLight) light,
+    inout_ref(RandomSamplerState) RNG,
+    in_ref(float4) boundingSphere
+) {
+    const float3x3 obn = createONB(light.direction);
+    const float2 cd = uniformSampleDisk(GetNextRandomFloat2(RNG));
+    const float3 origin = boundingSphere.xyz - boundingSphere.w * light.direction 
+                       + boundingSphere.w * (cd.x * obn[0] + cd.y * obn[1]);
+    // Generate the light ray sample
+    LightRaySample sample;
+    sample.ray = SpawnRay(origin, light.direction, light.direction);
+    sample.normal = light.direction;
+    sample.pdf_position = 1. / (k_pi * boundingSphere.w * boundingSphere.w);
+    sample.pdf_direction = 1.f;
+    sample.radiance = light.intensity;
     return sample;
 }
 
@@ -87,6 +129,31 @@ LightSample sample_li(
     sample.position = light.position;
     return sample;
 }
+
+/**
+ * Sample a point light with a random point and direction
+ */
+LightRaySample sample_le(
+    in_ref(PointLight) light,
+    inout_ref(RandomSamplerState) RNG
+) {
+    const float3 direction = UniformOnSphere(GetNextRandomFloat2(RNG));
+    LightRaySample sample;
+    sample.ray = SpawnRay(light.position, direction, direction);
+    sample.normal = direction;
+    sample.pdf_position = 1.f;
+    sample.pdf_direction = PdfUniformOnSphere();
+    sample.radiance = light.intensity;
+    return sample;
+}
+
+/**
+ * Pdf of sampling a point light with a random point and direction
+ */
+// float2 pdf_le(
+//     in_ref(PointLight) light
+// ) {
+// }
 
 /**********************************************************************
 ** Spot Light
@@ -151,6 +218,27 @@ LightSample sample_li(
     return sample;
 }
 
+/**
+ * Sample a point light with a random point and direction
+ */
+LightRaySample sample_le(
+    in_ref(SpotLight) light,
+    inout_ref(RandomSamplerState) RNG
+) {
+    // Uniformly sample a direction of the spot light
+    const float3x3 w2l = createONB(light.direction);
+    const float3 dir_ls = SampleUniformCone(GetNextRandomFloat2(RNG), light.cosTotalWidth);
+    const float3 dir_ws = to_world(w2l, dir_ls);
+    // Generate the light sample
+    LightRaySample sample;
+    sample.ray = SpawnRay(light.position, dir_ws, dir_ws);
+    sample.pdf_position = 1.f;
+    sample.pdf_direction = PdfUniformCone(light.cosTotalWidth);
+    sample.radiance = light.intensity * spot_light_falloff(light, dir_ws);
+    sample.normal = dir_ws;
+    return sample;
+}
+
 /**********************************************************************
 ** Polymorphic Light
 **********************************************************************/
@@ -167,6 +255,27 @@ LightSample SampleLight(
     case PolymorphicLightType::kSpot:
         return sample_li(hit, unpackSpotLight(light));
     }
+}
+
+struct LightSampleInfo {
+    float4 boundingSphere;
+};
+
+LightRaySample SampleLightRay(
+    in_ref(PolymorphicLightInfo) light,
+    in_ref(LightSampleInfo) info,
+    inout_ref(RandomSamplerState) RNG
+) {
+    const PolymorphicLightType type = getLightType(light);
+    switch (type) {
+    case PolymorphicLightType::kDirectional:
+        return sample_le(unpackDirectionalLight(light), RNG, info.boundingSphere);
+    case PolymorphicLightType::kPoint:
+        return sample_le(unpackPointLight(light), RNG);
+    case PolymorphicLightType::kSpot:
+        return sample_le(unpackSpotLight(light), RNG);
+    }
+    return EmptyLightRaySample();
 }
 
 float3 EvaluateDirectLight(

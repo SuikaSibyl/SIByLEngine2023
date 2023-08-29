@@ -80,7 +80,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		InvalidScene();
 		device->waitIdle();
 
-		pipeline1 = std::make_unique<CustomPipeline>();
+		pipeline1 = std::make_unique<Addon::VPL::VPLTestPipeline>();
 		pipeline2 = std::make_unique<Addon::SLC::SLCTestPipeline>();
         rtgi_pipeline = std::make_unique<RestirGIPipeline>();
         geoinsp_pipeline = std::make_unique<GTPipeline>();

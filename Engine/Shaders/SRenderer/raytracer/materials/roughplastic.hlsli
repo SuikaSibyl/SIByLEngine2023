@@ -185,7 +185,7 @@ void PdfRoughPlastic(inout_ref(BSDFSamplePDFQuery) cBSDFSamplePDFQuery) {
     float roughness;
     if (cBSDFSamplePDFQuery.mat_id == 0xFFFFFFFF) {
         // info is already packed in the query
-        Kd = UnpackRGBE(asuint(cBSDFSamplePDFQuery.dir_out.x));
+        Kd = UnpackRGBE(asuint(cBSDFSamplePDFQuery.packedInfo0));
         Ks = UnpackRGBE(asuint(cBSDFSamplePDFQuery.uv.y));
         roughness = cBSDFSamplePDFQuery.uv.x;
     }

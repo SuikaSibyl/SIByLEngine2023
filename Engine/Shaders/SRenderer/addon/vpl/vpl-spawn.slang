@@ -2,6 +2,7 @@
 #include "../../raytracer/lights/directional.hlsli"
 #include "../../include/common/random.hlsli"
 #include "../../include/common/sampling.hlsli"
+#include "../../include/common/light_impl.hlsli"
 #include "../../include/raytracer_descriptor_set.hlsli"
 #include "../../include/scene_descriptor_set.hlsli"
 
@@ -24,29 +25,19 @@ void RgenMain() {
     // Initialize thread RNG
     if (any(DispatchRaysIndex().xy >= DispatchRaysDimensions().xy)) return;
     RandomSamplerState RNG = InitRandomSampler(DispatchRaysIndex().xy, pConst.sample_batch);
-    
+
+    LightSampleInfo info;
+    info.boundingSphere = pConst.bounding_sphere;
+
     // Selected light
     const PolymorphicLightInfo light = lights[0];
-    float3 lightColor = unpackLightColor(light);
-    float3 lightDir = Unorm32OctahedronToUnitVector(light.databyte0);
-
-    float3 sample_origin;
-    float sample_pdf;
-    DirectionalLightSample(
-        lightDir, pConst.bounding_sphere,
-        float2(GetNextRandom(RNG), GetNextRandom(RNG)),
-        sample_origin, sample_pdf);
+    LightRaySample lightRaySamp = SampleLightRay(light, info, RNG);    
+    Ray lightRay = lightRaySamp.ray;
     
-    Ray lightRay;
-    lightRay.origin = sample_origin;
-    lightRay.direction = lightDir;
-    lightRay.tMin = 0.0f;
-    lightRay.tMax = k_inf;
-
     PrimaryPayload payload;
-    
+
     // Should be similar to the radiance of the chosen light sample
-    float3 throughput = lightColor / sample_pdf;
+    float3 throughput = lightRaySamp.radiance / (lightRaySamp.pdf_position * lightRaySamp.pdf_direction);
     for (int depth = 0; depth < pConst.max_depth; ++depth) {
         // Trace the light ray
         payload.RND = RNG;

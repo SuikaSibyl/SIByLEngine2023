@@ -221,12 +221,13 @@ struct BSDFSamplePDFQuery {
     float3 dir_in;
     uint mat_id;
     float3 dir_out;
+    float packedInfo0;
     float3 geometric_normal;
-    float3x3 frame;
+    float packedInfo1;
     float2 uv;
-    float hitFrontface;
     // output
     float pdf;
+    float3x3 frame;
 };
 
 bool TraceOccludeRay(
@@ -243,6 +244,21 @@ bool TraceOccludeRay(
 
     RND = shadowPld.RND;
     return shadowPld.occluded;
+}
+
+Ray SpawnRay(
+    in_ref(float3) position,
+    in_ref(float3) flat_normal,
+    in_ref(float3) dir
+) {
+    const float3 offsetDir = faceforward(flat_normal, -dir, flat_normal);
+    const float3 offsetedPosition = offsetPositionAlongNormal(position, offsetDir);
+    Ray ray;
+    ray.origin = offsetedPosition;
+    ray.direction = dir;
+    ray.tMin = 0.000;
+    ray.tMax = k_inf;
+    return ray;
 }
 
 Ray SpawnRay(
@@ -470,7 +486,37 @@ float PdfBsdfSample(
     cBSDFSamplePDFQuery.geometric_normal = hit.geometryNormal;
     cBSDFSamplePDFQuery.uv = hit.texcoord;
     cBSDFSamplePDFQuery.frame = createONB(hit.shadingNormal);
-    cBSDFSamplePDFQuery.hitFrontface = 1.f;
+    CallShader(BSDF_PDF_IDX(bsdf_type), cBSDFSamplePDFQuery);
+    return cBSDFSamplePDFQuery.pdf;
+}
+
+/**
+ * The pdf of sampling a direction from the BSDF.
+ * @param hit The geometry hit.
+ * @param dir_in The direction of the incoming ray.
+ * @param dir_out The direction of the outgoing ray.
+ * @return The pdf of selecting the sampled direction.
+ */
+float PdfBsdfSample(
+    in_ref(ShadingSurface) surface,
+    in_ref(float3) dir_in,
+    in_ref(float3) dir_out
+) {
+    const uint bsdf_type = surface.bsdfID;
+    BSDFSamplePDFQuery cBSDFSamplePDFQuery;
+    cBSDFSamplePDFQuery.dir_in = dir_in;
+    cBSDFSamplePDFQuery.dir_out = dir_out;
+    cBSDFSamplePDFQuery.geometric_normal = surface.geometryNormal;
+    cBSDFSamplePDFQuery.frame = createONB(surface.shadingNormal);
+    cBSDFSamplePDFQuery.mat_id = 0xFFFFFFFF;
+    // pack shading surface data into query struct
+    // we can pack up to 6 floats into the query struct here:
+    // uv (2) dir_out (3) pdf_out (1)
+    cBSDFSamplePDFQuery.uv.x = surface.roughness;                             // roughness
+    cBSDFSamplePDFQuery.uv.y = asfloat(PackRGBE(surface.specularF0));         // specularF0
+    cBSDFSamplePDFQuery.packedInfo0 = asfloat(PackRGBE(surface.diffuseAlbedo)); // diffuseAlbedo
+    cBSDFSamplePDFQuery.packedInfo1 = surface.transmissionFactor;               // eta
+    // call shader
     CallShader(BSDF_PDF_IDX(bsdf_type), cBSDFSamplePDFQuery);
     return cBSDFSamplePDFQuery.pdf;
 }

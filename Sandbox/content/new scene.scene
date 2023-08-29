@@ -5,8 +5,8 @@ SceneNodes:
     components:
       TagComponent: Camera Object
       Transform:
-        translation: [0.0612769611, 4.79729128, -6.88003445]
-        eulerAngles: [-12.3291168, -178.728577, 0]
+        translation: [-2.34061837, 6.93804264, -6.26837063]
+        eulerAngles: [-34.0673637, -158.565765, 0]
         scale: [4.10000086, 1, 1]
       CameraComponent:
         fovy: 60
@@ -21,12 +21,14 @@ SceneNodes:
       TagComponent: DirectionalLight
       Transform:
         translation: [0, 0, 0]
-        eulerAngles: [0, -0, 0]
-        scale: [0.999841154, 0.999995828, 0.999841154]
+        eulerAngles: [2.79999566, -0, 0]
+        scale: [0.999835074, 0.999960959, 0.99982363]
       LightComponent:
-        Type: 3
-        Intensity: [1, 1, 1]
+        Type: 0
+        Intensity: [15, 15, 15]
         Texture: 18446744073709551615
+        Pack0: [0, 0, 0, 0]
+        Pack1: [0, 0, 0, 0]
   - uid: 2
     parent: 18446744073709551615
     components:
@@ -40,17 +42,4 @@ SceneNodes:
         CPF: 0
       MeshRendererComponent:
         - ORID: 1658390946990111580
-  - uid: 3
-    parent: 18446744073709551615
-    components:
-      TagComponent: Mesh000.obj
-      Transform:
-        translation: [0, 0, 0]
-        eulerAngles: [0, -0, 0]
-        scale: [1, 1, 1]
-      MeshReference:
-        ORID: 1688503842835441189
-        CPF: 0
-      MeshRendererComponent:
-        - ORID: 1688503901890521284
 SceneEnd: TRUE

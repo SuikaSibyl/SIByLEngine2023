@@ -325,7 +325,8 @@ auto FinalShading::reflect() noexcept -> RDG::PassReflection {
   reflector.addInputOutput("GIReservoir")
       .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
       .consume(RDG::BufferInfo::ConsumeEntry{}
-              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT |
+                         (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
               .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
   reflector.addOutput("Diffuse")
       .isTexture().withSize(Math::vec3(1, 1, 1))
@@ -375,12 +376,17 @@ auto FinalShading::execute(RDG::RenderContext* context,
     uint32_t initialOutputBufferIndex;
     uint32_t enableFinalVisibility;
     uint32_t sample_batch;
-  } pConst = {*param, 1, 1, frameID};
+    uint32_t evaluate_radiance;
+  } pConst = {*param, 1, 1, frameID, re_evaluate_radiance ? 1 : 0};
 
   RHI::RayTracingPassEncoder* encoder = beginPass(context);
   encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::RAYGEN, 0,
                          sizeof(PushConstant));
   encoder->traceRays(diffuse->texture->width(), diffuse->texture->height(), 1);
   encoder->end();
+}
+
+auto FinalShading::renderUI() noexcept -> void {
+  ImGui::Checkbox("Re-Eval Radiance", &re_evaluate_radiance);
 }
 }

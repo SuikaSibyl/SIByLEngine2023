@@ -606,10 +606,10 @@ SLCTestGraph::SLCTestGraph() {
     dstLevelStart = dstLevelEnd;
   }
 
-  //// visualize SLC
-  //addPass(std::make_unique<SLCVisualizePass>(&spawn_info), "VisSLC Pass");
-  //addEdge(prevName, "NodesBuffer", "VisSLC Pass", "NodesBuffer");
-  //addEdge("VPLVisualize Pass", "Color", "VisSLC Pass", "Color");
+  // visualize SLC
+  addPass(std::make_unique<SLCVisualizePass>(&spawn_info), "VisSLC Pass");
+  addEdge(prevName, "NodesBuffer", "VisSLC Pass", "NodesBuffer");
+  addEdge("VPLVisualize Pass", "Color", "VisSLC Pass", "Color");
 
   // VBuffer Pass
   addPass(std::make_unique<Addon::VBuffer::RayTraceVBuffer>(), "VBuffer Pass");

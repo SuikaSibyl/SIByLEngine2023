@@ -96,6 +96,9 @@ void RgenMain() {
         }
 
         u_debug[pixel] = debugColor;
+        if (any(isnan(radiance))) {
+            radiance = float3(0);
+        }
         u_color[pixel] = float4(radiance, 1);
     }
 }

@@ -15,34 +15,13 @@ cbuffer PushConstants {
     uint shadeInputBufferIndex;
     uint giEnableFinalVisibility;
     uint sample_batch;
+    bool evaluate_radiance;
 };
 
-const StructuredBuffer<PackedGIReservoir> u_GIReservoirs;
+RWStructuredBuffer<PackedGIReservoir> u_GIReservoirs;
 
 RWTexture2D<float4> u_Diffuse;
 RWTexture2D<uint> u_Specular;
-// float GetMISWeight(const SplitBrdf roughBrdf, const SplitBrdf trueBrdf, const float3 diffuseAlbedo) {
-//     float3 combinedRoughBrdf = roughBrdf.demodulatedDiffuse * diffuseAlbedo + roughBrdf.specular;
-//     float3 combinedTrueBrdf = trueBrdf.demodulatedDiffuse * diffuseAlbedo + trueBrdf.specular;
-
-//     combinedRoughBrdf = clamp(combinedRoughBrdf, 1e-4, kMaxBrdfValue);
-//     combinedTrueBrdf = clamp(combinedTrueBrdf, 0, kMaxBrdfValue);
-
-//     const float initWeight = saturate(calcLuminance(combinedTrueBrdf) / calcLuminance(combinedTrueBrdf + combinedRoughBrdf));
-//     return initWeight * initWeight * initWeight;
-// }
-
-// GIReservoir LoadInitialSampleReservoir(int2 reservoirPosition, RAB_Surface primarySurface) {
-//     const uint gbufferIndex = RTXDI_ReservoirPositionToPointer(g_Const.runtimeParams, reservoirPosition, 0);
-//     const SecondaryGBufferData secondaryGBufferData = u_SecondaryGBuffer[gbufferIndex];
-
-//     const float3 normal = octToNdirUnorm32(secondaryGBufferData.normal);
-//     const float3 throughput = Unpack_R16G16B16A16_FLOAT(secondaryGBufferData.throughputAndFlags).rgb;
-
-//     // Note: the secondaryGBufferData.emission field contains the sampled radiance saved in ShadeSecondarySurfaces
-//     return RTXDI_MakeGIReservoir(secondaryGBufferData.worldPos,
-//                                  normal, secondaryGBufferData.emission * throughput, secondaryGBufferData.pdf);
-// }
 
 [shader("raygeneration")]
 void RgenMain() {
@@ -65,13 +44,31 @@ void RgenMain() {
     ShadingSurface primarySurface = GetGBufferSurface(
         pixel, globalUniform.cameraData);
 
-    const GIReservoir reservoir = LoadGIReservoir(
+    GIReservoir reservoir = LoadGIReservoir(
         runtimeParams, pixel, shadeInputBufferIndex, u_GIReservoirs);
     
     float3 diffuse = 0;
     float3 specular = 0;
 
     if (IsShadingSurfaceValid(primarySurface) && IsValidGIReservoir(reservoir)) {
+        if (evaluate_radiance) {
+            const float3 bsdf_direction = normalize(reservoir.position - primarySurface.worldPos);
+            const float bsdf_pdf = PdfBsdfSample(primarySurface, -primaryRay.direction, bsdf_direction);
+            const Ray bsdfRay = SpawnRay(primarySurface, bsdf_direction);
+            PrimaryPayload payload;
+            Intersection(bsdfRay, SceneBVH, payload, RNG);
+            if (HasHit(payload.hit)) {
+                const PolymorphicLightInfo light = lights[0];
+                reservoir.radiance = (bsdf_pdf != 0)
+                                      ? EvaluateDirectLight(bsdfRay, payload.hit, light, RNG)
+                                      : float3(0);
+            }
+            else {
+                reservoir.radiance = float3(0);
+            }
+            StoreGIReservoir(reservoir, runtimeParams, pixel, shadeInputBufferIndex, u_GIReservoirs);
+        }
+
         float3 radiance = reservoir.radiance * reservoir.weightSum;
         float3 visibility = 1.0;
 

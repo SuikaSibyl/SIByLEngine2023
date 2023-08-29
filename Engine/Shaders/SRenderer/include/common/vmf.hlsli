@@ -39,7 +39,7 @@ struct vMFDistribution {
     float k;
     // Draw a sample from the distribution
     float3 DrawSample(in_ref(float2) rnd) {
-        if (k == 0) return RandomPointOnSphere(rnd);
+        if (k == 0) return UniformOnSphere(rnd);
         const float W = 1 + log(rnd.y + (1 - rnd.y) * exp(-2 * k)) / k;
         const float2 V = float2(cos(2 * k_pi * rnd.x), sin(2 * k_pi * rnd.x));
         const float tmp = sqrt(1 - W * W);

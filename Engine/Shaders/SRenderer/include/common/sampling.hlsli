@@ -8,11 +8,15 @@
 /**
  * Uiform sample on 3D geometrics
  */
-float3 RandomPointOnSphere(in_ref(float2) u) {
+float3 UniformOnSphere(in_ref(float2) u) {
     const float z = 1.0f - 2.0f * u.x;
     float r = sqrt(max(0.0f, 1.0f - z * z));
     float phi = k_2pi * u[1];
     return float3(r * cos(phi), r * sin(phi), z);
+}
+
+float PdfUniformOnSphere() {
+    return 1.f / (4.f * k_pi);
 }
 
 float3 RandomPointOnHemiphere(in_ref(float2) u) {
@@ -20,6 +24,20 @@ float3 RandomPointOnHemiphere(in_ref(float2) u) {
     float r = sqrt(max(0.0f, 1.0f - u.x * u.x));
     float phi = k_2pi * u[1];
     return float3(r * cos(phi), r * sin(phi), z);
+}
+
+float3 SampleUniformCone(
+    in_ref(float2) rnd,
+    float cosThetaMax
+) {
+    const float cosTheta = (1.f - rnd[0]) + rnd[0] * cosThetaMax;
+    const float sinTheta = sqrt(1.f - cosTheta * cosTheta);
+    const float phi = rnd[1] * k_2pi;
+    return float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta); 
+}
+
+float PdfUniformCone(float cosThetaMax) { 
+    return 1.f / (k_2pi * (1 - cosThetaMax)); 
 }
 
 /**

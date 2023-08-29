@@ -156,6 +156,10 @@ float GetNextRandom(inout RandomSamplerState r) {
     return SampleUniformFloat(r);
 }
 
+float2 GetNextRandomFloat2(inout RandomSamplerState r) {
+    return float2(GetNextRandom(r), GetNextRandom(r));
+}
+
 uint GetNextRandomUint(inout RandomSamplerState r) {
     return SampleUint(r);
 }
