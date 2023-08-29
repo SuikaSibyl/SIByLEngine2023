@@ -220,6 +220,7 @@ SE_EXPORT struct SRenderer {
     RHI::TLASDescriptor tlas_desc = {};
     std::shared_ptr<RHI::TLAS> tlas = {};
     std::shared_ptr<RHI::TLAS> back_tlas = {};
+    std::shared_ptr<RHI::TLAS> backback_tlas = {};
 
     struct MeshRecord {
       std::vector<GeometryDrawData> submesh_geometry;

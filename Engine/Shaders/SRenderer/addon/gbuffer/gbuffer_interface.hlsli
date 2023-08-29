@@ -18,6 +18,7 @@ RESOURCE_TYPE<uint>  t_GBufferGeoNormals;
 RESOURCE_TYPE<uint>  t_GBufferDiffuseAlbedo;
 RESOURCE_TYPE<uint>  t_GBufferSpecularRough;
 RESOURCE_TYPE<float4> t_MotionVectors;
+RESOURCE_TYPE<float4> t_MaterialInfo;
 
 ShadingSurface GetGBufferSurface(
     in_ref(int2) pixelPosition,
@@ -26,8 +27,9 @@ ShadingSurface GetGBufferSurface(
     Texture2D<uint> normalsTexture,
     Texture2D<uint> geoNormalsTexture,
     Texture2D<uint> diffuseAlbedoTexture,
-    Texture2D<uint> specularRoughTexture)
-{
+    Texture2D<uint> specularRoughTexture,
+    Texture2D<float4> materialInfo
+) {
     ShadingSurface surface = EmptyShadingSurface();
     // outside gbuffer
     if (any(pixelPosition >= getViewportSize(cameraData)))
@@ -46,8 +48,8 @@ ShadingSurface GetGBufferSurface(
     surface.roughness = specularRough.a;
     surface.worldPos = position.xyz;
     surface.viewDir = normalize(cameraData.posW.xyz - surface.worldPos);
-    surface.transmissionFactor = 1.0;
-    
+    surface.transmissionFactor = materialInfo[pixelPosition].w;
+    surface.bsdfID = uint(materialInfo[pixelPosition].z);
     return surface;
 }
 
@@ -58,7 +60,8 @@ ShadingSurface GetGBufferSurface(
     RWTexture2D<uint> normalsTexture,
     RWTexture2D<uint> geoNormalsTexture,
     RWTexture2D<uint> diffuseAlbedoTexture,
-    RWTexture2D<uint> specularRoughTexture)
+    RWTexture2D<uint> specularRoughTexture,
+    RWTexture2D<float4> materialInfo)
 {
     ShadingSurface surface = EmptyShadingSurface();
     // outside gbuffer
@@ -78,8 +81,8 @@ ShadingSurface GetGBufferSurface(
     surface.roughness = specularRough.a;
     surface.worldPos = position.xyz;
     surface.viewDir = normalize(cameraData.posW.xyz - surface.worldPos);
-    surface.transmissionFactor = 1.0;
-
+    surface.transmissionFactor = materialInfo[pixelPosition].w;
+    surface.bsdfID = uint(materialInfo[pixelPosition].z);
     return surface;
 }
 
@@ -104,7 +107,8 @@ ShadingSurface GetGBufferSurface(
         t_GBufferNormals,
         t_GBufferGeoNormals,
         t_GBufferDiffuseAlbedo,
-        t_GBufferSpecularRough);
+        t_GBufferSpecularRough,
+        t_MaterialInfo);
 }
 
 // The motion vectors rendered by the G-buffer pass match what is expected by NRD and DLSS.

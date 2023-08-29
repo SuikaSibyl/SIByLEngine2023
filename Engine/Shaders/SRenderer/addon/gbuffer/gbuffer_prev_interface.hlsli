@@ -12,6 +12,7 @@ Texture2D<uint>  t_PrevGBufferNormals;
 Texture2D<uint>  t_PrevGBufferGeoNormals;
 Texture2D<uint>  t_PrevGBufferDiffuseAlbedo;
 Texture2D<uint>  t_PrevGBufferSpecularRough;
+Texture2D<float4>  t_PrevGBufferMaterialInfo;
 
 ShadingSurface GetPrevGBufferSurface(
     in_ref(int2) pixelPosition,
@@ -24,7 +25,8 @@ ShadingSurface GetPrevGBufferSurface(
         t_PrevGBufferNormals,
         t_PrevGBufferGeoNormals,
         t_PrevGBufferDiffuseAlbedo,
-        t_PrevGBufferSpecularRough);
+        t_PrevGBufferSpecularRough,
+        t_PrevGBufferMaterialInfo);
 }
 
 float3 GetGeometryNormalPrev(in_ref(int2) pixelPosition) {

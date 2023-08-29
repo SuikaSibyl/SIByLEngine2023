@@ -67,6 +67,13 @@ auto RasterizedGBufferPass::reflect() noexcept -> RDG::PassReflection {
       .consume(RDG::TextureInfo::ConsumeEntry{
           RDG::TextureInfo::ConsumeType::ColorAttachment}
                    .setAttachmentLoc(6));
+  reflector.addOutput("MaterialInfo")
+      .isTexture().withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::RGBA16_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+          RDG::TextureInfo::ConsumeType::ColorAttachment}
+                   .setAttachmentLoc(7));
   reflector.addInputOutput("Depth")
       .isTexture().withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::DEPTH32_FLOAT)
@@ -90,6 +97,7 @@ auto RasterizedGBufferPass::execute(RDG::RenderContext* context,
   GFX::Texture* emissive = renderData.getTexture("Emissive");
   GFX::Texture* motionVector = renderData.getTexture("MotionVector");
   GFX::Texture* depth = renderData.getTexture("Depth");
+  GFX::Texture* material = renderData.getTexture("MaterialInfo");
 
   renderPassDescriptor = {
       {RHI::RenderPassColorAttachment{position->getRTV(0, 0, 1),
@@ -123,6 +131,11 @@ auto RasterizedGBufferPass::execute(RDG::RenderContext* context,
                                       RHI::LoadOp::CLEAR,
                                       RHI::StoreOp::STORE},
        RHI::RenderPassColorAttachment{motionVector->getRTV(0, 0, 1),
+                                      nullptr,
+                                      {0, 0, 0, 1},
+                                      RHI::LoadOp::CLEAR,
+                                      RHI::StoreOp::STORE},
+       RHI::RenderPassColorAttachment{material->getRTV(0, 0, 1),
                                       nullptr,
                                       {0, 0, 0, 1},
                                       RHI::LoadOp::CLEAR,
@@ -166,68 +179,63 @@ auto GBufferUtils::addGBufferInput(RDG::PassReflection& reflector,
                                    uint32_t stages) noexcept
     -> void {
   reflector.addInput("Position")
-      .isTexture()
-      .withSize(Math::vec3(1, 1, 1))
+      .isTexture().withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::R32_FLOAT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
       .consume(RDG::TextureInfo::ConsumeEntry{
           RDG::TextureInfo::ConsumeType::StorageBinding}
                    .setSubresource(0, 1, 0, 1)
                    .addStage(stages));
-
   reflector.addInput("DiffuseAlbedo")
-      .isTexture()
-      .withSize(Math::vec3(1, 1, 1))
+      .isTexture().withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::R32_UINT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
       .consume(RDG::TextureInfo::ConsumeEntry{
           RDG::TextureInfo::ConsumeType::StorageBinding}
                    .setSubresource(0, 1, 0, 1)
                    .addStage(stages));
-
   reflector.addInput("SpecularRough")
-      .isTexture()
-      .withSize(Math::vec3(1, 1, 1))
+      .isTexture().withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::R32_UINT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
       .consume(RDG::TextureInfo::ConsumeEntry{
           RDG::TextureInfo::ConsumeType::StorageBinding}
                    .setSubresource(0, 1, 0, 1)
                    .addStage(stages));
-
   reflector.addInput("Normal")
-      .isTexture()
-      .withSize(Math::vec3(1, 1, 1))
+      .isTexture().withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::R32_UINT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
       .consume(RDG::TextureInfo::ConsumeEntry{
           RDG::TextureInfo::ConsumeType::StorageBinding}
                    .setSubresource(0, 1, 0, 1)
                    .addStage(stages));
-
   reflector.addInput("GeometryNormal")
-      .isTexture()
-      .withSize(Math::vec3(1, 1, 1))
+      .isTexture().withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::R32_UINT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
       .consume(RDG::TextureInfo::ConsumeEntry{
           RDG::TextureInfo::ConsumeType::StorageBinding}
                    .setSubresource(0, 1, 0, 1)
                    .addStage(stages));
-
   reflector.addInput("Emissive")
-      .isTexture()
-      .withSize(Math::vec3(1, 1, 1))
+      .isTexture().withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::RGBA16_FLOAT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
       .consume(RDG::TextureInfo::ConsumeEntry{
           RDG::TextureInfo::ConsumeType::StorageBinding}
                    .setSubresource(0, 1, 0, 1)
                    .addStage(stages));
-
   reflector.addInput("MotionVector")
-      .isTexture()
-      .withSize(Math::vec3(1, 1, 1))
+      .isTexture().withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::RGBA16_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+          RDG::TextureInfo::ConsumeType::StorageBinding}
+                   .setSubresource(0, 1, 0, 1)
+                   .addStage(stages));
+  reflector.addInput("MaterialInfo")
+      .isTexture().withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::RGBA16_FLOAT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
       .consume(RDG::TextureInfo::ConsumeEntry{
@@ -239,68 +247,63 @@ auto GBufferUtils::addGBufferInput(RDG::PassReflection& reflector,
 auto GBufferUtils::addGBufferInputOutput(RDG::PassReflection& reflector,
                                    uint32_t stages) noexcept -> void {
   reflector.addInputOutput("Position")
-      .isTexture()
-      .withSize(Math::vec3(1, 1, 1))
+      .isTexture().withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::R32_FLOAT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
       .consume(RDG::TextureInfo::ConsumeEntry{
           RDG::TextureInfo::ConsumeType::StorageBinding}
                    .setSubresource(0, 1, 0, 1)
                    .addStage(stages));
-
   reflector.addInputOutput("DiffuseAlbedo")
-      .isTexture()
-      .withSize(Math::vec3(1, 1, 1))
+      .isTexture().withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::R32_UINT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
       .consume(RDG::TextureInfo::ConsumeEntry{
           RDG::TextureInfo::ConsumeType::StorageBinding}
                    .setSubresource(0, 1, 0, 1)
                    .addStage(stages));
-
   reflector.addInputOutput("SpecularRough")
-      .isTexture()
-      .withSize(Math::vec3(1, 1, 1))
+      .isTexture().withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::R32_UINT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
       .consume(RDG::TextureInfo::ConsumeEntry{
           RDG::TextureInfo::ConsumeType::StorageBinding}
                    .setSubresource(0, 1, 0, 1)
                    .addStage(stages));
-
   reflector.addInputOutput("Normal")
-      .isTexture()
-      .withSize(Math::vec3(1, 1, 1))
+      .isTexture().withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::R32_UINT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
       .consume(RDG::TextureInfo::ConsumeEntry{
           RDG::TextureInfo::ConsumeType::StorageBinding}
                    .setSubresource(0, 1, 0, 1)
                    .addStage(stages));
-
   reflector.addInputOutput("GeometryNormal")
-      .isTexture()
-      .withSize(Math::vec3(1, 1, 1))
+      .isTexture().withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::R32_UINT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
       .consume(RDG::TextureInfo::ConsumeEntry{
           RDG::TextureInfo::ConsumeType::StorageBinding}
                    .setSubresource(0, 1, 0, 1)
                    .addStage(stages));
-
   reflector.addInputOutput("Emissive")
-      .isTexture()
-      .withSize(Math::vec3(1, 1, 1))
+      .isTexture().withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::RGBA16_FLOAT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
       .consume(RDG::TextureInfo::ConsumeEntry{
           RDG::TextureInfo::ConsumeType::StorageBinding}
                    .setSubresource(0, 1, 0, 1)
                    .addStage(stages));
-
   reflector.addInputOutput("MotionVector")
-      .isTexture()
-      .withSize(Math::vec3(1, 1, 1))
+      .isTexture().withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::RGBA16_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+          RDG::TextureInfo::ConsumeType::StorageBinding}
+                   .setSubresource(0, 1, 0, 1)
+                   .addStage(stages));
+  reflector.addInputOutput("MaterialInfo")
+      .isTexture().withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::RGBA16_FLOAT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
       .consume(RDG::TextureInfo::ConsumeEntry{
@@ -361,6 +364,16 @@ auto GBufferUtils::addPrevGBufferInput(RDG::PassReflection& reflector,
           RDG::TextureInfo::ConsumeType::StorageBinding}
                    .setSubresource(0, 1, 0, 1)
                    .addStage(stages));
+
+  reflector.addInput("PrevMaterialInfo")
+      .isTexture()
+      .withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::RGBA16_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+          RDG::TextureInfo::ConsumeType::StorageBinding}
+                   .setSubresource(0, 1, 0, 1)
+                   .addStage(stages));
 }
 
 auto GBufferUtils::addPrevGbufferInputOutput(RDG::PassReflection& reflector,
@@ -414,6 +427,16 @@ auto GBufferUtils::addPrevGbufferInputOutput(RDG::PassReflection& reflector,
           RDG::TextureInfo::ConsumeType::StorageBinding}
                    .setSubresource(0, 1, 0, 1)
                    .addStage(stages));
+
+  reflector.addInputOutput("PrevMaterialInfo")
+      .isTexture()
+      .withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::RGBA16_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+          RDG::TextureInfo::ConsumeType::StorageBinding}
+                   .setSubresource(0, 1, 0, 1)
+                   .addStage(stages));
 }
 
 auto GBufferUtils::addGBufferEdges(RDG::Graph* graph, std::string const& src,
@@ -425,6 +448,7 @@ auto GBufferUtils::addGBufferEdges(RDG::Graph* graph, std::string const& src,
   graph->addEdge(src, "GeometryNormal", dst, "GeometryNormal");
   graph->addEdge(src, "Emissive", dst, "Emissive");
   graph->addEdge(src, "MotionVector", dst, "MotionVector");
+  graph->addEdge(src, "MaterialInfo", dst, "MaterialInfo");
 }
 
 auto GBufferUtils::addPrevGBufferEdges(RDG::Graph* graph,
@@ -436,6 +460,7 @@ auto GBufferUtils::addPrevGBufferEdges(RDG::Graph* graph,
   graph->addEdge(src, "SpecularRough", dst, "PrevSpecularRough");
   graph->addEdge(src, "Normal", dst, "PrevNormal");
   graph->addEdge(src, "GeometryNormal", dst, "PrevGeometryNormal");
+  graph->addEdge(src, "MaterialInfo", dst, "PrevMaterialInfo");
 }
 
 auto GBufferUtils::addBlitPrevGBufferEdges(RDG::Graph* graph,
@@ -448,12 +473,14 @@ auto GBufferUtils::addBlitPrevGBufferEdges(RDG::Graph* graph,
   graph->addEdge(src, "SpecularRough", dst, "SpecularRough Source");
   graph->addEdge(src, "Normal", dst, "Normal Source");
   graph->addEdge(src, "GeometryNormal", dst, "GeometryNormal Source");
+  graph->addEdge(src, "MaterialInfo", dst, "MaterialInfo Source");
 
   graph->addEdge(tgt, "PrevPosition", dst, "Position Target");
   graph->addEdge(tgt, "PrevDiffuseAlbedo", dst, "DiffuseAlbedo Target");
   graph->addEdge(tgt, "PrevSpecularRough", dst, "SpecularRough Target");
   graph->addEdge(tgt, "PrevNormal", dst, "Normal Target");
   graph->addEdge(tgt, "PrevGeometryNormal", dst, "GeometryNormal Target");
+  graph->addEdge(tgt, "PrevMaterialInfo", dst, "MaterialInfo Target");
 }
 
 auto GBufferUtils::bindGBufferResource(
@@ -467,6 +494,7 @@ auto GBufferUtils::bindGBufferResource(
   GFX::Texture* geometryNormal = renderData.getTexture("GeometryNormal");
   GFX::Texture* emissive = renderData.getTexture("Emissive");
   GFX::Texture* motionVector = renderData.getTexture("MotionVector");
+  GFX::Texture* materialInfo = renderData.getTexture("MaterialInfo");
 
   pipeline->updateBindings(
       context,
@@ -487,6 +515,9 @@ auto GBufferUtils::bindGBufferResource(
           std::make_pair(
               "t_MotionVectors",
               RHI::BindingResource{motionVector->getSRV(0, 1, 0, 1)}),
+          std::make_pair(
+              "t_MaterialInfo",
+              RHI::BindingResource{materialInfo->getSRV(0, 1, 0, 1)}),
       });
 }
 
@@ -499,6 +530,7 @@ auto GBufferUtils::bindPrevGBufferResource(
   GFX::Texture* prev_specularRough = renderData.getTexture("PrevSpecularRough");
   GFX::Texture* prev_normal = renderData.getTexture("PrevNormal");
   GFX::Texture* prev_geometryNormal = renderData.getTexture("PrevGeometryNormal");
+  GFX::Texture* prev_materialInfo = renderData.getTexture("PrevMaterialInfo");
 
   pipeline->updateBindings(
       context,
@@ -517,6 +549,9 @@ auto GBufferUtils::bindPrevGBufferResource(
           std::make_pair(
               "t_PrevGBufferSpecularRough",
               RHI::BindingResource{prev_specularRough->getSRV(0, 1, 0, 1)}),
+          std::make_pair(
+              "t_PrevGBufferMaterialInfo",
+              RHI::BindingResource{prev_materialInfo->getSRV(0, 1, 0, 1)}),
       });
 }
 
@@ -726,6 +761,12 @@ auto GBufferHolderSource::reflect() noexcept -> RDG::PassReflection {
       .withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::R32_UINT)
       .withUsages((uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT);
+  
+  reflector.addOutput("MaterialInfo")
+      .isTexture()
+      .withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::RGBA16_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT);
 
   return reflector;
 }
@@ -737,12 +778,15 @@ auto GBufferHolderGraph::alias() noexcept -> RDG::AliasDict {
   dict.addAlias("SpecularRough Source", CONCAT("Blit SpecularRough"), "Source");
   dict.addAlias("Normal Source", CONCAT("Blit Normal"), "Source");
   dict.addAlias("GeometryNormal Source", CONCAT("Blit GeometryNormal"), "Source");
+  dict.addAlias("MaterialInfo Source", CONCAT("Blit MaterialInfo"), "Source");
 
   dict.addAlias("Position Target", CONCAT("Blit Position"), "Target");
   dict.addAlias("DiffuseAlbedo Target", CONCAT("Blit DiffuseAlbedo"), "Target");
   dict.addAlias("SpecularRough Target", CONCAT("Blit SpecularRough"), "Target");
   dict.addAlias("Normal Target", CONCAT("Blit Normal"), "Target");
   dict.addAlias("GeometryNormal Target", CONCAT("Blit GeometryNormal"),
+                "Target");
+  dict.addAlias("MaterialInfo Target", CONCAT("Blit MaterialInfo"),
                 "Target");
 
   return dict;
@@ -764,6 +808,9 @@ auto GBufferHolderGraph::onRegister(RDG::Graph* graph) noexcept -> void {
   graph->addPass(std::make_unique<BlitPass>(BlitPass::Descriptor{
                      0, 0, 0, 0, BlitPass::SourceType::UINT}),
                  CONCAT("Blit GeometryNormal"));
+  graph->addPass(std::make_unique<BlitPass>(BlitPass::Descriptor{
+                     0, 0, 0, 0, BlitPass::SourceType::FLOAT4}),
+                 CONCAT("Blit MaterialInfo"));
 }
 
 GBufferShading::GBufferShading() {

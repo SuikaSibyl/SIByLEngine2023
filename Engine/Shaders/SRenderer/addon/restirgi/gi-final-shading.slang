@@ -62,7 +62,7 @@ void RgenMain() {
         globalUniform.cameraData
     );
 
-    const ShadingSurface primarySurface = GetGBufferSurface(
+    ShadingSurface primarySurface = GetGBufferSurface(
         pixel, globalUniform.cameraData);
 
     const GIReservoir reservoir = LoadGIReservoir(

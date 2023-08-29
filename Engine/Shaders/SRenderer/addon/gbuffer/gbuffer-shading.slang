@@ -44,7 +44,6 @@ void RgenMain() {
     ShadingSurface surface = GetGBufferSurface(
         pixel, globalUniform.cameraData
     );
-    surface.bsdfID = 0;
 
     float3 diffuse = float3(0);
     if (IsShadingSurfaceValid(surface)) {

@@ -19,9 +19,9 @@ void EvalLambertian(inout_ref(BSDFEvalQuery) cBSDFEvalQuery) {
     }
     // Making sure the shading frame is consistent with the view direction.
     float3x3 frame = cBSDFEvalQuery.frame;
-    if (dot(frame[2], cBSDFEvalQuery.dir_in) < 0) {
-        frame = -frame;
-    }
+    // if (dot(frame[2], cBSDFEvalQuery.dir_in) < 0) {
+    //     frame = -frame;
+    // }
     // Evaluate bsdf
     float3 albedo;
     if (cBSDFEvalQuery.mat_id == 0xFFFFFFFF) {
@@ -51,9 +51,9 @@ void SampleLambertian(inout_ref(BSDFSampleQuery) cBSDFSampleQuery) {
     }
     // Making sure the shading frame is consistent with the view direction.
     float3x3 frame = cBSDFSampleQuery.frame;
-    if (dot(frame[2], cBSDFSampleQuery.dir_in) < 0) {
-        frame = -frame;
-    }
+    // if (dot(frame[2], cBSDFSampleQuery.dir_in) < 0) {
+    //     frame = -frame;
+    // }
     // Sample bsdf
     cBSDFSampleQuery.dir_out = to_world(
         frame,
@@ -77,9 +77,9 @@ void PdfLambertian(inout_ref(BSDFSamplePDFQuery) cBSDFSamplePDFQuery) {
     }
     // Making sure the shading frame is consistent with the view direction.
     float3x3 frame = cBSDFSamplePDFQuery.frame;
-    if (dot(frame[2], cBSDFSamplePDFQuery.dir_in) < 0) {
-        frame = -frame;
-    }
+    // if (dot(frame[2], cBSDFSamplePDFQuery.dir_in) < 0) {
+    //     frame = -frame;
+    // }
     cBSDFSamplePDFQuery.pdf = saturate(dot(frame[2], cBSDFSamplePDFQuery.dir_out)) / k_pi;
 }
 

@@ -161,26 +161,6 @@ bool IsValidNeighbor(
         && CompareRelativeDifference(ourDepth, theirDepth, depthThreshold);
 }
 
-struct SplitBrdf {
-    float demodulatedDiffuse;
-    float3 specular;
-};
-
-SplitBrdf EvaluateBrdf(in_ref(ShadingSurface) surface, float3 samplePosition) {
-    float3 N = surface.geometryNormal;
-    float3 V = surface.viewDir;
-    float3 L = normalize(samplePosition - surface.worldPos);
-    
-    SplitBrdf brdf;
-    brdf.demodulatedDiffuse = k_inv_pi * saturate(dot(surface.geometryNormal, L));
-    brdf.specular = float3(0);
-    // if (surface.roughness == 0)
-    //     brdf.specular = 0;
-    // else
-    //     brdf.specular = GGX_times_NdotL(V, L, surface.normal, max(surface.roughness, kMinRoughness), surface.specularF0);
-    return brdf;
-}
-
 /**
  * Computes the weight of the given GI sample when
  * the given surface is shaded using that GI sample.
@@ -191,11 +171,13 @@ SplitBrdf EvaluateBrdf(in_ref(ShadingSurface) surface, float3 samplePosition) {
  */
 float GetGISampleTargetPdfForSurface(
     in_ref(float3) samplePosition,
-    in_ref(float3) sampleRadiance, 
-    in_ref(ShadingSurface) surface
+    in_ref(float3) sampleRadiance,
+    in_ref(ShadingSurface) surface,
+    in_ref(float3) cameraPosition
 ) {
-    SplitBrdf brdf = EvaluateBrdf(surface, samplePosition);
-    float3 reflectedRadiance = sampleRadiance * (brdf.demodulatedDiffuse * surface.diffuseAlbedo + brdf.specular);
+    const float3 inDir = normalize(cameraPosition - surface.worldPos);
+    const float3 bsdf = EvalBsdf(surface, inDir, normalize(samplePosition - surface.worldPos));
+    const float3 reflectedRadiance = sampleRadiance * bsdf;
     return luminance(reflectedRadiance);
 }
 
@@ -259,8 +241,7 @@ void CalculatePartialJacobian(
 float CalculateJacobian(
     in_ref(float3) recieverPos,
     in_ref(float3) neighborReceiverPos,
-    in_ref(GIReservoir) neighborReservoir,
-    out_ref(float4) debug
+    in_ref(GIReservoir) neighborReservoir
 ) {
     // Calculate Jacobian determinant to adjust weight.
     // See Equation (11) in the ReSTIR GI paper.
@@ -273,7 +254,7 @@ float CalculateJacobian(
     float jacobian = (newCosine * originalDistance * originalDistance)
         / (originalCosine * newDistance * newDistance);
     if (isinf(jacobian) || isnan(jacobian))
-        jacobian = 1;
+        jacobian = 0;
     return jacobian;
 }
 
@@ -285,8 +266,48 @@ bool ValidateGISampleWithJacobian(inout float jacobian) {
         return false;
     }
     // clamp Jacobian.
-    jacobian = clamp(jacobian, 1 / 3.0, 3.0);
+    // jacobian = clamp(jacobian, 1 / 3.0, 3.0);
     return true;
+}
+
+bool GetConservativeVisibility(
+    RaytracingAccelerationStructure accelStruct,
+    in_ref(ShadingSurface) surface,
+    in_ref(float3) samplePosition,
+    inout_ref(RandomSamplerState) RNG
+) {
+    const Ray ray = SetupVisibilityRay(surface, samplePosition, 0.01);
+    RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> q;
+    q.TraceRayInline(
+        accelStruct,
+        0, 0xff,
+        ToRayDesc(ray));
+    if (q.Proceed()) {
+        return false;
+    }
+    return true;
+}
+
+// Same as RAB_GetConservativeVisibility but for temporal resampling.
+// When the previous frame TLAS and BLAS are available, the implementation should use the previous position and the previous AS.
+// When they are not available, use the current AS. That will result in transient bias.
+bool GetTemporalConservativeVisibility(
+    in_ref(ShadingSurface) previousSurface,
+    in_ref(float3) samplePosition,
+    inout_ref(RandomSamplerState) RNG
+) {
+    return GetConservativeVisibility(PrevSceneBVH, previousSurface, samplePosition, RNG);
+}
+
+// Same as RAB_GetConservativeVisibility but for temporal resampling.
+// When the previous frame TLAS and BLAS are available, the implementation should use the previous position and the previous AS.
+// When they are not available, use the current AS. That will result in transient bias.
+bool GetConservativeVisibility(
+    in_ref(ShadingSurface) surface,
+    in_ref(float3) samplePosition,
+    inout_ref(RandomSamplerState) RNG
+) {
+    return GetConservativeVisibility(SceneBVH, surface, samplePosition, RNG);
 }
 
 // Temporal resampling for GI reservoir pass.
@@ -297,6 +318,7 @@ GIReservoir GITemporalResampling(
     in_ref(GITemporalResamplingParameters) tparams,
     in_ref(GIResamplingRuntimeParameters) params,
     in_ref(CameraData) prev_camera,
+    in_ref(CameraData) camera,
     in_ref(RWStructuredBuffer<PackedGIReservoir>) reservoir_buffer,
     inout_ref(RandomSamplerState) RNG,
     RWTexture2D<float4> u_debug
@@ -330,11 +352,11 @@ GIReservoir GITemporalResampling(
         }
 
         int2 idx = prevPos + offset;
-        // if ((tparams.enablePermutationSampling && isFirstSample) || isFallbackSample) {
-        //     // Apply permutation sampling for the first (non-jittered) sample,
-        //     // also for the last (fallback) sample to prevent visible repeating patterns in disocclusions.
-        //     ApplyPermutationSampling(idx, params.uniformRandomNumber);
-        // }
+        if ((tparams.enablePermutationSampling && isFirstSample) || isFallbackSample) {
+            // Apply permutation sampling for the first (non-jittered) sample,
+            // also for the last (fallback) sample to prevent visible repeating patterns in disocclusions.
+            ApplyPermutationSampling(idx, params.uniformRandomNumber);
+        }
         
         // Grab shading / g-buffer data from last frame
         temporalSurface = GetPrevGBufferSurface(idx, prev_camera);
@@ -355,7 +377,7 @@ GIReservoir GITemporalResampling(
         if (!AreMaterialsSimilar(surface, temporalSurface)) {
             continue;
         }
-
+        
         // Read temporal reservoir.
         temporalReservoir = LoadGIReservoir(params, idx, tparams.sourceBufferIndex, reservoir_buffer);
         
@@ -373,7 +395,7 @@ GIReservoir GITemporalResampling(
     // Combine the input reservoir into the current reservoir.
     float selectedTargetPdf = 0;
     if (IsValidGIReservoir(inputReservoir)) {
-        selectedTargetPdf = GetGISampleTargetPdfForSurface(inputReservoir.position, inputReservoir.radiance, surface);
+        selectedTargetPdf = GetGISampleTargetPdfForSurface(inputReservoir.position, inputReservoir.radiance, surface, camera.posW);
         CombineGIReservoirs(curReservoir, inputReservoir, /* random = */ 0.5, selectedTargetPdf);
     }
 
@@ -382,11 +404,12 @@ GIReservoir GITemporalResampling(
         // Found a valid temporal surface and its GI reservoir.
         // Calculate Jacobian determinant to adjust weight.
         float jacobian = CalculateJacobian(
-            surface.worldPos, temporalSurface.worldPos, temporalReservoir, debug);
+            surface.worldPos, temporalSurface.worldPos, temporalReservoir);
 
-        if (!ValidateGISampleWithJacobian(jacobian))
-            foundTemporalReservoir = false;
-
+        // Could influence unbiasedness (?)
+        // if (!ValidateGISampleWithJacobian(jacobian))
+        //     foundTemporalReservoir = false;
+        
         temporalReservoir.weightSum *= jacobian;
         // Clamp history length
         temporalReservoir.M = min(temporalReservoir.M, 20);
@@ -399,54 +422,48 @@ GIReservoir GITemporalResampling(
             foundTemporalReservoir = false;
         }
     }
-
+    
     // // Combine the temporal reservoir into the current reservoir.
-    // bool selectedPreviousSample = false;
+    bool selectedPreviousSample = false;
     if (foundTemporalReservoir) {
         // Reweighting and denormalize the temporal sample with the current surface.
-        float targetPdf = GetGISampleTargetPdfForSurface(temporalReservoir.position, temporalReservoir.radiance, surface);
+        float targetPdf = GetGISampleTargetPdfForSurface(temporalReservoir.position, temporalReservoir.radiance, surface, camera.posW);
         // Combine the temporalReservoir into the curReservoir
         if (CombineGIReservoirs(curReservoir, temporalReservoir, GetNextRandom(RNG), targetPdf)) {
             selectedTargetPdf = targetPdf;
+            selectedPreviousSample = true;
         }
     }
 
-// #if RTXDI_GI_ALLOWED_BIAS_CORRECTION >= RTXDI_BIAS_CORRECTION_BASIC
-//     if (tparams.biasCorrectionMode >= RTXDI_BIAS_CORRECTION_BASIC)
-//     {
-//         float pi = selectedTargetPdf;
-//         float piSum = selectedTargetPdf * inputReservoir.M;
+    u_debug[pixelPosition] = debug;
 
-//         if (RTXDI_IsValidGIReservoir(curReservoir) && foundTemporalReservoir)
-//         {
-//             float temporalP = RAB_GetGISampleTargetPdfForSurface(curReservoir.position, curReservoir.radiance, temporalSurface);
+    if (tparams.biasCorrectionMode >= 1) {
+        float pi = selectedTargetPdf;
+        float piSum = selectedTargetPdf * inputReservoir.M;
 
-// #if RTXDI_ALLOWED_BIAS_CORRECTION >= RTXDI_BIAS_CORRECTION_RAY_TRACED
-//             if (tparams.biasCorrectionMode == RTXDI_BIAS_CORRECTION_RAY_TRACED && temporalP > 0)
-//             {
-//                 if (!RAB_GetTemporalConservativeVisibility(surface, temporalSurface, curReservoir.position))
-//                 {
-//                     temporalP = 0;
-//                 }
-//             }
-// #endif
+        if (IsValidGIReservoir(curReservoir) && foundTemporalReservoir) {
+            // probablity of choosing the temporal sample
+            float temporalP = GetGISampleTargetPdfForSurface(curReservoir.position, curReservoir.radiance, temporalSurface, prev_camera.posW);
+            // We should cull out those reservoirs that can not actually propose the sample.
+            if (tparams.biasCorrectionMode == 2 && temporalP > 0) {
+                if (!GetTemporalConservativeVisibility(temporalSurface, curReservoir.position, RNG)) {
+                    temporalP = 0;
+                }
+            }
+            pi = selectedPreviousSample ? temporalP : pi;
+            piSum += temporalP * temporalReservoir.M;
+        }
 
-//             pi = selectedPreviousSample ? temporalP : pi;
-//             piSum += temporalP * temporalReservoir.M;
-//         }
-
-//         // Normalizing
-//         float normalizationNumerator = pi;
-//         float normalizationDenominator = piSum * selectedTargetPdf;
-//         FinalizeGIResampling(curReservoir, normalizationNumerator, normalizationDenominator);
-//     }
-//     else
-// #endif
-    // Normalizing
-    const float normalizationNumerator = 1.0;
-    const float normalizationDenominator = selectedTargetPdf * curReservoir.M;
-    FinalizeGIResampling(curReservoir, normalizationNumerator, normalizationDenominator);
-
+        // Normalizing
+        float normalizationNumerator = pi;
+        float normalizationDenominator = piSum * selectedTargetPdf;
+        FinalizeGIResampling(curReservoir, normalizationNumerator, normalizationDenominator);
+    }
+    else {   // Normalizing
+        const float normalizationNumerator = 1.0;
+        const float normalizationDenominator = selectedTargetPdf * curReservoir.M;
+        FinalizeGIResampling(curReservoir, normalizationNumerator, normalizationDenominator);
+    }
     return curReservoir;
 }
 
@@ -482,7 +499,7 @@ GIReservoir GISpatialResampling(
     // Simply add the input reservoir into the current reservoir.
     float selectedTargetPdf = 0;
     if (IsValidGIReservoir(inputReservoir)) {
-        selectedTargetPdf = GetGISampleTargetPdfForSurface(inputReservoir.position, inputReservoir.radiance, surface);
+        selectedTargetPdf = GetGISampleTargetPdfForSurface(inputReservoir.position, inputReservoir.radiance, surface, camera.posW);
         CombineGIReservoirs(curReservoir, inputReservoir, /* random = */ 0.5, selectedTargetPdf);
     }
     
@@ -525,17 +542,17 @@ GIReservoir GISpatialResampling(
             continue;
 
         // Calculate Jacobian determinant to adjust weight.
-        // float jacobian = CalculateJacobian(surface.worldPos, neighborSurface.worldPos, neighborReservoir);
-        float jacobian = 1.f;
+        float jacobian = CalculateJacobian(surface.worldPos, neighborSurface.worldPos, neighborReservoir);
         // Compute reuse weight.
-        float targetPdf = GetGISampleTargetPdfForSurface(neighborReservoir.position, neighborReservoir.radiance, surface);
-
+        float targetPdf = GetGISampleTargetPdfForSurface(neighborReservoir.position, neighborReservoir.radiance, surface, camera.posW);
+        
+        // This one again could influence unbiasedness
         // The Jacobian to transform a GI sample's solid angle holds the lengths and angles to the GI sample from the surfaces,
         // that are valuable information to determine if the GI sample should be combined with the current sample's stream.
         // This function also may clamp the value of the Jacobian.
-        if (!ValidateGISampleWithJacobian(jacobian)) {
-            continue;
-        }
+        // if (!ValidateGISampleWithJacobian(jacobian)) {
+        //     continue;
+        // }
         
         // Valid neighbor surface and its GI reservoir. Combine the reservor.
         cachedResult |= (1u << uint(i));
@@ -573,12 +590,11 @@ GIReservoir GISpatialResampling(
             GIReservoir neighborReservoir = LoadGIReservoir(params, idx, sparams.sourceBufferIndex, reservoir_buffer);
 
             // Get the PDF of the sample RIS selected in the first loop, above, *at this neighbor*
-            float ps = GetGISampleTargetPdfForSurface(curReservoir.position, curReservoir.radiance, neighborSurface);
+            float ps = GetGISampleTargetPdfForSurface(curReservoir.position, curReservoir.radiance, neighborSurface, camera.posW);
 
             // This should be done to correct bias.
             if (sparams.biasCorrectionMode == 2 && ps > 0) {
-                const Ray ray = SetupVisibilityRay(surface, curReservoir.position, 0.01);
-                if (TraceOccludeRay(ray, RNG, SceneBVH)) {
+                if (!GetConservativeVisibility(neighborSurface, curReservoir.position, RNG)) {
                     ps = 0;
                 }
             }
@@ -592,11 +608,9 @@ GIReservoir GISpatialResampling(
 
         // "MIS-like" normalization
         // {wSum * (pi/piSum)} * 1/selectedTargetPdf
-        {
-            float normalizationNumerator = pi;
-            float normalizationDenominator = selectedTargetPdf * piSum;
-            FinalizeGIResampling(curReservoir, normalizationNumerator, normalizationDenominator);
-        }
+        float normalizationNumerator = pi;
+        float normalizationDenominator = selectedTargetPdf * piSum;
+        FinalizeGIResampling(curReservoir, normalizationNumerator, normalizationDenominator);
     }
     else {
         // Normalization

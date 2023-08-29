@@ -42,12 +42,11 @@ void RgenMain() {
     ShadingSurface surface = GetGBufferSurface(
         pixel, globalUniform.cameraData
     );
-    surface.bsdfID = 0;
 
+    float4 debugval = float4(0,0,0, 1);
+    
     GIReservoir reservoir = EmptyGIReservoir();
     float selectedTargetPdf = 0.0f;
-
-    float4 debugval = float4(0, 0, 0, 1);
 
     float weight_sum = 0.f;
     if (IsShadingSurfaceValid(surface)) {
@@ -71,7 +70,8 @@ void RgenMain() {
                 // outputShadingResult = isSpecularRay && isDeltaSurface;
                 // This pixel has a valid indirect sample so it stores information as an initial GI reservoir.
                 GIReservoir local = MakeGIReservoir(payload.hit.position, payload.hit.geometryNormal, radiance, bsdf_pdf);
-                const float target_pdf = GetGISampleTargetPdfForSurface(local.position, local.radiance, surface);
+                const float target_pdf = GetGISampleTargetPdfForSurface(local.position, local.radiance, surface, globalUniform.cameraData.posW);
+                debugval = float4(radiance, 1);
                 if (CombineGIReservoirs(reservoir, local, GetNextRandom(RNG), target_pdf)) {
                     selectedTargetPdf = target_pdf;
                 }
@@ -80,7 +80,6 @@ void RgenMain() {
                     float distanceToSurface = length(vec);
                     float doted = dot(local.normal, vec / distanceToSurface);
                     float cosine = saturate(doted);
-                    debugval = float4(distanceToSurface, doted, cosine, 1);
                 }
             }
             else {

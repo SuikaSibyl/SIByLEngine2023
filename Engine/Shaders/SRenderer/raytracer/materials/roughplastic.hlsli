@@ -11,6 +11,32 @@
  */
 [shader("callable")]
 void EvalRoughPlastic(inout_ref(BSDFEvalQuery) cBSDFEvalQuery) {
+    // First load the material info
+    // -------------------------------------------------------------
+    float3 Kd;
+    float3 Ks;
+    float eta;
+    float roughness;
+    if (cBSDFEvalQuery.mat_id == 0xFFFFFFFF) {
+        // info is already packed in the query
+        Kd = UnpackRGBE(asuint(cBSDFEvalQuery.bsdf.x));
+        Ks = UnpackRGBE(asuint(cBSDFEvalQuery.uv.y));
+        eta = cBSDFEvalQuery.bsdf.y;
+        roughness = cBSDFEvalQuery.uv.x;
+    } else { // load info from the material buffer
+        const MaterialInfo material = materials[cBSDFEvalQuery.mat_id];
+        const float3 texAlbedo = textures[material.baseOrDiffuseTextureIndex]
+                                     .Sample(cBSDFEvalQuery.uv, 0) .xyz;
+        Kd = material.baseOrDiffuseColor * texAlbedo;
+        Ks = material.specularColor;
+        eta = material.transmissionFactor;
+        roughness = material.roughness;
+    }
+    // Clamp roughness to avoid numerical issues.
+    roughness = clamp(roughness, 0.01f, 1.f);
+
+    // Then evaluate the BSDF
+    // -------------------------------------------------------------
     cBSDFEvalQuery.bsdf = float3(0);
     if (dot(cBSDFEvalQuery.geometric_normal, cBSDFEvalQuery.dir_in) < 0 ||
         dot(cBSDFEvalQuery.geometric_normal, cBSDFEvalQuery.dir_out) < 0) {
@@ -31,32 +57,6 @@ void EvalRoughPlastic(inout_ref(BSDFEvalQuery) cBSDFEvalQuery) {
         return;
     }
 
-    // Evaluate bsdf
-    // First load the material info
-    float3 Kd;
-    float3 Ks;
-    float eta;
-    float roughness;
-    if (cBSDFEvalQuery.mat_id == 0xFFFFFFFF) {
-        // info is already packed in the query
-        Kd = UnpackRGBE(asuint(cBSDFEvalQuery.dir_out.x));
-        Ks = UnpackRGBE(asuint(cBSDFEvalQuery.uv.y));
-        eta = cBSDFEvalQuery.dir_out.y;
-        roughness = cBSDFEvalQuery.uv.x;
-    }
-    else {
-        // load info from the material buffer
-        const MaterialInfo material = materials[cBSDFEvalQuery.mat_id];
-        const float3 texAlbedo = textures[material.baseOrDiffuseTextureIndex]
-                                     .Sample(cBSDFEvalQuery.uv, 0) .xyz;
-        Kd = material.baseOrDiffuseColor * texAlbedo;
-        Ks = material.specularColor;
-        eta = material.transmissionFactor;
-        roughness = material.roughness;
-    }
-
-    // Clamp roughness to avoid numerical issues.
-    roughness = clamp(roughness, 0.01f, 1.f);
     // dielectric layer:
     // F_o is the reflection percentage.
     const float F_o = FresnelDielectric(dot(half_vector, cBSDFEvalQuery.dir_out), eta);
@@ -82,21 +82,8 @@ void EvalRoughPlastic(inout_ref(BSDFEvalQuery) cBSDFEvalQuery) {
  */
 [shader("callable")]
 void SampleRoughPlastic(inout_ref(BSDFSampleQuery) cBSDFSampleQuery) {
-    cBSDFSampleQuery.pdf_out = 0;
-    cBSDFSampleQuery.dir_out = float3(0);
-
-    if (dot(cBSDFSampleQuery.geometric_normal, cBSDFSampleQuery.dir_in) < 0 ||
-        dot(cBSDFSampleQuery.geometric_normal, cBSDFSampleQuery.dir_out) < 0) {
-        // No light below the surface
-        return;
-    }
-    // Making sure the shading frame is consistent with the view direction.
-    float3x3 frame = cBSDFSampleQuery.frame;
-    if (dot(frame[2], cBSDFSampleQuery.dir_in) < 0) {
-        frame = -frame;
-    }
-
-    // Evaluate bsdf
+    // First load the material info
+    // -------------------------------------------------------------
     float3 Kd;
     float3 Ks;
     float roughness;
@@ -115,11 +102,27 @@ void SampleRoughPlastic(inout_ref(BSDFSampleQuery) cBSDFSampleQuery) {
         Ks = material.specularColor;
         roughness = material.roughness;
     }
+    // Clamp roughness to avoid numerical issues.
+    roughness = clamp(roughness, 0.01f, 1.f);
+
+    // Then sample the BSDF
+    // -------------------------------------------------------------
+    cBSDFSampleQuery.pdf_out = 0;
+    cBSDFSampleQuery.dir_out = float3(0);
+
+    if (dot(cBSDFSampleQuery.geometric_normal, cBSDFSampleQuery.dir_in) < 0 ||
+        dot(cBSDFSampleQuery.geometric_normal, cBSDFSampleQuery.dir_out) < 0) {
+        // No light below the surface
+        return;
+    }
+    // Making sure the shading frame is consistent with the view direction.
+    float3x3 frame = cBSDFSampleQuery.frame;
+    if (dot(frame[2], cBSDFSampleQuery.dir_in) < 0) {
+        frame = -frame;
+    }
 
     float lS = luminance(Ks);
     float lR = luminance(Kd);
-    // Clamp roughness to avoid numerical issues.
-    roughness = clamp(roughness, 0.01f, 1.f);
     float alpha = roughness * roughness;
 
     if (lS + lR <= 0) {
@@ -175,6 +178,31 @@ void SampleRoughPlastic(inout_ref(BSDFSampleQuery) cBSDFSampleQuery) {
  */
 [shader("callable")]
 void PdfRoughPlastic(inout_ref(BSDFSamplePDFQuery) cBSDFSamplePDFQuery) {
+    // First load the material info
+    // -------------------------------------------------------------
+    float3 Kd;
+    float3 Ks;
+    float roughness;
+    if (cBSDFSamplePDFQuery.mat_id == 0xFFFFFFFF) {
+        // info is already packed in the query
+        Kd = UnpackRGBE(asuint(cBSDFSamplePDFQuery.dir_out.x));
+        Ks = UnpackRGBE(asuint(cBSDFSamplePDFQuery.uv.y));
+        roughness = cBSDFSamplePDFQuery.uv.x;
+    }
+    else {
+        // load info from the material buffer
+        const MaterialInfo material = materials[cBSDFSamplePDFQuery.mat_id];
+        const float3 texAlbedo = textures[material.baseOrDiffuseTextureIndex]
+                                     .Sample(cBSDFSamplePDFQuery.uv, 0) .xyz;
+        Kd = material.baseOrDiffuseColor * texAlbedo;
+        Ks = material.specularColor;
+        roughness = material.roughness;
+    }
+    // Clamp roughness to avoid numerical issues.
+    roughness = clamp(roughness, 0.01f, 1.f);
+    
+    // Then evaluate the pdf
+    // -------------------------------------------------------------
     cBSDFSamplePDFQuery.pdf = 0.f;
     if (dot(cBSDFSamplePDFQuery.geometric_normal, cBSDFSamplePDFQuery.dir_in) < 0 ||
         dot(cBSDFSamplePDFQuery.geometric_normal, cBSDFSamplePDFQuery.dir_out) < 0) {
@@ -195,33 +223,11 @@ void PdfRoughPlastic(inout_ref(BSDFSamplePDFQuery) cBSDFSamplePDFQuery) {
         return;
     }
 
-    // Evaluate bsdf
-    float3 Kd;
-    float3 Ks;
-    float roughness;
-    if (cBSDFSamplePDFQuery.mat_id == 0xFFFFFFFF) {
-        // info is already packed in the query
-        Kd = UnpackRGBE(asuint(cBSDFSamplePDFQuery.dir_out.x));
-        Ks = UnpackRGBE(asuint(cBSDFSamplePDFQuery.uv.y));
-        roughness = cBSDFSamplePDFQuery.uv.x;
-    }
-    else {
-        // load info from the material buffer
-        const MaterialInfo material = materials[cBSDFSamplePDFQuery.mat_id];
-        const float3 texAlbedo = textures[material.baseOrDiffuseTextureIndex]
-                                     .Sample(cBSDFSamplePDFQuery.uv, 0) .xyz;
-        Kd = material.baseOrDiffuseColor * texAlbedo;
-        Ks = material.specularColor;
-        roughness = material.roughness;
-    }
-
     const float lS = luminance(Ks);
     const float lR = luminance(Kd);
     if (lS + lR <= 0) {
         return;
     }
-    // Clamp roughness to avoid numerical issues.
-    roughness = clamp(roughness, 0.01f, 1.f);
     // We use the reflectance to determine whether to choose specular sampling lobe or diffuse.
     float spec_prob = lS / (lS + lR);
     float diff_prob = 1 - spec_prob;

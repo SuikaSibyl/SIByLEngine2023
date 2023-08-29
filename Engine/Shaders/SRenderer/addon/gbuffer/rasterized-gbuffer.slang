@@ -53,7 +53,8 @@ void fragmentMain(
     out uint o_normal: SV_Target3,
     out uint o_geoNormal: SV_Target4,
     out float4 o_emissive: SV_Target5,
-    out float4 o_motion: SV_Target6)
+    out float4 o_motion: SV_Target6,
+    out float3 o_material: SV_Target7)
 {
     const GeometryInfo geometry = geometries[coarseVertex.geoID];
     const GeometryInfo prevGeometry = prevGeometries[coarseVertex.geoID];
@@ -145,4 +146,5 @@ void fragmentMain(
     o_geoNormal = UnitVectorToUnorm32Octahedron(flatNormal);
     o_emissive = float4(emissiveColor, viewDistance); // viewDistance is here to enable glass ray tracing on all pixels
     o_motion = float4(motion, fwidth_depth);
+    o_material = float3(material.bsdfID, uv);
 }

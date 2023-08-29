@@ -87,7 +87,7 @@ GeometryHit fetchTrimeshGeometryHit(
     in_ref(Ray) ray
 ) {
     GeometryHit hit = fetchTrimeshGeometryHit(geometryID, bary, primitiveID);
-    const float frontFace = (dot(hit.shadingNormal, ray.direction) < 0) ? 1 : -1;
+    const float frontFace = (dot(hit.geometryNormal, ray.direction) < 0) ? 1 : -1;
     hit.shadingNormal *= frontFace;
     hit.geometryNormal *= frontFace;
     return hit;

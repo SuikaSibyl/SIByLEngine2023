@@ -90,7 +90,9 @@ void RgenMain() {
     const int vxg_type = (pConst.sampleStragegy >> 4) & 0x3;
     const bool power_mis = ((pConst.sampleStragegy >> 6) & 0x1) != 0;
     const VisibilityType visibility = VisibilityType((pConst.sampleStragegy >> 7) & 0x3);
-    
+
+    u_Debug[pixel] = float4(hit.geometryNormal * 0.5 + 1, 1);
+
     // 1 spp : spawn a new BSDF ray.
     float2 uv = float2(GetNextRandom(RNG), GetNextRandom(RNG));
     if (sample_stragegy == 0) {

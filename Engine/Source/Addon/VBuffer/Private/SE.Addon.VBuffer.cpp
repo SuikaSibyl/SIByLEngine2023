@@ -124,6 +124,13 @@ auto VBuffer2GBufferPass::reflect() noexcept -> RDG::PassReflection {
       .consume(RDG::TextureInfo::ConsumeEntry{
               RDG::TextureInfo::ConsumeType::StorageBinding}
               .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addOutput("MaterialInfo")
+      .isTexture().withSize(Math::vec3(1,1,1))
+      .withFormat(RHI::TextureFormat::RGBA16_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
   // Readonly
   reflector.addInputOutput("VBuffer")
       .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
@@ -144,6 +151,7 @@ auto VBuffer2GBufferPass::execute(RDG::RenderContext* context,
   GFX::Texture* emissive = renderData.getTexture("Emissive");
   GFX::Texture* motionVector = renderData.getTexture("MotionVector");
   GFX::Texture* vbuffer = renderData.getTexture("VBuffer");
+  GFX::Texture* materialInfo = renderData.getTexture("MaterialInfo");
 
   // Bind common for RT
   std::vector<RHI::BindGroupEntry>* set_0_entries =
@@ -162,6 +170,7 @@ auto VBuffer2GBufferPass::execute(RDG::RenderContext* context,
           {"u_GBufferSpecularRough", RHI::BindingResource{specularRough->getUAV(0, 0, 1)}},
           {"u_Emissive", RHI::BindingResource{emissive->getUAV(0, 0, 1)}},
           {"u_MotionVectors", RHI::BindingResource{motionVector->getUAV(0, 0, 1)}},
+          {"u_Material", RHI::BindingResource{materialInfo->getUAV(0, 0, 1)}},
       });
 
   updateBindings(

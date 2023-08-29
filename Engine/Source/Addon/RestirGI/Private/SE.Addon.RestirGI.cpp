@@ -154,6 +154,8 @@ auto TemporalResampling::execute(RDG::RenderContext* context,
                 RHI::BindingResource{{reservoir->buffer.get(), 0, reservoir->buffer->size()}});
   updateBinding(context, "PrevGlobalUniforms",
                 renderData.getBindingResource("PrevGlobalUniforms").value());
+  updateBinding(context, "PrevSceneBVH",
+                renderData.getBindingResource("PrevSceneBVH").value());
   updateBinding(context, "u_debug",
                 RHI::BindingResource{{debug->getUAV(0, 0, 1)}});
 
@@ -269,7 +271,7 @@ auto SpatialResampling::execute(RDG::RenderContext* context,
   getBindGroup(context, 0)->updateBinding(*set_0_entries);
   std::vector<RHI::BindGroupEntry>* set_1_entries =
       renderData.getBindGroupEntries("CommonRT");
-   //getBindGroup(context, 1)->updateBinding(*set_1_entries);
+   getBindGroup(context, 1)->updateBinding(*set_1_entries);
   GBufferUtils::bindGBufferResource(this, context, renderData);
 
   GFX::Buffer* reservoir = renderData.getBuffer("GIReservoir");

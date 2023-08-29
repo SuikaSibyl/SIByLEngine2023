@@ -563,6 +563,7 @@ auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
         (uint32_t)RHI::BufferUsage::STORAGE);
   }
 
+  sceneDataPack.backback_tlas = sceneDataPack.back_tlas;
   sceneDataPack.back_tlas = sceneDataPack.tlas;
 
   // if (packstate.invalidTLAS)
@@ -1248,6 +1249,8 @@ auto SRenderer::updateRDGData(RDG::Graph* graph) noexcept -> void {
   graph->renderData.setBindingResource(
       "PrevGeometryBuffer",
       sceneDataBuffers.geometry_buffer.getBufferBinding(prevFlightIdx));
+  graph->renderData.setBindingResource("PrevSceneBVH",
+                                       {sceneDataPack.back_tlas.get()});
 
   graph->renderData.setBindGroupEntries(
       "CommonScene", &(commonDescData.set0_flights_resources[flightIdx]));

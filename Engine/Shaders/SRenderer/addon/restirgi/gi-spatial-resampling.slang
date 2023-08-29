@@ -38,22 +38,22 @@ void RgenMain() {
     // Load Primary Hit from GBuffer
     // --------------------------------------------------------------------
     ShadingSurface surface = GetGBufferSurface(pixel, globalUniform.cameraData);
-
+    
     GIReservoir reservoir = LoadGIReservoir(runtimeParams, pixel, spatialInputBufferIndex, u_GIReservoirs);
 
     if (IsShadingSurfaceValid(surface)) {
         GISpatialResamplingParameters sparams;
         sparams.sourceBufferIndex = spatialInputBufferIndex;
-        sparams.biasCorrectionMode = 0;
+        sparams.biasCorrectionMode = 2;
         sparams.depthThreshold = spatialDepthThreshold;
         sparams.normalThreshold = spatialNormalThreshold;
         sparams.numSamples = numSpatialSamples;
         sparams.samplingRadius = spatialSamplingRadius;
-
+        
         // Execute resampling.
-        // reservoir = GISpatialResampling(
-        //     pixel, surface, reservoir, sparams, runtimeParams,
-        //     globalUniform.cameraData, RNG, u_GIReservoirs, u_NeighborOffsets, u_debug);
+        reservoir = GISpatialResampling(
+            pixel, surface, reservoir, sparams, runtimeParams,
+            globalUniform.cameraData, RNG, u_GIReservoirs, u_NeighborOffsets, u_debug);
     }
 
     StoreGIReservoir(reservoir, runtimeParams, pixel, spatialOutputBufferIndex, u_GIReservoirs);

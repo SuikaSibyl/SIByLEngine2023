@@ -42,7 +42,6 @@ void RgenMain() {
     ShadingSurface surface = GetGBufferSurface(
         pixel, globalUniform.cameraData
     );
-    surface.bsdfID = 0;
 
     const float3 motionVector = GetMotionVector(pixel);
 
@@ -55,7 +54,7 @@ void RgenMain() {
         tParams.screenSpaceMotion = motionVector;
         tParams.sourceBufferIndex = temporalInputBufferIndex;
         tParams.maxHistoryLength = maxHistoryLength;
-        tParams.biasCorrectionMode = temporalBiasCorrection;
+        tParams.biasCorrectionMode = 2;
         tParams.depthThreshold = temporalDepthThreshold;
         tParams.normalThreshold = temporalNormalThreshold;
         tParams.enablePermutationSampling = enablePermutationSampling;
@@ -70,31 +69,10 @@ void RgenMain() {
         // Execute resampling.
         curReservoir = GITemporalResampling(
             pixel, surface, reservoir, tParams, runtimeParams,
-            prevGlobalUniform.cameraData, u_GIReservoirs, RNG, u_debug);
-        // GIReservoir temporalReservoir = LoadGIReservoir(runtimeParams, pixel, temporalInputBufferIndex, u_GIReservoirs);
-        // // if (CombineGIReservoirs(reservoir, temporal, GetNextRandom(RNG), target_pdf)) {
-        // //     selectedTargetPdf = target_pdf;
-        // // }
-        // if (IsValidGIReservoir(temporalReservoir)) {
-        //     bool foundTemporalReservoir = true;
-        //     // Clamp history length
-        //     // temporalReservoir.M = min(temporalReservoir.M, tParams.maxHistoryLength);
-        //     // // Make the sample older
-        //     // ++temporalReservoir.age;
-        //     // discard if the reservoir is too old
-        //     // if (temporalReservoir.age > tParams.maxReservoirAge)
-        //     //     foundTemporalReservoir = false;
-        //     if (foundTemporalReservoir) {
-        //         float a_selectedTargetPdf = GetGISampleTargetPdfForSurface(temporalReservoir.position, temporalReservoir.radiance, surface);
-        //         if (CombineGIReservoirs(curReservoir, temporalReservoir, /* random = */ GetNextRandom(RNG), a_selectedTargetPdf)) {
-        //             selectedTargetPdf = a_selectedTargetPdf;
-        //         }
-        //     }
-        // }
+            prevGlobalUniform.cameraData, globalUniform.cameraData, u_GIReservoirs, RNG, u_debug);
     }
 
     StoreGIReservoir(curReservoir, runtimeParams, pixel, temporalOutputBufferIndex, u_GIReservoirs);
-    // StoreGIReservoir(reservoir, runtimeParams, pixel, temporalInputBufferIndex, u_GIReservoirs);
 
     // // Save the initial sample radiance for MIS in the final shading pass
     // secondaryGBufferData.emission = outputShadingResult ? 0 : radiance;

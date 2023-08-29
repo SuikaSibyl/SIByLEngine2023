@@ -10,6 +10,7 @@ RWTexture2D<uint>   u_GBufferDiffuseAlbedo;
 RWTexture2D<uint>   u_GBufferSpecularRough;
 RWTexture2D<float4> u_Emissive;
 RWTexture2D<float4> u_MotionVectors;
+RWTexture2D<float4> u_Material;
 
 [shader("compute")]
 [numthreads(16, 16, 1)]
@@ -30,6 +31,7 @@ void ComputeMain(int3 DTid: SV_DispatchThreadID) {
     float roughness = 1.f;
     float viewDistance = 0;
     float fwidth_depth = 0;
+    float4 materialInfo = float4(0);
     
     const Ray primaryRay = generateRay(
         pixel,
@@ -70,6 +72,9 @@ void ComputeMain(int3 DTid: SV_DispatchThreadID) {
         vertexUVs[1] = fetchVertexTexCoord(index[1] + int(geometry.vertexOffset));
         vertexUVs[2] = fetchVertexTexCoord(index[2] + int(geometry.vertexOffset));
         float2 uv = interpolate(vertexUVs, bary);
+        materialInfo.xy = uv;
+        materialInfo.z = material.bsdfID;
+        materialInfo.w = material.transmissionFactor;
 
         float3 objectSpaceFlatNormal = normalize(cross(
             vertexPositions[1] - vertexPositions[0],
@@ -106,9 +111,9 @@ void ComputeMain(int3 DTid: SV_DispatchThreadID) {
                                  positionOS, // no vertex change
                                  viewDepth);
 
-        specularF0 = float3(0);
-        roughness = 1;
-
+        specularF0 = material.specularColor;
+        roughness = material.roughness;
+            
         const float2 inUV = float2(pixel);
         const Ray ray_0 = generateRay(inUV, resolution, false, globalUniform.cameraData);
         const Ray ray_x = generateRay(inUV + float2(1, 0), resolution, false, globalUniform.cameraData);
@@ -125,4 +130,5 @@ void ComputeMain(int3 DTid: SV_DispatchThreadID) {
     u_GBufferGeoNormals[pixel] = UnitVectorToUnorm32Octahedron(flatNormal);
     u_Emissive[pixel] = float4(emission, viewDistance);
     u_MotionVectors[pixel] = float4(motion, fwidth_depth);
+    u_Material[pixel] = float4(materialInfo);
 }

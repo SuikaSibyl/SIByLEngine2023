@@ -299,12 +299,11 @@ Ray SetupVisibilityRay(
     in_ref(float3) samplePosition, 
     float offset = 0.001
 ) {
-    float3 L = samplePosition - surface.worldPos;
-    Ray ray;
-    ray.tMin = offset;
-    ray.tMax = max(offset, length(L) - offset * 2);
-    ray.direction = normalize(L);
-    ray.origin = surface.worldPos;
+    float3 direction = samplePosition - surface.worldPos;
+    const float len = length(direction);
+    direction /= len;
+    Ray ray = SpawnRay(surface, direction);
+    ray.tMax = max(offset, len - offset * 2);
     return ray;
 }
 
@@ -405,7 +404,7 @@ float3 SampleBsdf(
     BSDFSampleQuery cBSDFSampleQuery;
     cBSDFSampleQuery.dir_in = dir_in;
     cBSDFSampleQuery.mat_id = materialID;
-    cBSDFSampleQuery.geometric_normal = hit.shadingNormal;
+    cBSDFSampleQuery.geometric_normal = hit.geometryNormal;
     cBSDFSampleQuery.uv = hit.texcoord;
     cBSDFSampleQuery.frame = createONB(hit.shadingNormal);
     cBSDFSampleQuery.rnd_uv = rand.xy;
