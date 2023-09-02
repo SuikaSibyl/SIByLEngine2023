@@ -51,21 +51,104 @@ By default, Nvidia GPU with Turing or higher architecture is required to correct
   - `Editor_GFX module`: Provides many editor widgets for SIByL Engine. 
   - `Editor_RDG module`: Provides DebugDraw system via RDG and RDG Viewer (no RDG editor yet).
 
-## Feature List
-
 ## Demo Gallery
 
 <p align="center">
-  <img src="https://imagehost-suikasibyl-us.oss-us-west-1.aliyuncs.com/img/2023-06-13%2023-21-34%2000_00_03-00_00_15%2000_00_00-00_00_30.gif" width="480">
+  <img src="https://imagehost-suikasibyl-us.oss-us-west-1.aliyuncs.com/img/bdpt-conv.gif" height="260">
+  &nbsp
+  <img src="https://imagehost-suikasibyl-us.oss-us-west-1.aliyuncs.com/img/mmlt-gif.gif" height="260">
   <br />
-  <em>2D FLIP Fluid Simulation</em>
+  <em>Interactive GPU implementation of BDPT (left)  </em>
+  <a href="https://github.com/SuikaSibyl/SIByLEngine2023/tree/main/Engine/Shaders/SRenderer/raytracer/bdpt">[code]</a>  <em>and MMLT (right)  </em>
+  <a href="https://github.com/SuikaSibyl/SIByLEngine2023/tree/main/Engine/Shaders/SRenderer/raytracer/mmlt">[code]</a>
 </p>
 
+<p align="center">
+  <img src="https://imagehost-suikasibyl-us.oss-us-west-1.aliyuncs.com/img/2022-11-09%2017-21-09%2000_00_00-00_00_06.gif" height="260">
+  &nbsp
+  <img src="https://imagehost-suikasibyl-us.oss-us-west-1.aliyuncs.com/img/2022-11-09%2017-16-29%2000_00_00-00_00_05.gif" height="260">
+  <br />
+  <em>Axis-Aligned Filtering for soft shadow (left)  </em>
+  <a href="https://github.com/SuikaSibyl/SIByLEngine2023/tree/main/Engine/Shaders/RayTracing/RayTrace/src/AAF_softshadow">[code]</a>  <em>and and global illumination  </em>
+  <a href="https://github.com/SuikaSibyl/SIByLEngine2023/tree/main/Engine/Shaders/RayTracing/RayTrace/src/aaf_gi">[code]</a>
+  <br/>
+  <em>(aliasing is caused by gif compression)  </em>
+</p>
+
+<p align="center">
+  <img src="https://imagehost-suikasibyl-us.oss-us-west-1.aliyuncs.com/img/2023-06-13%2023-21-34%2000_00_03-00_00_15%2000_00_00-00_00_30.gif" width="420">
+  <br />
+  <em>2D FLIP Fluid Simulation</em>
+  <a href="https://github.com/SuikaSibyl/SIByLEngine2023/tree/main/Demo/FLIP">[code]</a>
+</p>
+
+<p align="center">
+  <img src="https://imagehost-suikasibyl-us.oss-us-west-1.aliyuncs.com/img/captalp.gif" height="260">
+  &nbsp
+  <img src="https://imagehost-suikasibyl-us.oss-us-west-1.aliyuncs.com/img/rabit.gif" height="260">
+  <br />
+  <em>3D tetrahedral elastic body simlation</em>
+  <a href="https://github.com/SuikaSibyl/SIByLEngine2023/tree/main/Demo/Elastic">[code]</a>
+</p>
+
+## Selected Feature List
+
+- ### Primitive Intersection and Sampling
+  - ```Triangle Intersection Offset```: [A Fast and Robust Method for Avoiding Self-Intersection [Chapter6 - Ray Tracing Gems]](https://www.realtimerendering.com/raytracinggems/unofficial_RayTracingGems_v1.4.pdf)
+  - ```Sphere Intersection Query```: [Precision Improvements for Ray/Sphere Intersection [Chapter7 - Ray Tracing Gems]](https://www.realtimerendering.com/raytracinggems/unofficial_RayTracingGems_v1.4.pdf)
+  - ```Spherical Rectangle Sampling```: [An Area-Preserving Parametrization for Spherical Rectangles](https://dl.acm.org/doi/10.1111/cgf.12151)
+
+- ### Material Models and BSDF Sampling
+  - ```Lambertian BSDF```: [Photometria, sive De mensura et gradibus luminus, colorum et umbrae](https://archive.org/details/lambertsphotome00lambgoog)
+  - ```RoughPlastic & Dielectric BSDF```: [Average irregularity representation of a rough surface for ray reflection](https://opg.optica.org/josa/abstract.cfm?uri=josa-65-5-531)
+  - ```Disney Principled BSDF```: [Physically Based Shading at Disney](https://media.disneyanimation.com/uploads/production/publication_asset/48/asset/s2012_pbs_disney_brdf_notes_v3.pdf)
+  - ```Importance Sampling of GGX Microfacet Model```: [Sampling the GGX Distribution of Visible Normals](https://jcgt.org/published/0007/04/01/) 
+
+- ### Various Formulations of Light Transport
+  - ```Unidirectional Path Tracing with MIS```: [Robust - Veach's Thesis [Chapter 9 - Multiple Importance Sampling]](https://graphics.stanford.edu/courses/cs348b-03/papers/veach-chapter9.pdf)
+  - ```Bidirectional Path Tracing```:  [Robust - Veach's Thesis [Chapter 10 - Bidirectional Path Tracing]](https://graphics.stanford.edu/courses/cs348b-03/papers/veach-chapter10.pdf)
+  - ```Multiplexed Metropolis Light Transport```:  [Multiplexed Metropolis Light Transport](https://cs.uwaterloo.ca/~thachisu/mmlt.pdf)
+  - ```Light Tracing as VPL```:   [[wiki page]](https://github.com/SuikaSibyl/SIByLEngine2023/wiki/SRenderer-Addons#vpl--virtual-point-light)  |  [Instant Radiosity](https://doi.org/10.1145/258734.258769)
+
+- ### Importance Sampling for Efficient Light Transport
+    - ```Screen-Space Path Guiding```:  [Real-Time Path-Guiding Based on Parametric Mixture Models](https://diglib.eg.org/bitstream/handle/10.2312/egs20221024/025-028.pdf)
+    - ```Neural Importance Sampling (modified)```:  [[project page]](https://suikasibyl.github.io/CSE272-Report-WebPage/) |  [Neural Importance Sampling](https://dl.acm.org/doi/10.1145/3341156)
+    - ```ReSTIR GI (Global Illumination)```:  [ReSTIR GI: Path Resampling for Real-Time Path Tracing](https://research.nvidia.com/publication/2021-06_restir-gi-path-resampling-real-time-path-tracing)
+
+- ### Efficient Many Lights Sampling
+  - ```Real-time Stochastic Lightcuts```:  [wiki page](https://github.com/SuikaSibyl/SIByLEngine2023/wiki/SRenderer-Addons#slc--stochastic-lightcuts) | [Real-Time Stochastic Lightcuts](https://dqlin.xyz/pubs/2020-i3d-SLC/)
+  - ```ReSTIR DI (Direct Lighting)```:  ------- *Under development* -------
+
+- ### Denoiser For Noisy Path Traced Image
+  - Realtime Local Frequency Analysis Based Approaches [[project page](https://suikasibyl.github.io/CSE274-RealtimeDenoiser-WebPage/)] 
+    - ```AAF Softshadow```: [Axis-Aligned Filtering for Interactive Sampled Soft Shadows](http://graphics.berkeley.edu/papers/UdayMehta-AAF-2012-12/)
+    - ```AAF Global Illumination```: [Axis-Aligned Filtering for Interactive Physically-Based Diffuse Indirect Lighting](https://cseweb.ucsd.edu/~ravir/filtering_GI_final.pdf)
+    - ```MAAF Combined Effects```: [Multiple Axis-Aligned Filters for Rendering of Combined
+Distribution Effects](https://cseweb.ucsd.edu/~ravir/paper_maaf.pdf)
+  - Spatial-Temporal Reuse Based Approaches With Moment Estimation [[wiki page](https://github.com/SuikaSibyl/SIByLEngine2023/wiki/SRenderer-Addons#a-svgf-adaptive-spatiotemporal-variance-guided-filtering)]
+    - ```SVGF Denoiser```: [Spatiotemporal Variance-Guided Filtering: Real-Time Reconstruction for Path-Traced Global Illumination](https://research.nvidia.com/publication/2017-07_Spatiotemporal-Variance-Guided-Filtering%3A)
+    - ```A-SVGF Denoiser```: [Gradient Estimation for Real-Time Adaptive Temporal Filtering](https://cg.ivd.kit.edu/atf.php)
+
+- ### Biased Global Illumination with Approximation
+   - ```Voxel Global Illumination```: [Deferred voxel shading for real-time global illumination](https://ieeexplore.ieee.org/document/7833375)
+     - ```Realtime Voxelization Based on Rasterization```: [The Basics of GPU Voxelization](https://developer.nvidia.com/content/basics-gpu-voxelization)
+   - ```Stochastic Substitute Tree```:  [Stochastic Substitute Trees for Real-Time Global Illumination](https://dl.acm.org/doi/fullHtml/10.1145/3384382.3384521)
+   - ```DDGI```:  ------- *Under development* -------
+
+- ### Miscellaneous Utils as GPU Parallel Computing
+  - Parallel Sorting Algorithms on GPU
+    - ```Parallel Bitonic Sort```: [GPU Gem 2 [Chapter 46. Improved GPU Sorting]](https://developer.nvidia.com/gpugems/gpugems2/part-vi-simulation-and-numerical-algorithms/chapter-46-improved-gpu-sorting)
+    - ```A Faster Parallel Radix Sort```: [A Faster Radix Sort Implementation](https://developer.download.nvidia.com/video/gputechconf/gtc/2020/presentations/s21572-a-faster-radix-sort-implementation.pdf)
+  - Screen Space Passes and Computer Vision Processing
+    - ```G-Buffer```: [Comprehensible rendering of 3-D shapes](https://dl.acm.org/doi/pdf/10.1145/97880.97901)
+    - ```V-Buffer```: [The Visibility Buffer: A Cache-Friendly Approach to Deferred Shading](https://jcgt.org/published/0002/02/04/paper.pdf)
+    - ```gSLICr Superpixel Segmentation```: [gSLICr: SLIC superpixels at over 250Hz](https://www.robots.ox.ac.uk/~victor/gslicr/)
+
 ## Dependencies
-- `glad`: [Multi-Language Vulkan/GL/GLES/EGL/GLX/WGL Loader-Generator based on the official specs.](https://github.com/Dav1dde/glad)
-- `glfw`: [A multi-platform library for OpenGL, OpenGL ES, Vulkan, window and input.](https://github.com/glfw/glfw)
 - `dear_imgui`: [Bloat-free Graphical User interface for C++ with minimal dependencies](https://github.com/ocornut/imgui)
 - `ffmpeg`: [A complete, cross-platform solution to record, convert and stream audio and video.](https://ffmpeg.org/)
+- `glad`: [Multi-Language Vulkan/GL/GLES/EGL/GLX/WGL Loader-Generator based on the official specs.](https://github.com/Dav1dde/glad)
+- `glfw`: [A multi-platform library for OpenGL, OpenGL ES, Vulkan, window and input.](https://github.com/glfw/glfw)
 - `slang`: [Making it easier to work with shaders.](https://github.com/shader-slang/slang)
 - `spirv-cross`: [A practical tool and library for performing reflection on SPIR-V and disassembling SPIR-V back to high level languages.](https://github.com/KhronosGroup/SPIRV-Cross)
 - `stb`: [stb single-file public domain libraries for C/C++](https://github.com/nothings/stb)
