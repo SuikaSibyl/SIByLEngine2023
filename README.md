@@ -94,8 +94,8 @@ By default, Nvidia GPU with Turing or higher architecture is required to correct
 ## Selected Feature List
 
 - ### Primitive Intersection and Sampling
-  - ```Triangle Intersection Offset```: [A Fast and Robust Method for Avoiding Self-Intersection [Chapter6 - Ray Tracing Gems]](https://www.realtimerendering.com/raytracinggems/unofficial_RayTracingGems_v1.4.pdf)
-  - ```Sphere Intersection Query```: [Precision Improvements for Ray/Sphere Intersection [Chapter7 - Ray Tracing Gems]](https://www.realtimerendering.com/raytracinggems/unofficial_RayTracingGems_v1.4.pdf)
+  - ```Triangle Intersection Offset```: [A Fast and Robust Method for Avoiding Self-Intersection](https://www.realtimerendering.com/raytracinggems/unofficial_RayTracingGems_v1.4.pdf)
+  - ```Sphere Intersection Query```: [Precision Improvements for Ray/Sphere Intersection](https://www.realtimerendering.com/raytracinggems/unofficial_RayTracingGems_v1.4.pdf)
   - ```Spherical Rectangle Sampling```: [An Area-Preserving Parametrization for Spherical Rectangles](https://dl.acm.org/doi/10.1111/cgf.12151)
 
 - ### Material Models and BSDF Sampling
@@ -122,11 +122,11 @@ By default, Nvidia GPU with Turing or higher architecture is required to correct
 - ### Denoiser For Noisy Path Traced Image
   - Realtime Local Frequency Analysis Based Approaches [[project page](https://suikasibyl.github.io/CSE274-RealtimeDenoiser-WebPage/)] 
     - ```AAF Softshadow```: [Axis-Aligned Filtering for Interactive Sampled Soft Shadows](http://graphics.berkeley.edu/papers/UdayMehta-AAF-2012-12/)
-    - ```AAF Global Illumination```: [Axis-Aligned Filtering for Interactive Physically-Based Diffuse Indirect Lighting](https://cseweb.ucsd.edu/~ravir/filtering_GI_final.pdf)
+    - ```AAF GI```: [Axis-Aligned Filtering for Interactive Physically-Based Diffuse Indirect Lighting](https://cseweb.ucsd.edu/~ravir/filtering_GI_final.pdf)
     - ```MAAF Combined Effects```: [Multiple Axis-Aligned Filters for Rendering of Combined
 Distribution Effects](https://cseweb.ucsd.edu/~ravir/paper_maaf.pdf)
   - Spatial-Temporal Reuse Based Approaches With Moment Estimation [[wiki page](https://github.com/SuikaSibyl/SIByLEngine2023/wiki/SRenderer-Addons#a-svgf-adaptive-spatiotemporal-variance-guided-filtering)]
-    - ```SVGF Denoiser```: [Spatiotemporal Variance-Guided Filtering: Real-Time Reconstruction for Path-Traced Global Illumination](https://research.nvidia.com/publication/2017-07_Spatiotemporal-Variance-Guided-Filtering%3A)
+    - ```SVGF Denoiser```: [SVGF: Real-Time Reconstruction for Path-Traced Global Illumination](https://research.nvidia.com/publication/2017-07_Spatiotemporal-Variance-Guided-Filtering%3A)
     - ```A-SVGF Denoiser```: [Gradient Estimation for Real-Time Adaptive Temporal Filtering](https://cg.ivd.kit.edu/atf.php)
 
 - ### Biased Global Illumination with Approximation
