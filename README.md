@@ -56,7 +56,7 @@ By default, Nvidia GPU with Turing or higher architecture is required to correct
 ## Demo Gallery
 
 <p align="center">
-  <img src="[https://imagehost-suikasibyl-us.oss-us-west-1.aliyuncs.com/img/vplvis.png](https://imagehost-suikasibyl-us.oss-us-west-1.aliyuncs.com/img/2023-06-13%2023-21-34%2000_00_03-00_00_15%2000_00_00-00_00_30.gif)" width="640">
+  <img src="https://imagehost-suikasibyl-us.oss-us-west-1.aliyuncs.com/img/2023-06-13%2023-21-34%2000_00_03-00_00_15%2000_00_00-00_00_30.gif" width="480">
   <br />
   <em>2D FLIP Fluid Simulation</em>
 </p>
