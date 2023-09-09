@@ -133,8 +133,14 @@ Distribution Effects](https://cseweb.ucsd.edu/~ravir/paper_maaf.pdf)
    - ```Voxel Global Illumination```: [Deferred voxel shading for real-time global illumination](https://ieeexplore.ieee.org/document/7833375)
      - ```Realtime Voxelization Based on Rasterization```: [The Basics of GPU Voxelization](https://developer.nvidia.com/content/basics-gpu-voxelization)
    - ```Stochastic Substitute Tree```:  [Stochastic Substitute Trees for Real-Time Global Illumination](https://dl.acm.org/doi/fullHtml/10.1145/3384382.3384521)
+   - ```Screen Space Reflection / Global Illumination```: [Stochastic Screen Space Reflections](https://www.ea.com/frostbite/news/stochastic-screen-space-reflections)
    - ```DDGI```:  ------- *Under development* -------
 
+- ### Rasterizer-Specific Rendering Algorithms
+   - Shadow Mapping [Casting curved shadows on curved surfaces](https://cseweb.ucsd.edu//~ravir/274/15/papers/p270-williams.pdf)
+     - ```Cascaded Shadow Maps```: [Cascaded Shadow Maps](https://developer.download.nvidia.com/SDK/10.5/opengl/src/cascaded_shadow_maps/doc/cascaded_shadow_maps.pdf)
+     - ```Percentage-Closer Filtering```: [GPU Gems [Chapter 11. Shadow Map Antialiasing]](https://developer.nvidia.com/gpugems/GPUGems/gpugems_ch11.html)
+       
 - ### Miscellaneous Utils as GPU Parallel Computing
   - Parallel Sorting Algorithms on GPU
     - ```Parallel Bitonic Sort```: [GPU Gem 2 [Chapter 46. Improved GPU Sorting]](https://developer.nvidia.com/gpugems/gpugems2/part-vi-simulation-and-numerical-algorithms/chapter-46-improved-gpu-sorting)
