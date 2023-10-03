@@ -460,6 +460,7 @@ auto MaterialElucidator::onDrawGui_PTR(GFX::Material* material) noexcept
       const char* item_names[] = {
           "Lambertian",
           "Rough Plastic",
+          "Rough Dielectric",
       };
       if (ImGui::Combo("##BSDFType", (int*)&material->BxDF, item_names,
                        IM_ARRAYSIZE(item_names), IM_ARRAYSIZE(item_names))) {
@@ -509,6 +510,9 @@ auto MaterialElucidator::onDrawGui_PTR(GFX::Material* material) noexcept
                                 (float*)&material->emissiveColor,
                                 ImGuiColorEditFlags_NoInputs |
                                     ImGuiColorEditFlags_NoLabel | misc_flags)) {
+            material->isDirty = true;
+          }
+          if (ImGui::InputFloat3("##Emissive", (float*)&material->emissiveColor)) {
             material->isDirty = true;
           }
         });
@@ -739,7 +743,7 @@ auto captureImage(Core::GUID src) noexcept -> void {
    std::unique_ptr<RHI::CommandEncoder> commandEncoder =
        rhiLayer->getDevice()->createCommandEncoder({});
 
-   static Core::GUID copyDst = 0;
+   Core::GUID copyDst = 0;
    if (copyDst == 0) {
     copyDst = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
     RHI::TextureDescriptor desc{
@@ -2113,6 +2117,13 @@ auto TransformComponentFragment::elucidateComponent(
           drawVec3Control("Scaling", scaling, 1, 100);
           bool scale_modified = (component->scale != scaling);
           if (scale_modified) component->scale = scaling;
+
+          drawCustomColume("Static", 100, [&]() {
+            uint32_t param = component->static_param;
+            bool is_static = (param != 0);
+            ImGui::Checkbox("##Static", &is_static);
+            component->static_param = is_static ? 1 : 0;
+          });
         },
         false);
    }

@@ -58,6 +58,7 @@ auto TransformComponent::serialize(void* pemitter,
     emitter << YAML::Key << "eulerAngles" << YAML::Value
             << transform->eulerAngles;
     emitter << YAML::Key << "scale" << YAML::Value << transform->scale;
+    emitter << YAML::Key << "staticParam" << YAML::Value << transform->static_param;
     emitter << YAML::EndMap;
   }
 }
@@ -77,6 +78,9 @@ auto TransformComponent::deserialize(void* compAoS,
     transform->translation = translation;
     transform->eulerAngles = eulerAngles;
     transform->scale = scale;
+    if (transformComponentAoS["staticParam"]) {
+      transform->static_param = transformComponentAoS["staticParam"].as<uint32_t>();
+    }
   }
 }
 

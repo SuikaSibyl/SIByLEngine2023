@@ -1,16 +1,17 @@
-#include "../../include/common/space_filling_curve.hlsli"
 #include "../../include/common/geometry.hlsli"
-#include "seminee_interface.hlsli"
+#include "../../include/common/space_filling_curve.hlsli"
+#include "sst-interface.hlsli"
 
 [[vk::push_constant]]
 cbuffer PushConstantBuffer {
     TreeApproxParams gApproxParams;
 };
 
-RWStructuredBuffer<TreeNode>   u_Nodes;
-RWStructuredBuffer<VPLData>    u_VPLData;
+RWStructuredBuffer<TreeNode> u_Nodes;
 RWStructuredBuffer<VPLMerge> u_Merge;
-RWStructuredBuffer<TreeConstrIndirectArgs> u_ConstrIndirectArgs;
+RWStructuredBuffer<VPLData> u_VPLData;
+
+const StructuredBuffer<TreeConstrIndirectArgs> u_ConstrIndirectArgs;
 
 [shader("compute")]
 [numthreads(256, 1, 1)]
@@ -38,7 +39,7 @@ void ComputeMain(uint3 DTid: SV_DispatchThreadID) {
             // wait the other thread from the other child node.
             return;
         }
-
+        
         // Get child node indices
         const uint lidx = u_Nodes[parent].left_idx;
         const uint ridx = u_Nodes[parent].right_idx;
@@ -56,17 +57,13 @@ void ComputeMain(uint3 DTid: SV_DispatchThreadID) {
 
         // Merge nodes
         VPLData merged;
-        merged.posW     = uint2(0);
-        merged.normW    = uint2(0);
-        merged.aabbMin  = uint2(0);
-        merged.aabbMax  = uint2(0);
-        merged.rad      = uint2(0);
-        merged.var      = uint2(0);
+        merged.posW     = float3(0);
+        merged.normW    = float3(0);
         merged.id       = 0;
         merged.idChild1 = 0;
         merged.idChild2 = 0;
         merged.numVPLSubTree = 0;
-
+        
         const float lhsIntensity = lhs.getIntensity();
         const float rhsIntensity = rhs.getIntensity();
         const float totalIntensity = lhsIntensity + rhsIntensity;

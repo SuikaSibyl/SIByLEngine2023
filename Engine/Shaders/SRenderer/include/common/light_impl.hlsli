@@ -3,6 +3,7 @@
 
 #include "../../raytracer/spt_interface.hlsli"
 #include "../../include/common/sampling.hlsli"
+#include "../../raytracer/primitives/trimesh.hlsli"
 #include "geometry.hlsli"
 #include "light.hlsli"
 
@@ -240,6 +241,72 @@ LightRaySample sample_le(
 }
 
 /**********************************************************************
+** Spot Light
+**********************************************************************/
+struct MeshPrimitiveLight {
+    uint geometryID;
+    uint primitiveID;
+};
+
+/**
+ * Pack the spot light
+ * @param light the spot light
+ * @return the unpacked spot light
+ */
+MeshPrimitiveLight unpackMeshPrimitiveLight(in_ref(PolymorphicLightInfo) light) {
+    MeshPrimitiveLight mlight;
+    mlight.geometryID = light.databyte0;
+    mlight.primitiveID = light.databyte1;
+    return mlight;
+}
+/**
+ * Sample a point on the spot light
+ * @param hit the hit point
+ * @param light the spot light
+ * @return the light sample
+ */
+LightSample sample_li(
+    in_ref(MeshPrimitiveLight) light,
+    in_ref(float3) rand
+) {
+    ShapeSampleQuery query;
+    query.geometry_id = light.geometryID;
+    query.primitive_id = light.primitiveID;
+    query.uv = rand.xy; query.w = rand.z;
+    SampleTrimesh(query);
+
+    MaterialInfo material = materials[geometries[light.geometryID].materialID];
+
+    LightSample sample;
+    sample.normal = query.normal;
+    sample.pdf = query.pdf;
+    sample.radiance = material.emissiveColor;
+    sample.position = query.position;
+    // sample.wi = normalize(query.position - hit.position);
+    return sample;
+}
+
+// /** Sample a point light with a random point and direction */
+// LightRaySample sample_le(
+//     in_ref(MeshPrimitiveLight) light,
+//     inout_ref(RandomSamplerState) RNG
+// ) {
+//     // // Uniformly sample a direction of the spot light
+//     // const float3x3 w2l = createONB(light.direction);
+//     // const float3 dir_ls = SampleUniformCone(GetNextRandomFloat2(RNG), light.cosTotalWidth);
+//     // const float3 dir_ws = to_world(w2l, dir_ls);
+//     // // Generate the light sample
+//     // LightRaySample sample;
+//     // sample.ray = SpawnRay(light.position, dir_ws, dir_ws);
+//     // sample.pdf_position = 1.f;
+//     // sample.pdf_direction = PdfUniformCone(light.cosTotalWidth);
+//     // sample.radiance = light.intensity * spot_light_falloff(light, dir_ws);
+//     // sample.normal = dir_ws;
+//     // return sample;
+// }
+
+
+/**********************************************************************
 ** Polymorphic Light
 **********************************************************************/
 LightSample SampleLight(
@@ -290,7 +357,46 @@ float3 EvaluateDirectLight(
     const bool occluded = TraceOccludeRay(shadowRay, RNG, SceneBVH);
     const float visibility = occluded ? 0.0f : 1.0f;
     const float3 bsdf = EvalBsdf(hit, -previousRay.direction, lightSample.wi);
-    return lightSample.radiance * bsdf * visibility / lightSample.pdf;
+
+    const uint materialID = geometries[hit.geometryID].materialID;
+    const MaterialInfo material = materials[materialID];
+    const float3 emission = material.emissiveColor;
+
+    return lightSample.radiance * bsdf * visibility / lightSample.pdf + emission;
+}
+
+float3 EvaluateMultibounceIndirect(
+    in_ref(Ray) previousRay,
+    in_ref(int) bounce_count,
+    in_ref(float3) throughput,
+    in_ref(PrimaryPayload) payload,
+    inout_ref(RandomSamplerState) RNG,
+) {
+    // further bounces
+    float3 multi_bounce = float3(0, 0, 0);
+    Ray prev_bsdf_ray = previousRay;
+    for (int bounce = 0; bounce < bounce_count; ++bounce) {
+        if (HasHit(payload.hit)) {
+            float bsdf_pdf;
+            Ray bsdf_ray = SpawnBsdfRay(payload.hit, -prev_bsdf_ray.direction, RNG, bsdf_pdf);
+            float3 first_bsdf = EvalBsdf(payload.hit, -prev_bsdf_ray.direction, bsdf_ray.direction);
+            throughput *= first_bsdf / bsdf_pdf;
+            if (bsdf_pdf == 0) {
+                throughput = float3(0, 0, 0);
+                break;
+            }
+            Intersection(bsdf_ray, SceneBVH, payload, RNG);
+            if (HasHit(payload.hit)) {
+                const PolymorphicLightInfo light = lights[0];
+                multi_bounce += EvaluateDirectLight(bsdf_ray, payload.hit, light, RNG) * throughput;
+            }
+            prev_bsdf_ray = bsdf_ray;
+        }
+        else {
+            break;
+        }
+    }
+    return multi_bounce;
 }
 
 float3 EvaluateDirectLight(
@@ -307,6 +413,26 @@ float3 EvaluateDirectLight(
     const float visibility = occluded ? 0.0f : 1.0f;
     const float3 bsdf = EvalBsdf(surface, -previousRay.direction, lightSample.wi);
     return lightSample.radiance * bsdf * visibility / lightSample.pdf;
+}
+
+SplitShading EvaluateDirectLightSplit(
+    in_ref(Ray) previousRay,
+    in_ref(ShadingSurface) surface,
+    in_ref(PolymorphicLightInfo) light,
+    inout_ref(RandomSamplerState) RNG
+) {
+    const GeometryHit hit = CreateGeometryHit(surface);
+    const LightSample lightSample = SampleLight(hit, light);
+    Ray shadowRay = SpawnRay(surface, lightSample.wi);
+    shadowRay.tMax = distance(lightSample.position, surface.worldPos) - 0.01;
+    const bool occluded = TraceOccludeRay(shadowRay, RNG, SceneBVH);
+    const float visibility = occluded ? 0.0f : 1.0f;
+    const SplitShading bsdf = EvalBsdfSplit(surface, -previousRay.direction, lightSample.wi);
+    const float3 tmp = lightSample.radiance * visibility / lightSample.pdf;
+    SplitShading split;
+    split.diffuse = tmp * bsdf.diffuse;
+    split.specular = tmp * bsdf.specular;
+    return split;
 }
 
 #endif // _SRENDERER_LIGHT_IMPL_HEADER_

@@ -1,4 +1,5 @@
 #include "../Public/SE.Addon.VBuffer.hpp"
+#include <SE.RHI.Profiler.hpp>
 
 namespace SIByL::Addon::VBuffer {
 RayTraceVBuffer::RayTraceVBuffer() {
@@ -46,6 +47,10 @@ auto RayTraceVBuffer::execute(RDG::RenderContext* context,
   updateBinding(context, "u_vBuffer",
                 RHI::BindingResource{{vbuffer->getUAV(0, 0, 1)}});
 
+  Singleton<RHI::DeviceProfilerManager>::instance()->beginSegment(
+      context->cmdEncoder, RHI::PipelineStages::TOP_OF_PIPE_BIT,
+      "vbuffer");
+
   RHI::RayTracingPassEncoder* encoder = beginPass(context);
 
   struct PushConstant {
@@ -59,6 +64,10 @@ auto RayTraceVBuffer::execute(RDG::RenderContext* context,
   encoder->traceRays(pConst.resolution.x, pConst.resolution.y, 1);
 
   encoder->end();
+
+  Singleton<RHI::DeviceProfilerManager>::instance()->endSegment(
+      context->cmdEncoder, RHI::PipelineStages::BOTTOM_OF_PIPE_BIT,
+      "vbuffer");
 }
 
 VBuffer2GBufferPass::VBuffer2GBufferPass() {

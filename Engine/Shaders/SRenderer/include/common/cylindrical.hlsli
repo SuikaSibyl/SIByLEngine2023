@@ -6,6 +6,7 @@
 
 /**
  * Converts a uniform vector to cylindrical coordinates.
+ * It is the Lambert cylindrical equal-area projection, and is area-preserving.
  * @param unitVector The unit vector to convert.
  * @return The cylindrical coordinates: (cos\theta, \phi).
  * output.x: cos\theta: [-1, 1].
@@ -22,7 +23,7 @@ float2 UnitVectorToCylindrical(in_ref(float3) unitVector) {
  * @param cylindrical The cylindrical coordinates: (cos\theta, \phi).
  * @return The unit vector in [0,1]^2.
  */
-float2 CylindricalToUniform(in_ref(float2) cylindrical) {
+float2 CylindricalToUnit(in_ref(float2) cylindrical) {
     return saturate((cylindrical + float2(1.0, k_pi)) / float2(2.0, 2.0 * k_pi));
 }
 
@@ -33,7 +34,7 @@ float2 CylindricalToUniform(in_ref(float2) cylindrical) {
  * output.x: cos\theta: [-1, 1].
  * output.y: \phi: [-\pi, \pi].
  */
-float2 UniformToCylindrical(in_ref(float2) uniform) {
+float2 UnitToCylindrical(in_ref(float2) uniform) {
     return clamp((uniform * float2(2.0, 2.0 * k_pi)) - float2(1.0, k_pi),
                  float2(-1.0, -k_pi), float2(1.0, k_pi));
 }
@@ -52,7 +53,7 @@ float3 CylindricalToUnitVector(in_ref(float2) cylindrical) {
     unitVector.x = cos(phi) * sinTheta;
     unitVector.y = sin(phi) * sinTheta;
     unitVector.z = cosTheta;
-    return unitVector;
+    return normalize(unitVector);
 }
 
 #endif // _SRENDERER_CYLINDRICAL_HEADER_

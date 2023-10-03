@@ -15,10 +15,10 @@ cbuffer PushConstants {
     GIResamplingRuntimeParameters runtimeParams;
     uint initialOutputBufferIndex;
     uint sample_batch;
+    bool extra_bounce;
 };
 
 RWStructuredBuffer<PackedGIReservoir> u_GIReservoirs;
-RWTexture2D<float4> u_debug;
 
 [shader("raygeneration")]
 void RgenMain() {
@@ -28,8 +28,6 @@ void RgenMain() {
     const int2 resolution = getViewportSize(globalUniform.cameraData);
     const int2 pixel = int2(DispatchRaysIndex().xy);
     RandomSamplerState RNG = InitRandomSampler(pixel, sample_batch);
-    // RNG.state = u_RNGSeed[pixel];
-    // u_RNGPrev[pixel] = RNG.state;
     
     // Load Primary Hit from GBuffer
     // --------------------------------------------------------------------
@@ -47,8 +45,7 @@ void RgenMain() {
     
     GIReservoir reservoir = EmptyGIReservoir();
     float selectedTargetPdf = 0.0f;
-
-    float weight_sum = 0.f;
+    
     if (IsShadingSurfaceValid(surface)) {
         const PolymorphicLightInfo light = lights[0];
         for (int i = 0; i < 1; ++i) {
@@ -59,17 +56,21 @@ void RgenMain() {
             // float3 throughput = first_bsdf * demodulate;
             float3 throughput = float3(1);
             if (bsdf_pdf == 0) throughput = float3(0, 0, 0);
+            const uint32_t RNGState = RNG.state;
             
             PrimaryPayload payload;
             Intersection(bsdfRay, SceneBVH, payload, RNG);
             if (HasHit(payload.hit)) {
                 const PolymorphicLightInfo light = lights[0];
                 float3 radiance = EvaluateDirectLight(bsdfRay, payload.hit, light, RNG) * throughput;
+                if (extra_bounce) {
+                    radiance += EvaluateMultibounceIndirect(bsdfRay, 1, throughput, payload, RNG);
+                }
                 // TODO :: For delta reflection rays, just output the shading result in this shader
                 // and don't include it into ReSTIR GI reservoirs.
                 // outputShadingResult = isSpecularRay && isDeltaSurface;
                 // This pixel has a valid indirect sample so it stores information as an initial GI reservoir.
-                GIReservoir local = MakeGIReservoir(payload.hit.position, payload.hit.geometryNormal, radiance, bsdf_pdf);
+                GIReservoir local = MakeGIReservoir(payload.hit.position, payload.hit.geometryNormal, radiance, bsdf_pdf, RNGState);
                 const float target_pdf = GetGISampleTargetPdfForSurface(local.position, local.radiance, surface, globalUniform.cameraData.posW);
                 debugval = float4(radiance, 1);
                 if (CombineGIReservoirs(reservoir, local, GetNextRandom(RNG), target_pdf)) {
@@ -92,10 +93,5 @@ void RgenMain() {
     const float normalizationDenominator = selectedTargetPdf * reservoir.M;
     FinalizeGIResampling(reservoir, normalizationNumerator, normalizationDenominator);
 
-    u_debug[pixel] = debugval;
     StoreGIReservoir(reservoir, runtimeParams, pixel, initialOutputBufferIndex, u_GIReservoirs);
-
-    // // Save the initial sample radiance for MIS in the final shading pass
-    // secondaryGBufferData.emission = outputShadingResult ? 0 : radiance;
-    // u_SecondaryGBuffer[gbufferIndex] = secondaryGBufferData;
 }

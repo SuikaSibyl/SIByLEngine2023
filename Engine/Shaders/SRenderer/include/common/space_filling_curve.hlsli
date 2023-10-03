@@ -107,7 +107,7 @@ int direction_code(in_ref(float3) vec, const int sections) {
         // we found a source "omnidirectional" light (indicated by its normal vector being equal to 0). needs its own index
         return (1 << (3 + 2 * sections + 1)); // 3 shifts for the octant + 2 * sections as each subdivision has 4 divison.
     }
-
+    
     // get base vector::defines the quadrant the vector is in
     int final_int = 0;
     float3 x_base_vec = { 0, 0, 0 };

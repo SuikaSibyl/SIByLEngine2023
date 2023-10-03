@@ -34,6 +34,7 @@ void EvalRoughPlastic(inout_ref(BSDFEvalQuery) cBSDFEvalQuery) {
     }
     // Clamp roughness to avoid numerical issues.
     roughness = clamp(roughness, 0.01f, 1.f);
+    const QueryBitfield bitfield = UnpackQueryBitfield(cBSDFEvalQuery.misc_flag);
 
     // Then evaluate the BSDF
     // -------------------------------------------------------------
@@ -41,6 +42,7 @@ void EvalRoughPlastic(inout_ref(BSDFEvalQuery) cBSDFEvalQuery) {
     if (dot(cBSDFEvalQuery.geometric_normal, cBSDFEvalQuery.dir_in) < 0 ||
         dot(cBSDFEvalQuery.geometric_normal, cBSDFEvalQuery.dir_out) < 0) {
         // No light below the surface
+        cBSDFEvalQuery.dir_out = float3(0);
         return;
     }
     // Making sure the shading frame is consistent with the view direction.
@@ -54,6 +56,7 @@ void EvalRoughPlastic(inout_ref(BSDFEvalQuery) cBSDFEvalQuery) {
     const float n_dot_in = dot(frame[2], cBSDFEvalQuery.dir_in);
     const float n_dot_out = dot(frame[2], cBSDFEvalQuery.dir_out);
     if (n_dot_out <= 0 || n_dot_h <= 0) {
+        cBSDFEvalQuery.dir_out = float3(0);
         return;
     }
 
@@ -71,8 +74,13 @@ void EvalRoughPlastic(inout_ref(BSDFEvalQuery) cBSDFEvalQuery) {
     const float F_i = FresnelDielectric(dot(half_vector, cBSDFEvalQuery.dir_in), eta);
     // Multiplying with Fresnels leads to an overly dark appearance at the
     // object boundaries. Disney BRDF proposes a fix to this -- we will implement this in problem set 1.
-    const float3 diffuse_contrib = Kd * (1.f - F_o) * (1.f - F_i) / k_pi;
-    cBSDFEvalQuery.bsdf = (spec_contrib + diffuse_contrib) * n_dot_out;
+    const float3 diffuse_contrib = (1.f - F_o) * (1.f - F_i) / k_pi;
+    if (bitfield.split_query) {
+        cBSDFEvalQuery.bsdf = diffuse_contrib * n_dot_out;
+        cBSDFEvalQuery.dir_out = spec_contrib * n_dot_out;
+    } else {
+        cBSDFEvalQuery.bsdf = (spec_contrib + Kd * diffuse_contrib) * n_dot_out;
+    }
     return;
 }
 
@@ -93,8 +101,7 @@ void SampleRoughPlastic(inout_ref(BSDFSampleQuery) cBSDFSampleQuery) {
         Ks = UnpackRGBE(asuint(cBSDFSampleQuery.uv.y));
         roughness = cBSDFSampleQuery.uv.x;
     }
-    else {
-        // load info from the material buffer
+    else { // load info from the material buffer
         const MaterialInfo material = materials[cBSDFSampleQuery.mat_id];
         const float3 texAlbedo = textures[material.baseOrDiffuseTextureIndex]
                                      .Sample(cBSDFSampleQuery.uv, 0) .xyz;

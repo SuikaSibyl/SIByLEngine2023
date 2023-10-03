@@ -455,12 +455,12 @@ auto GBufferUtils::addPrevGBufferEdges(RDG::Graph* graph,
                                        std::string const& src,
                                        std::string const& dst) noexcept
     -> void {
-  graph->addEdge(src, "Position", dst, "PrevPosition");
-  graph->addEdge(src, "DiffuseAlbedo", dst, "PrevDiffuseAlbedo");
-  graph->addEdge(src, "SpecularRough", dst, "PrevSpecularRough");
-  graph->addEdge(src, "Normal", dst, "PrevNormal");
-  graph->addEdge(src, "GeometryNormal", dst, "PrevGeometryNormal");
-  graph->addEdge(src, "MaterialInfo", dst, "PrevMaterialInfo");
+  graph->addEdge(src, "PrevPosition", dst, "PrevPosition");
+  graph->addEdge(src, "PrevDiffuseAlbedo", dst, "PrevDiffuseAlbedo");
+  graph->addEdge(src, "PrevSpecularRough", dst, "PrevSpecularRough");
+  graph->addEdge(src, "PrevNormal", dst, "PrevNormal");
+  graph->addEdge(src, "PrevGeometryNormal", dst, "PrevGeometryNormal");
+  graph->addEdge(src, "PrevMaterialInfo", dst, "PrevMaterialInfo");
 }
 
 auto GBufferUtils::addBlitPrevGBufferEdges(RDG::Graph* graph,
@@ -732,37 +732,37 @@ GBufferHolderSource::GBufferHolderSource() { RDG::DummyPass::init(); }
 auto GBufferHolderSource::reflect() noexcept -> RDG::PassReflection {
   RDG::PassReflection reflector;
 
-  reflector.addOutput("Position")
+  reflector.addOutput("PrevPosition")
       .isTexture()
       .withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
       .withUsages((uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT);
 
-  reflector.addOutput("DiffuseAlbedo")
+  reflector.addOutput("PrevDiffuseAlbedo")
       .isTexture()
       .withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::R32_UINT)
       .withUsages((uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT);
 
-  reflector.addOutput("SpecularRough")
+  reflector.addOutput("PrevSpecularRough")
       .isTexture()
       .withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::R32_UINT)
       .withUsages((uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT);
 
-  reflector.addOutput("Normal")
+  reflector.addOutput("PrevNormal")
       .isTexture()
       .withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::R32_UINT)
       .withUsages((uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT);
 
-  reflector.addOutput("GeometryNormal")
+  reflector.addOutput("PrevGeometryNormal")
       .isTexture()
       .withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::R32_UINT)
       .withUsages((uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT);
   
-  reflector.addOutput("MaterialInfo")
+  reflector.addOutput("PrevMaterialInfo")
       .isTexture()
       .withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::RGBA16_FLOAT)
@@ -865,8 +865,16 @@ auto GBufferShading::reflect() noexcept -> RDG::PassReflection {
     .consume(RDG::TextureInfo::ConsumeEntry{
             RDG::TextureInfo::ConsumeType::StorageBinding}
             .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInputOutput("Indicator")
+    .isTexture().withSize(Math::vec3(1.f))
+    .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+    .consume(RDG::TextureInfo::ConsumeEntry{
+            RDG::TextureInfo::ConsumeType::StorageBinding}
+            .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
   GBufferUtils::addGBufferInput(
       reflector, (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR);
+  //GBufferUtils::addPrevGbufferInputOutput(
+  //    reflector, (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR);
   return reflector;
 }
 
@@ -881,12 +889,14 @@ auto GBufferShading::execute(RDG::RenderContext* context,
       renderData.getBindGroupEntries("CommonRT");
   getBindGroup(context, 1)->updateBinding(*set_1_entries);
   GBufferUtils::bindGBufferResource(this, context, renderData);
+  //GBufferUtils::bindPrevGBufferResource(this, context, renderData);
 
   GFX::Texture* diffuse = renderData.getTexture("Diffuse");
   GFX::Texture* specular = renderData.getTexture("Specular");
   GFX::Texture* rand = renderData.getTexture("RandSeed");
   GFX::Texture* seedprev = renderData.getTexture("RandPrev");
   GFX::Texture* debug = renderData.getTexture("Debug");
+  GFX::Texture* indicator = renderData.getTexture("Indicator");
   updateBinding(context, "u_Diffuse",
                 RHI::BindingResource{{diffuse->getUAV(0, 0, 1)}});
   updateBinding(context, "u_Specular",
@@ -897,15 +907,17 @@ auto GBufferShading::execute(RDG::RenderContext* context,
                 RHI::BindingResource{{seedprev->getUAV(0, 0, 1)}});
   updateBinding(context, "u_Debug",
                 RHI::BindingResource{{debug->getUAV(0, 0, 1)}});
+  updateBinding(context, "u_Indicator",
+                RHI::BindingResource{{indicator->getUAV(0, 0, 1)}});
 
   RHI::RayTracingPassEncoder* encoder = beginPass(context);
 
-  //struct PushConstant {
-  //  uint32_t sample_batch;
-  //} pConst = {renderData.getUInt("AccumIdx")};
+  struct PushConstant {
+    uint32_t sample_batch;
+  } pConst = {renderData.getUInt("FrameIdx")};
 
-  //encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::RAYGEN, 0,
-  //                       sizeof(PushConstant));
+  encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::RAYGEN, 0,
+                         sizeof(PushConstant));
   encoder->traceRays(diffuse->texture->width(), diffuse->texture->height(), 1);
 
   encoder->end();

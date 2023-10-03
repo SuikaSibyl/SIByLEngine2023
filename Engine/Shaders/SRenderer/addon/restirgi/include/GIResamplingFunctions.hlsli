@@ -107,6 +107,7 @@ bool CombineGIReservoirs(
         reservoir.normal = newReservoir.normal;
         reservoir.radiance = newReservoir.radiance;
         reservoir.age = newReservoir.age;
+        reservoir.RNGState = newReservoir.RNGState;
     }
     return selectSample;
 }
@@ -134,34 +135,6 @@ void FinalizeGIResampling(
 }
 
 /**
- * Compares two values and returns true if their relative difference is lower than the threshold.
- * Zero or negative threshold makes test always succeed, not fail.
- * @param reference The reference value.
- * @param candidate The candidate value.
- * @param threshold The threshold.
- */
-bool CompareRelativeDifference(float reference, float candidate, float threshold) {
-    return (threshold <= 0) || abs(reference - candidate) <= threshold * max(reference, candidate);
-}
-
-/**
- * See if we will reuse this neighbor or history sample using
- * edge-stopping functions (e.g., per a bilateral filter).
- * @param ourNorm Our surface normal.
- * @param theirNorm The neighbor surface normal.
- * @param ourDepth Our surface depth.
- */
-bool IsValidNeighbor(
-    in_ref(float3) ourNorm,
-    in_ref(float3) theirNorm, 
-    float ourDepth, float theirDepth, 
-    float normalThreshold, float depthThreshold
-) {
-    return (dot(theirNorm.xyz, ourNorm.xyz) >= normalThreshold)
-        && CompareRelativeDifference(ourDepth, theirDepth, depthThreshold);
-}
-
-/**
  * Computes the weight of the given GI sample when
  * the given surface is shaded using that GI sample.
  * Here, we omit the visibility and only use the BRDF.
@@ -181,6 +154,17 @@ float GetGISampleTargetPdfForSurface(
     return luminance(reflectedRadiance);
 }
 
+float GetGISampleTargetPdfForSurface(
+    in_ref(float3) samplePosition,
+    in_ref(float3) sampleRadiance,
+    in_ref(GeometryHit) hit,
+    in_ref(float3) cameraPosition
+) {
+    const float3 inDir = normalize(cameraPosition - hit.position);
+    const float3 bsdf = EvalBsdf(hit, inDir, normalize(samplePosition - hit.position));
+    const float3 reflectedRadiance = sampleRadiance * bsdf;
+    return luminance(reflectedRadiance);
+}
 /**
  * Generates a pattern of offsets for looking closely around a given pixel.
  * The pattern places 'sampleIdx' at the following locations in screen space around pixel (x):
@@ -206,22 +190,6 @@ void ApplyPermutationSampling(inout int2 prevPixelPos, uint uniformRandomNumber)
     prevPixelPos.x ^= 3;
     prevPixelPos.y ^= 3;
     prevPixelPos -= offset;
-}
-
-// Compares the materials of two surfaces, returns true if the surfaces
-// are similar enough that we can share the light reservoirs between them.
-// If unsure, just return true.
-bool AreMaterialsSimilar(in_ref(ShadingSurface) a, in_ref(ShadingSurface) b) {
-    const float roughnessThreshold = 0.5;
-    const float reflectivityThreshold = 0.25;
-    const float albedoThreshold = 0.25;
-    if (!CompareRelativeDifference(a.roughness, b.roughness, roughnessThreshold))
-        return false;
-    if (abs(luminance(a.specularF0) - luminance(b.specularF0)) > reflectivityThreshold)
-        return false;
-    if (abs(luminance(a.diffuseAlbedo) - luminance(b.diffuseAlbedo)) > albedoThreshold)
-        return false;
-    return true;
 }
 
 // Calculate the elements of the Jacobian to transform the sample's solid angle.
@@ -320,8 +288,7 @@ GIReservoir GITemporalResampling(
     in_ref(CameraData) prev_camera,
     in_ref(CameraData) camera,
     in_ref(RWStructuredBuffer<PackedGIReservoir>) reservoir_buffer,
-    inout_ref(RandomSamplerState) RNG,
-    RWTexture2D<float4> u_debug
+    inout_ref(RandomSamplerState) RNG
 ) {
     // Backproject this pixel to last frame
     int2 prevPos = int2(round(float2(pixelPosition) + tparams.screenSpaceMotion.xy));
@@ -418,9 +385,9 @@ GIReservoir GITemporalResampling(
         // discard if the reservoir is too old
         // My experience is discarding based on age make bias.
         // Therefore I discard base on M instead.
-        if (temporalReservoir.M > tparams.maxReservoirAge) {
-            foundTemporalReservoir = false;
-        }
+        // if (temporalReservoir.M > tparams.maxReservoirAge) {
+        //     foundTemporalReservoir = false;
+        // }
     }
     
     // // Combine the temporal reservoir into the current reservoir.
@@ -434,8 +401,6 @@ GIReservoir GITemporalResampling(
             selectedPreviousSample = true;
         }
     }
-
-    u_debug[pixelPosition] = debug;
 
     if (tparams.biasCorrectionMode >= 1) {
         float pi = selectedTargetPdf;
@@ -490,7 +455,6 @@ GIReservoir GISpatialResampling(
     inout_ref(RandomSamplerState) RNG,
     in_ref(RWStructuredBuffer<PackedGIReservoir>) reservoir_buffer,
     in_ref(StructuredBuffer<uint8_t>) neighbor_offsets_buffer,
-    RWTexture2D<float4> u_debug
 ) {
     // number of spatial samples to combine
     const uint numSamples = sparams.numSamples;

@@ -24,7 +24,6 @@ cbuffer PushConstants {
 
 RWStructuredBuffer<PackedGIReservoir> u_GIReservoirs;
 const StructuredBuffer<uint8_t> u_NeighborOffsets;
-const RWTexture2D<float4> u_debug;
 
 [shader("raygeneration")]
 void RgenMain() {
@@ -49,11 +48,16 @@ void RgenMain() {
         sparams.normalThreshold = spatialNormalThreshold;
         sparams.numSamples = numSpatialSamples;
         sparams.samplingRadius = spatialSamplingRadius;
-        
+
+        // GIReservoir back = reservoir;
         // Execute resampling.
         reservoir = GISpatialResampling(
             pixel, surface, reservoir, sparams, runtimeParams,
-            globalUniform.cameraData, RNG, u_GIReservoirs, u_NeighborOffsets, u_debug);
+            globalUniform.cameraData, RNG, u_GIReservoirs, u_NeighborOffsets);
+        
+        // if (true) {
+        //     reservoir = back;
+        // }
     }
 
     StoreGIReservoir(reservoir, runtimeParams, pixel, spatialOutputBufferIndex, u_GIReservoirs);

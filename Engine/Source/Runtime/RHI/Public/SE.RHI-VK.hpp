@@ -1161,10 +1161,13 @@ SE_EXPORT struct CommandEncoder_VK : public CommandEncoder {
                                     ImageCopyTexture const& destination,
                                     Extend3D const& copySize) noexcept
       -> void override;
+  /** Reset the queryset. */
+  virtual auto resetQuerySet(QuerySet* querySet, uint32_t firstQuery,
+                             uint32_t queryCount) noexcept -> void override;
   /** Writes a timestamp value into a querySet when all
    * previous commands have completed executing. */
-  virtual auto writeTimestamp(QuerySet* querySet, uint32_t queryIndex) noexcept
-      -> void override;
+  virtual auto writeTimestamp(QuerySet* querySet, PipelineStages stageMask,
+                              uint32_t queryIndex) noexcept -> void override;
   /** Resolves query results from a QuerySet out into a range of a Buffer. */
   virtual auto resolveQuerySet(QuerySet* querySet, uint32_t firstQuery,
                                uint32_t queryCount, Buffer& destination,
@@ -1399,6 +1402,21 @@ SE_EXPORT struct RayTracingPassEncoder_VK : public RayTracingPassEncoder {
 // Ray Tracing Interface
 // ===========================================================================
 // Queue Interface
+
+SE_EXPORT struct QuerySet_VK : public QuerySet {
+  /** initialize */
+  QuerySet_VK(Device_VK* device, QuerySetDescriptor const& desc);
+  /** virtual destructor */
+  ~QuerySet_VK();
+  /** fetch the query pooll result */
+  virtual auto resolveQueryResult(uint32_t firstQuery, uint32_t queryCount,
+                                  size_t dataSize, void* pData, uint64_t stride,
+                                  QueryResultFlag flag) noexcept
+      -> void override;
+  VkQueryPool queryPool;
+  /** vulkan device the QuerySet is created on */
+  Device_VK* device = nullptr;
+};
 
 // Queue Interface
 // ===========================================================================

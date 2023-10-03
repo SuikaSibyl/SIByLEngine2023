@@ -50,6 +50,7 @@ SE_EXPORT struct BufferInfo {
   uint32_t size = 0;
   RHI::BufferUsagesFlags usages = 0;
   ResourceFlags flags = 0;
+  GFX::Buffer* reference = nullptr;
 
   inline auto withSize(uint32_t size) noexcept -> BufferInfo&;
   inline auto withUsages(RHI::BufferUsagesFlags usages) noexcept -> BufferInfo&;
@@ -743,6 +744,8 @@ SE_EXPORT struct Graph {
    */
   auto setExternal(std::string const& pass, std::string const& resource,
                    GFX::Texture* tex) noexcept -> void;
+  auto setExternal(std::string const& pass, std::string const& resource,
+                   GFX::Buffer* tex) noexcept -> void;
 
   /**
    * Mark the main output of the render graph.

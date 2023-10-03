@@ -96,14 +96,12 @@ void filter_image(
         sigma_l_hf = 0;
     }
 
+    // Compute the normal weight for the HF & spec channel
     // reduce the HF filter sensitivity to normals when the lighting is invalidated
-    float normal_weight_scale = clamp(hist_len_hf / 8, 0, 1);
-
-    float normal_weight_hf = flt_atrous_normal_hf;
-    normal_weight_hf *= normal_weight_scale;
+    const float normal_weight_scale = clamp(hist_len_hf / 8, 0, 1);
+    const float normal_weight_hf = flt_atrous_normal_hf * normal_weight_scale;
     float normal_weight_spec = RoughnessSquareToSpecPower(square(roughness_center)) * flt_atrous_normal_spec;
-    normal_weight_spec = clamp(normal_weight_spec, 8, 1024);
-    normal_weight_spec *= normal_weight_scale;
+    normal_weight_spec = clamp(normal_weight_spec, 8, 1024) * normal_weight_scale;
 
     const int step_size = int(1u << spec_iteration);
 
@@ -131,7 +129,7 @@ void filter_image(
             const float3 normal = GetGeometryNormal(p);
             const float depth = GetViewDepth(p);
             const float roughness = GetSpecularRoughness(p).a;
-
+            // compute the edge-stopping functions
             float dist_z = abs(depth_center - depth) * fwidth_depth * flt_atrous_depth;
             w *= exp(-dist_z / float(step_size));   // times depth similarity
             w *= wavelet_kernel[abs(xx)][abs(yy)];  // times wavelet kernel
@@ -155,25 +153,19 @@ void filter_image(
             w_spec *= max(0, 1 - 10 * abs(roughness - roughness_center));
             w_spec *= spec_filter_width_scale;
 
-            float NdotN = max(0.0, dot(normal_center, normal));
-
-            if (normal_weight_hf > 0) {
-                w_hf *= pow(NdotN, normal_weight_hf);
-            }
-
-            if (normal_weight_spec > 0) {
-                w_spec *= pow(NdotN, normal_weight_spec);
-            }
-
+            // Apply normal weight to stopping function
+            const float NdotN = saturate(dot(normal_center, normal));
+            if (normal_weight_hf > 0)   w_hf *= pow(NdotN, normal_weight_hf);
+            if (normal_weight_spec > 0) w_spec *= pow(NdotN, normal_weight_spec);
             // If the iteration pass is larger than the maximum iteration, the weight is set to 0
             if (flt_atrous_hf <= spec_iteration) w_hf = 0;
             if (flt_atrous_spec <= spec_iteration) w_spec = 0;
-            
+            // Accumulate the weighted color and moments
             sum_color_hf += c_hf.rgb * w_hf;
             sum_color_spec += c_spec.rgb * w_spec;
-            sum_moments += c_mom * w_hf;
             sum_w_hf += w_hf;
             sum_w_spec += w_spec;
+            sum_moments += c_mom * w_hf;
         }
     }
 
@@ -186,9 +178,8 @@ void filter_image(
 [numthreads(16, 16, 1)]
 void ComputeMain(uint3 DTid: SV_DispatchThreadID) {
     const int2 ipos = int2(DTid.xy);
-    RandomSamplerState RNG = InitRandomSampler(ipos, rnd_seed);
-
     if (any((ipos >= resolution))) return;
+    RandomSamplerState RNG = InitRandomSampler(ipos, rnd_seed);
     
     float3 filtered_hf;
     float3 filtered_spec;

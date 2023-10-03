@@ -105,6 +105,7 @@ SphQuad CreateSphQuad(in_ref(float3) local, float2 extend) {
     const float2 extend2 = extend + extend;
     SphQuad squad;
     SphQuadInit(float3(-extend, 0), float3(extend2.x, 0, 0), float3(0, extend2.y, 0), local, squad);
+    // if (local.z < 0) squad.S = 0;
     return squad;
 }
 
@@ -854,6 +855,51 @@ inline int TraverseLightTree(
     return nid;
 }
 
+/**
+ * Get the pdf of traversing the light tree to pick a light.
+ * @param nid The node ID to start the traversal from.
+ * @param LeafStartIndex The index of the first leaf node.
+ * @param p The reference point position.
+ * @param n The reference point normal.
+ * @param v The reference point view direction.
+ * @param rnd The random number in [0, 1).
+ * @param nprob The normalized probability of the picked light.
+ * @param config The evaluation configuration.
+ * @param nodeBuffer The light tree node buffer.
+ */
+inline double PdfTraverseLightTree(
+    int nid,
+    int leafSelected,
+    in_ref(float3) p,
+    in_ref(float3) n,
+    in_ref(float3) v,
+    in_ref(TreeEvaluateConfig) config,
+    StructuredBuffer<TreeNode> nodeBuffer
+) {
+    double nprob = 1.;
+    int node_index = leafSelected;
+    TreeNode node = nodeBuffer[node_index];
+    while (node.parent_idx != 0xFFFFFFFF) {
+        TreeNode parent = nodeBuffer[node.parent_idx];
+        uint16_t c0_id = parent.left_idx;  // left child
+        uint16_t c1_id = parent.right_idx; // right child
+
+        float prob0;
+        const TreeNode c0 = nodeBuffer[c0_id];
+        const TreeNode c1 = nodeBuffer[c1_id];
+        EvaluateFirstChildWeight(c0, c1, p, n, v, config, prob0);
+        if (c0_id == node_index) {
+            nprob *= double(prob0);
+        } else {
+            nprob *= double(1 - prob0);
+        }
+        node_index = node.parent_idx;
+        node = parent;
+        if (node_index == 0) return nprob;
+    }
+    return nprob;
+}
+
 inline double PdfTraverseLightTree_Intensity(
     int nid,
     int selectedIndex,
@@ -944,15 +990,18 @@ float3 EvaluateVPLIndirectLight(
     in_ref(GeometryHit) primaryHit,
     in_ref(float4) bsdfPos,
     in_ref(RWTexture2D<float4>) color,
-    out_ref(float) bsdf_pdf
+    out_ref(float) bsdf_pdf,
+    out_ref(float3) throughput,
+    out_ref(Ray) bsdfRay,
 ) {
     const float4 bsdfColor = color[pixel];
     if (any(bsdfPos != 0) && bsdfColor.w != 0) {
         float3 bsdf_direction = normalize(bsdfPos.xyz - primaryHit.position);
+        bsdfRay = SpawnRay(primaryHit, bsdf_direction);
         bsdf_pdf = PdfBsdfSample(primaryHit, -primaryRay.direction, bsdf_direction);
         float3 first_bsdf = EvalBsdf(primaryHit, -primaryRay.direction, bsdf_direction);
         if (bsdf_pdf <= 0) return float3(0);
-        float3 throughput = first_bsdf / bsdf_pdf;
+        throughput = first_bsdf / bsdf_pdf;
         return bsdfColor.xyz * throughput;
     }
     else {
@@ -981,6 +1030,152 @@ float3 EvaluateIndirectLight(
     else return float3(0, 0, 0);
 }
 
+float3 EvaluateIndirectLightEX(
+    in_ref(Ray) primaryRay,
+    in_ref(Ray) secondRay,
+    double pdf,
+    in_ref(GeometryHit) primaryHit,
+    inout_ref(PrimaryPayload) payload,
+    inout_ref(RandomSamplerState) RNG,
+    out_ref(float3) di
+) {
+    di = float3(0);
+    if (pdf <= 0) return float3(0);
+    // trace the second ray
+    Intersection(secondRay, SceneBVH, payload, RNG);
+    const float3 first_bsdf = EvalBsdf(primaryHit, -primaryRay.direction, secondRay.direction);
+    const float3 throughput = first_bsdf; // divide float(pdf). leave it to return line;
+    if (HasHit(payload.hit)) {
+        const PolymorphicLightInfo light = lights[0];
+        di = EvaluateDirectLight(secondRay, payload.hit, light, RNG);
+        return di * throughput / float(pdf);
+    }
+    else return float3(0, 0, 0);
+}
+
+float3 EvaluateIndirectLightEX(
+    in_ref(Ray) primaryRay,
+    in_ref(Ray) secondRay,
+    double pdf,
+    in_ref(ShadingSurface) surface,
+    inout_ref(PrimaryPayload) payload,
+    inout_ref(RandomSamplerState) RNG,
+    out_ref(float3) di
+) {
+    di = float3(0);
+    if (pdf <= 0) return float3(0);
+    // trace the second ray
+    Intersection(secondRay, SceneBVH, payload, RNG);
+    const float3 first_bsdf = EvalBsdf(surface, -primaryRay.direction, secondRay.direction);
+    const float3 throughput = first_bsdf; // divide float(pdf). leave it to return line;
+    if (HasHit(payload.hit)) {
+        const PolymorphicLightInfo light = lights[0];
+        di = EvaluateDirectLight(secondRay, payload.hit, light, RNG);
+        return di * throughput / float(pdf);
+    }
+    else return float3(0, 0, 0);
+}
+
+float3 EvaluateIndirectLightEXX(
+    in_ref(Ray) primaryRay,
+    in_ref(Ray) secondRay,
+    double pdf,
+    in_ref(GeometryHit) primaryHit,
+    inout_ref(PrimaryPayload) payload,
+    inout_ref(RandomSamplerState) RNG,
+    out_ref(float3) di,
+    out_ref(float3) throughput
+) {
+    di = float3(0);
+    throughput = float3(0);
+    if (pdf <= 0) return float3(0);
+    // trace the second ray
+    Intersection(secondRay, SceneBVH, payload, RNG);
+    const float3 first_bsdf = EvalBsdf(primaryHit, -primaryRay.direction, secondRay.direction);
+    const float3 ithroughput = first_bsdf; // divide float(pdf). leave it to return line;
+    if (HasHit(payload.hit)) {
+        const PolymorphicLightInfo light = lights[0];
+        di = EvaluateDirectLight(secondRay, payload.hit, light, RNG);
+        throughput = ithroughput / float(pdf);
+        return di * throughput;
+    }
+    else return float3(0, 0, 0);
+}
+
+float3 EvaluateIndirectLightEXX(
+    in_ref(Ray) primaryRay,
+    in_ref(Ray) secondRay,
+    double pdf,
+    in_ref(ShadingSurface) surface,
+    inout_ref(PrimaryPayload) payload,
+    inout_ref(RandomSamplerState) RNG,
+    out_ref(float3) di,
+    out_ref(float3) throughput
+) {
+    di = float3(0);
+    throughput = float3(0);
+    if (pdf <= 0) return float3(0);
+    // trace the second ray
+    Intersection(secondRay, SceneBVH, payload, RNG);
+    const float3 first_bsdf = EvalBsdf(surface, -primaryRay.direction, secondRay.direction);
+    const float3 ithroughput = first_bsdf; // divide float(pdf). leave it to return line;
+    if (HasHit(payload.hit)) {
+        const PolymorphicLightInfo light = lights[0];
+        di = EvaluateDirectLight(secondRay, payload.hit, light, RNG);
+        throughput = ithroughput / float(pdf);
+        return di * throughput;
+    }
+    else return float3(0, 0, 0);
+}
+
+float3 EvaluateIndirectLightEXXSplit(
+    in_ref(Ray) primaryRay,
+    in_ref(Ray) secondRay,
+    double pdf,
+    in_ref(ShadingSurface) surface,
+    inout_ref(PrimaryPayload) payload,
+    inout_ref(RandomSamplerState) RNG,
+    out_ref(float3) di,
+    out_ref(SplitShading) throughput
+) {
+    di = float3(0);
+    throughput.diffuse = float3(0);
+    throughput.specular = float3(0);
+    if (pdf <= 0) return float3(0);
+    // trace the second ray
+    Intersection(secondRay, SceneBVH, payload, RNG);
+    const SplitShading first_bsdf = EvalBsdfSplit(surface, -primaryRay.direction, secondRay.direction);
+    if (HasHit(payload.hit)) {
+        const PolymorphicLightInfo light = lights[0];
+        di = EvaluateDirectLight(secondRay, payload.hit, light, RNG);
+        throughput.diffuse = first_bsdf.diffuse / float(pdf);
+        throughput.specular = first_bsdf.specular / float(pdf);
+        return di;
+    }
+    else return float3(0, 0, 0);
+}
+
+float3 EvaluateIndirectLight_NoThroughput(
+    in_ref(Ray) primaryRay,
+    in_ref(Ray) secondRay,
+    double pdf,
+    in_ref(GeometryHit) primaryHit,
+    inout_ref(PrimaryPayload) payload,
+    inout_ref(RandomSamplerState) RNG,
+    out_ref(float3) di
+) {
+    di = float3(0);
+    if (pdf <= 0) return float3(0);
+    // trace the second ray
+    Intersection(secondRay, SceneBVH, payload, RNG);
+    if (HasHit(payload.hit)) {
+        const PolymorphicLightInfo light = lights[0];
+        di = EvaluateDirectLight(secondRay, payload.hit, light, RNG);
+        return di;
+    }
+    else return float3(0, 0, 0);
+}
+
 float3 SampleSphericalVoxel(
     in_ref(int) vxFlatten,
     in_ref(float3) rnd_vec,
@@ -1004,6 +1199,29 @@ float3 SampleSphericalVoxel(
         pdf);
 }
 
+float3 SampleSphericalVoxel(
+    in_ref(int) vxFlatten,
+    in_ref(float3) rnd_vec,
+    in_ref(ShadingSurface) surface,
+    in_ref(StructuredBuffer<uint4>) pMin,
+    in_ref(StructuredBuffer<uint4>) pMax,
+    in_ref(VoxelTexInfo) info,
+    out_ref(AABB) voxelBound,
+    out_ref(float) pdf
+) {
+    const int3 vxID = ReconstructIndex(vxFlatten, 64);
+    voxelBound = VoxelToBound(vxID, 0, info);
+    const AABB compact_bound = UnpackCompactAABB(voxelBound, pMin[vxFlatten].xyz, pMax[vxFlatten].xyz);
+    const float3 voxelExtent = float3(compact_bound.max - compact_bound.min) / 2;
+    const float3 voxelCenter = 0.5 * (compact_bound.min + compact_bound.max);
+    return SampleSphericalVoxel(
+        voxelCenter,
+        voxelExtent,
+        surface.worldPos,
+        rnd_vec,
+        pdf);
+}
+
 float PdfSampleSphericalVoxel(
     in_ref(int3) vxID,
     in_ref(int) vxFlatten,
@@ -1020,6 +1238,24 @@ float PdfSampleSphericalVoxel(
         voxelCenter,
         voxelExtent,
         primaryHit.position);
+}
+
+float PdfSampleSphericalVoxel(
+    in_ref(int3) vxID,
+    in_ref(int) vxFlatten,
+    in_ref(ShadingSurface) surface,
+    in_ref(StructuredBuffer<uint4>) pMin,
+    in_ref(StructuredBuffer<uint4>) pMax,
+    in_ref(VoxelTexInfo) info
+) {
+    const AABB aabb = VoxelToBound(vxID, 0, info);
+    const AABB compact_bound = UnpackCompactAABB(aabb, pMin[vxFlatten].xyz, pMax[vxFlatten].xyz);
+    const float3 voxelExtent = float3(compact_bound.max - compact_bound.min) / 2;
+    const float3 voxelCenter = 0.5 * (compact_bound.min + compact_bound.max);
+    return PdfSampleSphericalVoxel(
+        voxelCenter,
+        voxelExtent,
+        surface.worldPos);
 }
 
 enum VoxelGuidingType {
@@ -1181,8 +1417,21 @@ double PdfVoxelGuiding(
     }
     else if (config.type == VoxelGuidingType::VG_Irradiance) {
         const int compactID = inverse_index[vxID];
+        if (compactID == -1) return 0.0;
         const int leafID = compact2leaf[compactID];
         voxel_pdf = PdfTraverseLightTree_Intensity(0, leafID, tree_nodes);
+    }
+    else if (config.type == VoxelGuidingType::VG_SLC) {
+        TreeEvaluateConfig teconfig;
+        teconfig.intensity_only = false;
+        teconfig.distanceType = 0;
+        teconfig.useApproximateCosineBound = true;
+        const int compactID = inverse_index[vxID];
+        if (compactID == -1) return 0.0;
+        const int leafID = compact2leaf[compactID];
+        voxel_pdf = PdfTraverseLightTree(0, leafID, hit.position,
+                                         hit.geometryNormal, float3(0),
+                                         teconfig, tree_nodes);
     }
     else if (config.type == VoxelGuidingType::VG_VisibilityIrradiance) {
         const int compactID = inverse_index[vxID];

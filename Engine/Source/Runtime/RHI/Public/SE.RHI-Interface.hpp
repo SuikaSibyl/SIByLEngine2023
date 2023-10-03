@@ -90,6 +90,37 @@ struct BarrierDescriptor;
 struct MemoryBarrier;
 struct MemoryBarrierDescriptor;
 struct Semaphore;
+/** pipeline stage enums */
+SE_EXPORT using PipelineStageFlags = uint32_t;
+/** pipeline stage enums */
+SE_EXPORT enum class PipelineStages : uint32_t {
+  TOP_OF_PIPE_BIT = 0x00000001,
+  DRAW_INDIRECT_BIT = 0x00000002,
+  VERTEX_INPUT_BIT = 0x00000004,
+  VERTEX_SHADER_BIT = 0x00000008,
+  TESSELLATION_CONTROL_SHADER_BIT = 0x00000010,
+  TESSELLATION_EVALUATION_SHADER_BIT = 0x00000020,
+  GEOMETRY_SHADER_BIT = 0x00000040,
+  FRAGMENT_SHADER_BIT = 0x00000080,
+  EARLY_FRAGMENT_TESTS_BIT = 0x00000100,
+  LATE_FRAGMENT_TESTS_BIT = 0x00000200,
+  COLOR_ATTACHMENT_OUTPUT_BIT = 0x00000400,
+  COMPUTE_SHADER_BIT = 0x00000800,
+  TRANSFER_BIT = 0x00001000,
+  BOTTOM_OF_PIPE_BIT = 0x00002000,
+  HOST_BIT = 0x00004000,
+  ALL_GRAPHICS_BIT = 0x00008000,
+  ALL_COMMANDS_BIT = 0x00010000,
+  TRANSFORM_FEEDBACK_BIT_EXT = 0x01000000,
+  CONDITIONAL_RENDERING_BIT_EXT = 0x00040000,
+  ACCELERATION_STRUCTURE_BUILD_BIT_KHR = 0x02000000,
+  RAY_TRACING_SHADER_BIT_KHR = 0x00200000,
+  TASK_SHADER_BIT_NV = 0x00080000,
+  MESH_SHADER_BIT_NV = 0x00100000,
+  FRAGMENT_DENSITY_PROCESS_BIT = 0x00800000,
+  FRAGMENT_SHADING_RATE_ATTACHMENT_BIT = 0x00400000,
+  COMMAND_PREPROCESS_BIT = 0x00020000,
+};
 // *************************|****************************************
 // Ray Tracing				|   Ray Tracing
 // |
@@ -183,6 +214,7 @@ SE_EXPORT struct AdapterInfo {
   std::string architecture;
   std::string device;
   std::string description;
+  float timestampPeriod;
 };
 
 ////////////////////////////////////
@@ -1537,10 +1569,13 @@ SE_EXPORT struct CommandEncoder {
                                     ImageCopyTexture const& destination,
                                     Extend3D const& copySize) noexcept
       -> void = 0;
+  /** Reset the queryset. */
+  virtual auto resetQuerySet(QuerySet* querySet, uint32_t firstQuery,
+                             uint32_t queryCount) noexcept -> void = 0;
   /** Writes a timestamp value into a querySet when all
    * previous commands have completed executing. */
-  virtual auto writeTimestamp(QuerySet* querySet, uint32_t queryIndex) noexcept
-      -> void = 0;
+  virtual auto writeTimestamp(QuerySet* querySet, PipelineStages stageMask,
+                              uint32_t queryIndex) noexcept -> void = 0;
   /** Resolves query results from a QuerySet out into a range of a Buffer. */
   virtual auto resolveQuerySet(QuerySet* querySet, uint32_t firstQuery,
                                uint32_t queryCount, Buffer& destination,
@@ -1907,10 +1942,26 @@ SE_EXPORT struct QueueDescriptor {};
 // ===========================================================================
 // Queries Interface
 
-SE_EXPORT enum struct QueryType { OCCLUSION, TIMESTAMP };
+SE_EXPORT enum struct QueryType { 
+    OCCLUSION, 
+    PIPELINE_STATISTICS,
+    TIMESTAMP,
+};
+
+SE_EXPORT enum struct QueryResultBits {
+  RESULT_64 = 0x1,
+  RESULT_WAIT = 0x1 << 1,
+  RESULT_WITH_AVAILABILITY = 0x1 << 2,
+  RESULT_PARTIAL = 0x1 << 3,
+};
+SE_EXPORT using QueryResultFlag = uint32_t;
 
 SE_EXPORT struct QuerySet {
-  virtual auto destroy() noexcept -> void = 0;
+  virtual ~QuerySet() = default;
+  /** fetch the query pooll result */
+  virtual auto resolveQueryResult(uint32_t firstQuery, uint32_t queryCount,
+                                  size_t dataSize, void* pData, uint64_t stride,
+                                  QueryResultFlag flag) noexcept -> void = 0;
   QueryType type;
   uint32_t count;
 };
@@ -2174,38 +2225,6 @@ SE_EXPORT struct TextureMemoryBarrierDescriptor {
  * │ └───────────────────────────────────────────────────────────────┘ <
  * Dependency Flags > Basically, we could use the NONE flag.
  */
-
-/** pipeline stage enums */
-SE_EXPORT using PipelineStageFlags = uint32_t;
-/** pipeline stage enums */
-SE_EXPORT enum class PipelineStages : uint32_t {
-  TOP_OF_PIPE_BIT = 0x00000001,
-  DRAW_INDIRECT_BIT = 0x00000002,
-  VERTEX_INPUT_BIT = 0x00000004,
-  VERTEX_SHADER_BIT = 0x00000008,
-  TESSELLATION_CONTROL_SHADER_BIT = 0x00000010,
-  TESSELLATION_EVALUATION_SHADER_BIT = 0x00000020,
-  GEOMETRY_SHADER_BIT = 0x00000040,
-  FRAGMENT_SHADER_BIT = 0x00000080,
-  EARLY_FRAGMENT_TESTS_BIT = 0x00000100,
-  LATE_FRAGMENT_TESTS_BIT = 0x00000200,
-  COLOR_ATTACHMENT_OUTPUT_BIT = 0x00000400,
-  COMPUTE_SHADER_BIT = 0x00000800,
-  TRANSFER_BIT = 0x00001000,
-  BOTTOM_OF_PIPE_BIT = 0x00002000,
-  HOST_BIT = 0x00004000,
-  ALL_GRAPHICS_BIT = 0x00008000,
-  ALL_COMMANDS_BIT = 0x00010000,
-  TRANSFORM_FEEDBACK_BIT_EXT = 0x01000000,
-  CONDITIONAL_RENDERING_BIT_EXT = 0x00040000,
-  ACCELERATION_STRUCTURE_BUILD_BIT_KHR = 0x02000000,
-  RAY_TRACING_SHADER_BIT_KHR = 0x00200000,
-  TASK_SHADER_BIT_NV = 0x00080000,
-  MESH_SHADER_BIT_NV = 0x00100000,
-  FRAGMENT_DENSITY_PROCESS_BIT = 0x00800000,
-  FRAGMENT_SHADING_RATE_ATTACHMENT_BIT = 0x00400000,
-  COMMAND_PREPROCESS_BIT = 0x00020000,
-};
 
 /** dependency of barriers */
 SE_EXPORT using DependencyTypeFlags = uint32_t;

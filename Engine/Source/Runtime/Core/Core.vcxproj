@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Private\SE.Core.Profiler.cpp" />
     <ClCompile Include="Public\Config\SE.Core.Config.cpp" />
     <ClCompile Include="Public\ECS\SE.Core.ECS.cpp" />
     <ClCompile Include="Public\Misc\SE.Core.Misc.cpp" />
@@ -45,6 +46,7 @@
     <ClInclude Include="Public\Print\SE.Core.Log.hpp" />
     <ClInclude Include="Public\Resource\SE.Core.Resource.hpp" />
     <ClInclude Include="Public\SE.Core.hpp" />
+    <ClInclude Include="Public\SE.Core.Profiler.hpp" />
     <ClInclude Include="Public\SE.Core.Serialize.hpp" />
     <ClInclude Include="Public\SE.Core.Reflect.hpp" />
     <ClInclude Include="Public\System\SE.Core.System.hpp" />

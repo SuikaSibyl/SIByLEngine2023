@@ -1,15 +1,11 @@
 
 #include "../../include/common/space_filling_curve.hlsli"
-#include "seminee_interface.hlsli"
+#include "sst-interface.hlsli"
 
-[[vk::push_constant]]
-cbuffer PushConstantBuffer {
-    uint numAllVPLs;
-};
-
-const RWStructuredBuffer<uint64_t> u_Codes;
 RWStructuredBuffer<TreeNode> u_Nodes;
 RWStructuredBuffer<TreeConstrIndirectArgs> u_ConstrIndirectArgs;
+
+const StructuredBuffer<uint64_t> u_Codes;
 
 int clz(uint x) {
     return 31 - int(firstbithigh(x));
@@ -121,10 +117,10 @@ void ComputeMain(uint3 dtid: SV_DispatchThreadID) {
     if (idx >= max(0, num_objects - 1))
         return;
 
-    u_Nodes[idx].vpl_idx = numAllVPLs + idx; //  assign internal node storage
+    u_Nodes[idx].vpl_idx = numVPLs + idx; //  assign internal node storage
     const uint2 ij = determine_range(num_objects, idx);
     const int gamma = int(find_split(ij.x, ij.y));
-
+    
     u_Nodes[idx].left_idx = gamma;
     u_Nodes[idx].right_idx = gamma + 1;
 
@@ -132,7 +128,7 @@ void ComputeMain(uint3 dtid: SV_DispatchThreadID) {
         u_Nodes[idx].left_idx += numVPLs - 1;
     if (max(ij.x, ij.y) == gamma + 1)
         u_Nodes[idx].right_idx += numVPLs - 1;
-
+    
     u_Nodes[u_Nodes[idx].left_idx].parent_idx = idx;
     u_Nodes[u_Nodes[idx].right_idx].parent_idx = idx;
 }

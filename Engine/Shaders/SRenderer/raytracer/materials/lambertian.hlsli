@@ -15,25 +15,27 @@ void EvalLambertian(inout_ref(BSDFEvalQuery) cBSDFEvalQuery) {
         dot(cBSDFEvalQuery.geometric_normal, cBSDFEvalQuery.dir_out) < 0) {
         // No light below the surface
         cBSDFEvalQuery.bsdf = float3(0);
+        cBSDFEvalQuery.dir_out = float3(0); // override specular
         return;
     }
     // Making sure the shading frame is consistent with the view direction.
     float3x3 frame = cBSDFEvalQuery.frame;
-    // if (dot(frame[2], cBSDFEvalQuery.dir_in) < 0) {
-    //     frame = -frame;
-    // }
+    const QueryBitfield bitfield = UnpackQueryBitfield(cBSDFEvalQuery.misc_flag);
+
     // Evaluate bsdf
     float3 albedo;
     if (cBSDFEvalQuery.mat_id == 0xFFFFFFFF) {
-        albedo = UnpackRGBE(asuint(cBSDFEvalQuery.bsdf.x)) / k_pi;
+        albedo = UnpackRGBE(asuint(cBSDFEvalQuery.bsdf.x));
     }
     else {
         const MaterialInfo material = materials[cBSDFEvalQuery.mat_id];
         const float3 texAlbedo = textures[material.baseOrDiffuseTextureIndex]
                                      .Sample(cBSDFEvalQuery.uv, 0) .xyz;
-        albedo = material.baseOrDiffuseColor * texAlbedo / k_pi;
+        albedo = material.baseOrDiffuseColor * texAlbedo;
     }
-    cBSDFEvalQuery.bsdf = saturate(dot(frame[2], cBSDFEvalQuery.dir_out)) * albedo;
+    const float3 demodulate = saturate(dot(frame[2], cBSDFEvalQuery.dir_out)) / k_pi;
+    cBSDFEvalQuery.bsdf = bitfield.split_query ? demodulate : albedo * demodulate;
+    cBSDFEvalQuery.dir_out = float3(0); // override specular
 }
 
 /**
@@ -51,9 +53,6 @@ void SampleLambertian(inout_ref(BSDFSampleQuery) cBSDFSampleQuery) {
     }
     // Making sure the shading frame is consistent with the view direction.
     float3x3 frame = cBSDFSampleQuery.frame;
-    // if (dot(frame[2], cBSDFSampleQuery.dir_in) < 0) {
-    //     frame = -frame;
-    // }
     // Sample bsdf
     cBSDFSampleQuery.dir_out = to_world(
         frame,
@@ -77,9 +76,6 @@ void PdfLambertian(inout_ref(BSDFSamplePDFQuery) cBSDFSamplePDFQuery) {
     }
     // Making sure the shading frame is consistent with the view direction.
     float3x3 frame = cBSDFSamplePDFQuery.frame;
-    // if (dot(frame[2], cBSDFSamplePDFQuery.dir_in) < 0) {
-    //     frame = -frame;
-    // }
     cBSDFSamplePDFQuery.pdf = saturate(dot(frame[2], cBSDFSamplePDFQuery.dir_out)) / k_pi;
 }
 

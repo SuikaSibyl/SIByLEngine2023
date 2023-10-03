@@ -17,6 +17,7 @@ struct ShadingSurface {
     float3 geometryNormal;
     uint bsdfID;
     float3 diffuseAlbedo;
+    bool faceForward;
     float3 specularF0;
 };
 

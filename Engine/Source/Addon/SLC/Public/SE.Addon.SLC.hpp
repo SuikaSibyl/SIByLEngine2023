@@ -71,6 +71,7 @@ SE_EXPORT struct SLCGIPass : public RDG::RayTracingPass {
   bool useApproximateGoemetry = true;
   bool useLightCone = false;
   int distanceType = 0;
+  int spp = 1;
 };
 
 SE_EXPORT struct SLCBuildGraph : public RDG::Subgraph {

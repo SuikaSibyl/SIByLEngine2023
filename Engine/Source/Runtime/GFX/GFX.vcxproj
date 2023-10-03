@@ -178,6 +178,7 @@
     <ClCompile Include="Private\SE.GFX-Loader.SceneNodeLoader.cpp" />
     <ClCompile Include="Private\SE.GFX-Loader.ShaderLoader.cpp" />
     <ClCompile Include="Private\SE.GFX-Main.cpp" />
+    <ClCompile Include="Private\SE.GFX-Utils.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Public\SE.GFX-Loader.MeshLoader.hpp" />
@@ -186,6 +187,7 @@
     <ClInclude Include="Public\SE.GFX-Loader.ShaderLoader.hpp" />
     <ClInclude Include="Public\SE.GFX-Main.hpp" />
     <ClInclude Include="Public\SE.GFX-SerializeUtils.hpp" />
+    <ClInclude Include="Public\SE.GFX-Utils.h" />
     <ClInclude Include="Public\SE.GFX.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

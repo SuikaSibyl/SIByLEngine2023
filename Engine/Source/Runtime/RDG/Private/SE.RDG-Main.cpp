@@ -149,6 +149,15 @@ auto Graph::setExternal(std::string const& _pass, std::string const& _resource,
       ->info.texture.reference = tex;
 }
 
+auto Graph::setExternal(std::string const& _pass, std::string const& _resource,
+    GFX::Buffer* buff) noexcept -> void {
+  std::string pass = _pass, res = _resource;
+  decodeAlias(pass, res);
+  passes[passNameList[pass]]
+      ->pReflection.getResourceInfo(res)
+      ->info.buffer.reference = buff;
+}
+
 auto Graph::markOutput(std::string const& _pass,
                        std::string const& _output) noexcept -> void {
   std::string pass = _pass, output = _output;
@@ -564,6 +573,9 @@ auto Graph::build() noexcept -> bool {
         bufferResources[rid]->cosumeHistories.push_back(
             {flattenedPasses[i], internal.second.info.buffer.consumeHistories});
         internal.second.devirtualizeID = rid;
+        if (internal.second.info.buffer.reference != nullptr)
+          bufferResources[rid]->buffer =
+              internal.second.info.buffer.reference;
       }
     }
     // devirtualize input resources

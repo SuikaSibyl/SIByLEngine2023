@@ -11,11 +11,13 @@ auto RTCommon::init() noexcept -> void {
         sphere_intersection, sphere_ray_rchit, sphere_anyhit,
         sphere_shadow_anyhit, common_ray_rmiss, shadow_ray_rchit,
         shadow_ray_rmiss, eval_lambertian, sample_lambertian, pdf_lambertian,
-        eval_roughplastic, sample_roughplastic, pdf_roughplastic] =
+        eval_roughplastic, sample_roughplastic, pdf_roughplastic,
+        eval_roughdielectric, sample_roughdielectric, pdf_roughdielectric
+  ] =
       GFX::ShaderLoader_SLANG::load(
           "../Engine/Shaders/SRenderer/raytracer/"
           "spt.slang",
-          std::array<std::pair<std::string, RHI::ShaderStages>, 16>{
+          std::array<std::pair<std::string, RHI::ShaderStages>, 19>{
               std::make_pair("TrimeshClosestHit",
                              RHI::ShaderStages::CLOSEST_HIT),
               std::make_pair("TrimeshAnyHit", RHI::ShaderStages::ANY_HIT),
@@ -40,6 +42,10 @@ auto RTCommon::init() noexcept -> void {
               std::make_pair("EvalRoughPlastic", RHI::ShaderStages::CALLABLE),
               std::make_pair("SampleRoughPlastic", RHI::ShaderStages::CALLABLE),
               std::make_pair("PdfRoughPlastic", RHI::ShaderStages::CALLABLE),
+              // Material shaders - rough dielectric
+              std::make_pair("EvalRoughDielectric", RHI::ShaderStages::CALLABLE),
+              std::make_pair("SampleRoughDielectric", RHI::ShaderStages::CALLABLE),
+              std::make_pair("PdfRoughDielectric", RHI::ShaderStages::CALLABLE),
           });
 
    sbtDesc = GFX::SBTsDescriptor{
@@ -101,6 +107,10 @@ auto RTCommon::init() noexcept -> void {
           {Core::ResourceManager::get()->getResource<GFX::ShaderModule>(eval_roughplastic)},
           {Core::ResourceManager::get()->getResource<GFX::ShaderModule>(sample_roughplastic)},
           {Core::ResourceManager::get()->getResource<GFX::ShaderModule>(pdf_roughplastic)},
+          // roughdielectric
+          {Core::ResourceManager::get()->getResource<GFX::ShaderModule>(eval_roughdielectric)},
+          {Core::ResourceManager::get()->getResource<GFX::ShaderModule>(sample_roughdielectric)},
+          {Core::ResourceManager::get()->getResource<GFX::ShaderModule>(pdf_roughdielectric)},
           //{Core::ResourceManager::get()
           //     ->getResource<GFX::ShaderModule>(
           //         sphere_sampling_rcall)},

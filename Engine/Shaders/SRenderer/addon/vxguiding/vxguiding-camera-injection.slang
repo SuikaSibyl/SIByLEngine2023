@@ -15,18 +15,37 @@ cbuffer PushConstants {
     struct PushConstants {
         uint2 resolution;
         uint sample_batch;
+        uint setting;
     } pConst;
 };
 
 Texture2D<uint4> u_vBuffer;
 RWTexture3D<uint> u_pIrradiance;
-
+RWTexture3D<uint> u_vplCount;
 RWTexture2D<float4> u_position;
 RWTexture2D<float4> u_color;
 RWTexture2D<float4> u_shadingpoint;
 
 cbuffer VoxelizerUniform {
     VoxerlizerData gVD;
+}
+
+void InjectVPL(
+    in_ref(float3) position,
+    in_ref(float) irradiance,
+    in_ref(VoxelTexInfo) info,
+    bool use_avg_not_max
+) {
+    const int3 voxelPos = int3(WorldToVoxel(position, info) * info.volumeDimension);
+    const int voxelIDFlatten = FlatIndex(voxelPos, info.volumeDimension);
+    const uint packedIrr = PackIrradiance(irradiance);
+    if (use_avg_not_max) {
+        InterlockedAdd(u_pIrradiance[voxelPos], packedIrr);
+        InterlockedAdd(u_vplCount[voxelPos], 1);
+    } else {
+        InterlockedMax(u_pIrradiance[voxelPos], packedIrr);
+        u_vplCount[voxelPos] = 1;
+    }
 }
 
 [shader("raygeneration")]
@@ -65,7 +84,7 @@ void RgenMain() {
         u_position[pixel] = float4(0);
         return;
     }
-
+    
     PrimaryPayload payload;
     Intersection(bsdfRay, SceneBVH, payload, RNG);
     // If we didn't hit anything, we're done
@@ -89,10 +108,11 @@ void RgenMain() {
         u_position[pixel] = float4(0);
         return;
     }
-    
-    // inject irradiance to voxel where the hit position is 
+
+    // inject irradiance to voxel where the hit position is
+    const bool inject_1st_vertex = (pConst.setting & 0b1) == 0b1;
+    const bool use_avg_not_max = (pConst.setting & 0b10) == 0b10;
+
     VoxelTexInfo info = CreateVoxelTexInfo(gVD);
-    int3 voxelPos = int3(WorldToVoxel(payload.hit.position, info) * info.volumeDimension);
-    int voxelIDFlatten = FlatIndex(voxelPos, info.volumeDimension);
-    InterlockedMax(u_pIrradiance[voxelPos], PackIrradiance(irradiance));
+    InjectVPL(payload.hit.position, irradiance, info, use_avg_not_max);
 }

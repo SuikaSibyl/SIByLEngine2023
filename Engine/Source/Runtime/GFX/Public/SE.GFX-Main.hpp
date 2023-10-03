@@ -322,6 +322,8 @@ SE_EXPORT struct TransformComponent {
   Math::Transform transform = {};
   /** previous integrated world transform */
   Math::Transform previousTransform = {};
+  /** check whether the transform is a static one */
+  uint32_t static_param = 1;
   /** get transform */
   auto getTransform() noexcept -> Math::mat4;
   /** get rotated forward */

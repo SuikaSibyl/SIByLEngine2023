@@ -5,11 +5,12 @@ SceneNodes:
     components:
       TagComponent: Camera Object
       Transform:
-        translation: [4.78046894, 3.76827836, 9.60819149]
-        eulerAngles: [-16.4258842, 36.1130257, 0]
-        scale: [4.10000086, 1, 1]
+        translation: [-0.319336444, 0.91179806, 9.57143021]
+        eulerAngles: [1.34424329, -717.214172, 0]
+        scale: [4.10000134, 0.999992073, 0.99999404]
+        staticParam: 1
       CameraComponent:
-        fovy: 60
+        fovy: 34
         aspect: 1.77777779
         near: 0.100000001
         far: 1000
@@ -21,12 +22,15 @@ SceneNodes:
       TagComponent: DirectionalLight
       Transform:
         translation: [0, 0, 0]
-        eulerAngles: [12.6059237, -83.3581467, 0.00110459153]
-        scale: [0.999844551, 0.999989808, 0.999824047]
+        eulerAngles: [5.6160841, -75.0404739, 7.09609127]
+        scale: [0.999840915, 0.999991298, 0.999825776]
+        staticParam: 1
       LightComponent:
         Type: 0
-        Intensity: [3, 3, 3]
+        Intensity: [25, 25, 25]
         Texture: 18446744073709551615
+        Pack0: [0, 0, 0, 0]
+        Pack1: [0, 0, 0, 0]
   - uid: 2
     parent: 18446744073709551615
     children:
@@ -54,14 +58,16 @@ SceneNodes:
         translation: [0, 0, 0]
         eulerAngles: [0, -0, 0]
         scale: [1, 1, 1]
+        staticParam: 1
   - uid: 3
     parent: 2
     components:
       TagComponent: broom_polySurface335
       Transform:
         translation: [0, 0, 0]
-        eulerAngles: [0, 0, 0]
+        eulerAngles: [0, -0, 0]
         scale: [1, 1, 1]
+        staticParam: 1
       MeshReference:
         ORID: 1680874863154718819
         CPF: 0
@@ -75,8 +81,9 @@ SceneNodes:
       TagComponent: broom_polySurface366
       Transform:
         translation: [0, 0, 0]
-        eulerAngles: [0, 0, 0]
+        eulerAngles: [0, -0, 0]
         scale: [1, 1, 1]
+        staticParam: 1
       MeshReference:
         ORID: 1680874863152600804
         CPF: 0
@@ -89,8 +96,9 @@ SceneNodes:
       TagComponent: broom_polySurface380breakfast_room_Mesh
       Transform:
         translation: [0, 0, 0]
-        eulerAngles: [0, 0, 0]
+        eulerAngles: [0, -0, 0]
         scale: [1, 1, 1]
+        staticParam: 1
       MeshReference:
         ORID: 1680874863152682145
         CPF: 0
@@ -102,8 +110,9 @@ SceneNodes:
       TagComponent: broom_polySurface522
       Transform:
         translation: [0, 0, 0]
-        eulerAngles: [0, 0, 0]
+        eulerAngles: [0, -0, 0]
         scale: [1, 1, 1]
+        staticParam: 1
       MeshReference:
         ORID: 1680874863152108817
         CPF: 0
@@ -117,8 +126,9 @@ SceneNodes:
       TagComponent: broom_polySurface414
       Transform:
         translation: [0, 0, 0]
-        eulerAngles: [0, 0, 0]
+        eulerAngles: [0, -0, 0]
         scale: [1, 1, 1]
+        staticParam: 1
       MeshReference:
         ORID: 1680874863154742451
         CPF: 0
@@ -130,8 +140,9 @@ SceneNodes:
       TagComponent: broom_breakfast_room_MeshpolySurface416
       Transform:
         translation: [0, 0, 0]
-        eulerAngles: [0, 0, 0]
+        eulerAngles: [0, -0, 0]
         scale: [1, 1, 1]
+        staticParam: 1
       MeshReference:
         ORID: 1680874864226854482
         CPF: 0
@@ -143,8 +154,9 @@ SceneNodes:
       TagComponent: broom_polySurface332
       Transform:
         translation: [0, 0, 0]
-        eulerAngles: [0, 0, 0]
+        eulerAngles: [0, -0, 0]
         scale: [1, 1, 1]
+        staticParam: 1
       MeshReference:
         ORID: 1680874864224867352
         CPF: 0
@@ -158,8 +170,9 @@ SceneNodes:
       TagComponent: broom_breakfast_room_MeshpolySurface427
       Transform:
         translation: [0, 0, 0]
-        eulerAngles: [0, 0, 0]
+        eulerAngles: [0, -0, 0]
         scale: [1, 1, 1]
+        staticParam: 1
       MeshReference:
         ORID: 1680874864225856089
         CPF: 0
@@ -171,8 +184,9 @@ SceneNodes:
       TagComponent: broom_polySurface337
       Transform:
         translation: [0, 0, 0]
-        eulerAngles: [0, 0, 0]
+        eulerAngles: [0, -0, 0]
         scale: [1, 1, 1]
+        staticParam: 1
       MeshReference:
         ORID: 1680874865302273421
         CPF: 0
@@ -186,8 +200,9 @@ SceneNodes:
       TagComponent: broom_polySurface491
       Transform:
         translation: [0, 0, 0]
-        eulerAngles: [0, 0, 0]
+        eulerAngles: [0, -0, 0]
         scale: [1, 1, 1]
+        staticParam: 1
       MeshReference:
         ORID: 1680874865302211633
         CPF: 0
@@ -202,8 +217,9 @@ SceneNodes:
       TagComponent: broom_polySurface426
       Transform:
         translation: [0, 0, 0]
-        eulerAngles: [0, 0, 0]
+        eulerAngles: [0, -0, 0]
         scale: [1, 1, 1]
+        staticParam: 1
       MeshReference:
         ORID: 1680874866372578490
         CPF: 0
@@ -216,8 +232,9 @@ SceneNodes:
       TagComponent: broom_polySurface422
       Transform:
         translation: [0, 0, 0]
-        eulerAngles: [0, 0, 0]
+        eulerAngles: [0, -0, 0]
         scale: [1, 1, 1]
+        staticParam: 1
       MeshReference:
         ORID: 1680874867447705197
         CPF: 0
@@ -231,8 +248,9 @@ SceneNodes:
       TagComponent: broom_polySurface246
       Transform:
         translation: [0, 0, 0]
-        eulerAngles: [0, 0, 0]
+        eulerAngles: [0, -0, 0]
         scale: [1, 1, 1]
+        staticParam: 1
       MeshReference:
         ORID: 1680874867448675694
         CPF: 0
@@ -244,8 +262,9 @@ SceneNodes:
       TagComponent: broom_polySurface373
       Transform:
         translation: [0, 0, 0]
-        eulerAngles: [0, 0, 0]
+        eulerAngles: [0, -0, 0]
         scale: [1, 1, 1]
+        staticParam: 1
       MeshReference:
         ORID: 1680874867446902834
         CPF: 0
@@ -259,8 +278,9 @@ SceneNodes:
       TagComponent: broom_polySurface476
       Transform:
         translation: [0, 0, 0]
-        eulerAngles: [0, 0, 0]
+        eulerAngles: [0, -0, 0]
         scale: [1, 1, 1]
+        staticParam: 1
       MeshReference:
         ORID: 1680874867446867508
         CPF: 0
@@ -273,8 +293,9 @@ SceneNodes:
       TagComponent: broom_polySurface375
       Transform:
         translation: [0, 0, 0]
-        eulerAngles: [0, 0, 0]
+        eulerAngles: [0, -0, 0]
         scale: [1, 1, 1]
+        staticParam: 1
       MeshReference:
         ORID: 1680874868519890315
         CPF: 0
@@ -290,6 +311,7 @@ SceneNodes:
         translation: [0, 0, 0]
         eulerAngles: [0, 0, 0]
         scale: [1, 1, 1]
+        staticParam: 1
       MeshReference:
         ORID: 1680874868520969234
         CPF: 0
@@ -304,8 +326,9 @@ SceneNodes:
       TagComponent: broom_polySurface440
       Transform:
         translation: [0, 0, 0]
-        eulerAngles: [0, 0, 0]
+        eulerAngles: [0, -0, 0]
         scale: [1, 1, 1]
+        staticParam: 1
       MeshReference:
         ORID: 1680874869594140094
         CPF: 0

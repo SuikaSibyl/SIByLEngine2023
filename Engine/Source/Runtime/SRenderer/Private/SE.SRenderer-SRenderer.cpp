@@ -500,7 +500,7 @@ auto invalidSceneLightingSetting(SRenderer* srenderer) noexcept -> void {
   srenderer->sceneDataPack.lightTableDist =
       SRenderer::TableDist1D{lightPowerArray};
   srenderer->sceneDataPack.sceneInfoUniform.light_num =
-      srenderer->sceneDataPack.lightTableDist.pmf.size();
+      srenderer->sceneDataPack.light_buffer_cpu.size();
   srenderer->sceneDataPack.sceneInfoUniform.light_offset_pmf =
       srenderer->sceneDataPack.sample_dist_buffer_cpu.size();
   srenderer->sceneDataPack.sample_dist_buffer_cpu.insert(
@@ -592,6 +592,8 @@ auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
       4, RHI::BindingResource{{sceneDataPack.material_buffer.get(), 0,
                                sceneDataPack.material_buffer->size()}}};
 
+  sceneDataPack.sceneInfoUniform.light_num =
+      sceneDataPack.light_buffer_cpu.size();
   sceneDataBuffers.scene_info_buffer.setStructure(
       sceneDataPack.sceneInfoUniform, fid);
 
@@ -835,12 +837,18 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
             mesh_primitive_type = primitiveType;
           }
 
+          GFX::TransformComponent* transform = go->getEntity().getComponent<GFX::TransformComponent>();
+          uint32_t primitiveWithFlag = primitiveType;
+          if (transform->static_param == 1) {
+            primitiveWithFlag |= 1 << 31;
+          }
+
           GeometryDrawData geometrydata = iter;
           geometrydata.geometryTransform = objectMat;
           geometrydata.geometryTransformInverse = Math::inverse(objectMat);
           geometrydata.oddNegativeScaling = oddScaling >= 0 ? 1.f : -1.f;
           geometrydata.materialID = findMat->second;
-          geometrydata.primitiveType = primitiveType;
+          geometrydata.primitiveType = primitiveWithFlag;
           geometrydata.lightID = lightComponenet ? 0 : 4294967295;
           uint32_t geometry_id = sceneDataPack.geometry_buffer_cpu.size();
           sceneDataPack.geometry_buffer_cpu.push_back(geometrydata);
@@ -850,12 +858,10 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
             RACommon::DrawIndexedIndirectEX drawcall = {
                 geometrydata.indexSize,    1, geometrydata.indexOffset,
                 geometrydata.vertexOffset, 0, geometry_id};
-            if (geometrydata.primitiveType == 0 ||
-                geometrydata.primitiveType == 2) {
+            if (primitiveType == 0 || primitiveType == 2) {
               raCommon.structured_drawcalls.opaque_drawcalls_host.push_back(
                   drawcall);
-            } else if (geometrydata.primitiveType == 1 ||
-                       geometrydata.primitiveType == 3) {
+            } else if (primitiveType == 1 || primitiveType == 3) {
               raCommon.structured_drawcalls.alphacut_drawcalls_host.push_back(
                   drawcall);
             }
@@ -876,7 +882,8 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
             GFX::LightComponent::LightType::ENVIRONMENT) {
           sceneDataPack.sceneInfoUniform.env_map =
               packTexture(this, lightComponenet->texture->guid);
-        } else {
+        } else if (lightComponenet->type ==
+                   GFX::LightComponent::LightType::MESH_PRIMITIVE) {
           sceneDataPack.light_comp_record[go->entity] =
               SceneDataPack::EntityLightRecord{};
           entityLightCompRecord =
@@ -887,18 +894,6 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
               meshref->customPrimitiveFlag == 1) {
             float totalArea = 0;
             for (uint32_t geoidx : meshRefRecord->second.geometry_indices) {
-              sceneDataPack.geometry_buffer_cpu[geoidx].lightID =
-                  sceneDataPack.light_buffer_cpu.size();
-              entityLightCompRecord->second.lightIndices.push_back(
-                  sceneDataPack.light_buffer_cpu.size());
-              // TODO
-              //sceneDataPack.light_buffer_cpu.push_back(LightData{
-              //    1,  // type 1, sphere area light
-              //    lightComponenet->intensity,
-              //    geoidx,
-              //    0,
-              //});
-              // GFX::Mesh* meshPtr = meshRefRecord->second.meshReference->mesh;
               size_t primitiveNum = meshRefRecord->second.meshReference->mesh
                                         ->indexBuffer_host.size /
                                     (3 * sizeof(uint32_t));
@@ -928,15 +923,31 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
                 float area = Math::length(Math::cross(e1, e2)) / 2;
                 areas.push_back(area);
                 totalArea += area;
+
+                //sceneDataPack.geometry_buffer_cpu[geoidx].lightID =
+                //    sceneDataPack.light_buffer_cpu.size();
+                //entityLightCompRecord->second.lightIndices.push_back(
+                //    sceneDataPack.light_buffer_cpu.size());
+                // TODO
+                SRenderer::PolymorphicLightInfo info;
+                info.databyte0 = geoidx;
+                info.databyte1 = i;
+                info.colorTypeAndFlags =
+                    (uint32_t)PolymorphicLightType::kMeshPrimitive
+                    << kPolymorphicLightTypeShift;
+                sceneDataPack.light_buffer_cpu.push_back(info);
+                // GFX::Mesh* meshPtr =
+                // meshRefRecord->second.meshReference->mesh;
+
               }
-              // create dist1D
-              // entityLightCompRecord->second.tableDist = areas;
-              entityLightCompRecord->second.tableDists.emplace_back(
-                  TableDist1D{areas});
-              entityLightCompRecord->second.lightPowers.emplace_back(
-                  totalArea * 3.1415926 *
-                  luminance(lightComponenet->intensity));
-              sceneDataPack.geometry_buffer_cpu[geoidx].surfaceArea = totalArea;
+              //// create dist1D
+              //// entityLightCompRecord->second.tableDist = areas;
+              //entityLightCompRecord->second.tableDists.emplace_back(
+              //    TableDist1D{areas});
+              //entityLightCompRecord->second.lightPowers.emplace_back(
+              //    totalArea * 3.1415926 *
+              //    luminance(lightComponenet->intensity));
+              //sceneDataPack.geometry_buffer_cpu[geoidx].surfaceArea = totalArea;
             }
           }
           // if mesh reference is pointing to a sphere mesh
@@ -1279,6 +1290,52 @@ auto SRenderer::updateRDGData(RDG::Graph* graph) noexcept -> void {
             data.passEncoder.render->drawIndexed(geometry.indexSize, 1,
                                                  geometry.indexOffset,
                                                  geometry.vertexOffset, 0);
+            geometry_idx++;
+          }
+        }
+      });
+  graph->renderData.setDelegate(
+      "IssueStaticDrawcalls",
+      [&, flightIdx = flightIdx](RDG::RenderData::DelegateData const& data) {
+        if (sceneDataPack.geometry_buffer_cpu.size() > 0) {
+          data.passEncoder.render->setIndexBuffer(
+              sceneDataPack.index_buffer.get(), RHI::IndexFormat::UINT32_T, 0,
+              sceneDataPack.index_buffer->size());
+          data.passEncoder.render->setBindGroup(
+              0, data.pipelinePass->bindgroups[0][flightIdx].get(), 0, 0);
+          uint32_t geometry_idx = 0;
+          for (auto& geometry : sceneDataPack.geometry_buffer_cpu) {
+            if ((geometry.primitiveType >> 31) == 1) {
+              data.passEncoder.render->pushConstants(
+                  &geometry_idx, (uint32_t)RHI::ShaderStages::VERTEX, 0,
+                  sizeof(uint32_t));
+              data.passEncoder.render->drawIndexed(geometry.indexSize, 1,
+                                                   geometry.indexOffset,
+                                                   geometry.vertexOffset, 0);
+            }
+            geometry_idx++;
+          }
+        }
+      });
+  graph->renderData.setDelegate(
+      "IssueDynamicDrawcalls",
+      [&, flightIdx = flightIdx](RDG::RenderData::DelegateData const& data) {
+        if (sceneDataPack.geometry_buffer_cpu.size() > 0) {
+          data.passEncoder.render->setIndexBuffer(
+              sceneDataPack.index_buffer.get(), RHI::IndexFormat::UINT32_T, 0,
+              sceneDataPack.index_buffer->size());
+          data.passEncoder.render->setBindGroup(
+              0, data.pipelinePass->bindgroups[0][flightIdx].get(), 0, 0);
+          uint32_t geometry_idx = 0;
+          for (auto& geometry : sceneDataPack.geometry_buffer_cpu) {
+            if ((geometry.primitiveType >> 31) == 0) {
+              data.passEncoder.render->pushConstants(
+                  &geometry_idx, (uint32_t)RHI::ShaderStages::VERTEX, 0,
+                  sizeof(uint32_t));
+              data.passEncoder.render->drawIndexed(geometry.indexSize, 1,
+                                                   geometry.indexOffset,
+                                                   geometry.vertexOffset, 0);                
+            }
             geometry_idx++;
           }
         }

@@ -52,7 +52,7 @@ void main() {
     
         memoryBarrierShared();
         barrier();
-
+        
         if(sg == 0) weight = warp_prob[sgid];
 
         // build up the sum of prob tree

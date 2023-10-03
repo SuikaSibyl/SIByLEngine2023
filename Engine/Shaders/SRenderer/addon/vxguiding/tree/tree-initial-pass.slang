@@ -6,6 +6,7 @@
 RWStructuredBuffer<TreeNode> u_Nodes;
 RWStructuredBuffer<int> cluster_roots;
 RWStructuredBuffer<int> compact2leaf;
+RWStructuredBuffer<uint16_t2> u_Descendant;
 
 cbuffer VoxelizerUniform {
     VoxerlizerData gVD;
@@ -48,7 +49,7 @@ void ComputeMain(uint3 dtid: SV_DispatchThreadID) {
         u_Nodes[tid] = node;
         return;
     }
-
+    
     // Init leaf nodes
     VoxelTexInfo info = CreateVoxelTexInfo(gVD);
     const uint leafID = tid - numInternalNodes;
@@ -62,7 +63,7 @@ void ComputeMain(uint3 dtid: SV_DispatchThreadID) {
     node.intensity = u_vxIrradiance[compactID];
     node.vx_idx = int16_t(compactID);
     node.flag = clusterID;
-    
+    u_Descendant[tid] = uint16_t2(uint16_t(leafID));
     compact2leaf[compactID] = tid;
     u_Nodes[tid] = node;
 }

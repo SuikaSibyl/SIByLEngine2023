@@ -6,7 +6,7 @@
 #include <Memory/SE.Core.Memory.hpp>
 #include <Resource/SE.Core.Resource.hpp>
 #include <SE.Math.Geometric.hpp>
-
+#include <Config/SE.Core.Config.hpp>
 #include <SE.GFX-SerializeUtils.hpp>
 #include <SE.GFX-Loader.MeshLoader.hpp>
 #include <SE.RHI.hpp>
@@ -1103,6 +1103,7 @@ auto loadMaterial(aiMaterial* material, AssimpLoaderEnv& env) noexcept
         loadMaterialTextures(material, aiTextureType_DIFFUSE, env);
     aiColor3D diffuse_color(0.f, 0.f, 0.f);
     material->Get(AI_MATKEY_COLOR_DIFFUSE, diffuse_color);
+    gfxmat.baseOrDiffuseColor = {diffuse_color.r, diffuse_color.g, diffuse_color.b};
     if (diffuseMaps.size() != 1) {
       Core::LogManager::Error(
           "GFX :: SceneNodeLoader_assimp :: diffuse map number is not 1.");
@@ -1432,6 +1433,9 @@ auto loadMaterial(TPM_NAMESPACE::Object const* node,
   if (node->pluginType() == "dielectric") {
     mat_node = node;
   }
+  else if(node->pluginType() == "roughdielectric") {
+    mat_node = node;
+  }
   else if(node->pluginType() == "thindielectric") {
     mat_node = node;
   }
@@ -1466,7 +1470,6 @@ auto loadMaterial(TPM_NAMESPACE::Object const* node,
   gfxmat.ORID = Core::requestORID();
   if (mat_node->pluginType() == "roughplastic") {
     gfxmat.BxDF = 1;
-
   } else if (mat_node->pluginType() == "diffuse") {
     gfxmat.BxDF = 0;
   } else {
@@ -1490,6 +1493,16 @@ auto loadMaterial(TPM_NAMESPACE::Object const* node,
       GFX::GFXManager::get()->registerMaterialResource(gfxmat.path.c_str());
   env->materials[node] = matID;
   return matID;
+}
+
+Core::GUID CloneMaterial(Core::GUID guid) {
+  GFX::Material* material =
+      Core::ResourceManager::get()->getResource<GFX::Material>(guid);
+  GFX::Material gfxmat = *material;
+  gfxmat.path =
+      "content/materials/" + std::to_string(Core::requestORID()) + ".mat";
+  gfxmat.serialize();
+  return GFX::GFXManager::get()->registerMaterialResource(gfxmat.path.c_str());
 }
 
 auto loadMeshNode(TPM_NAMESPACE::Object const* node, GFX::Scene& gfxscene,
@@ -1530,6 +1543,121 @@ auto loadMeshNode(TPM_NAMESPACE::Object const* node, GFX::Scene& gfxscene,
       Core::GUID mat = loadMaterial(mat_node, env);
       renderer->materials.emplace_back(
           Core::ResourceManager::get()->getResource<GFX::Material>(mat));
+    }
+  }
+  if (node->pluginType() == "cube") {
+    std::string engine_path = Core::RuntimeConfig::get()->string_property("engine_path");
+    std::string obj_path = engine_path + "\\" + "Binaries\\Runtime\\meshes\\cube.obj";
+    GameObjectHandle obj_node = SceneNodeLoader_obj::loadSceneNode(
+        obj_path, gfxscene, gfxNode, meshConfig);
+    GFX::MeshRenderer* renderer = gfxscene.getGameObject(obj_node)
+                                      ->getEntity()
+                                      .addComponent<GFX::MeshRenderer>();
+    TPM_NAMESPACE::Transform transform =
+        node->property("to_world").getTransform();
+    Math::mat4 transform_mat = {
+        transform.matrix[0],  transform.matrix[1],  transform.matrix[2],
+        transform.matrix[3],  transform.matrix[4],  transform.matrix[5],
+        transform.matrix[6],  transform.matrix[7],  transform.matrix[8],
+        transform.matrix[9],  transform.matrix[10], transform.matrix[11],
+        transform.matrix[12], transform.matrix[13], transform.matrix[14],
+        transform.matrix[15]};
+    Math::vec3 t, r, s;
+    Math::decompose(transform_mat, &t, &r, &s);
+    GFX::TransformComponent* transform_component =
+        gfxscene.getGameObject(obj_node)
+            ->getEntity()
+            .getComponent<GFX::TransformComponent>();
+    transform_component->translation = t;
+    transform_component->scale = s;
+    transform_component->eulerAngles = r / Math::float_Pi * 180;
+    if (node->anonymousChildren().size() > 0) {
+      TPM_NAMESPACE::Object* mat_node = node->anonymousChildren()[0].get();
+      Core::GUID mat = loadMaterial(mat_node, env);
+      renderer->materials.emplace_back(
+          Core::ResourceManager::get()->getResource<GFX::Material>(mat));
+    }
+  }
+  if (node->pluginType() == "rectangle") {
+    std::string engine_path =
+        Core::RuntimeConfig::get()->string_property("engine_path");
+    std::string obj_path =
+        engine_path + "\\" + "Binaries\\Runtime\\meshes\\rectangle.obj";
+    GameObjectHandle obj_node = SceneNodeLoader_obj::loadSceneNode(
+        obj_path, gfxscene, gfxNode, meshConfig);
+    GFX::MeshRenderer* renderer = gfxscene.getGameObject(obj_node)
+                                      ->getEntity()
+                                      .addComponent<GFX::MeshRenderer>();
+    TPM_NAMESPACE::Transform transform =
+        node->property("to_world").getTransform();
+    Math::mat4 transform_mat = {
+        transform.matrix[0],  transform.matrix[1],  transform.matrix[2],
+        transform.matrix[3],  transform.matrix[4],  transform.matrix[5],
+        transform.matrix[6],  transform.matrix[7],  transform.matrix[8],
+        transform.matrix[9],  transform.matrix[10], transform.matrix[11],
+        transform.matrix[12], transform.matrix[13], transform.matrix[14],
+        transform.matrix[15]};
+    Math::vec3 t, r, s;
+    Math::decompose(transform_mat, &t, &r, &s);
+    GFX::TransformComponent* transform_component =
+        gfxscene.getGameObject(obj_node)
+            ->getEntity()
+            .getComponent<GFX::TransformComponent>();
+    transform_component->translation = t;
+    transform_component->scale = s;
+    transform_component->eulerAngles = r / Math::float_Pi * 180;
+    if (node->anonymousChildren().size() > 0) {
+      TPM_NAMESPACE::Object* mat_node = node->anonymousChildren()[0].get();
+      Core::GUID mat = loadMaterial(mat_node, env);
+      renderer->materials.emplace_back(
+          Core::ResourceManager::get()->getResource<GFX::Material>(mat));
+    }
+  }
+  if (node->pluginType() == "sphere") {
+    std::string engine_path = Core::RuntimeConfig::get()->string_property("engine_path");
+    std::string obj_path = engine_path + "\\" + "Binaries\\Runtime\\meshes\\sphere.obj";
+    GameObjectHandle obj_node = SceneNodeLoader_obj::loadSceneNode(
+        obj_path, gfxscene, gfxNode, meshConfig);
+    GFX::MeshRenderer* renderer = gfxscene.getGameObject(obj_node)
+                                      ->getEntity()
+                                      .addComponent<GFX::MeshRenderer>();
+    TPM_NAMESPACE::Transform transform =
+        node->property("to_world").getTransform();
+    float radius = node->property("radius").getNumber();
+    TPM_NAMESPACE::Vector center = node->property("center").getVector();
+    GFX::TransformComponent* transform_component =
+        gfxscene.getGameObject(obj_node)
+            ->getEntity()
+            .getComponent<GFX::TransformComponent>();
+    transform_component->translation = Math::vec3(center.x, center.y, center.z);
+    transform_component->scale = Math::vec3(radius);
+    transform_component->eulerAngles = Math::vec3(0);
+
+    if (node->anonymousChildren().size() > 0) {
+      Core::GUID mat = Core::INVALID_GUID;
+      Math::vec3 radiance = Math::vec3(0);
+      for (auto& subnode : node->anonymousChildren()) {
+        if (subnode->type() == TPM_NAMESPACE::OT_BSDF) {
+            // material
+          TPM_NAMESPACE::Object* mat_node = subnode.get();
+          mat = loadMaterial(mat_node, env);
+        } else if (subnode->type() == TPM_NAMESPACE::OT_EMITTER) {
+          if (subnode->pluginType() == "area") {
+            TPM_NAMESPACE::Color rgb = subnode->property("radiance").getColor();
+            radiance = Math::vec3(rgb.r, rgb.g, rgb.b);
+          }
+        }
+      }
+      if (mat != Core::INVALID_GUID) {
+        if (radiance.x != 0 || radiance.y != 0 || radiance.z != 0) {
+          mat = CloneMaterial(mat);
+        }
+        GFX::Material* mat_ptr =
+            Core::ResourceManager::get()->getResource<GFX::Material>(mat);
+        mat_ptr->emissiveColor = radiance;
+        mat_ptr->serialize();
+        renderer->materials.emplace_back(mat_ptr);
+      }
     }
   }
   else {

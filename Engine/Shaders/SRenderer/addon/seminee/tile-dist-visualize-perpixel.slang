@@ -73,7 +73,7 @@ void RaygenMain() {
     RandomSamplerState RNG = InitRandomSampler(pixel, pConst.sample_batch);
 
     const float2 uv = (float2(pixel) + 0.5f) / float2(resolution);
-    const float3 dir = CylindricalToUnitVector(UniformToCylindrical(uv));
+    const float3 dir = CylindricalToUnitVector(UnitToCylindrical(uv));
 
     // Trace primary ray to target pixel
     Ray primaryRay = generateRay(

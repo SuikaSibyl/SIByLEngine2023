@@ -36,6 +36,8 @@ struct GIReservoir {
     uint M;
     // Number of frames the chosen sample has survived.
     uint age;
+    // RNG state for the reservoir
+    uint32_t RNGState;
 };
 
 struct PackedGIReservoir {
@@ -44,7 +46,7 @@ struct PackedGIReservoir {
     uint32_t packed_radiance;       // Stored as 32bit LogLUV format.
     float weight;
     uint32_t packed_normal; // Stored as 2x 16-bit snorms in the octahedral mapping
-    float unused;
+    uint32_t RNGState;      // RNG state for the reservoir
 };
 
 // Encoding helper constants for RTXDI_PackedGIReservoir
@@ -72,7 +74,7 @@ PackedGIReservoir PackGIReservoir(in_ref(GIReservoir) reservoir, const uint misc
         | (min(reservoir.M, RTXDI_PackedGIReservoir_MaxM) << RTXDI_PackedGIReservoir_MShift);
     data.weight = reservoir.weightSum;
     data.packed_radiance = PackRGBE(reservoir.radiance);
-    data.unused = 0;
+    data.RNGState = reservoir.RNGState;
     return data;
 }
 
@@ -84,6 +86,7 @@ GIReservoir UnpackGIReservoir(PackedGIReservoir data, out uint miscData) {
     res.normal = DecodeNormalizedVectorFromSnorm2x16(data.packed_normal);
     res.radiance = UnpackRGBE(data.packed_radiance);
     res.weightSum = data.weight;
+    res.RNGState = data.RNGState;
     res.M = (data.packed_miscData_age_M >> RTXDI_PackedGIReservoir_MShift) & RTXDI_PackedGIReservoir_MaxM;
     res.age = (data.packed_miscData_age_M >> RTXDI_PackedGIReservoir_AgeShift) & RTXDI_PackedGIReservoir_MaxAge;
     miscData = data.packed_miscData_age_M & RTXDI_PackedGIReservoir_MiscDataMask;
@@ -103,6 +106,7 @@ GIReservoir EmptyGIReservoir() {
     s.normal = float3(0.0, 0.0, 0.0);
     s.radiance = float3(0.0, 0.0, 0.0);
     s.weightSum = 0.0; s.M = 0; s.age = 0;
+    s.RNGState = 0;
     return s;
 }
 
@@ -113,7 +117,8 @@ GIReservoir MakeGIReservoir(
     in_ref(float3) samplePos,
     in_ref(float3) sampleNormal,
     in_ref(float3) sampleRadiance,
-    in_ref(float) samplePdf
+    in_ref(float) samplePdf,
+    in_ref(uint) RNGState
 ) {
     GIReservoir reservoir;
     reservoir.position = samplePos;
@@ -122,6 +127,7 @@ GIReservoir MakeGIReservoir(
     reservoir.weightSum = samplePdf > 0.0 ? 1.0 / samplePdf : 0.0;
     reservoir.M = 1;
     reservoir.age = 0;
+    reservoir.RNGState = RNGState;
     return reservoir;
 }
 

@@ -18,7 +18,7 @@ RESOURCE_TYPE<uint>  t_GBufferGeoNormals;
 RESOURCE_TYPE<uint>  t_GBufferDiffuseAlbedo;
 RESOURCE_TYPE<uint>  t_GBufferSpecularRough;
 RESOURCE_TYPE<float4> t_MotionVectors;
-RESOURCE_TYPE<float4> t_MaterialInfo;
+RESOURCE_TYPE<float16_t4> t_MaterialInfo;
 
 ShadingSurface GetGBufferSurface(
     in_ref(int2) pixelPosition,
@@ -28,7 +28,7 @@ ShadingSurface GetGBufferSurface(
     Texture2D<uint> geoNormalsTexture,
     Texture2D<uint> diffuseAlbedoTexture,
     Texture2D<uint> specularRoughTexture,
-    Texture2D<float4> materialInfo
+    Texture2D<float16_t4> materialInfo
 ) {
     ShadingSurface surface = EmptyShadingSurface();
     // outside gbuffer
@@ -49,7 +49,9 @@ ShadingSurface GetGBufferSurface(
     surface.worldPos = position.xyz;
     surface.viewDir = normalize(cameraData.posW.xyz - surface.worldPos);
     surface.transmissionFactor = materialInfo[pixelPosition].w;
-    surface.bsdfID = uint(materialInfo[pixelPosition].z);
+    const uint packed_z = asuint16(materialInfo[pixelPosition].z);
+    surface.faceForward = (packed_z & 0x8000) != 0;
+    surface.bsdfID = packed_z & 0x7FFF;
     return surface;
 }
 
@@ -61,7 +63,7 @@ ShadingSurface GetGBufferSurface(
     RWTexture2D<uint> geoNormalsTexture,
     RWTexture2D<uint> diffuseAlbedoTexture,
     RWTexture2D<uint> specularRoughTexture,
-    RWTexture2D<float4> materialInfo)
+    RWTexture2D<float16_t4> materialInfo)
 {
     ShadingSurface surface = EmptyShadingSurface();
     // outside gbuffer
@@ -82,7 +84,9 @@ ShadingSurface GetGBufferSurface(
     surface.worldPos = position.xyz;
     surface.viewDir = normalize(cameraData.posW.xyz - surface.worldPos);
     surface.transmissionFactor = materialInfo[pixelPosition].w;
-    surface.bsdfID = uint(materialInfo[pixelPosition].z);
+    const uint packed_z = asuint(materialInfo[pixelPosition].z);
+    surface.faceForward = (packed_z & 0x8000) != 0;
+    surface.bsdfID = packed_z & 0x7FFF;
     return surface;
 }
 

@@ -1,9 +1,10 @@
-#include "seminee_interface.hlsli"
 #include "../../include/common/space_filling_curve.hlsli"
+#include "sst-interface.hlsli"
 
-const RWStructuredBuffer<uint64_t>  u_Codes;
 RWStructuredBuffer<TreeNode> u_Nodes;
-RWStructuredBuffer<TreeConstrIndirectArgs> u_ConstrIndirectArgs;
+
+const StructuredBuffer<uint64_t>  u_Codes;
+const StructuredBuffer<TreeConstrIndirectArgs> u_ConstrIndirectArgs;
 
 [shader("compute")]
 [numthreads(256, 1, 1)]

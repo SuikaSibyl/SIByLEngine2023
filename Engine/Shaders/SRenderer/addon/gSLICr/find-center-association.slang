@@ -79,25 +79,43 @@ void Pack(in_ref(FuzzyVec) vec, int2 idx_img) {
 }
 
 float2 compute_slic_distance(
-    in_ref(float4) pix,
-    int x, int y,
-    in_ref(spixel_info) center_info,
+    in_ref(float3) pix_pos, in_ref(float3) pix_normal, in_ref(float2) pix_xy,
+    in_ref(float3) sp_pos, in_ref(float3) sp_normal, in_ref(float2) sp_xy,
     float weight,
     float normalizer_xy,
     float normalizer_color
 ) {
-    const float3 pix_normal = Unorm32OctahedronToUnitVector(asuint(pix.w));
-    const float3 sp_normal = Unorm32OctahedronToUnitVector(asuint(center_info.color_info.w));
     float dot_normal = dot(pix_normal, sp_normal);
-
-    const float3 diff_color = pix.xyz - center_info.color_info.xyz;
+    const float3 diff_color = pix_pos - sp_pos;
     float dcolor = dot(diff_color, diff_color);
-    const float2 diff_xy = float2(x, y) - center_info.center;
+    const float2 diff_xy = pix_xy - sp_xy;
     const float dxy = dot(diff_xy, diff_xy);
     const float retval = dcolor * normalizer_color + weight * dxy * normalizer_xy;
-    const float sqrt_retval = sqrt(retval);
-
+    const float sqrt_retval = retval;
     return float2((dot_normal > 0.01) ? sqrt_retval : 1000000, sqrt_retval);
+}
+
+groupshared float3 spixel_pos[3 * 3];
+groupshared float3 spixel_normals[3 * 3];
+groupshared float2 spixel_xy[3 * 3];
+groupshared int spixel_ids[3 * 3];
+
+int offset2idx(int2 offset) {
+    return (offset.y + 1) * 3 + offset.x + 1;
+}
+
+void preload_mem(
+    int n,
+    out float3 spixel_pos_preload,
+    out float3 spixel_normal_preload,
+    out float2 spixel_xy_preload,
+) {
+    const int i = n / 3 - 1;
+    const int j = n % 3 - 1;
+    const int offset = offset2idx(int2(j, i));
+    spixel_pos_preload = spixel_pos[offset];
+    spixel_normal_preload = spixel_normals[offset];
+    spixel_xy_preload = spixel_xy[offset];
 }
 
 void find_center_association(
@@ -110,13 +128,32 @@ void find_center_association(
     float weight,
     int x, int y,
     float max_xy_dist,
-    float max_color_dist
+    float max_color_dist,
+    int gid
 ) {
-    int2 idx_img = int2(x, y);
-
-    int ctr_x = x / spixel_size;
-    int ctr_y = y / spixel_size;
-
+    // idx_imag is the pixel coordinate
+    const int2 idx_img = int2(x, y);
+    // ctr x/y should be similar for the whole group
+    const int ctr_x = x / spixel_size;
+    const int ctr_y = y / spixel_size;
+    if (gid < 9) {
+        const int2 offset = int2(gid % 3 - 1, gid / 3 - 1);
+        const int idx = offset2idx(offset);
+        int ctr_x_check = ctr_x + offset.x;
+        int ctr_y_check = ctr_y + offset.y;
+        if (ctr_x_check >= 0 && ctr_y_check >= 0 && ctr_x_check < map_size.x && ctr_y_check < map_size.y) {
+            int ctr_idx = ctr_y_check * map_size.x + ctr_x_check;
+            spixel_info center_info = in_spixel_map[ctr_idx];
+            spixel_pos[idx] = center_info.color_info.xyz;
+            spixel_normals[idx] = Unorm32OctahedronToUnitVector(asuint(center_info.color_info.w));
+            spixel_xy[idx] = center_info.center;
+            spixel_ids[idx] = center_info.id;
+        }
+    }
+    // load the pixel color
+    const float4 pix_val = inimg[idx_img];
+    const float3 pix_normal = Unorm32OctahedronToUnitVector(asuint(pix_val.w));
+    
     int minidx = -1;
     float dist = 999999.9999f;
 
@@ -128,45 +165,82 @@ void find_center_association(
     fuzzy_vec.size = 0;
     fuzzy_vec_fallback.size = 0;
 
+    GroupMemoryBarrierWithGroupSync();
+
     // search 3x3 neighborhood
     // TODO :: use shared memory to speed up
-    for (int i = -1; i <= 1; i++)
-        for (int j = -1; j <= 1; j++) {
-            int ctr_x_check = ctr_x + j;
-            int ctr_y_check = ctr_y + i;
-            if (ctr_x_check >= 0 && ctr_y_check >= 0 && ctr_x_check < map_size.x && ctr_y_check < map_size.y) {
-                int ctr_idx = ctr_y_check * map_size.x + ctr_x_check;
-                float2 cdist = compute_slic_distance(inimg[idx_img], x, y, in_spixel_map[ctr_idx], weight, max_xy_dist, max_color_dist);
-                if (cdist.x < dist) {
-                    dist = cdist.x;
-                    minidx = in_spixel_map[ctr_idx].id;
-                }
-                if(cdist.y < dist_fallback) {
-                    dist_fallback = cdist.y;
-                    minidx_fallback = in_spixel_map[ctr_idx].id;
-                }
-                fuzzy_vec.insert(ctr_idx, cdist.x);
-                fuzzy_vec_fallback.insert(ctr_idx, cdist.y);
+    float3 spixel_pos_neighbor;
+    float3 spixel_normal_neighbor;
+    float2 spixel_xy_neighbor;
+    preload_mem(0, spixel_pos_neighbor, spixel_normal_neighbor, spixel_xy_neighbor);
+    
+    // preload
+    float3 spixel_pos_preload;
+    float3 spixel_normal_preload;
+    float2 spixel_xy_preload;
+
+    [unroll]
+    for (int n = 0; n < 9; ++n) {
+        const int i = n / 3 - 1;
+        const int j = n % 3 - 1;
+        int ctr_x_check = ctr_x + j;
+        int ctr_y_check = ctr_y + i;
+
+        if (n < 8)
+            preload_mem(n + 1, spixel_pos_preload, spixel_normal_preload, spixel_xy_preload);
+
+        const int offset = offset2idx(int2(j, i));
+        int spixel_id = spixel_ids[offset];
+
+        if (ctr_x_check >= 0 && ctr_y_check >= 0 && ctr_x_check < map_size.x && ctr_y_check < map_size.y) {
+            int ctr_idx = ctr_y_check * map_size.x + ctr_x_check;
+            float2 cdist = compute_slic_distance(
+                pix_val.xyz, pix_normal, float2(x, y),
+                spixel_pos_neighbor, spixel_normal_neighbor, spixel_xy_neighbor,
+                weight, max_xy_dist, max_color_dist);
+            if (cdist.x < dist) {
+                dist = cdist.x;
+                minidx = spixel_id;
             }
+            if(cdist.y < dist_fallback) {
+                dist_fallback = cdist.y;
+                minidx_fallback = spixel_id;
+            }
+            fuzzy_vec.insert(ctr_idx, cdist.x);
+            fuzzy_vec_fallback.insert(ctr_idx, cdist.y);
         }
-    if (minidx >= 0) {
-        out_idx_img[idx_img] = minidx;
-        Pack(fuzzy_vec, idx_img);
+
+        spixel_pos_neighbor = spixel_pos_preload;
+        spixel_normal_neighbor = spixel_normal_preload;
+        spixel_xy_neighbor = spixel_xy_preload;
     }
-    else {
-        out_idx_img[idx_img] = minidx_fallback;
-        if (minidx_fallback == -1)
-            fuzzy_vec_fallback.size = 0;
-        Pack(fuzzy_vec_fallback, idx_img);
-    }
+
+    bool is_valid = (minidx >= 0);
+    out_idx_img[idx_img] = is_valid ? minidx : minidx_fallback;
+    if (minidx_fallback == -1)
+        fuzzy_vec_fallback.size = 0;
+    Pack(is_valid ? fuzzy_vec : fuzzy_vec_fallback, idx_img);
+    // if (minidx >= 0) {
+    //     out_idx_img[idx_img] = minidx;
+    //     Pack(fuzzy_vec, idx_img);
+    // }
+    // else {
+    //     out_idx_img[idx_img] = minidx_fallback;
+    //     if (minidx_fallback == -1)
+    //         fuzzy_vec_fallback.size = 0;
+    //     Pack(fuzzy_vec_fallback, idx_img);
+    // }
 }
 
 [shader("compute")]
 [numthreads(gSLICr_BLOCK_DIM, gSLICr_BLOCK_DIM, 1)]
-void ComputeMain(int3 DTid: SV_DispatchThreadID) {
+void ComputeMain(
+    int3 DTid: SV_DispatchThreadID,
+    int gid: SV_GroupIndex
+) {
     if (any(DTid.xy >= img_size)) return;
     find_center_association(
         u_inImg, u_inSPixel, u_outIdxImg, map_size,
         img_size, spixel_size, weight, DTid.x, DTid.y,
-        max_xy_dist, max_color_dist);
+        max_xy_dist, max_color_dist, gid);
 }

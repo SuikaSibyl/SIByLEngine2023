@@ -37,8 +37,12 @@ struct GeometryHit {
 static const uint GeometryHitFlag_HitShift = 0x00;
 static const uint GeometryHitFlag_HitMask = 0x01;
 
-static const uint GeometryTypeFlag_HitShift = 0x01;
+static const uint GeometryFlag_FaceForwardShift = 0x01;
+static const uint GeometryFlag_FaceForwardMask = 0x01;
+
+static const uint GeometryTypeFlag_HitShift = 0x02;
 static const uint GeometryTypeFlag_HitMask = 0xff;
+
 
 bool HasHit(in_ref(GeometryHit) hit) {
     return ((hit.flags >> GeometryHitFlag_HitShift) & GeometryHitFlag_HitMask) != 0;
@@ -46,6 +50,14 @@ bool HasHit(in_ref(GeometryHit) hit) {
 void SetHit(inout_ref(GeometryHit) hit, bool value) {
     hit.flags = (hit.flags & ~(GeometryHitFlag_HitMask << GeometryHitFlag_HitShift)) 
             | (value ? 1 : 0) << GeometryHitFlag_HitShift;
+}
+
+bool IsFaceForward(in_ref(GeometryHit) hit) {
+    return ((hit.flags >> GeometryFlag_FaceForwardShift) & GeometryFlag_FaceForwardShift) != 0;
+}
+void SetFaceForward(inout_ref(GeometryHit) hit, bool value) {
+    hit.flags = (hit.flags & ~(GeometryFlag_FaceForwardMask << GeometryFlag_FaceForwardShift)) 
+            | (value ? 1 : 0) << GeometryFlag_FaceForwardShift;
 }
 
 /** Primary Payload Struct */
@@ -160,6 +172,9 @@ struct Attributes {
     float2 uv;
 };
 
+// ------------------------------------------------------------
+// Query structures for shape sampling
+// ------------------------------------------------------------
 // Payload structure for shape sample callable.
 struct ShapeSampleQuery {
     // input
@@ -167,10 +182,12 @@ struct ShapeSampleQuery {
     uint geometry_id;
     float2 uv; // for selecting a point on a 2D surface
     float w;   // for selecting triangles
+    uint primitive_id;
     uint2 offset;
     uint2 size;
     // output
     float3 position;
+    float pdf;
     float3 normal;
 };
 
@@ -184,47 +201,91 @@ struct ShapeSamplePdfQuery {
     float pdf;
 };
 
-struct BSDFEvalQuery {
-    // input
-    float3 dir_in;
-    uint mat_id;
-    float3 dir_out;
-    uint transport_mode; // 0: path tracing // 1: light tracing
-    float3 geometric_normal;
-    float3x3 frame;
-    float2 uv;
-    float hitFrontface;
-    // output
-    float3 bsdf;
+struct SplitShading {
+    float3 diffuse;
+    float3 specular;
 };
 
+SplitShading add(in_ref(SplitShading) a, in_ref(SplitShading) b) {
+    SplitShading result;
+    result.diffuse = a.diffuse + b.diffuse;
+    result.specular = a.specular + b.specular;
+    return result;
+}
+
+// ------------------------------------------------------------
+// Common structures for various kind of queries
+// ------------------------------------------------------------
+/** Enum for transport mode. */
 static const uint enum_transport_radiance = 0;
 static const uint enum_transport_importance = 1;
+/** QueryBitfield describes some misc info. */
+struct QueryBitfield {
+    uint transport_mode; // transport mode
+    bool face_forward;   // true: hit front face // false: hit back face
+    bool split_query;    // true: split the demodulate diffuse and specular // false: combined BSDF
+};
+/** Pack the query bitfield into a single uint. */
+uint PackQueryBitfield(in_ref(QueryBitfield) bitfield) {
+    uint flag = 0;
+    flag |= bitfield.transport_mode << 0;
+    flag |= bitfield.face_forward << 1;
+    flag |= bitfield.split_query << 2;
+    return flag;
+}
+/** Unpack the packed flag into a query bitfield. */
+QueryBitfield UnpackQueryBitfield(in_ref(uint) flag) {
+    QueryBitfield bitfield;
+    bitfield.transport_mode = (flag >> 0) & 0x1;
+    bitfield.face_forward = ((flag >> 1) & 0x1) != 0;
+    bitfield.split_query = ((flag >> 2) & 0x1) != 0;
+    return bitfield;
+}
 
+// ------------------------------------------------------------
+// Query structures for bsdf evaluation and sampling
+// ------------------------------------------------------------
+// Payload structure for evaluating the bsdf.
+struct BSDFEvalQuery {
+    // input
+    float3 dir_in; // ----------- 4 floats
+    uint mat_id;
+    float3 dir_out; // ---------- 4 floats
+    uint misc_flag;
+    float3 geometric_normal; // - 4 floats
+    float2 uv;
+    // output
+    float3 bsdf;
+    // shading frame - 3x3 floats
+    float3x3 frame; // shading frame
+};
+// Payload structure for sampling the bsdf.
 struct BSDFSampleQuery {
     // input
-    float3 dir_in;
+    float3 dir_in; // ----------- 4 floats
     uint mat_id;
-    float3 geometric_normal;
+    float3 geometric_normal; // - 4 floats
     float rnd_w;
-    float2 uv;
+    float2 uv; // --------------- 4 floats
     float2 rnd_uv;
-    // output - 4 floats
-    float3 dir_out;
+    // output
+    float3 dir_out; // ---------- 4 floats
     float pdf_out;
-    // frame - 3x3 floats
-    float3x3 frame;
+    // shading frame - 3x3 floats
+    float3x3 frame; // shading frame
+    uint misc_flag; // misc flag
 };
 
 struct BSDFSamplePDFQuery {
     // input
-    float3 dir_in;
+    float3 dir_in; // ----------- 4 floats
     uint mat_id;
-    float3 dir_out;
+    float3 dir_out; // ---------- 4 floats
+    uint misc_flag;
+    float3 geometric_normal; // - 4 floats
     float packedInfo0;
-    float3 geometric_normal;
+    float2 uv; // --------------- 4 floats
     float packedInfo1;
-    float2 uv;
     // output
     float pdf;
     float3x3 frame;
@@ -361,8 +422,11 @@ float3 EvalBsdf(
     cBSDFEvalQuery.geometric_normal = hit.geometryNormal;
     cBSDFEvalQuery.uv = hit.texcoord;
     cBSDFEvalQuery.frame = createONB(hit.shadingNormal);
-    cBSDFEvalQuery.hitFrontface = 1.f; //
-    cBSDFEvalQuery.transport_mode = transport_mode;
+    QueryBitfield flag;
+    flag.transport_mode = transport_mode;
+    flag.face_forward = IsFaceForward(hit);
+    flag.split_query = false;
+    cBSDFEvalQuery.misc_flag = PackQueryBitfield(flag);
     CallShader(BSDF_EVAL_IDX(bsdf_type), cBSDFEvalQuery);
     return cBSDFEvalQuery.bsdf;
 }
@@ -388,7 +452,11 @@ float3 EvalBsdf(
     cBSDFEvalQuery.mat_id = 0xFFFFFFFF;
     cBSDFEvalQuery.geometric_normal = surface.geometryNormal;
     cBSDFEvalQuery.frame = createONB(surface.shadingNormal);
-    cBSDFEvalQuery.transport_mode = transport_mode;
+    QueryBitfield flag;
+    flag.transport_mode = transport_mode;
+    flag.face_forward = surface.faceForward;
+    flag.split_query = false;
+    cBSDFEvalQuery.misc_flag = PackQueryBitfield(flag);
     // pack shading surface data into query struct
     // we can pack up to 6 floats into the query struct here:
     // uv (2) bsdf (4)
@@ -401,6 +469,39 @@ float3 EvalBsdf(
     return cBSDFEvalQuery.bsdf;
 }
 
+SplitShading EvalBsdfSplit(
+    in_ref(ShadingSurface) surface,
+    in_ref(float3) dir_in,
+    in_ref(float3) dir_out,
+    in const uint transport_mode = 0,
+) {
+    BSDFEvalQuery cBSDFEvalQuery;
+    uint bsdf_type = surface.bsdfID;
+    cBSDFEvalQuery.dir_in = dir_in;
+    cBSDFEvalQuery.dir_out = dir_out;
+    cBSDFEvalQuery.mat_id = 0xFFFFFFFF;
+    cBSDFEvalQuery.geometric_normal = surface.geometryNormal;
+    cBSDFEvalQuery.frame = createONB(surface.shadingNormal);
+    QueryBitfield flag;
+    flag.transport_mode = transport_mode;
+    flag.face_forward = surface.faceForward;
+    flag.split_query = true;
+    cBSDFEvalQuery.misc_flag = PackQueryBitfield(flag);
+    // pack shading surface data into query struct
+    // we can pack up to 6 floats into the query struct here:
+    // uv (2) bsdf (4)
+    cBSDFEvalQuery.uv.x = surface.roughness;                          // roughness
+    cBSDFEvalQuery.uv.y = asfloat(PackRGBE(surface.specularF0));      // specularF0
+    cBSDFEvalQuery.bsdf.x = asfloat(PackRGBE(surface.diffuseAlbedo)); // diffuseAlbedo
+    cBSDFEvalQuery.bsdf.y = surface.transmissionFactor;               // eta
+    // call shader
+    CallShader(BSDF_EVAL_IDX(bsdf_type), cBSDFEvalQuery);
+    // unpack the result
+    SplitShading result;
+    result.diffuse = cBSDFEvalQuery.bsdf;
+    result.specular = cBSDFEvalQuery.dir_out;
+    return result;
+}
 /**
  * Sample a direction from the BSDF.
  * @param hit The geometry hit.
@@ -425,6 +526,10 @@ float3 SampleBsdf(
     cBSDFSampleQuery.frame = createONB(hit.shadingNormal);
     cBSDFSampleQuery.rnd_uv = rand.xy;
     cBSDFSampleQuery.rnd_w = rand.z;
+    QueryBitfield flag;
+    flag.transport_mode = 0;
+    flag.face_forward = IsFaceForward(hit);
+    cBSDFSampleQuery.misc_flag = PackQueryBitfield(flag);
     CallShader(BSDF_SAMPLE_IDX(bsdf_type), cBSDFSampleQuery);
     pdf_out = cBSDFSampleQuery.pdf_out;
     return cBSDFSampleQuery.dir_out;
@@ -458,7 +563,11 @@ float3 SampleBsdf(
     cBSDFSampleQuery.uv.x = surface.roughness; // roughness
     cBSDFSampleQuery.uv.y = asfloat(PackRGBE(surface.specularF0)); // specularF0
     cBSDFSampleQuery.dir_out.x = asfloat(PackRGBE(surface.diffuseAlbedo)); // diffuseAlbedo
-    cBSDFSampleQuery.dir_out.y = surface.transmissionFactor; // eta
+    cBSDFSampleQuery.dir_out.y = surface.transmissionFactor;               // eta
+    QueryBitfield flag;
+    flag.transport_mode = 0;
+    flag.face_forward = surface.faceForward;
+    cBSDFSampleQuery.misc_flag = PackQueryBitfield(flag);
     // call shader
     CallShader(BSDF_SAMPLE_IDX(bsdf_type), cBSDFSampleQuery);
     pdf_out = cBSDFSampleQuery.pdf_out;
@@ -486,6 +595,10 @@ float PdfBsdfSample(
     cBSDFSamplePDFQuery.geometric_normal = hit.geometryNormal;
     cBSDFSamplePDFQuery.uv = hit.texcoord;
     cBSDFSamplePDFQuery.frame = createONB(hit.shadingNormal);
+    QueryBitfield flag;
+    flag.transport_mode = 0;
+    flag.face_forward = IsFaceForward(hit);
+    cBSDFSamplePDFQuery.misc_flag = PackQueryBitfield(flag);
     CallShader(BSDF_PDF_IDX(bsdf_type), cBSDFSamplePDFQuery);
     return cBSDFSamplePDFQuery.pdf;
 }
@@ -515,7 +628,11 @@ float PdfBsdfSample(
     cBSDFSamplePDFQuery.uv.x = surface.roughness;                             // roughness
     cBSDFSamplePDFQuery.uv.y = asfloat(PackRGBE(surface.specularF0));         // specularF0
     cBSDFSamplePDFQuery.packedInfo0 = asfloat(PackRGBE(surface.diffuseAlbedo)); // diffuseAlbedo
-    cBSDFSamplePDFQuery.packedInfo1 = surface.transmissionFactor;               // eta
+    cBSDFSamplePDFQuery.packedInfo1 = surface.transmissionFactor; // eta
+    QueryBitfield flag;
+    flag.transport_mode = 0;
+    flag.face_forward = surface.faceForward;
+    cBSDFSamplePDFQuery.misc_flag = PackQueryBitfield(flag);
     // call shader
     CallShader(BSDF_PDF_IDX(bsdf_type), cBSDFSamplePDFQuery);
     return cBSDFSamplePDFQuery.pdf;

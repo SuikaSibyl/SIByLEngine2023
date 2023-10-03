@@ -103,6 +103,16 @@ auto GradientReprojection::reflect() noexcept -> RDG::PassReflection {
       .consume(RDG::TextureInfo::ConsumeEntry{
               RDG::TextureInfo::ConsumeType::StorageBinding}
               .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addOutput("Debug")
+      .isTexture()
+      .withSize(Math::vec3(1.f))
+      .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(
+          RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+
   return reflector;
 }
 
@@ -120,6 +130,7 @@ auto GradientReprojection::execute(RDG::RenderContext* context,
   GFX::Texture* hf_prev = renderData.getTexture("HFPrev");
   GFX::Texture* spec_prev = renderData.getTexture("SpecPrev");
   GFX::Texture* vbuffer_prev = renderData.getTexture("VBufferPrev");
+  GFX::Texture* debug = renderData.getTexture("Debug");
 
   // Bind common for RT
   std::vector<RHI::BindGroupEntry>* set_0_entries =
@@ -142,6 +153,7 @@ auto GradientReprojection::execute(RDG::RenderContext* context,
           {"u_RNGSeed", RHI::BindingResource{rand->getUAV(0, 0, 1)}},
           {"u_RNGSeed_prev", RHI::BindingResource{rand_prev->getUAV(0, 0, 1)}},
           {"u_IsCorrelated", RHI::BindingResource{correlate->getUAV(0, 0, 1)}},
+          {"u_Debug", RHI::BindingResource{debug->getUAV(0, 0, 1)}},
       });
 
   struct PushConstant {
@@ -569,7 +581,7 @@ auto AtrousPass::execute(RDG::RenderContext* context,
   } pConst = {
     {1280, 720},
     iteration,
-    renderData.getUInt("AccumIdx")
+    renderData.getUInt("FrameIdx")
   };
   
   RHI::ComputePassEncoder* encoder = beginPass(context);

@@ -10,7 +10,7 @@ RWTexture2D<uint>   u_GBufferDiffuseAlbedo;
 RWTexture2D<uint>   u_GBufferSpecularRough;
 RWTexture2D<float4> u_Emissive;
 RWTexture2D<float4> u_MotionVectors;
-RWTexture2D<float4> u_Material;
+RWTexture2D<float16_t4> u_Material;
 
 [shader("compute")]
 [numthreads(16, 16, 1)]
@@ -18,7 +18,7 @@ void ComputeMain(int3 DTid: SV_DispatchThreadID) {
     const int2 pixel = DTid.xy;
     const int2 resolution = getViewportSize(globalUniform.cameraData);
     if (any(pixel >= resolution)) return;
-
+    
     // output data
     float viewDepth = k_background_depth;
     float3 motion = float3(0);
@@ -31,7 +31,8 @@ void ComputeMain(int3 DTid: SV_DispatchThreadID) {
     float roughness = 1.f;
     float viewDistance = 0;
     float fwidth_depth = 0;
-    float4 materialInfo = float4(0);
+    float16_t4 materialInfo = float16_t4(0);
+    bool faceforward = true;
     
     const Ray primaryRay = generateRay(
         pixel,
@@ -72,9 +73,6 @@ void ComputeMain(int3 DTid: SV_DispatchThreadID) {
         vertexUVs[1] = fetchVertexTexCoord(index[1] + int(geometry.vertexOffset));
         vertexUVs[2] = fetchVertexTexCoord(index[2] + int(geometry.vertexOffset));
         float2 uv = interpolate(vertexUVs, bary);
-        materialInfo.xy = uv;
-        materialInfo.z = material.bsdfID;
-        materialInfo.w = material.transmissionFactor;
 
         float3 objectSpaceFlatNormal = normalize(cross(
             vertexPositions[1] - vertexPositions[0],
@@ -82,9 +80,15 @@ void ComputeMain(int3 DTid: SV_DispatchThreadID) {
 
         float4x4 o2wn = ObjectToWorldNormal(geometry);
         flatNormal = normalize(mul(float4(objectSpaceFlatNormal, 0.0), o2wn).xyz);
-        bool faceforward = dot(flatNormal, viewDirection) < 0;
+        faceforward = dot(flatNormal, viewDirection) < 0;
         flatNormal = faceforward ? flatNormal : -flatNormal;
 
+        uint16_t packed_z = uint16_t(material.bsdfID) & 0xFF;
+        if (faceforward) packed_z |= 0x8000;
+        materialInfo.xy = float16_t2(uv);
+        materialInfo.z = asfloat16(packed_z);
+        materialInfo.w = float16_t(material.transmissionFactor);
+        
         float3 normals[3];
         normals[0] = fetchVertexNormal(index[0] + int(geometry.vertexOffset));
         normals[1] = fetchVertexNormal(index[1] + int(geometry.vertexOffset));
@@ -101,7 +105,9 @@ void ComputeMain(int3 DTid: SV_DispatchThreadID) {
         float4 tangentWS = float4(normalize(mul(float4(tangentOS, 0), o2w).xyz), geometry.oddNegativeScaling);
 
         // Grab material infomation
-        diffuseAlbedo = textures[material.baseOrDiffuseTextureIndex].Sample(uv).rgb;
+        const float3 texAlbedo = textures[material.baseOrDiffuseTextureIndex]
+                                     .Sample(uv) .rgb;
+        diffuseAlbedo = material.baseOrDiffuseColor * texAlbedo;
 
         motion = getMotionVector(globalUniform.cameraData,
                                  prevGlobalUniform.cameraData,
@@ -130,5 +136,5 @@ void ComputeMain(int3 DTid: SV_DispatchThreadID) {
     u_GBufferGeoNormals[pixel] = UnitVectorToUnorm32Octahedron(flatNormal);
     u_Emissive[pixel] = float4(emission, viewDistance);
     u_MotionVectors[pixel] = float4(motion, fwidth_depth);
-    u_Material[pixel] = float4(materialInfo);
+    u_Material[pixel] = materialInfo;
 }

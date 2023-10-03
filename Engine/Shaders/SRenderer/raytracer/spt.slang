@@ -7,6 +7,7 @@
 
 #include "materials/lambertian.hlsli"
 #include "materials/roughplastic.hlsli"
+#include "materials/roughdielectric.hlsli"
 
 // Shadow ray ...
 [shader("closesthit")]

@@ -36,6 +36,9 @@
     <ClCompile Include="Private\SE.Core.Reflect.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Private\SE.Core.Profiler.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Public\System\SE.Core.System.hpp">
@@ -78,6 +81,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="Public\SE.Core.Utility.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.Core.Profiler.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

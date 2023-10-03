@@ -649,10 +649,10 @@ Adapter_VK::Adapter_VK(VkPhysicalDevice device, Context_VK* context,
       adapterInfo([&]() -> AdapterInfo {
         AdapterInfo info;
         info.device = properties.deviceName;
-        ;
         info.vendor = properties.vendorID;
         info.architecture = properties.deviceType;
         info.description = properties.deviceID;
+        info.timestampPeriod = properties.limits.timestampPeriod;
         return info;
       }()),
       timestampPeriod(properties.limits.timestampPeriod),
@@ -918,11 +918,6 @@ auto Device_VK::createRenderPipelineAsync(
 auto Device_VK::createRenderBundleEncoder(
     CommandEncoderDescriptor const& desc) noexcept
     -> std::unique_ptr<RenderBundleEncoder> {
-  return nullptr;
-}
-
-auto Device_VK::createQuerySet(QuerySetDescriptor const& desc) noexcept
-    -> std::unique_ptr<QuerySet> {
   return nullptr;
 }
 
@@ -3375,6 +3370,39 @@ inline auto getVkPipelineStageFlags(PipelineStageFlags stages) noexcept
   return (VkPipelineStageFlags)flags;
 }
 
+inline auto getVkPipelineStageFlagBits(PipelineStages stage) noexcept
+    -> VkPipelineStageFlagBits {
+  switch (stage) {
+    case PipelineStages::TOP_OF_PIPE_BIT: return VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    case PipelineStages::DRAW_INDIRECT_BIT: return VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
+    case PipelineStages::VERTEX_INPUT_BIT: return VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+    case PipelineStages::VERTEX_SHADER_BIT: return VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+    case PipelineStages::TESSELLATION_CONTROL_SHADER_BIT: return VK_PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT;
+    case PipelineStages::TESSELLATION_EVALUATION_SHADER_BIT: return VK_PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT;
+    case PipelineStages::GEOMETRY_SHADER_BIT: return VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT;
+    case PipelineStages::FRAGMENT_SHADER_BIT: return VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    case PipelineStages::EARLY_FRAGMENT_TESTS_BIT: return VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    case PipelineStages::LATE_FRAGMENT_TESTS_BIT: return VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    case PipelineStages::COLOR_ATTACHMENT_OUTPUT_BIT: return VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    case PipelineStages::COMPUTE_SHADER_BIT: return VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    case PipelineStages::TRANSFER_BIT: return VK_PIPELINE_STAGE_TRANSFER_BIT;
+    case PipelineStages::BOTTOM_OF_PIPE_BIT: return VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    case PipelineStages::HOST_BIT: return VK_PIPELINE_STAGE_HOST_BIT;
+    case PipelineStages::ALL_GRAPHICS_BIT: return VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+    case PipelineStages::ALL_COMMANDS_BIT: return VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+    case PipelineStages::TRANSFORM_FEEDBACK_BIT_EXT: return VK_PIPELINE_STAGE_TRANSFORM_FEEDBACK_BIT_EXT;
+    case PipelineStages::CONDITIONAL_RENDERING_BIT_EXT: return VK_PIPELINE_STAGE_CONDITIONAL_RENDERING_BIT_EXT;
+    case PipelineStages::ACCELERATION_STRUCTURE_BUILD_BIT_KHR: return VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+    case PipelineStages::RAY_TRACING_SHADER_BIT_KHR: return VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
+    case PipelineStages::TASK_SHADER_BIT_NV: return VK_PIPELINE_STAGE_TASK_SHADER_BIT_NV;
+    case PipelineStages::MESH_SHADER_BIT_NV: return VK_PIPELINE_STAGE_MESH_SHADER_BIT_NV;
+    case PipelineStages::FRAGMENT_DENSITY_PROCESS_BIT: return VK_PIPELINE_STAGE_FRAGMENT_DENSITY_PROCESS_BIT_EXT;
+    case PipelineStages::FRAGMENT_SHADING_RATE_ATTACHMENT_BIT: return VK_PIPELINE_STAGE_FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR;
+    case PipelineStages::COMMAND_PREPROCESS_BIT: return VK_PIPELINE_STAGE_COMMAND_PREPROCESS_BIT_NV;
+    default: return VK_PIPELINE_STAGE_NONE_KHR;
+  }
+}
+
 inline auto getVkAccessFlags(AccessFlags accessFlags) noexcept
     -> VkAccessFlags {
   VkAccessFlags flags = 0;
@@ -3632,9 +3660,6 @@ auto CommandEncoder_VK::copyTextureToTexture(
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,  // Destination image layout
       1, &region);                           // Regions
 }
-
-auto CommandEncoder_VK::writeTimestamp(QuerySet* querySet,
-                                       uint32_t queryIndex) noexcept -> void {}
 
 auto CommandEncoder_VK::resolveQuerySet(QuerySet* querySet, uint32_t firstQuery,
                                         uint32_t queryCount,
@@ -4885,6 +4910,79 @@ auto CommandEncoder_VK::beginRayTracingPass(
     RayTracingPassDescriptor const& desc) noexcept
     -> std::unique_ptr<RayTracingPassEncoder> {
   return std::make_unique<RayTracingPassEncoder_VK>(this, desc);
+}
+
+#pragma endregion
+
+#pragma region VK_QUERY_IMPL
+
+auto Device_VK::createQuerySet(QuerySetDescriptor const& desc) noexcept
+    -> std::unique_ptr<QuerySet> {
+  return std::make_unique<QuerySet_VK>(this, desc);
+}
+
+inline auto getVkQueryType(QueryType const type) noexcept -> VkQueryType {
+  switch (type) {
+    case QueryType::OCCLUSION: return VK_QUERY_TYPE_OCCLUSION;
+    case QueryType::PIPELINE_STATISTICS: return VK_QUERY_TYPE_PIPELINE_STATISTICS;
+    case QueryType::TIMESTAMP: return VK_QUERY_TYPE_TIMESTAMP;
+    default: return VK_QUERY_TYPE_MAX_ENUM;
+  }
+}
+
+inline auto getVkQueryResultFlags(QueryResultFlag flags) noexcept
+    -> VkQueryResultFlags {
+    uint32_t flag = 0;
+    if (hasBit(flags, QueryResultBits::RESULT_64)) flag |= VK_QUERY_RESULT_64_BIT;
+    if (hasBit(flags, QueryResultBits::RESULT_WAIT)) flag |= VK_QUERY_RESULT_WAIT_BIT;
+    if (hasBit(flags, QueryResultBits::RESULT_WITH_AVAILABILITY)) flag |= VK_QUERY_RESULT_WITH_AVAILABILITY_BIT;
+    if (hasBit(flags, QueryResultBits::RESULT_PARTIAL)) flag |= VK_QUERY_RESULT_PARTIAL_BIT;
+    return flag;
+}
+
+QuerySet_VK::QuerySet_VK(Device_VK* device, QuerySetDescriptor const& desc)
+    : device(device) {
+  type = desc.type;
+  count = desc.count;
+  VkQueryPoolCreateInfo info;
+  info.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+  info.queryType = getVkQueryType(type);
+  info.queryCount = count;
+  info.flags = 0;
+  info.pNext = nullptr;
+  Core::LogManager::Assert(vkCreateQueryPool(device->getVkDevice(), &info,
+                                             nullptr, &queryPool) == VK_SUCCESS,
+      "RHI :: Vulkan :: Create query set failed!");
+}
+
+QuerySet_VK::~QuerySet_VK() {
+  vkDestroyQueryPool(device->getVkDevice(), queryPool, nullptr);
+}
+
+auto QuerySet_VK::resolveQueryResult(
+    uint32_t firstQuery, uint32_t queryCount,
+    size_t dataSize, void* pData, uint64_t stride,
+    QueryResultFlag flags) noexcept -> void {
+  vkGetQueryPoolResults(device->getVkDevice(), queryPool, firstQuery,
+                        queryCount, dataSize, pData, stride,
+                        getVkQueryResultFlags(flags));
+}
+auto CommandEncoder_VK::resetQuerySet(
+    QuerySet* querySet, uint32_t firstQuery,
+    uint32_t queryCount) noexcept -> void {
+  QuerySet_VK* queryset_vk = static_cast<QuerySet_VK*>(querySet);
+  vkCmdResetQueryPool(commandBuffer->commandBuffer, queryset_vk->queryPool,
+                      firstQuery, queryCount);
+}
+
+auto CommandEncoder_VK::writeTimestamp(
+    QuerySet* querySet,
+    PipelineStages stageMask,
+    uint32_t queryIndex) noexcept -> void {
+  QuerySet_VK* queryset_vk = static_cast<QuerySet_VK*>(querySet);
+  vkCmdWriteTimestamp(commandBuffer->commandBuffer,
+                      getVkPipelineStageFlagBits(stageMask),
+                      queryset_vk->queryPool, queryIndex);
 }
 
 #pragma endregion

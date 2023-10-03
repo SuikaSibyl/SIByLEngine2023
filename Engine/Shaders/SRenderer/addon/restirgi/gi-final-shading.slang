@@ -16,6 +16,7 @@ cbuffer PushConstants {
     uint giEnableFinalVisibility;
     uint sample_batch;
     bool evaluate_radiance;
+    bool extra_bounce;
 };
 
 RWStructuredBuffer<PackedGIReservoir> u_GIReservoirs;
@@ -55,17 +56,23 @@ void RgenMain() {
             const float3 bsdf_direction = normalize(reservoir.position - primarySurface.worldPos);
             const float bsdf_pdf = PdfBsdfSample(primarySurface, -primaryRay.direction, bsdf_direction);
             const Ray bsdfRay = SpawnRay(primarySurface, bsdf_direction);
+            float3 first_bsdf = EvalBsdf(primarySurface, -primaryRay.direction, bsdfRay.direction);
+            float3 throughput = float3(1);
+            if (bsdf_pdf == 0) throughput = float3(0, 0, 0);
+            RNG.state = reservoir.RNGState;
             PrimaryPayload payload;
+            payload.RND = RNG;
+            float3 radiance = float3(0);
             Intersection(bsdfRay, SceneBVH, payload, RNG);
             if (HasHit(payload.hit)) {
                 const PolymorphicLightInfo light = lights[0];
-                reservoir.radiance = (bsdf_pdf != 0)
-                                      ? EvaluateDirectLight(bsdfRay, payload.hit, light, RNG)
-                                      : float3(0);
+                radiance += EvaluateDirectLight(bsdfRay, payload.hit, light, RNG) * throughput;
+                // further bounces
+                if (extra_bounce) {
+                    radiance += EvaluateMultibounceIndirect(bsdfRay, 1, throughput, payload, RNG);
+                }
             }
-            else {
-                reservoir.radiance = float3(0);
-            }
+            reservoir.radiance = radiance;            
             StoreGIReservoir(reservoir, runtimeParams, pixel, shadeInputBufferIndex, u_GIReservoirs);
         }
 
@@ -75,7 +82,6 @@ void RgenMain() {
         if (giEnableFinalVisibility > 0) {
             const Ray ray = SetupVisibilityRay(primarySurface, reservoir.position, 0.01);
             visibility = TraceOccludeRay(ray, RNG, SceneBVH) ? float3(0) : float3(1);
-            if (dot(primarySurface.geometryNormal, ray.direction) < 0) visibility = float3(0);
         }
         
         const float3 bsdf_direction = normalize(reservoir.position - primarySurface.worldPos);
@@ -83,39 +89,9 @@ void RgenMain() {
 
         radiance *= visibility * first_bsdf;
         diffuse += radiance;
-        // const SplitBrdf brdf = EvaluateBrdf(primarySurface, reservoir.position);
-
-        // if (g_Const.giEnableFinalMIS) {
-        //     const RTXDI_GIReservoir initialReservoir = LoadInitialSampleReservoir(reservoirPosition, primarySurface);
-        //     const SplitBrdf brdf0 = EvaluateBrdf(primarySurface, initialReservoir.position);
-
-        //     RAB_Surface roughenedSurface = primarySurface;
-        //     roughenedSurface.roughness = max(roughenedSurface.roughness, kMISRoughness);
-
-        //     const SplitBrdf roughBrdf = EvaluateBrdf(roughenedSurface, reservoir.position);
-        //     const SplitBrdf roughBrdf0 = EvaluateBrdf(roughenedSurface, initialReservoir.position);
-
-        //     const float finalWeight = 1.0 - GetMISWeight(roughBrdf, brdf, primarySurface.diffuseAlbedo);
-        //     const float initialWeight = GetMISWeight(roughBrdf0, brdf0, primarySurface.diffuseAlbedo);
-
-        //     const float3 initialRadiance = initialReservoir.radiance * initialReservoir.weightSum;
-
-        //     diffuse = brdf.demodulatedDiffuse * radiance * finalWeight
-        //             + brdf0.demodulatedDiffuse * initialRadiance * initialWeight;
-
-        //     specular = brdf.specular * radiance * finalWeight
-        //              + brdf0.specular * initialRadiance * initialWeight;
-        // }
-        // else {
-        //     diffuse = brdf.demodulatedDiffuse * radiance;
-        //     specular = brdf.specular * radiance;
-        // }
-
-        // specular = DemodulateSpecular(primarySurface.specularF0, specular);
+        // diffuse += visibility * radiance;
     }
 
     u_Diffuse[pixel] = float4(diffuse, 1);
     u_Specular[pixel] = 0;
-    // StoreShadingOutput(GlobalIndex, pixelPosition,
-    //                    primarySurface.viewDepth, primarySurface.roughness, diffuse, specular, 0, false, true);
 }

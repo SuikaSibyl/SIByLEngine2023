@@ -35,13 +35,6 @@ auto InitialSample::reflect() noexcept -> RDG::PassReflection {
               .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT |
                          (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
               .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
-    reflector.addOutput("DebugImage")
-      .isTexture().withSize(Math::vec3(1, 1, 1))
-      .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
-      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
-      .consume(RDG::TextureInfo::ConsumeEntry{
-              RDG::TextureInfo::ConsumeType::StorageBinding}
-              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
   GBufferUtils::addGBufferInput(
       reflector, (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR);
   return reflector;
@@ -74,9 +67,6 @@ auto InitialSample::execute(RDG::RenderContext* context,
   GFX::Buffer* reservoir = renderData.getBuffer("GIReservoir");
   updateBinding(context, "u_GIReservoirs",
                 RHI::BindingResource{{reservoir->buffer.get(), 0, reservoir->buffer->size()}});
-  GFX::Texture* debug = renderData.getTexture("DebugImage");
-  updateBinding(context, "u_debug",
-                RHI::BindingResource{{debug->getUAV(0, 0, 1)}});
 
   const uint32_t frameID = renderData.getUInt("FrameIdx");
   // update params
@@ -87,13 +77,18 @@ auto InitialSample::execute(RDG::RenderContext* context,
     GIResamplingRuntimeParameters params;
     uint32_t initialOutputBufferIndex;
     uint32_t sample_batch;
-  } pConst = {*param, 0, frameID};
+    uint32_t extra_bounce;
+  } pConst = {*param, 0, frameID, extra_bounce ? 1 : 0};
 
   RHI::RayTracingPassEncoder* encoder = beginPass(context);
   encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::RAYGEN, 0,
                          sizeof(PushConstant));
   encoder->traceRays(1280, 720, 1);
   encoder->end();
+}
+
+auto InitialSample::renderUI() noexcept -> void {
+  ImGui::Checkbox("Extra bounce", &extra_bounce);
 }
 
 TemporalResampling::TemporalResampling(GIResamplingRuntimeParameters* param)
@@ -119,15 +114,7 @@ auto TemporalResampling::reflect() noexcept -> RDG::PassReflection {
       .consume(RDG::BufferInfo::ConsumeEntry{}
               .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT |
                          (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
-              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
-  reflector.addOutput("DebugImage")
-      .isTexture().withSize(Math::vec3(1, 1, 1))
-      .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
-      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
-      .consume(RDG::TextureInfo::ConsumeEntry{
-              RDG::TextureInfo::ConsumeType::StorageBinding}
-              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
-  
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));  
   GBufferUtils::addGBufferInput(
       reflector, (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR);
   GBufferUtils::addPrevGbufferInputOutput(
@@ -149,15 +136,12 @@ auto TemporalResampling::execute(RDG::RenderContext* context,
   GBufferUtils::bindPrevGBufferResource(this, context, renderData);
 
   GFX::Buffer* reservoir = renderData.getBuffer("GIReservoir");
-  GFX::Texture* debug = renderData.getTexture("DebugImage");
   updateBinding(context, "u_GIReservoirs",
                 RHI::BindingResource{{reservoir->buffer.get(), 0, reservoir->buffer->size()}});
   updateBinding(context, "PrevGlobalUniforms",
                 renderData.getBindingResource("PrevGlobalUniforms").value());
   updateBinding(context, "PrevSceneBVH",
                 renderData.getBindingResource("PrevSceneBVH").value());
-  updateBinding(context, "u_debug",
-                RHI::BindingResource{{debug->getUAV(0, 0, 1)}});
 
   uint32_t frameID = renderData.getUInt("FrameIdx");
   struct PushConstant {
@@ -249,14 +233,6 @@ auto SpatialResampling::reflect() noexcept -> RDG::PassReflection {
               .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT |
                          (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
               .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
-reflector.addOutput("DebugImage")
-    .isTexture().withSize(Math::vec3(1, 1, 1))
-    .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
-    .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
-    .consume(RDG::TextureInfo::ConsumeEntry{
-            RDG::TextureInfo::ConsumeType::StorageBinding}
-            .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
-
   GBufferUtils::addGBufferInput(
       reflector, (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR);
   return reflector;
@@ -281,9 +257,6 @@ auto SpatialResampling::execute(RDG::RenderContext* context,
   updateBinding(context, "u_NeighborOffsets",
                 RHI::BindingResource{
                     {neighbor_buffer->buffer.get(), 0, neighbor_buffer->buffer->size()}});
-  GFX::Texture* debug = renderData.getTexture("DebugImage");
-  updateBinding(context, "u_debug",
-                RHI::BindingResource{{debug->getUAV(0, 0, 1)}});
 
   uint32_t frameID = renderData.getUInt("FrameIdx");
   struct PushConstant {
@@ -377,7 +350,13 @@ auto FinalShading::execute(RDG::RenderContext* context,
     uint32_t enableFinalVisibility;
     uint32_t sample_batch;
     uint32_t evaluate_radiance;
-  } pConst = {*param, 1, 1, frameID, re_evaluate_radiance ? 1 : 0};
+    uint32_t extra_bounce;
+  } pConst = {*param,
+              1,
+              1,
+              frameID,
+              re_evaluate_radiance ? 1 : 0,
+              extra_bounce ? 1 : 0};
 
   RHI::RayTracingPassEncoder* encoder = beginPass(context);
   encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::RAYGEN, 0,
@@ -388,5 +367,6 @@ auto FinalShading::execute(RDG::RenderContext* context,
 
 auto FinalShading::renderUI() noexcept -> void {
   ImGui::Checkbox("Re-Eval Radiance", &re_evaluate_radiance);
+  ImGui::Checkbox("Extra bounce", &extra_bounce);
 }
 }

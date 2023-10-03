@@ -22,7 +22,7 @@ void main()
     const vec3 dir_in  = cBSDFEvalQuery.dir_in;
     const vec3 dir_out = cBSDFEvalQuery.dir_out;
     const vec3 unflipped_ng = cBSDFEvalQuery.geometric_normal * cBSDFEvalQuery.hitFrontface;
-
+    
     bool reflected = dot(unflipped_ng, dir_in) *
                      dot(unflipped_ng, dir_out) > 0;
     

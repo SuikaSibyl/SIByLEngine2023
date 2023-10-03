@@ -1238,9 +1238,12 @@ auto GroundTruthPass::reflect() noexcept -> RDG::PassReflection {
 
 auto GroundTruthPass::renderUI() noexcept -> void {
     {
-    const char* item_names[] = {"DI Only", "GI Only", "Combined"};
+    const char* item_names[] = {"DI Only", "GI Only", "Combined", "Multi"};
     ImGui::Combo("Mode", &showMode, item_names, IM_ARRAYSIZE(item_names),
                  IM_ARRAYSIZE(item_names));
+    ImGui::DragInt("Extra bounce", &extra_bounce, 1);
+    ImGui::DragInt("SPP", &spp, 1);
+    ImGui::DragInt("SPP One-bounce", &spp_ob, 1);
     }
 }
 
@@ -1268,9 +1271,12 @@ auto GroundTruthPass::execute(RDG::RenderContext* context,
     uint32_t height;
     uint32_t sample_batch;
     int showMode;
+    int extra_bounce;
+    int spp;
+    int spp_ob;
   };
   PushConstant pConst = {color->texture->width(), color->texture->height(),
-                         batchIdx, showMode};
+                         batchIdx, showMode, extra_bounce, spp, spp_ob};
   encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::RAYGEN, 0,
                          sizeof(PushConstant));
   encoder->traceRays(color->texture->width(), color->texture->height(), 1);

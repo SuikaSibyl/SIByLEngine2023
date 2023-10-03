@@ -1,4 +1,5 @@
 #include "../Public/SE.Addon.gSLICr.hpp"
+#include <SE.RHI.Profiler.hpp>
 
 namespace SIByL::Addon::gSLICr {
 InitClusterCenterPass::InitClusterCenterPass(gSLICrSetting* desc)
@@ -44,11 +45,8 @@ auto InitClusterCenterPass::execute(RDG::RenderContext* context,
   GFX::Buffer* sp = renderData.getBuffer("SPixelInfo");
   GFX::Texture* color = renderData.getTexture("Color");
 
-  updateBinding(
-      context, "u_outSPixel",
-      RHI::BindingResource{{sp->buffer.get(), 0, sp->buffer->size()}});
-  updateBinding(context, "u_inImg",
-                RHI::BindingResource{color->getSRV(0, 1, 0, 1)});
+  updateBinding(context, "u_outSPixel", RHI::BindingResource{{sp->buffer.get(), 0, sp->buffer->size()}});
+  updateBinding(context, "u_inImg", RHI::BindingResource{color->getSRV(0, 1, 0, 1)});
 
   struct PushConstant {
     Math::ivec2 map_size;
@@ -59,9 +57,12 @@ auto InitClusterCenterPass::execute(RDG::RenderContext* context,
   pConst.map_size = desc->map_size;
   pConst.spixel_size = desc->spixel_size;
 
+  Singleton<RHI::DeviceProfilerManager>::instance()->beginSegment(
+      context->cmdEncoder, RHI::PipelineStages::TOP_OF_PIPE_BIT,
+      "superpixel-clustering");
+
   RHI::ComputePassEncoder* encoder = beginPass(context);
-  encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::COMPUTE, 0,
-                         sizeof(PushConstant));
+  encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::COMPUTE, 0, sizeof(PushConstant));
   encoder->dispatchWorkgroups((desc->map_size.x + 15) / 16,
                               (desc->map_size.y + 15) / 16, 1);
   encoder->end();
@@ -173,6 +174,10 @@ auto FindCenterAssociationPass::execute(
   encoder->dispatchWorkgroups((desc->img_size.x + 15) / 16,
                               (desc->img_size.y + 15) / 16, 1);
   encoder->end();
+
+  Singleton<RHI::DeviceProfilerManager>::instance()->endSegment(
+      context->cmdEncoder, RHI::PipelineStages::BOTTOM_OF_PIPE_BIT,
+      "superpixel-clustering");
 }
 
 //gSLICrGraph::gSLICrGraph(gSLICrSetting const& desc) : desc(desc) {}

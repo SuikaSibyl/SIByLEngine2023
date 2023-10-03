@@ -29,9 +29,25 @@ void RgenMain() {
     LightSampleInfo info;
     info.boundingSphere = pConst.bounding_sphere;
 
+    // {
+    //     const uint light_num = sceneInfoUniform.light_num;
+    //     const uint light_selected = clamp(uint(GetNextRandom(RNG) * light_num), 0, light_num - 1);
+    //     const PolymorphicLightInfo light = lights[light_selected];
+    //     if (getLightType(light) == PolymorphicLightType::kMeshPrimitive) {
+    //         MeshPrimitiveLight meshLight = unpackMeshPrimitiveLight(light);
+    //         LightSample sample = sample_li(meshLight, float3(GetNextRandom(RNG), GetNextRandom(RNG), GetNextRandom(RNG)));
+
+    //         // Store the VPL
+    //         uint VPLid;
+    //         InterlockedAdd(u_vplCounter[0], 1, VPLid);
+    //         u_vplPositions[VPLid] = float4(sample.position, 0.0);
+    //         u_vplNormals[VPLid] = float4(sample.normal, 0.0);
+    //         u_vplColors[VPLid] = float4(sample.radiance * light_num / (sample.pdf), 0.0);
+    //     }
+    // }
     // Selected light
     const PolymorphicLightInfo light = lights[0];
-    LightRaySample lightRaySamp = SampleLightRay(light, info, RNG);    
+    LightRaySample lightRaySamp = SampleLightRay(light, info, RNG);
     Ray lightRay = lightRaySamp.ray;
     
     PrimaryPayload payload;
@@ -52,7 +68,7 @@ void RgenMain() {
         const GeometryInfo geometry = geometries[payload.hit.geometryID];
         const MaterialInfo material = materials[geometry.materialID];
         const float4 albedo = textures[material.baseOrDiffuseTextureIndex].Sample(payload.hit.texcoord);
-        throughput *= albedo.xyz / k_pi;
+        throughput *= albedo.xyz * material.baseOrDiffuseColor / k_pi;
         
         // Store the VPL
         uint VPLid;
@@ -64,8 +80,10 @@ void RgenMain() {
         // Quit if we reach max depth
         if (depth + 1 >= pConst.max_depth)
             break;
+        
         // Sample the next light ray if we need further bounces
         const float2 uv = float2(GetNextRandom(RNG), GetNextRandom(RNG));
-        lightRay = SpawnRay(payload.hit, CosineWeightedHemisphereSample(payload.hit.geometryNormal, uv));
+        lightRay = SpawnRay(payload.hit, CosineWeightedHemisphereSample(payload.hit.shadingNormal, uv));
+        throughput /= k_inv_pi;
     }
 }

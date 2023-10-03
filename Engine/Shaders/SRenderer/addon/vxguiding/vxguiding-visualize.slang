@@ -5,6 +5,7 @@
 
 RWStructuredBuffer<uint4> u_pMin;
 RWStructuredBuffer<uint4> u_pMax;
+RWTexture3D<uint> u_irradiance;
 
 cbuffer CameraBuffer {
     CameraData gCamera;
@@ -113,6 +114,7 @@ VertexStageOutput vertexMain(
     const int vertexID = assembledVertex.vertexId % 30;
     // Map instanceID to 64x64x64 grid
     const int3 voxelID = int3(instanceID % 64, (instanceID / 64) % 64, instanceID / (64 * 64));
+    const uint irradiance = u_irradiance[voxelID];
 
     int voxelIDFlatten = FlatIndex(voxelID, 64);
 
@@ -121,7 +123,7 @@ VertexStageOutput vertexMain(
     AABB compact_bound = UnpackCompactAABB(voxel_bound, u_pMin[voxelIDFlatten].xyz, u_pMax[voxelIDFlatten].xyz);
     float3 bound_extend = voxel_bound.max - voxel_bound.min;
 
-    if (any(compact_bound.min > compact_bound.max)) {
+    if (any(compact_bound.min > compact_bound.max) || irradiance < 0) {
         VertexStageOutput degenerate_output;
         degenerate_output.sv_position = float4(0.0f, 0.0f, 0.0f, 0.0f);
         return degenerate_output;

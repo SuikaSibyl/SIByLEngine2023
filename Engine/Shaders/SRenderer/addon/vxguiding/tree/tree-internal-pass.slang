@@ -5,6 +5,7 @@
 const StructuredBuffer<uint64_t> u_Codes;
 const StructuredBuffer<TreeConstrIndirectArgs> u_ConstrIndirectArgs;
 RWStructuredBuffer<TreeNode> u_Nodes;
+RWStructuredBuffer<uint16_t2> u_Descendant;
 
 int clz(uint x) {
     return 31 - int(firstbithigh(x));
@@ -114,8 +115,9 @@ void ComputeMain(uint3 DTid: SV_DispatchThreadID) {
 
     // For all internal nodes, determine the range of objects they represent
     const uint2 ij = determine_range(num_objects, idx);
+    u_Descendant[idx] = uint16_t2(uint16_t(ij.x), uint16_t(ij.y));
     const int gamma = int(find_split(ij.x, ij.y));
-
+    
     u_Nodes[idx].left_idx = uint16_t(gamma);
     u_Nodes[idx].right_idx = uint16_t(gamma + 1);
 

@@ -20,6 +20,7 @@ RWTexture2D<float2> u_HfSpecLum_prev;
 RWTexture2D<uint4> u_VBuffer;
 RWTexture2D<uint> u_RNGSeed;
 RWTexture2D<uint> u_IsCorrelated;
+RWTexture2D<float4> u_Debug;
 
 const Texture2D<uint> u_RNGSeed_prev;
 const Texture2D<uint> u_GradSamplePos_prev;
@@ -98,6 +99,10 @@ float3 patch_position(in_ref(int2) found_pos_prev) {
     return GetVBufferPosition(vhit);
 }
 
+float Pack2Float(int2 pix) {
+    return asfloat(uint(pix.x) << 16 | uint(pix.y));
+}
+
 [shader("compute")]
 [numthreads(GROUP_SIZE_PIXELS, GROUP_SIZE_PIXELS, 1)]
 void ComputeMain(
@@ -114,7 +119,7 @@ void ComputeMain(
 
     if(init_rand == 1u) {
         // Initialize the random number sequence
-        RandomSamplerState RNG = InitRandomSampler(ipos, sample_batch * 0);
+        RandomSamplerState RNG = InitRandomSampler(ipos, sample_batch);
         u_RNGSeed[ipos] = RNG.state;
     }
 
@@ -163,6 +168,7 @@ void ComputeMain(
     
     if (!found) {
         u_GradSamplePos[pos_grad] = 0u;
+        u_Debug[pos_grad] = float4(0);
         return;
     }
 
@@ -174,13 +180,21 @@ void ComputeMain(
     // Store the gradient index offset
     u_GradSamplePos[pos_grad] = gradient_idx;
     u_HfSpecLum_prev[pos_grad] = found_prev_lum;
-    
+    // u_HfSpecLum_prev[pos_grad] = float2(luminance(UnpackRGBE(u_HF_prev[found_pos_prev])), 0.0f);
+
     // Patch the surface parameters
     t_GBufferPosition[ipos].xyz = patch_position(found_pos_prev);
+    
     u_IsCorrelated[ipos] = 1u;
-    u_RNGSeed[ipos] = u_RNGSeed_prev[found_pos_prev];
+    if (init_rand != 1u) {
+        // Initialize the random number sequence
+        u_RNGSeed[ipos] = u_RNGSeed_prev[found_pos_prev];
+    }
+    u_Debug[pos_grad] = float4(Pack2Float(ipos), Pack2Float(found_pos_prev),
+                               asfloat(u_RNGSeed_prev[found_pos_prev]), 1);
     t_GBufferNormals[ipos] = t_PrevGBufferNormals[found_pos_prev];
     t_GBufferGeoNormals[ipos] = t_PrevGBufferGeoNormals[found_pos_prev];
     t_GBufferDiffuseAlbedo[ipos] = t_PrevGBufferDiffuseAlbedo[found_pos_prev];
     t_GBufferSpecularRough[ipos] = t_PrevGBufferSpecularRough[found_pos_prev];
+    t_MaterialInfo[ipos] = t_PrevGBufferMaterialInfo[found_pos_prev];
 }

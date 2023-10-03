@@ -99,4 +99,70 @@ auto AccumulatePass::renderUI() noexcept -> void {
       std::string("Accumulated Count: " + std::to_string(pConst.gAccumCount))
           .c_str());
 }
+
+ToneMapperPass::ToneMapperPass() {
+  auto [frag] = GFX::ShaderLoader_SLANG::load(
+      "../Engine/Shaders/SRenderer/addon/postprocess/"
+      "tone-mapper.slang",
+      std::array<std::pair<std::string, RHI::ShaderStages>, 1>{
+          std::make_pair("fragmentMain", RHI::ShaderStages::FRAGMENT),
+      });
+
+  RDG::FullScreenPass::init(
+      Core::ResourceManager::get()->getResource<GFX::ShaderModule>(frag));
+}
+
+auto ToneMapperPass::reflect() noexcept -> RDG::PassReflection {
+  RDG::PassReflection reflector;
+  reflector.addInput("Input")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+          RDG::TextureInfo::ConsumeType::StorageBinding}
+                   .addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT)
+                   .setSubresource(0, 1, 0, 1));
+  reflector.addOutput("Output")
+      .isTexture().withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::RGBA8_UNORM)
+      .withUsages((uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+          RDG::TextureInfo::ConsumeType::ColorAttachment}
+                   .setAttachmentLoc(0));
+  return reflector;
+}
+
+auto ToneMapperPass::execute(RDG::RenderContext* context,
+    RDG::RenderData const& renderData) noexcept
+    -> void {
+  GFX::Texture* input = renderData.getTexture("Input");
+  GFX::Texture* output = renderData.getTexture("Output");
+
+  renderPassDescriptor = {
+      {RHI::RenderPassColorAttachment{output->getRTV(0, 0, 1),
+                                      nullptr,
+                                      {0, 0, 0, 1},
+                                      RHI::LoadOp::CLEAR,
+                                      RHI::StoreOp::STORE}},
+      RHI::RenderPassDepthStencilAttachment{},
+  };
+
+  updateBindings(context, {
+      {"s_source", RHI::BindingResource{input->getUAV(0, 0, 1)}},
+  });
+
+  struct PushConstant {
+    Math::ivec2 resolution;
+    float exposure;
+  } pConst;
+  pConst.resolution = Math::ivec2{1280, 720};
+  pConst.exposure = exposure;
+  RHI::RenderPassEncoder* encoder = beginPass(context, output);
+  encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::FRAGMENT, 0,
+                         sizeof(PushConstant));
+  dispatchFullScreen(context);
+  encoder->end();
+}
+
+auto ToneMapperPass::renderUI() noexcept -> void {
+  ImGui::DragFloat("Manual Exposure", &exposure, 0.01f);
+}
 }

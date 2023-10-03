@@ -27,6 +27,9 @@
     <ClCompile Include="Private\SE.RHI-VK.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Private\SE.RHI.Profiler.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Public\SE.RHI-Interface.hpp">
@@ -45,6 +48,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="Public\SE.RHI.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.RHI.Profiler.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

@@ -4,6 +4,58 @@
 #include "cpp_compatible.hlsli"
 #include "math.hlsli"
 
+// /**
+//  * Maps a square to a disk .
+//  * Adapted from "A Low Distortion Map Between Disk and Square." Improved based
+//  * on comments from Peter Shirley's blog post: "Improved code for concentric map."
+//  * Adapted from Unreal Engine 4's implementation of `ToConcentricMap`
+//  * @file: Engine/Shaders/Private/RayTracing/RayTracingDirectionalLight.ush
+//  * @param p: A point on the unit square
+//  * @return: A point on the unit disk
+//  */
+// float2 ToConcentricMap(in_ref(float2) RectangularCoords) {
+//     float R; float Phi;
+//     RectangularCoords = 2.0 * RectangularCoords - 1.0;
+//     float2 RectangularCoordsSquared = RectangularCoords * RectangularCoords;
+//     if (RectangularCoordsSquared.x > RectangularCoordsSquared.y) {
+//         R = RectangularCoords.x;
+//         Phi = (k_pi / 4.0) * (RectangularCoords.y / RectangularCoords.x);
+//     } else {
+//         R = RectangularCoords.y;
+//         Phi = (k_pi / 2.0) - (k_pi / 4.0) * (RectangularCoords.x / RectangularCoords.y);
+//     }
+//     float2 PolarCoords = float2(R, Phi);
+//     return PolarCoords;
+// }
+
+// /**
+//  * Inverse of `ToConcentricMap`, mapping a disk to a square.
+//  * Adapted from Unreal Engine 4's implementation of `InverseConcentricMapping`
+//  * @file: Engine/Shaders/Private/PathTracing/Material/PathTracingRadianceProbe.ush
+//  * @param p: A point on the unit disk
+//  * @return: A point on the unit square
+//  */
+// float2 FromConcentricMap(in_ref(float2) p) {
+//     // Handle degeneracy at the origin
+//     if (p.x == 0 && p.y == 0) return float2(0, 0);
+//     float r = sqrt(p.x * p.x + p.y * p.y);
+//     float theta = atan2(p.y, p.x);
+//     if (theta < -k_pi / 4) theta += 2 * k_pi;
+//     float a; float b;
+//     if (theta < k_pi / 4) { // region 1
+//         a = r; b = theta * a / (k_pi / 4);
+//     } else if (theta < 3 * k_pi / 4) { // region 2
+//         b = r; a = -(theta - k_pi / 2) * b / (k_pi / 4);
+//     } else if (theta < 5 * k_pi / 4) { // region 3
+//         a = -r; b = (theta - k_pi) * a / (k_pi / 4);
+//     } else { // region 4
+//         b = -r; a = -(theta - 3 * k_pi / 2) * b / (k_pi / 4);
+//     }
+//     const float x = (a + 1) / 2;
+//     const float y = (b + 1) / 2;
+//     return float2(x, y);
+// }
+
 float2 ToConcentricMap(in_ref(float2) onSquare) {
     float phi; float r;
     // (a,b) is now on [-1,1]^2
@@ -41,19 +93,19 @@ float2 FromConcentricMap(in_ref(float2) onDisk) {
     if (phi < -k_pi / 4)
         phi += 2 * k_pi; // in range [-pi/4,7pi/4]
     float a; float b;
-    if (phi < k_pi / 4) {   // region 1
+    if (phi < k_pi / 4) { // region 1
         a = r;
         b = phi * a / (k_pi / 4);
     }
-    else if (phi < 3 * k_pi / 4)  { // region 2
+    else if (phi < 3 * k_pi / 4) { // region 2
         b = r;
         a = -(phi - k_pi / 2) * b / (k_pi / 4);
     }
-    else if (phi < 5 * k_pi / 4) {  // region 3
+    else if (phi < 5 * k_pi / 4) { // region 3
         a = -r;
         b = (phi - k_pi) * a / (k_pi / 4);
     }
-    else {  // region 4
+    else { // region 4
         b = -r;
         a = -(phi - 3 * k_pi / 2) * b / (k_pi / 4);
     }
@@ -62,6 +114,10 @@ float2 FromConcentricMap(in_ref(float2) onDisk) {
     return float2(x, y);
 }
 
+/**
+ * Maps a point on the disk to a point on the unit hemisphere.
+ * @ref: "A Low Distortion Map Between Disk and Square" - Peter Shirley & Kenneth Chiu
+ */
 float3 ConcentricDiskToUniformHemisphere(in_ref(float2) onDisk) {
     const float r2 = onDisk.x * onDisk.x + onDisk.y * onDisk.y;
     const float r = sqrt(r2);
@@ -73,6 +129,10 @@ float3 ConcentricDiskToUniformHemisphere(in_ref(float2) onDisk) {
     return float3(x, y, z);
 }
 
+/**
+ * Maps a point on the unit hemisphere to a point on the disk.
+ * @ref: "A Low Distortion Map Between Disk and Square" - Peter Shirley & Kenneth Chiu
+ */
 float2 UniformHemisphereToConcentricDisk(in_ref(float3) onHemisphere) {
     const float r = sqrt(1 - onHemisphere.z);
     const float tmp = sqrt(1 - onHemisphere.z * onHemisphere.z);

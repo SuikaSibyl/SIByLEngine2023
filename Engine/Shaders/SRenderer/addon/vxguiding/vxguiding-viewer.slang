@@ -3,6 +3,7 @@
 #include "../../include/common/random.hlsli"
 #include "../../include/common/raycast.hlsli"
 #include "../../include/common/packing.hlsli"
+#include "../../include/common/colormaps.hlsli"
 #include "../vxgi/include/vxgi_interface.hlsli"
 #include "clustering/voxel_cluster.hlsli"
 

@@ -33,4 +33,11 @@ constexpr inline auto hasBit(T flag, T bit) -> bool {
   return (static_cast<std::underlying_type<T>::type>(flag) &
           static_cast<std::underlying_type<T>::type>(bit)) != 0;
 }
+/** Whether flag has the bit. */
+SE_EXPORT template <class T>
+  requires std::is_enum_v<T>
+constexpr inline auto hasBit(uint32_t flag, T bit) -> bool {
+  return (static_cast<std::underlying_type<T>::type>(flag) &
+          static_cast<std::underlying_type<T>::type>(bit)) != 0;
+}
 }  // namespace SIByL

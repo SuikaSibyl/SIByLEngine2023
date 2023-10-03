@@ -1,4 +1,6 @@
 #include "../Public/SE.Addon.VXGuiding.hpp"
+#include <SE.RHI.Profiler.hpp>
+#include <SE.Addon.GBuffer.hpp>
 
 namespace SIByL::Addon::VXGuiding {
 VXGuiderClearPass::VXGuiderClearPass(VXGI::VXGISetting* setting,
@@ -22,28 +24,41 @@ auto VXGuiderClearPass::reflect() noexcept -> RDG::PassReflection {
   uint32_t const size = setting->clipmapSetting.size;
   RDG::PassReflection reflector;
   reflector.addOutput("AABBMin")
-      .isBuffer()
-      .withSize(size * size * size * sizeof(uint32_t) * 4)
+      .isBuffer().withSize(size * size * size * sizeof(uint32_t) * 4)
       .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
-      .consume(
-          RDG::BufferInfo::ConsumeEntry{}
+      .consume(RDG::BufferInfo::ConsumeEntry{}
               .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
               .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
   reflector.addOutput("AABBMax")
-      .isBuffer()
-      .withSize(size * size * size * sizeof(uint32_t) * 4)
+      .isBuffer().withSize(size * size * size * sizeof(uint32_t) * 4)
       .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
-      .consume(
-          RDG::BufferInfo::ConsumeEntry{}
+      .consume(RDG::BufferInfo::ConsumeEntry{}
               .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
               .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("AABBMinPrebake")
+      .isBuffer().withSize(size * size * size * sizeof(uint32_t) * 4)
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("AABBMaxPrebake")
+      .isBuffer().withSize(size * size * size * sizeof(uint32_t) * 4)
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
   reflector.addOutput("Irradiance")
-      .isTexture()
-      .withSize(Math::ivec3(size, size, size))
+      .isTexture().withSize(Math::ivec3(size, size, size))
       .withFormat(RHI::TextureFormat::R32_UINT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
-      .consume(
-          RDG::TextureInfo::ConsumeEntry{
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addOutput("VPLCount")
+      .isTexture().withSize(Math::ivec3(size, size, size))
+      .withFormat(RHI::TextureFormat::R32_UINT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
               RDG::TextureInfo::ConsumeType::StorageBinding}
               .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
   reflector.addOutput("CounterBuffer")
@@ -65,16 +80,19 @@ auto VXGuiderClearPass::execute(RDG::RenderContext* context,
     -> void {
   GFX::Buffer* aabbMin = renderData.getBuffer("AABBMin");
   GFX::Buffer* aabbMax = renderData.getBuffer("AABBMax");
+  GFX::Buffer* aabbMin_prebake = renderData.getBuffer("AABBMinPrebake");
+  GFX::Buffer* aabbMax_prebake = renderData.getBuffer("AABBMaxPrebake");
   GFX::Texture* irradiance = renderData.getTexture("Irradiance");
+  GFX::Texture* vplCount = renderData.getTexture("VPLCount");
 
-  updateBinding(context, "u_pMin",
-                RHI::BindingResource{
-                    {aabbMin->buffer.get(), 0, aabbMin->buffer->size()}});
-  updateBinding(context, "u_pMax",
-                RHI::BindingResource{
-                    {aabbMax->buffer.get(), 0, aabbMax->buffer->size()}});
-  updateBinding(context, "u_pIrradiance",
-                RHI::BindingResource{{irradiance->getUAV(0, 0, 1)}});
+  updateBindings(context, {
+      {"u_pMin", RHI::BindingResource{{aabbMin->buffer.get(), 0, aabbMin->buffer->size()}}},
+      {"u_pMax", RHI::BindingResource{{aabbMax->buffer.get(), 0, aabbMax->buffer->size()}}},
+      {"u_pMinPrebake", RHI::BindingResource{{aabbMin_prebake->buffer.get(), 0, aabbMin_prebake->buffer->size()}}},
+      {"u_pMaxPrebake", RHI::BindingResource{{aabbMax_prebake->buffer.get(), 0, aabbMax_prebake->buffer->size()}}},
+      {"u_pIrradiance", RHI::BindingResource{{irradiance->getUAV(0, 0, 1)}}},
+      {"u_vplCount", RHI::BindingResource{{vplCount->getUAV(0, 0, 1)}}},
+      });
 
   if (vxguiding_setting->respawn) {
     RHI::ComputePassEncoder* encoder = beginPass(context);
@@ -104,6 +122,8 @@ auto VXGuiderClearPass::execute(RDG::RenderContext* context,
 
 auto VXGuiderClearPass::renderUI() noexcept -> void {
   ImGui::Checkbox("Respawn", &vxguiding_setting->respawn);
+  ImGui::Checkbox("Inject 1st Vertex", &vxguiding_setting->inject_first_vertex);
+  ImGui::Checkbox("Use Average Irradiance", &vxguiding_setting->use_average_irradiance);
 }
 
 VXGuiderGIPass::VXGuiderGIPass(
@@ -124,6 +144,1009 @@ VXGuiderGIPass::VXGuiderGIPass(
 }
 
 auto VXGuiderGIPass::reflect() noexcept -> RDG::PassReflection {
+  RDG::PassReflection reflector;
+  reflector.addInput("VBuffer")
+      .isTexture()
+      .withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::RGBA32_UINT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(
+          RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("Irradiance")
+      .isTexture()
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(
+          RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("AABBMin")
+      .isBuffer()
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(
+          RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("AABBMax")
+      .isBuffer()
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(
+          RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("CounterBuffer")
+      .isBuffer()
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(
+          RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("CompactIndices")
+      .isBuffer()
+      .withSize(131072 * sizeof(uint32_t))
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(
+          RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("AABBMin")
+      .isBuffer()
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(
+          RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("AABBMax")
+      .isBuffer()
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(
+          RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInputOutput("Color")
+      .isTexture()
+      .withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(
+          RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  //reflector.addOutput("Debug")
+  //    .isTexture()
+  //    .withSize(Math::vec3(1, 1, 1))
+  //    .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
+  //    .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+  //    .consume(
+  //        RDG::TextureInfo::ConsumeEntry{
+  //            RDG::TextureInfo::ConsumeType::StorageBinding}
+  //            .addStage(
+  //                (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  //reflector.addOutput("Debug1")
+  //    .isTexture()
+  //    .withSize(Math::vec3(1, 1, 1))
+  //    .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
+  //    .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+  //    .consume(
+  //        RDG::TextureInfo::ConsumeEntry{
+  //            RDG::TextureInfo::ConsumeType::StorageBinding}
+  //            .addStage(
+  //                (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  //reflector.addOutput("Debug2")
+  //    .isTexture()
+  //    .withSize(Math::vec3(1, 1, 1))
+  //    .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
+  //    .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+  //    .consume(
+  //        RDG::TextureInfo::ConsumeEntry{
+  //            RDG::TextureInfo::ConsumeType::StorageBinding}
+  //            .addStage(
+  //                (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("Positions")
+      .isTexture()
+      .withSize(Math::vec3(1, 1, 1))
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(
+          RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("Node")
+      .isBuffer()
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("TopLevelTree")
+      .isBuffer()
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("ClusterRoots")
+      .isBuffer()
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("SPixelIndexImage")
+      .isTexture()
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("FuzzyWeight")
+      .isTexture().withFormat(RHI::TextureFormat::RGBA16_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("FuzzyIndex")
+      .isTexture().withFormat(RHI::TextureFormat::RGBA16_SINT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("InverseIndex")
+      .isTexture()
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(
+          RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT));
+  reflector.addInput("AssociateBuffer")
+      .isBuffer()
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(
+          RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("Compact2Leaf")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInputOutput("Intensity")
+      .isTexture().withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::R32_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  return reflector;
+}
+
+auto VXGuiderGIPass::execute(
+    RDG::RenderContext* context, RDG::RenderData const& renderData) noexcept
+    -> void {
+  GFX::Texture* vbuffer = renderData.getTexture("VBuffer");
+  GFX::Texture* color = renderData.getTexture("Color");
+  GFX::Texture* position = renderData.getTexture("Positions");
+  //GFX::Texture* debug = renderData.getTexture("Debug");
+  //GFX::Texture* debug1 = renderData.getTexture("Debug1");
+  //GFX::Texture* debug2 = renderData.getTexture("Debug2");
+  GFX::Texture* irradiance = renderData.getTexture("Irradiance");
+  GFX::Texture* spxielIdx = renderData.getTexture("SPixelIndexImage");
+  GFX::Texture* fweight = renderData.getTexture("FuzzyWeight");
+  GFX::Texture* findex = renderData.getTexture("FuzzyIndex");
+  GFX::Texture* ii = renderData.getTexture("InverseIndex");
+  GFX::Texture* intensity = renderData.getTexture("Intensity");
+
+  GFX::Buffer* counterbuffer = renderData.getBuffer("CounterBuffer");
+  GFX::Buffer* compactIndices = renderData.getBuffer("CompactIndices");
+  GFX::Buffer* aabbMin = renderData.getBuffer("AABBMin");
+  GFX::Buffer* aabbMax = renderData.getBuffer("AABBMax");
+  GFX::Buffer* treeNode = renderData.getBuffer("Node");
+  GFX::Buffer* tlt = renderData.getBuffer("TopLevelTree");
+  GFX::Buffer* cr = renderData.getBuffer("ClusterRoots");
+  GFX::Buffer* ab = renderData.getBuffer("AssociateBuffer");
+  GFX::Buffer* compact2leaf = renderData.getBuffer("Compact2Leaf");
+
+  updateBinding(context, "u_Color",
+                RHI::BindingResource{color->getUAV(0, 0, 1)});
+  updateBinding(context, "u_inverseIndex",
+                RHI::BindingResource{ii->getUAV(0, 0, 1)});
+  updateBinding(context, "u_position",
+                RHI::BindingResource{position->getUAV(0, 0, 1)});
+  //updateBinding(context, "u_Debug",
+  //              RHI::BindingResource{debug->getUAV(0, 0, 1)});
+  //updateBinding(context, "u_Debug2",
+  //              RHI::BindingResource{debug1->getUAV(0, 0, 1)});
+  //updateBinding(context, "u_Debug3",
+  //              RHI::BindingResource{debug2->getUAV(0, 0, 1)});
+  updateBinding(context, "u_pIrradiance",
+                RHI::BindingResource{{irradiance->getUAV(0, 0, 1)}});
+  updateBinding(context, "u_spixelIdx",
+                RHI::BindingResource{{spxielIdx->getUAV(0, 0, 1)}});
+  updateBinding(context, "u_intensity",
+                RHI::BindingResource{{intensity->getUAV(0, 0, 1)}});
+  updateBinding(context, "u_fuzzyWeight",
+                RHI::BindingResource{fweight->getSRV(0, 1, 0, 1)});
+  updateBinding(context, "u_fuzzyIDX",
+                RHI::BindingResource{findex->getSRV(0, 1, 0, 1)});
+
+  updateBinding(context, "u_vxAssociate",
+      RHI::BindingResource{{ab->buffer.get(), 0, ab->buffer->size()}});
+  updateBinding(context, "u_topLevelTree",
+      RHI::BindingResource{{tlt->buffer.get(), 0, tlt->buffer->size()}});
+  updateBinding(context, "u_clusterRoots",
+      RHI::BindingResource{{cr->buffer.get(), 0, cr->buffer->size()}});
+  updateBinding(context, "u_pMin",
+                RHI::BindingResource{
+                    {aabbMin->buffer.get(), 0, aabbMin->buffer->size()}});
+  updateBinding(context, "u_pMax",
+                RHI::BindingResource{
+                    {aabbMax->buffer.get(), 0, aabbMax->buffer->size()}});
+  updateBinding(context, "u_vBuffer",
+                RHI::BindingResource{vbuffer->getSRV(0, 1, 0, 1)});
+  updateBinding(context, "u_vxCounter",
+                RHI::BindingResource{{counterbuffer->buffer.get(), 0,
+                                      counterbuffer->buffer->size()}});
+  updateBinding(context, "u_pCompactIndex",
+                RHI::BindingResource{{compactIndices->buffer.get(), 0,
+                                      compactIndices->buffer->size()}});
+  updateBinding(context, "u_TreeNodes",
+                RHI::BindingResource{{treeNode->buffer.get(), 0, treeNode->buffer->size()}});
+  updateBinding(context, "u_compact2leaf",
+                RHI::BindingResource{{compact2leaf->buffer.get(), 0,
+                                      compact2leaf->buffer->size()}});
+
+  std::vector<RHI::BindGroupEntry>* set_0_entries =
+      renderData.getBindGroupEntries("CommonScene");
+  getBindGroup(context, 0)->updateBinding(*set_0_entries);
+  std::vector<RHI::BindGroupEntry>* set_1_entries =
+      renderData.getBindGroupEntries("CommonRT");
+  getBindGroup(context, 1)->updateBinding(*set_1_entries);
+
+  updateBinding(context, "VoxelizerUniform",
+                voxel_setting->shared.voxUniBinding);
+
+  Singleton<RHI::DeviceProfilerManager>::instance()->beginSegment(
+      context->cmdEncoder, RHI::PipelineStages::TOP_OF_PIPE_BIT,
+      "fused_sampling");
+
+  RHI::RayTracingPassEncoder* encoder = beginPass(context);
+
+  uint32_t batchIdx = renderData.getUInt("FrameIdx");
+
+  struct PushConstant {
+    uint32_t width;
+    uint32_t height;
+    uint32_t sample_batch;
+    uint32_t sample_strategy;
+    uint32_t second_bounce;
+  };
+  PushConstant pConst = {1280, 720, batchIdx,
+                         (strategy & 0xf) | ((traverse_mode & 0x3) << 4) |
+                             ((mis_mode & 0x1) << 6) |
+                             ((visibility_mode & 0x3) << 7),
+                         second ? 1 : 0};
+  encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::RAYGEN, 0,
+                         sizeof(PushConstant));
+  encoder->traceRays(1280, 720, 1);
+  encoder->end();
+
+  Singleton<RHI::DeviceProfilerManager>::instance()->endSegment(
+      context->cmdEncoder, RHI::PipelineStages::BOTTOM_OF_PIPE_BIT,
+      "fused_sampling");
+}
+
+auto VXGuiderGIPass::renderUI() noexcept -> void {
+  {
+    const char* item_names[] = {"Init",  "BSDF",         "BSDF 2spp",
+                                "Guide", "Guide + BSDF", "EXT",
+                                "EXT2",  "EXT3",         "Extra Bounce"};
+    ImGui::Combo("Sample Mode", &strategy, item_names, IM_ARRAYSIZE(item_names),
+                 IM_ARRAYSIZE(item_names));
+  }
+  {
+    const char* item_names[] = {"Unifrom", "Irradiance", "Visibility Irradiance", "SLC"};
+    ImGui::Combo("VX Traverse Mode", &traverse_mode, item_names, IM_ARRAYSIZE(item_names),
+                 IM_ARRAYSIZE(item_names));
+  }
+  { const char* item_names[] = {"Balance", "Power"};
+    ImGui::Combo("MIS Mode", &mis_mode, item_names,
+                 IM_ARRAYSIZE(item_names),
+                 IM_ARRAYSIZE(item_names));
+  }
+  {
+    const char* item_names[] = {"None", "Spixel", "Fuzzy Spixel"};
+    ImGui::Combo("Visibility Mode", &visibility_mode, item_names,
+                 IM_ARRAYSIZE(item_names),
+                 IM_ARRAYSIZE(item_names));
+  }
+  ImGui::Checkbox("Second Bounce", &second);
+  }
+
+VXGuiderGIASVGFPass::VXGuiderGIASVGFPass(
+    VXGI::VXGISetting* vx_set)
+    : voxel_setting(vx_set) {
+  auto [rgen] = GFX::ShaderLoader_SLANG::load<1u>(
+      "../Engine/Shaders/SRenderer/addon/"
+      "vxguiding/vxguiding-gi-asvgf.slang",
+      std::array<std::pair<std::string, RHI::ShaderStages>, 1>{
+          std::make_pair("RgenMain", RHI::ShaderStages::RAYGEN),
+      });
+
+  GFX::SBTsDescriptor sbt = RTCommon::get()->getSBTDescriptor();
+  sbt.rgenSBT = GFX::SBTsDescriptor::RayGenerationSBT{
+      {Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rgen)}};
+
+  RayTracingPass::init(sbt, 1);
+}
+
+auto VXGuiderGIASVGFPass::reflect() noexcept -> RDG::PassReflection {
+  RDG::PassReflection reflector;
+  reflector.addOutput("Diffuse")
+      .isTexture().withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::R32_UINT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addOutput("Specular")
+      .isTexture().withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::R32_UINT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInputOutput("RandSeed")
+    .isTexture().withSize(Math::vec3(1.f))
+    .withFormat(RHI::TextureFormat::R32_UINT)
+    .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+    .consume(RDG::TextureInfo::ConsumeEntry{
+            RDG::TextureInfo::ConsumeType::StorageBinding}
+            .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInputOutput("RandPrev")
+    .isTexture().withSize(Math::vec3(1.f))
+    .withFormat(RHI::TextureFormat::R32_UINT)
+    .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+    .consume(RDG::TextureInfo::ConsumeEntry{
+            RDG::TextureInfo::ConsumeType::StorageBinding}
+            .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  GBufferUtils::addGBufferInput(
+      reflector, (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR);
+  reflector.addInput("VBuffer")
+      .isTexture()
+      .withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::RGBA32_UINT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(
+          RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("Irradiance")
+      .isTexture()
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(
+          RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("AABBMin")
+      .isBuffer()
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(
+          RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("AABBMax")
+      .isBuffer()
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(
+          RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("CounterBuffer")
+      .isBuffer()
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(
+          RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("CompactIndices")
+      .isBuffer()
+      .withSize(131072 * sizeof(uint32_t))
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(
+          RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("AABBMin")
+      .isBuffer()
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(
+          RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("AABBMax")
+      .isBuffer()
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(
+          RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInputOutput("Color")
+      .isTexture()
+      .withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(
+          RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("Positions")
+      .isTexture()
+      .withSize(Math::vec3(1, 1, 1))
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(
+          RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("Node")
+      .isBuffer()
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("TopLevelTree")
+      .isBuffer()
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("ClusterRoots")
+      .isBuffer()
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("SPixelIndexImage")
+      .isTexture()
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("FuzzyWeight")
+      .isTexture().withFormat(RHI::TextureFormat::RGBA16_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("FuzzyIndex")
+      .isTexture().withFormat(RHI::TextureFormat::RGBA16_SINT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("InverseIndex")
+      .isTexture()
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(
+          RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT));
+  reflector.addInput("AssociateBuffer")
+      .isBuffer()
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(
+          RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("Compact2Leaf")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInputOutput("Intensity")
+      .isTexture().withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::R32_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  return reflector;
+}
+
+auto VXGuiderGIASVGFPass::execute(
+    RDG::RenderContext* context, RDG::RenderData const& renderData) noexcept
+    -> void {
+  GFX::Texture* vbuffer = renderData.getTexture("VBuffer");
+  //GFX::Texture* color = renderData.getTexture("Color");
+  GFX::Texture* position = renderData.getTexture("Positions");
+  //GFX::Texture* debug = renderData.getTexture("Debug");
+  //GFX::Texture* debug1 = renderData.getTexture("Debug1");
+  //GFX::Texture* debug2 = renderData.getTexture("Debug2");
+  GFX::Texture* irradiance = renderData.getTexture("Irradiance");
+  GFX::Texture* spxielIdx = renderData.getTexture("SPixelIndexImage");
+  GFX::Texture* fweight = renderData.getTexture("FuzzyWeight");
+  GFX::Texture* findex = renderData.getTexture("FuzzyIndex");
+  GFX::Texture* ii = renderData.getTexture("InverseIndex");
+  GFX::Texture* intensity = renderData.getTexture("Intensity");
+
+  GFX::Buffer* counterbuffer = renderData.getBuffer("CounterBuffer");
+  GFX::Buffer* compactIndices = renderData.getBuffer("CompactIndices");
+  GFX::Buffer* aabbMin = renderData.getBuffer("AABBMin");
+  GFX::Buffer* aabbMax = renderData.getBuffer("AABBMax");
+  GFX::Buffer* treeNode = renderData.getBuffer("Node");
+  GFX::Buffer* tlt = renderData.getBuffer("TopLevelTree");
+  GFX::Buffer* cr = renderData.getBuffer("ClusterRoots");
+  GFX::Buffer* ab = renderData.getBuffer("AssociateBuffer");
+  GFX::Buffer* compact2leaf = renderData.getBuffer("Compact2Leaf");
+
+  GBufferUtils::bindGBufferResource(this, context, renderData);
+  //GBufferUtils::bindPrevGBufferResource(this, context, renderData);
+
+  GFX::Texture* diffuse = renderData.getTexture("Diffuse");
+  GFX::Texture* specular = renderData.getTexture("Specular");
+  GFX::Texture* rand = renderData.getTexture("RandSeed");
+  GFX::Texture* seedprev = renderData.getTexture("RandPrev");
+  updateBinding(context, "u_Diffuse",
+                RHI::BindingResource{{diffuse->getUAV(0, 0, 1)}});
+  updateBinding(context, "u_Specular",
+                RHI::BindingResource{{specular->getUAV(0, 0, 1)}});
+  updateBinding(context, "u_RNGSeed",
+                RHI::BindingResource{{rand->getUAV(0, 0, 1)}});
+  updateBinding(context, "u_RNGPrev",
+                RHI::BindingResource{{seedprev->getUAV(0, 0, 1)}});
+
+
+  updateBinding(context, "u_inverseIndex",
+                RHI::BindingResource{ii->getUAV(0, 0, 1)});
+  updateBinding(context, "u_position",
+                RHI::BindingResource{position->getUAV(0, 0, 1)});
+  //updateBinding(context, "u_Debug",
+  //              RHI::BindingResource{debug->getUAV(0, 0, 1)});
+  //updateBinding(context, "u_Debug2",
+  //              RHI::BindingResource{debug1->getUAV(0, 0, 1)});
+  //updateBinding(context, "u_Debug3",
+  //              RHI::BindingResource{debug2->getUAV(0, 0, 1)});
+  updateBinding(context, "u_pIrradiance",
+                RHI::BindingResource{{irradiance->getUAV(0, 0, 1)}});
+  updateBinding(context, "u_spixelIdx",
+                RHI::BindingResource{{spxielIdx->getUAV(0, 0, 1)}});
+  updateBinding(context, "u_intensity",
+                RHI::BindingResource{{intensity->getUAV(0, 0, 1)}});
+  updateBinding(context, "u_fuzzyWeight",
+                RHI::BindingResource{fweight->getSRV(0, 1, 0, 1)});
+  updateBinding(context, "u_fuzzyIDX",
+                RHI::BindingResource{findex->getSRV(0, 1, 0, 1)});
+
+  updateBinding(context, "u_vxAssociate",
+      RHI::BindingResource{{ab->buffer.get(), 0, ab->buffer->size()}});
+  updateBinding(context, "u_topLevelTree",
+      RHI::BindingResource{{tlt->buffer.get(), 0, tlt->buffer->size()}});
+  updateBinding(context, "u_clusterRoots",
+      RHI::BindingResource{{cr->buffer.get(), 0, cr->buffer->size()}});
+  updateBinding(context, "u_pMin",
+                RHI::BindingResource{
+                    {aabbMin->buffer.get(), 0, aabbMin->buffer->size()}});
+  updateBinding(context, "u_pMax",
+                RHI::BindingResource{
+                    {aabbMax->buffer.get(), 0, aabbMax->buffer->size()}});
+  updateBinding(context, "u_vBuffer",
+                RHI::BindingResource{vbuffer->getSRV(0, 1, 0, 1)});
+  updateBinding(context, "u_vxCounter",
+                RHI::BindingResource{{counterbuffer->buffer.get(), 0,
+                                      counterbuffer->buffer->size()}});
+  updateBinding(context, "u_pCompactIndex",
+                RHI::BindingResource{{compactIndices->buffer.get(), 0,
+                                      compactIndices->buffer->size()}});
+  updateBinding(context, "u_TreeNodes",
+                RHI::BindingResource{{treeNode->buffer.get(), 0, treeNode->buffer->size()}});
+  updateBinding(context, "u_compact2leaf",
+                RHI::BindingResource{{compact2leaf->buffer.get(), 0,
+                                      compact2leaf->buffer->size()}});
+
+  std::vector<RHI::BindGroupEntry>* set_0_entries =
+      renderData.getBindGroupEntries("CommonScene");
+  getBindGroup(context, 0)->updateBinding(*set_0_entries);
+  std::vector<RHI::BindGroupEntry>* set_1_entries =
+      renderData.getBindGroupEntries("CommonRT");
+  getBindGroup(context, 1)->updateBinding(*set_1_entries);
+
+  updateBinding(context, "VoxelizerUniform",
+                voxel_setting->shared.voxUniBinding);
+
+  Singleton<RHI::DeviceProfilerManager>::instance()->beginSegment(
+      context->cmdEncoder, RHI::PipelineStages::TOP_OF_PIPE_BIT,
+      "fused_sampling");
+
+  RHI::RayTracingPassEncoder* encoder = beginPass(context);
+
+  uint32_t batchIdx = renderData.getUInt("FrameIdx");
+
+  struct PushConstant {
+    uint32_t width;
+    uint32_t height;
+    uint32_t sample_batch;
+    uint32_t sample_strategy;
+    uint32_t second_bounce;
+  };
+  PushConstant pConst = {1280, 720, batchIdx,
+                         (strategy & 0xf) | ((traverse_mode & 0x3) << 4) |
+                             ((mis_mode & 0x1) << 6) |
+                             ((visibility_mode & 0x3) << 7),
+                         second ? 1 : 0};
+  encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::RAYGEN, 0,
+                         sizeof(PushConstant));
+  encoder->traceRays(1280, 720, 1);
+  encoder->end();
+
+  Singleton<RHI::DeviceProfilerManager>::instance()->endSegment(
+      context->cmdEncoder, RHI::PipelineStages::BOTTOM_OF_PIPE_BIT,
+      "fused_sampling");
+}
+
+auto VXGuiderGIASVGFPass::renderUI() noexcept -> void {
+  {
+    const char* item_names[] = {"Init",  "BSDF",         "BSDF 2spp",
+                                "Guide", "Guide + BSDF", "EXT",
+                                "EXT2",  "EXT3",         "Extra Bounce"};
+    ImGui::Combo("Sample Mode", &strategy, item_names, IM_ARRAYSIZE(item_names),
+                 IM_ARRAYSIZE(item_names));
+  }
+  {
+    const char* item_names[] = {"Unifrom", "Irradiance", "Visibility Irradiance", "SLC"};
+    ImGui::Combo("VX Traverse Mode", &traverse_mode, item_names, IM_ARRAYSIZE(item_names),
+                 IM_ARRAYSIZE(item_names));
+  }
+  { const char* item_names[] = {"Balance", "Power"};
+    ImGui::Combo("MIS Mode", &mis_mode, item_names,
+                 IM_ARRAYSIZE(item_names),
+                 IM_ARRAYSIZE(item_names));
+  }
+  {
+    const char* item_names[] = {"None", "Spixel", "Fuzzy Spixel"};
+    ImGui::Combo("Visibility Mode", &visibility_mode, item_names,
+                 IM_ARRAYSIZE(item_names),
+                 IM_ARRAYSIZE(item_names));
+  }
+  ImGui::Checkbox("Second Bounce", &second);
+  }
+
+VXGuiderReSTIRGIPass::VXGuiderReSTIRGIPass(
+    VXGI::VXGISetting* vx_set, RestirGI::GIResamplingRuntimeParameters* param)
+    : voxel_setting(vx_set), param(param) {
+  auto [rgen] = GFX::ShaderLoader_SLANG::load<1u>(
+      "../Engine/Shaders/SRenderer/addon/"
+      "vxguiding/vxguiding-restir-initial-sample.slang",
+      std::array<std::pair<std::string, RHI::ShaderStages>, 1>{
+          std::make_pair("RgenMain", RHI::ShaderStages::RAYGEN),
+      });
+
+  GFX::SBTsDescriptor sbt = RTCommon::get()->getSBTDescriptor();
+  sbt.rgenSBT = GFX::SBTsDescriptor::RayGenerationSBT{
+      {Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rgen)}};
+
+  RayTracingPass::init(sbt, 1);
+}
+
+auto VXGuiderReSTIRGIPass::reflect() noexcept -> RDG::PassReflection {
+  RDG::PassReflection reflector;
+  reflector.addInput("VBuffer")
+      .isTexture().withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::RGBA32_UINT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("Irradiance")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("AABBMin")
+      .isBuffer()
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("AABBMax")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("CounterBuffer")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("CompactIndices")
+      .isBuffer().withSize(131072 * sizeof(uint32_t))
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("AABBMin")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("AABBMax")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage(
+                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInputOutput("Color")
+      .isTexture().withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("Positions")
+      .isTexture().withSize(Math::vec3(1, 1, 1))
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("Node")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("TopLevelTree")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("ClusterRoots")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("SPixelIndexImage")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("FuzzyWeight")
+      .isTexture().withFormat(RHI::TextureFormat::RGBA16_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("FuzzyIndex")
+      .isTexture().withFormat(RHI::TextureFormat::RGBA16_SINT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("InverseIndex")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT));
+  reflector.addInput("AssociateBuffer")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("Compact2Leaf")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInputOutput("Intensity")
+      .isTexture().withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::R32_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addOutput("GIReservoir")
+      .isBuffer().withSize(sizeof(uint32_t) * 8 * (1280 * 720 * 2))
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT |
+                         (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  return reflector;
+}
+
+// 32 bit Jenkins hash
+static uint32_t JenkinsHash(uint32_t a) {
+  // http://burtleburtle.net/bob/hash/integer.html
+  a = (a + 0x7ed55d16) + (a << 12);
+  a = (a ^ 0xc761c23c) ^ (a >> 19);
+  a = (a + 0x165667b1) + (a << 5);
+  a = (a + 0xd3a2646c) ^ (a << 9);
+  a = (a + 0xfd7046c5) + (a << 3);
+  a = (a ^ 0xb55a4f09) ^ (a >> 16);
+  return a;
+}
+
+auto VXGuiderReSTIRGIPass::execute(
+    RDG::RenderContext* context, RDG::RenderData const& renderData) noexcept
+    -> void {
+  GFX::Texture* vbuffer = renderData.getTexture("VBuffer");
+  GFX::Texture* color = renderData.getTexture("Color");
+  GFX::Texture* position = renderData.getTexture("Positions");
+  GFX::Texture* irradiance = renderData.getTexture("Irradiance");
+  GFX::Texture* spxielIdx = renderData.getTexture("SPixelIndexImage");
+  GFX::Texture* fweight = renderData.getTexture("FuzzyWeight");
+  GFX::Texture* findex = renderData.getTexture("FuzzyIndex");
+  GFX::Texture* ii = renderData.getTexture("InverseIndex");
+  GFX::Texture* intensity = renderData.getTexture("Intensity");
+
+  GFX::Buffer* counterbuffer = renderData.getBuffer("CounterBuffer");
+  GFX::Buffer* compactIndices = renderData.getBuffer("CompactIndices");
+  GFX::Buffer* aabbMin = renderData.getBuffer("AABBMin");
+  GFX::Buffer* aabbMax = renderData.getBuffer("AABBMax");
+  GFX::Buffer* treeNode = renderData.getBuffer("Node");
+  GFX::Buffer* tlt = renderData.getBuffer("TopLevelTree");
+  GFX::Buffer* cr = renderData.getBuffer("ClusterRoots");
+  GFX::Buffer* ab = renderData.getBuffer("AssociateBuffer");
+  GFX::Buffer* compact2leaf = renderData.getBuffer("Compact2Leaf");
+
+  GFX::Buffer* reservoir = renderData.getBuffer("GIReservoir");
+  updateBinding(context, "u_GIReservoirs",
+                RHI::BindingResource{
+                    {reservoir->buffer.get(), 0, reservoir->buffer->size()}});
+
+
+  updateBinding(context, "u_Color",
+                RHI::BindingResource{color->getUAV(0, 0, 1)});
+  updateBinding(context, "u_inverseIndex",
+                RHI::BindingResource{ii->getUAV(0, 0, 1)});
+  updateBinding(context, "u_position",
+                RHI::BindingResource{position->getUAV(0, 0, 1)});
+  updateBinding(context, "u_pIrradiance",
+                RHI::BindingResource{{irradiance->getUAV(0, 0, 1)}});
+  updateBinding(context, "u_spixelIdx",
+                RHI::BindingResource{{spxielIdx->getUAV(0, 0, 1)}});
+  updateBinding(context, "u_intensity",
+                RHI::BindingResource{{intensity->getUAV(0, 0, 1)}});
+  updateBinding(context, "u_fuzzyWeight",
+                RHI::BindingResource{fweight->getSRV(0, 1, 0, 1)});
+  updateBinding(context, "u_fuzzyIDX",
+                RHI::BindingResource{findex->getSRV(0, 1, 0, 1)});
+
+  updateBinding(context, "u_vxAssociate",
+      RHI::BindingResource{{ab->buffer.get(), 0, ab->buffer->size()}});
+  updateBinding(context, "u_topLevelTree",
+      RHI::BindingResource{{tlt->buffer.get(), 0, tlt->buffer->size()}});
+  updateBinding(context, "u_clusterRoots",
+      RHI::BindingResource{{cr->buffer.get(), 0, cr->buffer->size()}});
+  updateBinding(context, "u_pMin",
+                RHI::BindingResource{
+                    {aabbMin->buffer.get(), 0, aabbMin->buffer->size()}});
+  updateBinding(context, "u_pMax",
+                RHI::BindingResource{
+                    {aabbMax->buffer.get(), 0, aabbMax->buffer->size()}});
+  updateBinding(context, "u_vBuffer",
+                RHI::BindingResource{vbuffer->getSRV(0, 1, 0, 1)});
+  updateBinding(context, "u_vxCounter",
+                RHI::BindingResource{{counterbuffer->buffer.get(), 0,
+                                      counterbuffer->buffer->size()}});
+  updateBinding(context, "u_pCompactIndex",
+                RHI::BindingResource{{compactIndices->buffer.get(), 0,
+                                      compactIndices->buffer->size()}});
+  updateBinding(context, "u_TreeNodes",
+                RHI::BindingResource{{treeNode->buffer.get(), 0, treeNode->buffer->size()}});
+  updateBinding(context, "u_compact2leaf",
+                RHI::BindingResource{{compact2leaf->buffer.get(), 0,
+                                      compact2leaf->buffer->size()}});
+
+  std::vector<RHI::BindGroupEntry>* set_0_entries =
+      renderData.getBindGroupEntries("CommonScene");
+  getBindGroup(context, 0)->updateBinding(*set_0_entries);
+  std::vector<RHI::BindGroupEntry>* set_1_entries =
+      renderData.getBindGroupEntries("CommonRT");
+  getBindGroup(context, 1)->updateBinding(*set_1_entries);
+
+  updateBinding(context, "VoxelizerUniform",
+                voxel_setting->shared.voxUniBinding);
+
+  Singleton<RHI::DeviceProfilerManager>::instance()->beginSegment(
+      context->cmdEncoder, RHI::PipelineStages::TOP_OF_PIPE_BIT,
+      "fused_sampling");
+
+  RHI::RayTracingPassEncoder* encoder = beginPass(context);
+
+  uint32_t batchIdx = renderData.getUInt("FrameIdx");
+
+  struct PushConstant {
+    RestirGI::GIResamplingRuntimeParameters params;
+    uint32_t width;
+    uint32_t height;
+    uint32_t sample_batch;
+    uint32_t sample_strategy;
+    uint32_t initialOutputBufferIndex;
+  };
+  PushConstant pConst = {*param, 1280, 720, batchIdx,
+                         (strategy & 0xf) | ((traverse_mode & 0x3) << 4) |
+                             ((mis_mode & 0x1) << 6) |
+                             ((visibility_mode & 0x3) << 7)};
+  pConst.initialOutputBufferIndex = 0;
+  encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::RAYGEN, 0,
+                         sizeof(PushConstant));
+  encoder->traceRays(1280, 720, 1);
+  encoder->end();
+
+  Singleton<RHI::DeviceProfilerManager>::instance()->endSegment(
+      context->cmdEncoder, RHI::PipelineStages::BOTTOM_OF_PIPE_BIT,
+      "fused_sampling");
+
+  const uint32_t frameID = renderData.getUInt("FrameIdx");
+  // update params
+  {
+    param->uniformRandomNumber = JenkinsHash(frameID);
+    param->neighborOffsetMask = 8192 - 1;
+  }
+}
+
+auto VXGuiderReSTIRGIPass::renderUI() noexcept -> void {
+  {
+    const char* item_names[] = {"Init",  "BSDF",         "BSDF 2spp",
+                                "Guide", "Guide + BSDF", "EXT",
+                                "EXT2",  "EXT3",         "Extra Bounce"};
+    ImGui::Combo("Sample Mode", &strategy, item_names, IM_ARRAYSIZE(item_names),
+                 IM_ARRAYSIZE(item_names));
+  }
+  {
+    const char* item_names[] = {"Unifrom", "Irradiance", "Visibility Irradiance", "SLC"};
+    ImGui::Combo("VX Traverse Mode", &traverse_mode, item_names, IM_ARRAYSIZE(item_names),
+                 IM_ARRAYSIZE(item_names));
+  }
+  { const char* item_names[] = {"Balance", "Power"};
+    ImGui::Combo("MIS Mode", &mis_mode, item_names,
+                 IM_ARRAYSIZE(item_names),
+                 IM_ARRAYSIZE(item_names));
+  }
+  {
+    const char* item_names[] = {"None", "Spixel", "Fuzzy Spixel"};
+    ImGui::Combo("Visibility Mode", &visibility_mode, item_names,
+                 IM_ARRAYSIZE(item_names),
+                 IM_ARRAYSIZE(item_names));
+  }
+}
+
+VXGuiderAccumPass::VXGuiderAccumPass(
+    VXGI::VXGISetting* vx_set)
+    : voxel_setting(vx_set) {
+  auto [rgen] = GFX::ShaderLoader_SLANG::load<1u>(
+      "../Engine/Shaders/SRenderer/addon/"
+      "vxguiding/vxguiding-accumulator.slang",
+      std::array<std::pair<std::string, RHI::ShaderStages>, 1>{
+          std::make_pair("RgenMain", RHI::ShaderStages::RAYGEN),
+      });
+
+  GFX::SBTsDescriptor sbt = RTCommon::get()->getSBTDescriptor();
+  sbt.rgenSBT = GFX::SBTsDescriptor::RayGenerationSBT{
+      {Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rgen)}};
+
+  RayTracingPass::init(sbt, 1);
+}
+
+auto VXGuiderAccumPass::reflect() noexcept -> RDG::PassReflection {
   RDG::PassReflection reflector;
   reflector.addInput("VBuffer")
       .isTexture()
@@ -297,12 +1320,32 @@ auto VXGuiderGIPass::reflect() noexcept -> RDG::PassReflection {
       .consume(RDG::BufferInfo::ConsumeEntry{}
               .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
               .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInputOutput("PdfAccumulator")
+      .isTexture().withSize(Math::ivec3(512,512,1))
+      .withFormat(RHI::TextureFormat::R32_UINT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInputOutput("PdfAccumulatorInfo")
+      .isTexture().withSize(Math::ivec3(2,2,1))
+      .withFormat(RHI::TextureFormat::R32_UINT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
   return reflector;
 }
 
-auto VXGuiderGIPass::execute(
+auto VXGuiderAccumPass::execute(
     RDG::RenderContext* context, RDG::RenderData const& renderData) noexcept
     -> void {
+  GFX::Texture* pdf_accum = renderData.getTexture("PdfAccumulator");
+  GFX::Texture* pdf_ainfo = renderData.getTexture("PdfAccumulatorInfo");
+  updateBindings(context, {
+      {"u_PdfAccumulator", RHI::BindingResource{pdf_accum->getUAV(0, 0, 1)}},
+      {"u_PdfAccumulatorInfo", RHI::BindingResource{pdf_ainfo->getUAV(0, 0, 1)}}});
+
   GFX::Texture* vbuffer = renderData.getTexture("VBuffer");
   GFX::Texture* color = renderData.getTexture("Color");
   GFX::Texture* position = renderData.getTexture("Positions");
@@ -384,28 +1427,47 @@ auto VXGuiderGIPass::execute(
 
   RHI::RayTracingPassEncoder* encoder = beginPass(context);
 
-  uint32_t batchIdx = renderData.getUInt("AccumIdx");
+  uint32_t batchIdx = renderData.getUInt("FrameIdx");
 
   struct PushConstant {
     uint32_t width;
     uint32_t height;
     uint32_t sample_batch;
     uint32_t sample_strategy;
+    Math::ivec2 debug_pixel;
   };
-  PushConstant pConst = {1280, 720, batchIdx,
+  PushConstant pConst = {512, 512, batchIdx,
                          (strategy & 0xf) | ((traverse_mode & 0x3) << 4) |
                              ((mis_mode & 0x1) << 6) |
-                             ((visibility_mode & 0x3) << 7)};
+                             ((visibility_mode & 0x3) << 7),
+                         debugPixel};
+
+  Singleton<RHI::DeviceProfilerManager>::instance()->beginSegment(
+      context->cmdEncoder, RHI::PipelineStages::TOP_OF_PIPE_BIT, "sample_pass");
+
   encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::RAYGEN, 0,
                          sizeof(PushConstant));
   encoder->traceRays(1280, 720, 1);
   encoder->end();
+
+  Singleton<RHI::DeviceProfilerManager>::instance()->endSegment(
+      context->cmdEncoder, RHI::PipelineStages::BOTTOM_OF_PIPE_BIT, "sample_pass");
 }
 
-auto VXGuiderGIPass::renderUI() noexcept -> void {
+auto VXGuiderAccumPass::onInteraction(
+    Platform::Input* input, Editor::Widget::WidgetInfo* info) noexcept -> void {
+  if (info->isFocused && info->isHovered) {
+    if (input->isMouseButtonPressed(Platform::SIByL_MOUSE_BUTTON_1)) {
+      debugPixel.x = std::clamp(info->mousePos.x, 0.f, 1279.f);
+      debugPixel.y = std::clamp(info->mousePos.y, 0.f, 719.f);
+    }
+  }
+}
+auto VXGuiderAccumPass::renderUI() noexcept -> void {
   {
-    const char* item_names[] = {"Init",         "BSDF", "BSDF 2spp", "Guide",
-                                "Guide + BSDF", "EXT",  "EXT2",      "EXT3"};
+    const char* item_names[] = {"Init",  "BSDF",         "BSDF 2spp",
+                                "Guide", "Guide + BSDF", "EXT",
+                                "EXT2",  "EXT3",         "Extra Bounce"};
     ImGui::Combo("Sample Mode", &strategy, item_names, IM_ARRAYSIZE(item_names),
                  IM_ARRAYSIZE(item_names));
   }
@@ -425,6 +1487,8 @@ auto VXGuiderGIPass::renderUI() noexcept -> void {
                  IM_ARRAYSIZE(item_names),
                  IM_ARRAYSIZE(item_names));
   }
+  ImGui::DragInt("Debug Pixel X", &debugPixel.x);
+  ImGui::DragInt("Debug Pixel Y", &debugPixel.y);
 }
 
 VXGuiderCompactPass::VXGuiderCompactPass(VXGI::VXGISetting* setting)
@@ -534,31 +1598,24 @@ auto VXGuiderGeometryPass::reflect() noexcept -> RDG::PassReflection {
 
   RDG::PassReflection reflector;
   reflector.addInputOutput("AABBMin")
-      .isBuffer()
-      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
-      .consume(
-          RDG::BufferInfo::ConsumeEntry{}
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
               .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT |
                          (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
               .addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT));
   reflector.addInputOutput("AABBMax")
-      .isBuffer()
-      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
-      .consume(
-          RDG::BufferInfo::ConsumeEntry{}
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
               .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT |
                          (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
               .addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT));
   reflector.addInput("Irradiance")
-      .isTexture()
-      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
-      .consume(
-          RDG::TextureInfo::ConsumeEntry{
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
               RDG::TextureInfo::ConsumeType::StorageBinding}
               .addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT));
   reflector.addOutput("Depth")
-      .isTexture()
-      .withSize(Math::ivec3(size, size, 1))
+      .isTexture().withSize(Math::ivec3(size, size, 1))
       .withFormat(RHI::TextureFormat::DEPTH32_FLOAT)
       .withUsages((uint32_t)RHI::TextureUsage::DEPTH_ATTACHMENT)
       .consume(RDG::TextureInfo::ConsumeEntry{
@@ -603,9 +1660,17 @@ auto VXGuiderGeometryPass::execute(RDG::RenderContext* context,
   updateBinding(context, "VoxelConfig",
                 settingBuffer.getBufferBinding(context->flightIdx));
 
+  Singleton<RHI::DeviceProfilerManager>::instance()->beginSegment(
+      context->cmdEncoder, RHI::PipelineStages::TOP_OF_PIPE_BIT, "geometry_injection");
+
   RHI::RenderPassEncoder* encoder = beginPass(context, depth);
-  renderData.getDelegate("IssueAllDrawcalls")(
-      prepareDelegateData(context, renderData));
+  if (injectGeometries) {
+    renderData.getDelegate("IssueAllDrawcalls")(
+        prepareDelegateData(context, renderData));
+  }
+
+  Singleton<RHI::DeviceProfilerManager>::instance()->endSegment(
+      context->cmdEncoder, RHI::PipelineStages::BOTTOM_OF_PIPE_BIT, "geometry_injection");
 
   encoder->end();
 }
@@ -617,9 +1682,178 @@ auto VXGuiderGeometryPass::renderUI() noexcept -> void {
   ImGui::Checkbox("Use Compact", &use_compact);
   ImGui::Checkbox("Z Conservative", &z_conservative);
   ImGui::Checkbox("Use Clipping", &clipping);
+  ImGui::Checkbox("Inject Voxels", &injectGeometries);
   gVoxelSetting.use_compact = use_compact ? 1 : 0;
   gVoxelSetting.z_conservative = z_conservative ? 1 : 0;
   gVoxelSetting.clipping = clipping ? 1 : 0;
+}
+
+VXGuiderGeometryBakePass::VXGuiderGeometryBakePass(VXGI::VXGISetting* setting)
+    : setting(setting) {
+  auto [vert, geom, frag] = GFX::ShaderLoader_SLANG::load(
+      "../Engine/Shaders/SRenderer/addon/vxguiding/"
+      "vxguiding-geome-prebake.slang",
+      std::array<std::pair<std::string, RHI::ShaderStages>, 3>{
+          std::make_pair("vertexMain", RHI::ShaderStages::VERTEX),
+          std::make_pair("geometryMain", RHI::ShaderStages::GEOMETRY),
+          std::make_pair("fragmentMain", RHI::ShaderStages::FRAGMENT),
+      });
+
+  RDG::RenderPass::init(
+      Core::ResourceManager::get()->getResource<GFX::ShaderModule>(vert),
+      Core::ResourceManager::get()->getResource<GFX::ShaderModule>(geom),
+      Core::ResourceManager::get()->getResource<GFX::ShaderModule>(frag),
+      [](RHI::RenderPipelineDescriptor& desc) {
+        desc.rasterize.mode =  // Enable overestimate conservative rasterization
+            RHI::RasterizeState::ConservativeMode::OVERESTIMATE;
+      });
+
+  settingBuffer = GFX::GFXManager::get()->createStructuredUniformBuffer<VoxelSetting>();
+  uniformBuffer = GFX::GFXManager::get()->createStructuredUniformBuffer<VXGI::VoxelizeUniform>();
+}
+
+auto VXGuiderGeometryBakePass::reflect() noexcept -> RDG::PassReflection {
+  uint32_t const size = setting->clipmapSetting.size;
+  RDG::PassReflection reflector;
+  reflector.addInputOutput("AABBMin")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT |
+                         (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT));
+  reflector.addInputOutput("AABBMax")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT |
+                         (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT));
+  reflector.addOutput("Depth")
+      .isTexture().withSize(Math::ivec3(size, size, 1))
+      .withFormat(RHI::TextureFormat::DEPTH32_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::DEPTH_ATTACHMENT)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+          RDG::TextureInfo::ConsumeType::DepthStencilAttachment}
+                   .enableDepthWrite(false)
+                   .setAttachmentLoc(0)
+                   .setDepthCompareFn(RHI::CompareFunction::EQUAL));
+  return reflector;
+}
+
+auto VXGuiderGeometryBakePass::execute(
+    RDG::RenderContext* context, RDG::RenderData const& renderData) noexcept
+    -> void {
+  GFX::Texture* depth = renderData.getTexture("Depth");
+  GFX::Buffer* aabbMin = renderData.getBuffer("AABBMin");
+  GFX::Buffer* aabbMax = renderData.getBuffer("AABBMax");
+  updateBinding(context, "u_pMin", RHI::BindingResource{{aabbMin->buffer.get(), 0, aabbMin->buffer->size()}});
+  updateBinding(context, "u_pMax", RHI::BindingResource{{aabbMax->buffer.get(), 0, aabbMax->buffer->size()}});
+
+  renderPassDescriptor = {
+      {}, RHI::RenderPassDepthStencilAttachment{
+          depth->getDSV(0, 0, 1), 1, RHI::LoadOp::DONT_CARE,
+          RHI::StoreOp::DONT_CARE, false, 0, RHI::LoadOp::DONT_CARE,
+          RHI::StoreOp::DONT_CARE, false},
+  };
+
+  std::vector<RHI::BindGroupEntry>* set_0_entries =
+      renderData.getBindGroupEntries("CommonScene");
+  getBindGroup(context, 0)->updateBinding(*set_0_entries);
+  
+  Math::bounds3 aabb = *static_cast<Math::bounds3 const*>(renderData.getPtr("SceneAABB"));
+  VXGI::VoxelizeUniform gUniform;
+  gUniform.aabbMin = aabb.pMin;
+  gUniform.aabbMax = aabb.pMax;
+  gUniform.voxelSize = 64;
+  uniformBuffer.setStructure(gUniform, context->flightIdx);
+  updateBinding(context, "VoxelizerUniform",
+                uniformBuffer.getBufferBinding(context->flightIdx));
+
+  settingBuffer.setStructure(gVoxelSetting, context->flightIdx);
+  updateBinding(context, "VoxelConfig",
+                settingBuffer.getBufferBinding(context->flightIdx));
+
+  RHI::RenderPassEncoder* encoder = beginPass(context, depth);
+  renderData.getDelegate("IssueStaticDrawcalls")(
+      prepareDelegateData(context, renderData));
+
+  encoder->end();
+}
+
+VXGuiderBakeCleanPass::VXGuiderBakeCleanPass() {
+  auto [comp] = GFX::ShaderLoader_SLANG::load(
+      "../Engine/Shaders/SRenderer/addon/vxguiding/"
+      "vxguiding-bake-clear.slang",
+      std::array<std::pair<std::string, RHI::ShaderStages>, 1>{
+          std::make_pair("ComputeMain", RHI::ShaderStages::COMPUTE),
+      });
+
+  RDG::ComputePass::init(
+      Core::ResourceManager::get()->getResource<GFX::ShaderModule>(comp));
+}
+
+auto VXGuiderBakeCleanPass::reflect() noexcept -> RDG::PassReflection {
+  uint32_t const size = 64;
+  RDG::PassReflection reflector;
+  reflector.addOutput("AABBMin")
+      .isBuffer().withSize(size * size * size * sizeof(uint32_t) * 4)
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addOutput("AABBMax")
+      .isBuffer().withSize(size * size * size * sizeof(uint32_t) * 4)
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  return reflector;
+}
+
+auto VXGuiderBakeCleanPass::execute(RDG::RenderContext* context,
+                                RDG::RenderData const& renderData) noexcept
+    -> void {
+  GFX::Buffer* aabbMin = renderData.getBuffer("AABBMin");
+  GFX::Buffer* aabbMax = renderData.getBuffer("AABBMax");
+
+  updateBinding(context, "u_pMin", RHI::BindingResource{{aabbMin->buffer.get(), 0, aabbMin->buffer->size()}});
+  updateBinding(context, "u_pMax", RHI::BindingResource{{aabbMax->buffer.get(), 0, aabbMax->buffer->size()}});
+  
+  RHI::ComputePassEncoder* encoder = beginPass(context);
+  uint32_t const size = 64;
+  uint32_t const dispatchSize = size / 8;
+  encoder->dispatchWorkgroups(dispatchSize, dispatchSize, dispatchSize);
+  encoder->end();
+}
+
+auto VXGuiderGeometryBakePass::renderUI() noexcept -> void {
+  bool use_compact = gVoxelSetting.use_compact;
+  bool z_conservative = gVoxelSetting.z_conservative;
+  bool clipping = gVoxelSetting.clipping;
+  ImGui::Checkbox("Use Compact", &use_compact);
+  ImGui::Checkbox("Z Conservative", &z_conservative);
+  ImGui::Checkbox("Use Clipping", &clipping);
+  gVoxelSetting.use_compact = use_compact ? 1 : 0;
+  gVoxelSetting.z_conservative = z_conservative ? 1 : 0;
+  gVoxelSetting.clipping = clipping ? 1 : 0;
+}
+
+auto PrebakeDummyPass::reflect() noexcept -> RDG::PassReflection {
+  RDG::PassReflection reflector;
+  reflector.addOutput("AABBMin")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT));
+  reflector.addOutput("AABBMax")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT));
+  return reflector;
+}
+
+auto PrebakeDummyPass::renderUI() noexcept -> void {
+  ImGui::Checkbox("Rebake", &need_rebake);
 }
 
 VXGuiderDIInjection::VXGuiderDIInjection(
@@ -831,6 +2065,11 @@ auto VXGuiderVisualizePass::reflect() noexcept -> RDG::PassReflection {
                    .enableDepthWrite(true)
                    .setAttachmentLoc(0)
                    .setDepthCompareFn(RHI::CompareFunction::LESS));
+  reflector.addInput("Irradiance")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::VERTEX_SHADER_BIT));
   return reflector;
 }
 
@@ -841,6 +2080,7 @@ auto VXGuiderVisualizePass::execute(RDG::RenderContext* context,
   GFX::Texture* depth = renderData.getTexture("Depth");
   GFX::Buffer* aabbMin = renderData.getBuffer("AABBMin");
   GFX::Buffer* aabbMax = renderData.getBuffer("AABBMax");
+  GFX::Texture* irradiance = renderData.getTexture("Irradiance");
 
   updateBinding(context, "u_pMin",
                 RHI::BindingResource{
@@ -848,6 +2088,8 @@ auto VXGuiderVisualizePass::execute(RDG::RenderContext* context,
   updateBinding(context, "u_pMax",
                 RHI::BindingResource{
                     {aabbMax->buffer.get(), 0, aabbMax->buffer->size()}});
+  updateBinding(context, "u_irradiance",
+                RHI::BindingResource{irradiance->getUAV(0, 0, 1)});
   updateBinding(context, "VoxelizerUniform", setting->shared.voxUniBinding);
 
   renderPassDescriptor = {
@@ -903,53 +2145,50 @@ VXGuider1stBounceInjection::VXGuider1stBounceInjection(
 auto VXGuider1stBounceInjection::reflect() noexcept -> RDG::PassReflection {
   RDG::PassReflection reflector;
   reflector.addInput("VBuffer")
-      .isTexture()
-      .withSize(Math::vec3(1, 1, 1))
+      .isTexture().withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::RGBA32_UINT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
-      .consume(
-          RDG::TextureInfo::ConsumeEntry{
+      .consume(RDG::TextureInfo::ConsumeEntry{
               RDG::TextureInfo::ConsumeType::StorageBinding}
-              .addStage(
-                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
-  reflector.addInput("Irradiance")
-      .isTexture()
-      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
-      .consume(
-          RDG::TextureInfo::ConsumeEntry{
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInputOutput("Irradiance")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
               RDG::TextureInfo::ConsumeType::StorageBinding}
-              .addStage(
-                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInputOutput("VPLCount")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
   reflector.addOutput("Color")
-      .isTexture()
-      .withSize(Math::vec3(1, 1, 1))
+      .isTexture().withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
-      .consume(
-          RDG::TextureInfo::ConsumeEntry{
+      .consume(RDG::TextureInfo::ConsumeEntry{
               RDG::TextureInfo::ConsumeType::StorageBinding}
-              .addStage(
-                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
   reflector.addOutput("Positions")
-      .isTexture()
-      .withSize(Math::vec3(1, 1, 1))
+      .isTexture().withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
-      .consume(
-          RDG::TextureInfo::ConsumeEntry{
+      .consume(RDG::TextureInfo::ConsumeEntry{
               RDG::TextureInfo::ConsumeType::StorageBinding}
-              .addStage(
-                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
   reflector.addOutput("ShadingPoints")
-      .isTexture()
-      .withSize(Math::vec3(1, 1, 1))
+      .isTexture().withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
-      .consume(
-          RDG::TextureInfo::ConsumeEntry{
+      .consume(RDG::TextureInfo::ConsumeEntry{
               RDG::TextureInfo::ConsumeType::StorageBinding}
-              .addStage(
-                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addOutput("Intensity")  // only for compatibility
+      .isTexture().withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::R32_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
   return reflector;
 }
 
@@ -965,7 +2204,10 @@ auto VXGuider1stBounceInjection::execute(
   GFX::Texture* sp = renderData.getTexture("ShadingPoints");
   GFX::Texture* positions = renderData.getTexture("Positions");
   GFX::Texture* irradiance = renderData.getTexture("Irradiance");
+  GFX::Texture* vplCount = renderData.getTexture("VPLCount");
 
+  updateBinding(context, "u_vplCount",
+                RHI::BindingResource{{vplCount->getUAV(0, 0, 1)}});
   updateBinding(context, "u_pIrradiance",
                 RHI::BindingResource{{irradiance->getUAV(0, 0, 1)}});
 
@@ -990,20 +2232,145 @@ auto VXGuider1stBounceInjection::execute(
 
   RHI::RayTracingPassEncoder* encoder = beginPass(context);
 
-  uint32_t batchIdx = renderData.getUInt("AccumIdx");
+  uint32_t batchIdx = renderData.getUInt("FrameIdx");
 
   struct PushConstant {
     uint32_t width;
     uint32_t height;
     uint32_t sample_batch;
+    uint32_t setting;
   };
-  PushConstant pConst = {1280, 720, batchIdx};
+  PushConstant pConst = {1280, 720, batchIdx, 0};
+  if (vxguiding_setting->inject_first_vertex) pConst.setting |= 0b1;
+  if (vxguiding_setting->use_average_irradiance) pConst.setting |= 0b10;
+  
+  Singleton<RHI::DeviceProfilerManager>::instance()->beginSegment(
+      context->cmdEncoder, RHI::PipelineStages::TOP_OF_PIPE_BIT, "light_injection");
+
   encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::RAYGEN, 0,
                          sizeof(PushConstant));
   if (vxguiding_setting->respawn) {
     encoder->traceRays(1280, 720, 1);
   }
   encoder->end();
+  
+  Singleton<RHI::DeviceProfilerManager>::instance()->endSegment(
+      context->cmdEncoder, RHI::PipelineStages::BOTTOM_OF_PIPE_BIT, "light_injection");
+}
+
+VXGuiderLightInjection::VXGuiderLightInjection(
+    VXGI::VXGISetting* vx_set, VXGuidingSetting* vxguiding_setting)
+    : voxel_setting(vx_set), vxguiding_setting(vxguiding_setting) {
+  auto [comp] = GFX::ShaderLoader_SLANG::load(
+      "../Engine/Shaders/SRenderer/addon/vxguiding/"
+      "vxguiding-light-injection.slang",
+      std::array<std::pair<std::string, RHI::ShaderStages>, 1>{
+          std::make_pair("ComputeMain", RHI::ShaderStages::COMPUTE),
+      });
+
+  RDG::ComputePass::init(
+      Core::ResourceManager::get()->getResource<GFX::ShaderModule>(comp));
+}
+
+auto VXGuiderLightInjection::reflect() noexcept -> RDG::PassReflection {
+  RDG::PassReflection reflector;
+  reflector.addInput("VBuffer")
+      .isTexture().withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::RGBA32_UINT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInputOutput("Irradiance")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInputOutput("VPLCount")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addOutput("Color")
+      .isTexture().withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addOutput("Intensity")
+      .isTexture().withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::R32_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addOutput("Positions")
+      .isTexture().withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addOutput("ShadingPoints")
+      .isTexture().withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  return reflector;
+}
+
+auto VXGuiderLightInjection::renderUI() noexcept -> void {}
+
+auto VXGuiderLightInjection::execute(
+    RDG::RenderContext* context,
+                               RDG::RenderData const& renderData) noexcept
+    -> void {
+  GFX::Texture* vbuffer = renderData.getTexture("VBuffer");
+  GFX::Texture* intensity = renderData.getTexture("Intensity");
+  GFX::Texture* sp = renderData.getTexture("ShadingPoints");
+  GFX::Texture* positions = renderData.getTexture("Positions");
+  GFX::Texture* irradiance = renderData.getTexture("Irradiance");
+  GFX::Texture* vplCount = renderData.getTexture("VPLCount");
+
+  updateBindings(context, {
+    {"u_vplCount", RHI::BindingResource{{vplCount->getUAV(0, 0, 1)}}},
+    {"u_vBuffer", RHI::BindingResource{vbuffer->getSRV(0, 1, 0, 1)}},
+    {"u_intensity", RHI::BindingResource{intensity->getUAV(0, 0, 1)}},
+    {"u_position", RHI::BindingResource{positions->getUAV(0, 0, 1)}},
+    {"u_shadingpoint", RHI::BindingResource{sp->getUAV(0, 0, 1)}},
+    {"u_pIrradiance", RHI::BindingResource{{irradiance->getUAV(0, 0, 1)}}},
+    {"VoxelizerUniform", voxel_setting->shared.voxUniBinding},
+  });
+
+  std::vector<RHI::BindGroupEntry>* set_0_entries =
+      renderData.getBindGroupEntries("CommonScene");
+  getBindGroup(context, 0)->updateBinding(*set_0_entries);
+
+  uint32_t batchIdx = renderData.getUInt("FrameIdx");
+  struct PushConstant {
+    uint32_t width;
+    uint32_t height;
+    uint32_t sample_batch;
+    uint32_t setting;
+  };
+  PushConstant pConst = {1280, 720, batchIdx, 0};
+
+  RHI::ComputePassEncoder* encoder = beginPass(context);
+  if (vxguiding_setting->inject_first_vertex) pConst.setting |= 0b1;
+  if (vxguiding_setting->use_average_irradiance) pConst.setting |= 0b10;
+  Singleton<RHI::DeviceProfilerManager>::instance()->beginSegment(
+      context->cmdEncoder, RHI::PipelineStages::TOP_OF_PIPE_BIT, "light_injection");
+
+  encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::COMPUTE, 0,
+                         sizeof(PushConstant));
+  encoder->dispatchWorkgroups((1280 + 15) / 16, (720 + 15) / 16, 1);
+  encoder->end();
+  
+  Singleton<RHI::DeviceProfilerManager>::instance()->endSegment(
+      context->cmdEncoder, RHI::PipelineStages::BOTTOM_OF_PIPE_BIT, "light_injection");
 }
 
 VoxelClear6DPass::VoxelClear6DPass(VXGI::VXGISetting* setting)
@@ -1526,7 +2893,7 @@ auto Voxel6DRTInjection::execute(RDG::RenderContext* context,
 
   RHI::RayTracingPassEncoder* encoder = beginPass(context);
 
-  uint32_t batchIdx = renderData.getUInt("AccumIdx");
+  uint32_t batchIdx = renderData.getUInt("FrameIdx");
 
   struct PushConstant {
     uint32_t width;
@@ -2040,7 +3407,7 @@ auto DITestPass::execute(RDG::RenderContext* context,
 
   RHI::RayTracingPassEncoder* encoder = beginPass(context);
 
-  uint32_t batchIdx = renderData.getUInt("AccumIdx");
+  uint32_t batchIdx = renderData.getUInt("FrameIdx");
 
   struct PushConstant {
     uint32_t width;
@@ -2165,7 +3532,7 @@ auto GITestPass::execute(RDG::RenderContext* context,
 
   RHI::RayTracingPassEncoder* encoder = beginPass(context);
 
-  uint32_t batchIdx = renderData.getUInt("AccumIdx");
+  uint32_t batchIdx = renderData.getUInt("FrameIdx");
 
   struct PushConstant {
     uint32_t width;
@@ -2302,7 +3669,7 @@ auto ImportInjectPass::execute(RDG::RenderContext* context,
 
   RHI::RayTracingPassEncoder* encoder = beginPass(context);
 
-  uint32_t batchIdx = renderData.getUInt("AccumIdx");
+  uint32_t batchIdx = renderData.getUInt("FrameIdx");
 
   struct PushConstant {
     uint32_t width;
@@ -2370,10 +3737,13 @@ auto VXClusterComputeInfoPass::reflect() noexcept -> RDG::PassReflection {
               .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
               .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
   reflector.addInput("Irradiance")
-      .isTexture()
-      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
-      .consume(
-          RDG::TextureInfo::ConsumeEntry{
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("VPLCount")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
               RDG::TextureInfo::ConsumeType::StorageBinding}
               .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
   reflector.addOutput("VXNormal")
@@ -2415,7 +3785,10 @@ auto VXClusterComputeInfoPass::execute(
   GFX::Buffer* vxPremulIrradiance = renderData.getBuffer("VXPremulIrradiance");
   GFX::Buffer* associate = renderData.getBuffer("AssociateBuffer");
   GFX::Texture* irradiance = renderData.getTexture("Irradiance");
+  GFX::Texture* vplCount = renderData.getTexture("VPLCount");
 
+  updateBinding(context, "u_vplCount",
+                RHI::BindingResource{{vplCount->getUAV(0, 0, 1)}});
   updateBinding(context, "u_pMin",
                 RHI::BindingResource{
                     {aabbMin->buffer.get(), 0, aabbMin->buffer->size()}});
@@ -2585,7 +3958,7 @@ auto VXClusterInitCenterPass::execute(
     uint32_t batchIdx;
     uint32_t use_seed;
   } pConst = { 
-      renderData.getUInt("AccumIdx"),
+      renderData.getUInt("FrameIdx"),
       use_seed ? 1 :0
   };
 
@@ -2859,7 +4232,7 @@ auto VXClusterUpdateCenterPass::execute(
                 RHI::BindingResource{{svxAccumInfo->buffer.get(), 0,
                                       svxAccumInfo->buffer->size()}});
 
-  uint32_t batchIdx = renderData.getUInt("AccumIdx");
+  uint32_t batchIdx = renderData.getUInt("FrameIdx");
 
   RHI::ComputePassEncoder* encoder = beginPass(context);
   encoder->dispatchWorkgroups(1, 1, 1);
@@ -2894,17 +4267,21 @@ auto VXTreeInternalPass::reflect() noexcept -> RDG::PassReflection {
                          (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
               .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
   reflector.addInput("IndirectArgs")
-      .isBuffer()
-      .withSize(sizeof(float) * 16)
+      .isBuffer() .withSize(sizeof(float) * 16)
       .withUsages((uint32_t)RHI::BufferUsage::STORAGE |
                   (uint32_t)RHI::BufferUsage::INDIRECT)
-      .consume(
-          RDG::BufferInfo::ConsumeEntry{}
+      .consume(RDG::BufferInfo::ConsumeEntry{}
               .setAccess(
                   (uint32_t)RHI::AccessFlagBits::INDIRECT_COMMAND_READ_BIT |
                   (uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
               .addStage((uint32_t)RHI::PipelineStages::DRAW_INDIRECT_BIT |
                         (uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInputOutput("Descendant")
+      .isBuffer().withSize(65536 * sizeof(uint32_t))
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
   return reflector;
 }
 
@@ -2913,6 +4290,7 @@ auto VXTreeInternalPass::execute(
     -> void {
   GFX::Buffer* code = renderData.getBuffer("Code");
   GFX::Buffer* node = renderData.getBuffer("Node");
+  GFX::Buffer* descendant = renderData.getBuffer("Descendant");
   GFX::Buffer* indirectArgs = renderData.getBuffer("IndirectArgs");
 
   updateBinding(
@@ -2924,6 +4302,8 @@ auto VXTreeInternalPass::execute(
   updateBinding(context, "u_ConstrIndirectArgs",
                 RHI::BindingResource{{indirectArgs->buffer.get(), 0,
                                       indirectArgs->buffer->size()}});
+  updateBinding(context, "u_Descendant",
+                RHI::BindingResource{{descendant->buffer.get(), 0, descendant->buffer->size()}});
   
   RHI::ComputePassEncoder* encoder = beginPass(context);
   encoder->dispatchWorkgroupsIndirect(indirectArgs->buffer.get(),
@@ -2991,6 +4371,10 @@ auto VXTreeMergePass::execute(
   RHI::ComputePassEncoder* encoder = beginPass(context);
   encoder->dispatchWorkgroupsIndirect(iarg->buffer.get(), 0);
   encoder->end();
+
+  Singleton<RHI::DeviceProfilerManager>::instance()->endSegment(
+      context->cmdEncoder, RHI::PipelineStages::BOTTOM_OF_PIPE_BIT,
+      "tree_building");
 }
 
 VXTreeTopLevelPass::VXTreeTopLevelPass() {
@@ -3071,12 +4455,19 @@ auto VXTreeTopLevelPass::execute(
     //RHI::BindGroupEntry{4, RHI::BindingResource{{tlp->buffer.get(), 0, tlp->buffer->size()}}},
   });
 
+  Singleton<RHI::DeviceProfilerManager>::instance()->beginSegment(
+      context->cmdEncoder, RHI::PipelineStages::TOP_OF_PIPE_BIT, "matrix_tree_build");
+
   Math::ivec3 map_size = {40, 23, visibility};
   RHI::ComputePassEncoder* encoder = beginPass(context);
   encoder->pushConstants(&map_size, (uint32_t)RHI::ShaderStages::COMPUTE, 0,
                          sizeof(map_size));
   encoder->dispatchWorkgroups(5, 23, 1);
   encoder->end();
+
+  Singleton<RHI::DeviceProfilerManager>::instance()->endSegment(
+      context->cmdEncoder, RHI::PipelineStages::BOTTOM_OF_PIPE_BIT,
+      "matrix_tree_build");
 }
 
 auto VXTreeTopLevelPass::renderUI() noexcept -> void {
@@ -3164,7 +4555,11 @@ auto VXTreeEncodePass::execute(
                                       indirectArgs->buffer->size()}});
   updateBinding(context, "VoxelizerUniform",
                 voxel_setting->shared.voxUniBinding);
-  
+
+  Singleton<RHI::DeviceProfilerManager>::instance()->beginSegment(
+      context->cmdEncoder, RHI::PipelineStages::TOP_OF_PIPE_BIT,
+      "tree_building");
+
   RHI::ComputePassEncoder* encoder = beginPass(context);
   encoder->dispatchWorkgroupsIndirect(dispatchArgs->buffer.get(),
                                       4 * sizeof(uint32_t));
@@ -3208,7 +4603,7 @@ auto VXTreeIIntializePass::reflect() noexcept -> RDG::PassReflection {
               .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
               .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
   reflector.addOutput("Node")
-      .isBuffer().withSize(65536 * sizeof(float) * 8)
+      .isBuffer().withSize(65536 * sizeof(float) * 12)
       .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
       .consume( RDG::BufferInfo::ConsumeEntry{}
               .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
@@ -3234,6 +4629,12 @@ auto VXTreeIIntializePass::reflect() noexcept -> RDG::PassReflection {
                          (uint32_t)RHI::AccessFlagBits::INDIRECT_COMMAND_READ_BIT)
               .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT |
                         (uint32_t)RHI::PipelineStages::DRAW_INDIRECT_BIT));
+  reflector.addOutput("Descendant")
+      .isBuffer().withSize(65536 * sizeof(uint32_t))
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
   return reflector;
 }
 
@@ -3248,6 +4649,7 @@ auto VXTreeIIntializePass::execute(
   GFX::Buffer* indirectArgs = renderData.getBuffer("IndirectArgs");
   GFX::Buffer* clusterRoots = renderData.getBuffer("ClusterRoots");
   GFX::Buffer* compact2leaf = renderData.getBuffer("Compact2Leaf");
+  GFX::Buffer* descendant = renderData.getBuffer("Descendant");
 
   updateBinding(context, "u_vxIrradiance",
                 RHI::BindingResource{
@@ -3264,6 +4666,8 @@ auto VXTreeIIntializePass::execute(
   updateBinding(context, "compact2leaf",
                 RHI::BindingResource{{compact2leaf->buffer.get(), 0,
                                       compact2leaf->buffer->size()}});
+  updateBinding(context, "u_Descendant",
+                RHI::BindingResource{{descendant->buffer.get(), 0, descendant->buffer->size()}});
   updateBinding(
       context, "u_Codes",
       RHI::BindingResource{{code->buffer.get(), 0, code->buffer->size()}});
@@ -3370,12 +4774,10 @@ SPixelGatherPass::SPixelGatherPass(VXGI::VXGISetting* voxel_setting)
 auto SPixelGatherPass::reflect() noexcept -> RDG::PassReflection {
   RDG::PassReflection reflector;
   reflector.addOutput("SPixelGathered")
-      .isTexture()
-      .withSize(Math::ivec3(1280, 736, 1))
+      .isTexture().withSize(Math::ivec3(1280, 736, 1))
       .withFormat(RHI::TextureFormat::RG16_SINT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
-      .consume(
-          RDG::TextureInfo::ConsumeEntry{
+      .consume(RDG::TextureInfo::ConsumeEntry{
               RDG::TextureInfo::ConsumeType::StorageBinding}
               .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
   reflector.addOutput("ClusterGathered")
@@ -3470,12 +4872,578 @@ auto SPixelGatherPass::execute(
   updateBinding(context, "u_cluster_counter",
       RHI::BindingResource{{cc->buffer.get(), 0, cc->buffer->size()}});
 
-  Math::ivec2 resolution = {40, 23};
+  Singleton<RHI::DeviceProfilerManager>::instance()->beginSegment(
+      context->cmdEncoder, RHI::PipelineStages::TOP_OF_PIPE_BIT,
+      "matrix_gather");
+
+  struct PushConstant {
+    Math::ivec2 mapsize;
+  } pConst = {
+      {40,23}
+  };
   RHI::ComputePassEncoder* encoder = beginPass(context);
-  encoder->pushConstants(&resolution, (uint32_t)RHI::ShaderStages::COMPUTE, 0,
-                         sizeof(resolution));
+  encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::COMPUTE, 0,
+                         sizeof(PushConstant));
   encoder->dispatchWorkgroups((1280 + 15) / 16, (720 + 15) / 16, 1);
   encoder->end();
+
+  Singleton<RHI::DeviceProfilerManager>::instance()->endSegment(
+      context->cmdEncoder, RHI::PipelineStages::BOTTOM_OF_PIPE_BIT,
+      "matrix_gather");
+}
+
+RowColumnPresamplePass::RowColumnPresamplePass(
+    VXGI::VXGISetting* voxel_setting)
+    : voxel_setting(voxel_setting) {
+  auto [comp] = GFX::ShaderLoader_SLANG::load(
+      "../Engine/Shaders/SRenderer/addon/vxguiding/"
+      "mrcs/row-column-presample.slang",
+      std::array<std::pair<std::string, RHI::ShaderStages>, 1>{
+          std::make_pair("ComputeMain", RHI::ShaderStages::COMPUTE),
+      });
+
+  RDG::ComputePass::init(
+      Core::ResourceManager::get()->getResource<GFX::ShaderModule>(comp));
+}
+
+auto RowColumnPresamplePass::reflect() noexcept -> RDG::PassReflection {
+  RDG::PassReflection reflector;
+  reflector.addOutput("RepresentPixel")
+      .isBuffer().withSize(128 * sizeof(float) * 4)
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addOutput("RepresentVPL")
+      .isBuffer().withSize(65536 * sizeof(float) * 4)
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addOutput("IndirectArgs")
+      .isBuffer().withSize(4 * sizeof(uint32_t) * 4)
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("VXCounter")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("VPLPositions")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("VXInverseIndex")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume( RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("VBuffer")
+    .isTexture().withFormat(RHI::TextureFormat::RGBA32_UINT)
+    .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+    .consume(RDG::TextureInfo::ConsumeEntry{
+            RDG::TextureInfo::ConsumeType::StorageBinding}
+            .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInputOutput("BoundMin")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT |
+                         (uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInputOutput("BoundMax")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT |
+                         (uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  //reflector.addInputOutput("DirectionalHash")
+  //    .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+  //    .consume(RDG::BufferInfo::ConsumeEntry{}
+  //            .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT |
+  //                       (uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+  //            .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  return reflector;
+}
+
+auto RowColumnPresamplePass::execute(
+    RDG::RenderContext* context, RDG::RenderData const& renderData) noexcept
+    -> void {
+  GFX::Texture* pos = renderData.getTexture("VPLPositions");
+  GFX::Texture* vbuffer = renderData.getTexture("VBuffer");
+  GFX::Texture* vxi = renderData.getTexture("VXInverseIndex");
+  GFX::Buffer* rpix = renderData.getBuffer("RepresentPixel");
+  GFX::Buffer* rvpl = renderData.getBuffer("RepresentVPL");
+  GFX::Buffer* vxcounter = renderData.getBuffer("VXCounter");
+  GFX::Buffer* iarg = renderData.getBuffer("IndirectArgs");
+
+  std::vector<RHI::BindGroupEntry>* set_0_entries =
+      renderData.getBindGroupEntries("CommonScene");
+  getBindGroup(context, 0)->updateBinding(*set_0_entries);
+
+  updateBinding(context, "u_vpl_position",
+                RHI::BindingResource{{pos->getUAV(0, 0, 1)}});
+  updateBinding(context, "u_vBuffer",
+                RHI::BindingResource{{vbuffer->getUAV(0, 0, 1)}});
+  updateBinding(context, "u_inverse_index",
+                RHI::BindingResource{{vxi->getUAV(0, 0, 1)}});
+  updateBinding(context, "VoxelizerUniform",
+                voxel_setting->shared.voxUniBinding);
+  updateBinding(context, "u_RepresentPixel",
+      RHI::BindingResource{{rpix->buffer.get(), 0, rpix->buffer->size()}});
+  updateBinding(context, "u_RepresentVPL",
+      RHI::BindingResource{{rvpl->buffer.get(), 0, rvpl->buffer->size()}});
+  updateBinding(context, "u_vplCounter",
+      RHI::BindingResource{{vxcounter->buffer.get(), 0, vxcounter->buffer->size()}});
+  updateBinding(context, "u_IndirectArgs",
+      RHI::BindingResource{{iarg->buffer.get(), 0, iarg->buffer->size()}});
+
+  GFX::Buffer* bmin = renderData.getBuffer("BoundMin");
+  GFX::Buffer* bmax = renderData.getBuffer("BoundMax");
+  //GFX::Buffer* dhas = renderData.getBuffer("DirectionalHash");
+
+  updateBindings(context, {
+      {"u_BoundMin", RHI::BindingResource{{bmin->buffer.get(), 0, bmin->buffer->size()}}},
+      {"u_BoundMax", RHI::BindingResource{{bmax->buffer.get(), 0, bmax->buffer->size()}}},
+      //{"u_DirectionHash", RHI::BindingResource{{dhas->buffer.get(), 0, dhas->buffer->size()}}},
+      });
+
+  struct PushConstant {
+    Math::ivec2 mapsize;
+    Math::ivec2 resolution;
+    int rand_seed;
+  } pConst = {
+      {40,23},
+      {1280,720},
+      renderData.getUInt("FrameIdx")
+  };
+  RHI::ComputePassEncoder* encoder = beginPass(context);
+  encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::COMPUTE, 0,
+                         sizeof(PushConstant));
+  encoder->dispatchWorkgroups((1280 + 15) / 16, (720 + 15) / 16, 1);
+  encoder->end();
+}
+
+VXInfoClearPass::VXInfoClearPass(VXGI::VXGISetting* voxel_setting)
+    : voxel_setting(voxel_setting) {
+  auto [comp] = GFX::ShaderLoader_SLANG::load(
+      "../Engine/Shaders/SRenderer/addon/vxguiding/"
+      "mrcs/vxinfo-clear.slang",
+      std::array<std::pair<std::string, RHI::ShaderStages>, 1>{
+          std::make_pair("ComputeMain", RHI::ShaderStages::COMPUTE),
+      });
+
+  RDG::ComputePass::init(
+      Core::ResourceManager::get()->getResource<GFX::ShaderModule>(comp));
+}
+
+auto VXInfoClearPass::reflect() noexcept -> RDG::PassReflection {
+  RDG::PassReflection reflector;
+  reflector.addOutput("BoundMin")
+      .isBuffer().withSize(65536 * sizeof(uint32_t) * 4)
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addOutput("BoundMax")
+      .isBuffer().withSize(65536 * sizeof(uint32_t) * 4)
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  //reflector.addOutput("DirectionalHash")
+  //    .isBuffer().withSize(65536 * sizeof(uint32_t) * 2)
+  //    .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+  //    .consume(RDG::BufferInfo::ConsumeEntry{}
+  //            .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+  //            .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addOutput("VXPremulIrradiance")
+    .isBuffer().withSize(65536 * sizeof(float))
+    .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+    .consume(RDG::BufferInfo::ConsumeEntry{}
+            .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+            .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("AABBMin")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("AABBMax")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("CounterBuffer")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("CompactIndices")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("Irradiance")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));  
+  reflector.addInput("VPLCount")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));  
+  return reflector;
+}
+
+auto VXInfoClearPass::execute(
+    RDG::RenderContext* context, RDG::RenderData const& renderData) noexcept
+    -> void {
+  GFX::Buffer* bmin = renderData.getBuffer("BoundMin");
+  GFX::Buffer* bmax = renderData.getBuffer("BoundMax");
+  //GFX::Buffer* dhas = renderData.getBuffer("DirectionalHash");
+  GFX::Buffer* cont = renderData.getBuffer("CounterBuffer");
+  GFX::Buffer* copi = renderData.getBuffer("CompactIndices");
+  GFX::Buffer* prem = renderData.getBuffer("VXPremulIrradiance");
+  GFX::Buffer* abmin = renderData.getBuffer("AABBMin");
+  GFX::Buffer* abmax = renderData.getBuffer("AABBMax");
+  GFX::Texture* irra = renderData.getTexture("Irradiance");
+  GFX::Texture* vplCount = renderData.getTexture("VPLCount");
+
+  updateBindings(context, {
+      {"u_BoundMin", RHI::BindingResource{{bmin->buffer.get(), 0, bmin->buffer->size()}}},
+      {"u_BoundMax", RHI::BindingResource{{bmax->buffer.get(), 0, bmax->buffer->size()}}},
+      //{"u_DirectionHash", RHI::BindingResource{{dhas->buffer.get(), 0, dhas->buffer->size()}}},
+      {"u_PremulIrradiance", RHI::BindingResource{{prem->buffer.get(), 0, prem->buffer->size()}}},
+      {"u_vxCounter", RHI::BindingResource{{cont->buffer.get(), 0, cont->buffer->size()}}},
+      {"u_CompactIndex", RHI::BindingResource{{copi->buffer.get(), 0, copi->buffer->size()}}},
+      {"u_pMin", RHI::BindingResource{{abmin->buffer.get(), 0, abmin->buffer->size()}}},
+      {"u_pMax", RHI::BindingResource{{abmax->buffer.get(), 0, abmax->buffer->size()}}},
+      {"u_IrradianceMap", RHI::BindingResource{irra->getUAV(0,0,1)}},
+      {"u_VPLCount", RHI::BindingResource{{vplCount->getUAV(0, 0, 1)}}},
+      {"VoxelizerUniform", voxel_setting->shared.voxUniBinding},
+      });
+
+  Singleton<RHI::DeviceProfilerManager>::instance()->beginSegment(
+      context->cmdEncoder, RHI::PipelineStages::TOP_OF_PIPE_BIT, "svoxel_cluster");
+
+  RHI::ComputePassEncoder* encoder = beginPass(context);
+  encoder->dispatchWorkgroups(65536 / 512, 1, 1);
+  encoder->end();
+}
+
+RowVisibilityPass::RowVisibilityPass() {
+  auto [comp] = GFX::ShaderLoader_SLANG::load(
+      "../Engine/Shaders/SRenderer/addon/vxguiding/"
+      "mrcs/row-visibility.slang",
+      std::array<std::pair<std::string, RHI::ShaderStages>, 1>{
+          std::make_pair("ComputeMain", RHI::ShaderStages::COMPUTE),
+      });
+
+  RDG::ComputePass::init(
+      Core::ResourceManager::get()->getResource<GFX::ShaderModule>(comp));
+}
+
+auto RowVisibilityPass::reflect() noexcept -> RDG::PassReflection {
+  RDG::PassReflection reflector;
+  reflector.addInput("RepresentVPL")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("RepresentPixel")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("IndirectArgs")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE |
+                             (uint32_t)RHI::BufferUsage::INDIRECT)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT |
+                         (uint32_t)RHI::AccessFlagBits::INDIRECT_COMMAND_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT |
+                        (uint32_t)RHI::PipelineStages::DRAW_INDIRECT_BIT));
+  reflector.addOutput("RowVisibility")
+    .isBuffer().withSize(65536 * sizeof(uint32_t) * 4)
+    .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+    .consume(RDG::BufferInfo::ConsumeEntry{}
+            .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+            .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  return reflector;
+}
+
+auto RowVisibilityPass::execute(
+    RDG::RenderContext* context, RDG::RenderData const& renderData) noexcept
+    -> void {
+  GFX::Buffer* rpix = renderData.getBuffer("RepresentPixel");
+  GFX::Buffer* rvpl = renderData.getBuffer("RepresentVPL");
+  GFX::Buffer* iarg = renderData.getBuffer("IndirectArgs");
+  GFX::Buffer* rvis = renderData.getBuffer("RowVisibility");
+
+  std::vector<RHI::BindGroupEntry>* set_0_entries =
+      renderData.getBindGroupEntries("CommonScene");
+  getBindGroup(context, 0)->updateBinding(*set_0_entries);
+  std::vector<RHI::BindGroupEntry>* set_1_entries =
+      renderData.getBindGroupEntries("CommonRT");
+  getBindGroup(context, 1)->updateBinding(*set_1_entries);
+
+  updateBinding(context, "u_RepresentPixel",
+      RHI::BindingResource{{rpix->buffer.get(), 0, rpix->buffer->size()}});
+  updateBinding(context, "u_RepresentVPL",
+      RHI::BindingResource{{rvpl->buffer.get(), 0, rvpl->buffer->size()}});
+  updateBinding(context, "u_IndirectArgs",
+      RHI::BindingResource{{iarg->buffer.get(), 0, iarg->buffer->size()}});
+  updateBinding(context, "u_RowVisibility",
+      RHI::BindingResource{{rvis->buffer.get(), 0, rvis->buffer->size()}});
+
+  RHI::ComputePassEncoder* encoder = beginPass(context);
+  encoder->dispatchWorkgroupsIndirect(iarg->buffer.get(), 2 * 16);
+  encoder->end();
+}
+
+RowKmppCenterPass::RowKmppCenterPass() {
+  auto [comp] = GFX::ShaderLoader_SLANG::load(
+      "../Engine/Shaders/SRenderer/addon/vxguiding/"
+      "mrcs/column-kmpp-seeding.slang",
+      std::array<std::pair<std::string, RHI::ShaderStages>, 1>{
+          std::make_pair("ComputeMain", RHI::ShaderStages::COMPUTE),
+      });
+
+  RDG::ComputePass::init(
+      Core::ResourceManager::get()->getResource<GFX::ShaderModule>(comp));
+}
+
+auto RowKmppCenterPass::reflect() noexcept -> RDG::PassReflection {
+  RDG::PassReflection reflector;
+  reflector.addInput("IndirectArgs")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("RowVisibility")
+    .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+    .consume(RDG::BufferInfo::ConsumeEntry{}
+            .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+            .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addOutput("Seed")
+    .isBuffer().withSize(32 * sizeof(uint32_t))
+    .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+    .consume(RDG::BufferInfo::ConsumeEntry{}
+            .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+            .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addOutput("RowClusterInfo")
+    .isBuffer().withSize(32 * sizeof(uint32_t) * 8)
+    .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+    .consume(RDG::BufferInfo::ConsumeEntry{}
+            .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+            .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  return reflector;
+}
+
+auto RowKmppCenterPass::execute(
+    RDG::RenderContext* context, RDG::RenderData const& renderData) noexcept
+    -> void {
+  GFX::Buffer* iarg = renderData.getBuffer("IndirectArgs");
+  GFX::Buffer* rvis = renderData.getBuffer("RowVisibility");
+  GFX::Buffer* seed = renderData.getBuffer("Seed");
+  GFX::Buffer* rcif = renderData.getBuffer("RowClusterInfo");
+
+  updateBindings(context, {
+      {"u_IndirectArgs", RHI::BindingResource{{iarg->buffer.get(), 0, iarg->buffer->size()}}},
+      {"u_RowVisibility", RHI::BindingResource{{rvis->buffer.get(), 0, rvis->buffer->size()}}},
+      {"u_Seeds", RHI::BindingResource{{seed->buffer.get(), 0, seed->buffer->size()}}},
+      {"u_RowClusterInfo", RHI::BindingResource{{rcif->buffer.get(), 0, rcif->buffer->size()}}},
+      });
+
+  RHI::ComputePassEncoder* encoder = beginPass(context);
+  encoder->dispatchWorkgroups(1,1,1);
+  encoder->end();
+}
+
+RowFindCenterPass::RowFindCenterPass() {
+  auto [comp] = GFX::ShaderLoader_SLANG::load(
+      "../Engine/Shaders/SRenderer/addon/vxguiding/"
+      "mrcs/column-find-center.slang",
+      std::array<std::pair<std::string, RHI::ShaderStages>, 1>{
+          std::make_pair("ComputeMain", RHI::ShaderStages::COMPUTE),
+      });
+
+  RDG::ComputePass::init(
+      Core::ResourceManager::get()->getResource<GFX::ShaderModule>(comp));
+}
+
+auto RowFindCenterPass::reflect() noexcept -> RDG::PassReflection {
+  RDG::PassReflection reflector;
+  reflector.addOutput("Clusters")
+    .isBuffer().withSize(65536 * sizeof(uint32_t))
+    .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+    .consume(RDG::BufferInfo::ConsumeEntry{}
+            .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+            .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("CompactIndices")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("IndirectArgs")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE |
+                             (uint32_t)RHI::BufferUsage::INDIRECT)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT |
+                         (uint32_t)RHI::AccessFlagBits::INDIRECT_COMMAND_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT |
+                        (uint32_t)RHI::PipelineStages::DRAW_INDIRECT_BIT));
+  reflector.addInput("RowVisibility")
+    .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+    .consume(RDG::BufferInfo::ConsumeEntry{}
+            .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+            .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("RowClusterInfo")
+    .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+    .consume(RDG::BufferInfo::ConsumeEntry{}
+            .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+            .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  return reflector;
+}
+
+auto RowFindCenterPass::execute(
+    RDG::RenderContext* context, RDG::RenderData const& renderData) noexcept
+    -> void {
+  GFX::Buffer* clus = renderData.getBuffer("Clusters");
+  GFX::Buffer* comp = renderData.getBuffer("CompactIndices");
+  GFX::Buffer* iarg = renderData.getBuffer("IndirectArgs");
+  GFX::Buffer* rvis = renderData.getBuffer("RowVisibility");
+  GFX::Buffer* rclu = renderData.getBuffer("RowClusterInfo");
+  
+  updateBindings(context, {
+      {"u_Clusters", RHI::BindingResource{{clus->buffer.get(), 0, clus->buffer->size()}}},
+      {"u_CompactIndices", RHI::BindingResource{{comp->buffer.get(), 0, comp->buffer->size()}}},
+      {"u_IndirectArgs", RHI::BindingResource{{iarg->buffer.get(), 0, iarg->buffer->size()}}},
+      {"u_RowVisibility", RHI::BindingResource{{rvis->buffer.get(), 0, rvis->buffer->size()}}},
+      {"u_ClusterInfo", RHI::BindingResource{{rclu->buffer.get(), 0, rclu->buffer->size()}}},
+      });
+    
+  RHI::ComputePassEncoder* encoder = beginPass(context);
+  encoder->dispatchWorkgroupsIndirect(iarg->buffer.get(), 0);
+  encoder->end();
+
+  Singleton<RHI::DeviceProfilerManager>::instance()->endSegment(
+      context->cmdEncoder, RHI::PipelineStages::BOTTOM_OF_PIPE_BIT, "svoxel_cluster");
+}
+
+VXInfoRearrangePass::VXInfoRearrangePass() {
+  auto [comp] = GFX::ShaderLoader_SLANG::load(
+      "../Engine/Shaders/SRenderer/addon/vxguiding/"
+      "mrcs/vxinfo-rearrange.slang",
+      std::array<std::pair<std::string, RHI::ShaderStages>, 1>{
+          std::make_pair("ComputeMain", RHI::ShaderStages::COMPUTE),
+      });
+
+  RDG::ComputePass::init(
+      Core::ResourceManager::get()->getResource<GFX::ShaderModule>(comp));
+}
+
+auto VXInfoRearrangePass::reflect() noexcept -> RDG::PassReflection {
+  RDG::PassReflection reflector;
+  reflector.addInput("Compact2Leaf")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("IndirectArgs")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE |
+                             (uint32_t)RHI::BufferUsage::INDIRECT)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT |
+                         (uint32_t)RHI::AccessFlagBits::INDIRECT_COMMAND_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT |
+                        (uint32_t)RHI::PipelineStages::DRAW_INDIRECT_BIT));
+  reflector.addInput("BoundMin")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInput("BoundMax")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  //reflector.addInput("DirectionalHash")
+  //    .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+  //    .consume(RDG::BufferInfo::ConsumeEntry{}
+  //            .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+  //            .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  //reflector.addOutput("BoundMinOrdered")
+  //    .isBuffer().withSize(65536 * sizeof(uint32_t) * 4)
+  //    .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+  //    .consume(RDG::BufferInfo::ConsumeEntry{}
+  //            .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+  //            .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  //reflector.addOutput("BoundMaxOrdered")
+  //    .isBuffer().withSize(65536 * sizeof(uint32_t) * 4)
+  //    .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+  //    .consume(RDG::BufferInfo::ConsumeEntry{}
+  //            .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+  //            .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  //reflector.addOutput("DirectionalHashOrdered")
+  //    .isBuffer().withSize(65536 * sizeof(uint32_t) * 2)
+  //    .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+  //    .consume(RDG::BufferInfo::ConsumeEntry{}
+  //            .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+  //            .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInputOutput("AABBMin")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT |
+                         (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addInputOutput("AABBMax")
+      .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT |
+                         (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  return reflector;
+}
+
+auto VXInfoRearrangePass::execute(
+    RDG::RenderContext* context, RDG::RenderData const& renderData) noexcept
+    -> void {
+  GFX::Buffer* iarg = renderData.getBuffer("IndirectArgs");
+  GFX::Buffer* bmin = renderData.getBuffer("BoundMin");
+  GFX::Buffer* bmax = renderData.getBuffer("BoundMax");
+  //GFX::Buffer* dhas = renderData.getBuffer("DirectionalHash");
+  //GFX::Buffer* bmin_ordered = renderData.getBuffer("BoundMinOrdered");
+  //GFX::Buffer* bmax_ordered = renderData.getBuffer("BoundMaxOrdered");
+  //GFX::Buffer* dhas_ordered = renderData.getBuffer("DirectionalHashOrdered");
+  GFX::Buffer* comp2leaf = renderData.getBuffer("Compact2Leaf");
+  GFX::Buffer* abmin = renderData.getBuffer("AABBMin");
+  GFX::Buffer* abmax = renderData.getBuffer("AABBMax");
+
+  updateBindings(context, {
+      {"u_BoundMin", RHI::BindingResource{{bmin->buffer.get(), 0, bmin->buffer->size()}}},
+      {"u_BoundMax", RHI::BindingResource{{bmax->buffer.get(), 0, bmax->buffer->size()}}},
+      //{"u_DirectionHash", RHI::BindingResource{{dhas->buffer.get(), 0, dhas->buffer->size()}}},
+      //{"u_BoundMinOrdered", RHI::BindingResource{{bmin_ordered->buffer.get(), 0, bmin_ordered->buffer->size()}}},
+      //{"u_BoundMaxOrdered", RHI::BindingResource{{bmax_ordered->buffer.get(), 0, bmax_ordered->buffer->size()}}},
+      //{"u_DirectionHashOrdered", RHI::BindingResource{{dhas_ordered->buffer.get(), 0, dhas_ordered->buffer->size()}}},
+      {"u_pMin", RHI::BindingResource{{abmin->buffer.get(), 0, abmin->buffer->size()}}},
+      {"u_pMax", RHI::BindingResource{{abmax->buffer.get(), 0, abmax->buffer->size()}}},
+      {"u_IndirectArgs", RHI::BindingResource{{iarg->buffer.get(), 0, iarg->buffer->size()}}},
+      {"u_compact2leaf", RHI::BindingResource{{comp2leaf->buffer.get(), 0, comp2leaf->buffer->size()}}},
+      });
+
+  RHI::ComputePassEncoder* encoder = beginPass(context);
+  encoder->pushConstants(&threshold_use_vpl_bound, (uint32_t)RHI::ShaderStages::COMPUTE, 0, sizeof(threshold_use_vpl_bound));
+  encoder->dispatchWorkgroupsIndirect(iarg->buffer.get(), 0);
+  encoder->end();
+}
+
+auto VXInfoRearrangePass::renderUI() noexcept -> void {
+  ImGui::SliderInt("Label", &threshold_use_vpl_bound, -1, 100);
 }
 
 SPixelVisibilityPass::SPixelVisibilityPass() {
@@ -3581,7 +5549,7 @@ auto SPixelVisibilityPass::execute(RDG::RenderContext* context,
 
   RHI::RayTracingPassEncoder* encoder = beginPass(context);
 
-  uint32_t batchIdx = renderData.getUInt("AccumIdx");
+  uint32_t batchIdx = renderData.getUInt("FrameIdx");
 
   struct PushConstant {
     uint32_t width;
@@ -3595,7 +5563,8 @@ auto SPixelVisibilityPass::execute(RDG::RenderContext* context,
   encoder->end();
 }
 
-SPixelVisibilityEXPass::SPixelVisibilityEXPass() {
+SPixelVisibilityEXPass::SPixelVisibilityEXPass(VXGI::VXGISetting* vx_set)
+    : voxel_setting(vx_set) {
   auto [comp] = GFX::ShaderLoader_SLANG::load(
       "../Engine/Shaders/SRenderer/addon/vxguiding/"
       "visibility/cvis-visibility-check-comp.slang",
@@ -3654,6 +5623,34 @@ auto SPixelVisibilityEXPass::reflect() noexcept -> RDG::PassReflection {
                .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT |
                          (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
                .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  //reflector.addInput("BoundMinOrdered")
+  //    .isBuffer().withSize(65536 * sizeof(uint32_t) * 4)
+  //    .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+  //    .consume(RDG::BufferInfo::ConsumeEntry{}
+  //             .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+  //            .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  //reflector.addInput("BoundMaxOrdered")
+  //    .isBuffer().withSize(65536 * sizeof(uint32_t) * 4)
+  //    .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+  //    .consume(RDG::BufferInfo::ConsumeEntry{}
+  //            .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+  //            .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  //reflector.addInput("DirectionalHashOrdered")
+  //    .isBuffer().withSize(65536 * sizeof(uint32_t) * 2)
+  //    .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+  //    .consume(RDG::BufferInfo::ConsumeEntry{}
+  //            .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+  //            .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  //reflector.addInput("Descendant")
+  //    .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+  //    .consume(RDG::BufferInfo::ConsumeEntry{}
+  //            .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+  //            .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  //reflector.addInput("ClusterRoots")
+  //    .isBuffer().withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+  //    .consume(RDG::BufferInfo::ConsumeEntry{}
+  //            .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT)
+  //            .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
   return reflector;
 }
 
@@ -3673,6 +5670,21 @@ auto SPixelVisibilityEXPass::execute(
   GFX::Buffer* cg = renderData.getBuffer("ClusterGathered");
   GFX::Buffer* cc = renderData.getBuffer("ClusterCounter");
   GFX::Buffer* av = renderData.getBuffer("SPixelAvgVisibility");
+
+  //GFX::Buffer* bmio = renderData.getBuffer("BoundMinOrdered");
+  //GFX::Buffer* bmao = renderData.getBuffer("BoundMaxOrdered");
+  //GFX::Buffer* dhao = renderData.getBuffer("DirectionalHashOrdered");
+  //GFX::Buffer* desc = renderData.getBuffer("Descendant");
+  //GFX::Buffer* croo = renderData.getBuffer("ClusterRoots");
+  //
+  //updateBindings(context, {
+  //    {"u_BoundMin", RHI::BindingResource{{bmio->buffer.get(), 0, bmio->buffer->size()}}},
+  //    {"u_BoundMax", RHI::BindingResource{{bmao->buffer.get(), 0, bmao->buffer->size()}}},
+  //    {"u_DirectionHash", RHI::BindingResource{{dhao->buffer.get(), 0, dhao->buffer->size()}}},
+  //    {"u_Descendant", RHI::BindingResource{{desc->buffer.get(), 0, desc->buffer->size()}}},
+  //    {"u_ClusterRoots", RHI::BindingResource{{croo->buffer.get(), 0, croo->buffer->size()}}},
+  //    {"VoxelizerUniform", voxel_setting->shared.voxUniBinding},
+  //    });
 
   updateBinding(context, "u_spixel_gathered",
                 RHI::BindingResource{{spg->getUAV(0, 0, 1)}});
@@ -3702,6 +5714,9 @@ auto SPixelVisibilityEXPass::execute(
       renderData.getBindGroupEntries("CommonRT");
   getBindGroup(context, 1)->updateBinding(*set_1_entries);
 
+  Singleton<RHI::DeviceProfilerManager>::instance()->beginSegment(
+      context->cmdEncoder, RHI::PipelineStages::TOP_OF_PIPE_BIT, "matrix_rt");
+
   RHI::ComputePassEncoder* encoder = beginPass(context);
   struct PushConstant {
     uint32_t width;
@@ -3710,13 +5725,17 @@ auto SPixelVisibilityEXPass::execute(
     uint32_t map_height;
     uint32_t sample_batch;
   };
-  PushConstant pConst = {1280, 720, 40, 23, renderData.getUInt("AccumIdx")};
+  PushConstant pConst = {1280, 720, 40, 23, renderData.getUInt("FrameIdx")};
   if (do_execute) {
     encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::COMPUTE, 0,
                            sizeof(PushConstant));
     encoder->dispatchWorkgroups(1280 / 32, 736 / 8, 1);
   }
   encoder->end();
+
+  Singleton<RHI::DeviceProfilerManager>::instance()->endSegment(
+      context->cmdEncoder, RHI::PipelineStages::BOTTOM_OF_PIPE_BIT,
+      "matrix_rt");
 }
 
 VPLVisualizePass::VPLVisualizePass() {

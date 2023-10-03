@@ -176,6 +176,9 @@ SE_EXPORT struct GroundTruthPass : public RDG::RayTracingPass {
   virtual auto execute(RDG::RenderContext* context,
                        RDG::RenderData const& renderData) noexcept
       -> void override;
-  int showMode = 0;
+  int showMode = 3;
+  int extra_bounce = 1;
+  int spp = 2;
+  int spp_ob = 0;
 };
 }

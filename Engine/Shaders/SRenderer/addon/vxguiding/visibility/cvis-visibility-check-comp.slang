@@ -6,6 +6,7 @@
 #include "../../vbuffer/vbuffer.hlsli"
 #include "../../vxgi/include/conetrace_utils.hlsli"
 #include "../../vxgi/include/vxgi_interface.hlsli"
+#include "../include/vxguiding_interface.hlsli"
 
 Texture2D<int2> u_spixel_gathered;
 Texture2D<uint> u_spixel_counter;
@@ -18,6 +19,12 @@ RWTexture2D<float4> u_Debug;
 
 RWStructuredBuffer<uint8_t> u_spixel_avg_visibility;
 
+// const StructuredBuffer<uint4> u_BoundMin;
+// const StructuredBuffer<uint4> u_BoundMax;
+// const StructuredBuffer<uint64_t> u_DirectionHash;
+// const StructuredBuffer<uint16_t2> u_Descendant;
+// const StructuredBuffer<int> u_ClusterRoots;
+
 [[vk::push_constant]]
 cbuffer PushConstants {
     int2 resolution;
@@ -28,11 +35,52 @@ cbuffer PushConstants {
 groupshared uint sharedVisibility[32];
 groupshared uint groupVisibility;
 
+// float4 GrabVXSample(
+//     in_ref(VoxelTexInfo) info,
+//     int leafID,
+//     in float3 ref_pos,
+//     inout RandomSamplerState RNG,
+//     out float3 direction
+// ) {
+//     const uint3 bound_min = u_BoundMin[leafID].xyz;
+//     const uint3 bound_max = u_BoundMax[leafID].xyz;
+//     const uint vxFlatten = u_BoundMax[leafID].w;
+//     const int3 vxIDFlatten = ReconstructIndex(vxFlatten, info.volumeDimension);
+//     const AABB voxelBound = VoxelToBound(vxIDFlatten, 0, info);
+//     const AABB compact_bound = UnpackCompactAABB(voxelBound, u_BoundMin[vxFlatten].xyz, u_BoundMax[vxFlatten].xyz);
+//     const float3 voxelExtent = float3(compact_bound.max - compact_bound.min) / 2;
+//     const float3 voxelCenter = 0.5 * (compact_bound.min + compact_bound.max);
+//     float pdf;
+//     float3 direction = SampleSphericalVoxel(
+//         voxelCenter,
+//         voxelExtent,
+//         ref_pos,
+//         float3(GetNextRandom(RNG), GetNextRandom(RNG), GetNextRandom(RNG)),
+//         pdf);
+//     float t = rayBoxIntersect(ref_pos, direction, compact_bound.min, compact_bound.max);
+//     direction = normalize(direction);
+//     return float4(direction, t);
+// }
+
+// float4 GrabVXSample(
+//     in_ref(VoxelTexInfo) info,
+//     in uint clusterID,
+//     in float3 ref_pos,
+//     inout RandomSamplerState RNG,
+//     out float3 direction 
+// ) {
+//     int root = u_ClusterRoots[clusterID];
+//     int2 descendant = u_Descendant[root];
+//     int leafID = descendant.x + int((descendant.y - descendant.x) * GetNextRandom(RNG));
+//     leafID = clamp(leafID, descendant.x, descendant.y - 1);
+//     return GrabVXSample(info, leafID, ref_pos, RNG, direction);
+// }
+
 bool HandleVisibilityCheck(
     int2 spixelID,
     int2 dispatchID,
     int2 taskOffset,
-    int clusterToCheck
+    int clusterToCheck,
 ) {
     RandomSamplerState RNG = InitRandomSampler(dispatchID, seed);
 
@@ -69,7 +117,7 @@ bool HandleVisibilityCheck(
     const float distannce = length(dir);
     dir /= distannce;
     if (dot(-dir, vpl_normal) <= 0.0001 || dot(dir, hit.geometryNormal) <= 0.0001) return false;
-
+    
     // Visibility test
     bool visible = true;
     Ray visiblityRay = SpawnRay(hit, dir);

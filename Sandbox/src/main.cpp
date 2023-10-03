@@ -13,16 +13,19 @@
 #include <tinygltf/tiny_gltf.h>
 #include <crtdbg.h>
 
+#include <SE.RHI.Profiler.hpp>
 #include <Resource/SE.Core.Resource.hpp>
 #include <SE.Editor.Core.hpp>
 #include <SE.Editor.Config.hpp>
 #include <SE.Editor.DebugDraw.hpp>
+#include <SE.GFX-Utils.h>
 #include <SE.Application.hpp>
 #include <SE.SRenderer.hpp>
 #include "CustomPipeline.hpp"
 
 #include <SE.Addon.VPL.hpp>
 #include <SE.Addon.SLC.hpp>
+#include <SE.Addon.SST.hpp>
 #include <Plugins/SE.SRendererExt.GeomTab.hpp>
 #include <Pipeline/SE.SRendere-RTGIPipeline.hpp>
 #include <Pipeline/SE.SRendere-ForwardPipeline.hpp>
@@ -31,12 +34,75 @@
 #include <Pipeline/SE.SRendere-GeoInspectPipeline.hpp>
 #include <Passes/FullScreenPasses/ScreenSpace/SE.SRenderer-BarGTPass.hpp>
 
+using namespace SIByL::Math;
+namespace Test{
+Math::vec2 ToConcentricMap(Math::vec2 onSquare) {
+    float phi;
+    float r;
+    // (a,b) is now on [-1,1]^2
+    const float a = 2 * onSquare.x - 1;
+    const float b = 2 * onSquare.y - 1;
+    if (a > -b) {   // region 1 or 2
+      if (a > b) {  // region 1, also |a| > |b|
+        r = a;
+        phi = (Math::float_Pi / 4) * (b / a);
+      } else {  // region 2, also |b| > |a|
+        r = b;
+        phi = (Math::float_Pi / 4) * (2 - (a / b));
+      }
+    } else {        // region 3 or 4
+      if (a < b) {  // region 3, also |a| > |b|, a!= 0
+        r = -a;
+        phi = (Math::float_Pi / 4) * (4 + (b / a));
+      } else {  // region 4, |b| >= |a|, but a==0 and b==0 could occur.
+        r = -b;
+        if (b != 0)
+          phi = (Math::float_Pi / 4) * (6 - (a / b));
+        else
+          phi = 0;
+      }
+    }
+    float u = r * cos(phi);
+    float v = r * sin(phi);
+    return Math::vec2(u, v);
+  }
+
+  Math::vec2 FromConcentricMap(Math::vec2 onDisk) {
+    const float r = sqrt(onDisk.x * onDisk.x + onDisk.y * onDisk.y);
+    float phi = atan2(onDisk.y, onDisk.x);
+    if (phi < -Math::float_Pi / 4)
+      phi += 2 * Math::float_Pi;  // in range [-pi/4,7pi/4]
+    float a;
+    float b;
+    if (phi < Math::float_Pi / 4) {  // region 1
+      a = r;
+      b = phi * a / (Math::float_Pi / 4);
+    } else if (phi < 3 * Math::float_Pi / 4) {  // region 2
+      b = r;
+      a = -(phi - Math::float_Pi / 2) * b / (Math::float_Pi / 4);
+    } else if (phi < 5 * Math::float_Pi / 4) {  // region 3
+      a = -r;
+      b = (phi - Math::float_Pi) * a / (Math::float_Pi / 4);
+    } else {  // region 4
+      b = -r;
+      a = -(phi - 3 * Math::float_Pi / 2) * b / (Math::float_Pi / 4);
+    }
+    const float x = (a + 1) / 2;
+    const float y = (b + 1) / 2;
+    return Math::vec2(x, y);
+  }
+
+}
+
 struct SandBoxApplication :public Application::ApplicationBase {
 	
 	Video::VideoDecoder decoder;
 
 	/** Initialize the application */
 	virtual auto Init() noexcept -> void override {
+      Math::vec2 test = {0.25, 0.75};
+      Math::vec2 res = Test::FromConcentricMap(Test::ToConcentricMap(test));
+
 		// create optional layers: rhi, imgui, editor
 		rhiLayer = std::make_unique<RHI::RHILayer>(RHI::RHILayerDescriptor{
 				RHI::RHIBackend::Vulkan,
@@ -61,6 +127,9 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		RHI::Device* device = rhiLayer->getDevice();
 		RHI::SwapChain* swapchain = rhiLayer->getSwapChain();
 
+		Singleton<RHI::DeviceProfilerManager>::instance()->initialize(
+                    device, "device_something");
+
         GFX::GFXManager::get()->config.meshLoaderConfig =
                     SRenderer::meshLoadConfig;
 
@@ -80,13 +149,15 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		InvalidScene();
 		device->waitIdle();
 
-		pipeline1 = std::make_unique<Addon::VPL::VPLTestPipeline>();
-		pipeline2 = std::make_unique<Addon::SLC::SLCTestPipeline>();
+		//pipeline1 = std::make_unique<CustomPipeline>();
+		pipeline1 = std::make_unique<CustomPipeline>();
+		pipeline2 = std::make_unique<GTPipeline>();
         rtgi_pipeline = std::make_unique<RestirGIPipeline>();
-        geoinsp_pipeline = std::make_unique<GTPipeline>();
-        //geoinsp_pipeline = std::make_unique<SRP::GeoInspectPipeline>();
-		vxgi_pipeline = std::make_unique<SSPGPipeline>();
-        vxdi_pipeline = std::make_unique<VXGuidingPipeline>();
+		//geoinsp_pipeline = std::make_unique<SSPGP_GMM_Pipeline>();
+        geoinsp_pipeline = std::make_unique<SRP::GeoInspectPipeline>();
+		//vxgi_pipeline = std::make_unique<SSPGP_GMM_Pipeline>();
+        vxgi_pipeline = std::make_unique<VXPGASVGFPipeline>();
+        vxdi_pipeline = std::make_unique<VXPGPipeline>();
 		pipeline1->build();
 		pipeline2->build();
 		rtgi_pipeline->build();
@@ -163,11 +234,34 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		std::unique_ptr<RHI::CommandEncoder> commandEncoder = device->createCommandEncoder({ multiFrameFlights->getCommandBuffer() });
 		GFX::GFXManager::get()->onUpdate();
 		//decoder.readFrame();
+		
+        // GUI Recording
 
-                // GUI Recording
-                imguiLayer->startGuiRecording();
-                bool show_demo_window = true;
-                ImGui::ShowDemoWindow(&show_demo_window);
+        static int frames2capture = 0;
+        imguiLayer->startGuiRecording();
+        bool show_demo_window = true;
+        ImGui::ShowDemoWindow(&show_demo_window);
+		{
+			ImGui::Begin("Device-Profiler");
+				RHI::DeviceProfilerManager* profiler = Singleton<RHI::DeviceProfilerManager>::instance();
+				ImGui::Checkbox("Enable Profiler", &profiler->enabled);
+				bool clearProfiler = false;
+				ImGui::Checkbox("Clear Profiler", &clearProfiler);
+				if (clearProfiler) {
+					profiler->clear();
+				}
+				if (profiler->enabled) {
+					profiler->flushResults();
+					profiler->reset(commandEncoder.get());
+				}
+				for (auto& pair : profiler->statistics) {
+					double time = double(pair.second.accumulation) / (pair.second.count * 1000000);
+                    if (ImGui::TreeNode((pair.first + ": " + std::to_string(time)).c_str())) {
+						ImGui::TreePop();
+					}
+				}
+				ImGui::End();
+			}
 
                 ImGui::Begin("Pipeline Choose");
                 {  // Select an item type
@@ -179,6 +273,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
                                      IM_ARRAYSIZE(item_names),
                                      IM_ARRAYSIZE(item_names));
                         if (pipeline_id == 0) {
+								frames2capture = 50;
                                 pipeline = pipeline1.get();
                                 editorLayer
                                     ->getWidget<Editor::RDGViewerWidget>()
@@ -189,6 +284,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
                                     ->getWidget<Editor::RDGViewerWidget>()
                                     ->pipeline = pipeline;
                         } else if (pipeline_id == 2) {
+                                frames2capture = 50;
                                 pipeline = rtgi_pipeline.get();
                                 editorLayer
                                     ->getWidget<Editor::RDGViewerWidget>()
@@ -199,11 +295,13 @@ struct SandBoxApplication :public Application::ApplicationBase {
                                     ->getWidget<Editor::RDGViewerWidget>()
                                     ->pipeline = pipeline;
                         } else if (pipeline_id == 4) {
+                                frames2capture = 50;
                                 pipeline = vxgi_pipeline.get();
                                 editorLayer
                                     ->getWidget<Editor::RDGViewerWidget>()
                                     ->pipeline = pipeline;
                         } else if (pipeline_id == 5) {
+                                frames2capture = 50;
                                 pipeline = vxdi_pipeline.get();
                                 editorLayer
                                     ->getWidget<Editor::RDGViewerWidget>()
@@ -223,13 +321,20 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				graph->getPass(i)->onInteraction(mainWindow.get()->getInput(), &(editorLayer->getWidget<Editor::ViewportWidget>()->info));
 			}
 
+		Singleton<RHI::DeviceProfilerManager>::instance()->beginSegment(
+                    commandEncoder.get(), RHI::PipelineStages::TOP_OF_PIPE_BIT,
+                    "total_pipe");
 		pipeline->execute(commandEncoder.get());
 
-		Editor::DebugDraw::DrawAABB(srenderer->statisticsData.aabb, 5., 5.);
-		auto editor_graphs = Editor::DebugDraw::get()->pipeline->getActiveGraphs();
-		for (auto* graph : editor_graphs)
-			srenderer->updateRDGData(graph);
-		Editor::DebugDraw::Draw(commandEncoder.get());
+        Singleton<RHI::DeviceProfilerManager>::instance()->endSegment(
+                    commandEncoder.get(), RHI::PipelineStages::BOTTOM_OF_PIPE_BIT,
+                    "total_pipe");
+
+		//Editor::DebugDraw::DrawAABB(srenderer->statisticsData.aabb, 5., 5.);
+		//auto editor_graphs = Editor::DebugDraw::get()->pipeline->getActiveGraphs();
+		//for (auto* graph : editor_graphs)
+		//	srenderer->updateRDGData(graph);
+		//Editor::DebugDraw::Draw(commandEncoder.get());
 
 		device->getGraphicsQueue()->submit({ commandEncoder->finish({}) }, 
 			multiFrameFlights->getImageAvailableSeamaphore(),
@@ -240,8 +345,18 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		editorLayer->onDrawGui();
 		imguiLayer->render(multiFrameFlights->getRenderFinishedSeamaphore());
 
-
 		multiFrameFlights->frameEnd();
+
+		//if (frames2capture > 0) {
+		//	static int i = 0;
+		//	if (i < 102) {
+  //                      
+		//	}
+		//	device->waitIdle();
+  //          GFX::CaptureImage(pipeline->getOutput(),
+  //              "D:/data/adaptation/sspg_gmm/" + std::to_string(i++));
+		//	frames2capture--;
+		//}
 	};
 
 	/** Update the application every fixed update timestep */
@@ -260,7 +375,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
         geoinsp_pipeline = nullptr;
         vxdi_pipeline = nullptr;
         vxgi_pipeline = nullptr;
-
+        Singleton<RHI::DeviceProfilerManager>::instance()->finalize();
 		Editor::DebugDraw::Destroy();
 
 		editorLayer = nullptr;

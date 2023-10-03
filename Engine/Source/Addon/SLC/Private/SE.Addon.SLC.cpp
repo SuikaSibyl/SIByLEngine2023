@@ -17,7 +17,7 @@ MortonCodePass::MortonCodePass(VPL::VPLSpawnInfo* info) : vplInfo(info) {
 
 auto MortonCodePass::reflect() noexcept -> RDG::PassReflection {
   RDG::PassReflection reflector;
-  uint32_t alignedSize = ((vplInfo->maxNumber * sizeof(uint64_t) + 63) / 64) * 64;
+  uint32_t alignedSize = ((vplInfo->maxNumber*vplInfo->maxDepth * sizeof(uint64_t) + 63) / 64) * 64;
   reflector.addOutput("KeyIndexBuffer")
       .isBuffer()
       .withSize(alignedSize)
@@ -47,7 +47,7 @@ auto MortonCodePass::reflect() noexcept -> RDG::PassReflection {
 auto MortonCodePass::execute(RDG::RenderContext* context,
     RDG::RenderData const& renderData) noexcept
     -> void {
-  const uint32_t dispatch_size = (vplInfo->maxNumber + 511) / 512;
+  const uint32_t dispatch_size = (vplInfo->maxNumber*vplInfo->maxDepth + 511) / 512;
   GFX::Buffer* vp = renderData.getBuffer("VPLPositions");
   GFX::Buffer* ki = renderData.getBuffer("KeyIndexBuffer");
   GFX::Buffer* cb = renderData.getBuffer("CounterBuffer");
@@ -158,7 +158,7 @@ auto GenLevel0Pass::reflect() noexcept -> RDG::PassReflection {
 auto GenLevel0Pass::execute(RDG::RenderContext* context,
     RDG::RenderData const& renderData) noexcept
     -> void {
-  const uint32_t dispatch_size = (vplInfo->maxNumber + 511) / 512;
+  const uint32_t dispatch_size = (vplInfo->maxNumber*vplInfo->maxDepth + 511) / 512;
   GFX::Buffer* ki = renderData.getBuffer("KeyIndexBuffer");
   GFX::Buffer* nb = renderData.getBuffer("NodesBuffer");
 
@@ -447,12 +447,14 @@ auto SLCGIPass::execute(RDG::RenderContext* context,
     Math::vec4 bounding_sphere;
     float inv_vpl_paths;
     uint32_t slc_config;
+    int spp;
   } pConst = {{vbuffer->texture->width(), vbuffer->texture->height()},
-              renderData.getUInt("AccumIdx"),
+              renderData.getUInt("FrameIdx"),
               leafStartIndex,
               Math::vec4{center, radius},
               1.f / info->maxNumber,
-              slc_config};
+              slc_config,
+              spp};
 
   encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::RAYGEN, 0,
                          sizeof(PushConstant));
@@ -465,6 +467,7 @@ auto SLCGIPass::renderUI() noexcept -> void {
   ImGui::Checkbox("Use ApproxGeom", &useApproximateGoemetry);
   ImGui::Checkbox("Use Lightcone", &useLightCone);
   ImGui::DragInt("Distance Type", &distanceType, 1, 0, 2);
+  ImGui::DragInt("SPP", &spp, 1, 1, 5);
 }
 
 SLCBuildGraph::SLCBuildGraph(VPL::VPLSpawnInfo* spawn_info)
@@ -534,38 +537,34 @@ auto SLCBuildGraph::onRegister(RDG::Graph* graph) noexcept -> void {
 
 SLCTestGraph::SLCTestGraph() {
   // spawn info
-  spawn_info.maxDepth = 1;
-  spawn_info.maxNumber = 512 * 256;
+  spawn_info.maxDepth = 2;
+  spawn_info.maxNumber = 1024 * 1024;
   // sort setting config
-  sort_info.element_count = spawn_info.maxNumber;
+  sort_info.element_count = spawn_info.maxNumber * spawn_info.maxDepth;
   sort_info.type = BitonicSort::BitonicSortSetting::ElementType::UINT64;
-  sort_info.dispath =
-      BitonicSort::BitonicSortSetting::DispathType::DYNAMIC_INDIRECT;
+  sort_info.dispath = BitonicSort::BitonicSortSetting::DispathType::DYNAMIC_INDIRECT;
 
   // counter invalid pass
-  addPass(std::make_unique<Addon::VPL::CounterInvalidPass>(&spawn_info),
-          "CounterInvalid Pass");
+  addPass(std::make_unique<Addon::VPL::CounterInvalidPass>(&spawn_info), "CounterInvalid Pass");
   // spawn pass
-  addPass(std::make_unique<Addon::VPL::VPLSpawnPass>(&spawn_info),
-          "VPLSpawn Pass");
-  addEdge("CounterInvalid Pass", "CounterBuffer", "VPLSpawn Pass",
-          "CounterBuffer");
+  addPass(std::make_unique<Addon::VPL::VPLSpawnPass>(&spawn_info), "VPLSpawn Pass");
+  addEdge("CounterInvalid Pass", "CounterBuffer", "VPLSpawn Pass", "CounterBuffer");
   // visualize pass
-  addPass(std::make_unique<Addon::VPL::VPLVisualizePass>(&spawn_info),
-          "VPLVisualize Pass");
-  VPL::DVPLPack::addEdge("VPLSpawn Pass", "VPLVisualize Pass", this);
+  //addPass(std::make_unique<Addon::VPL::VPLVisualizePass>(&spawn_info),
+  //        "VPLVisualize Pass");
+  //VPL::DVPLPack::addEdge("VPLSpawn Pass", "VPLVisualize Pass", this);
 
   // moton coding pass
   addPass(std::make_unique<MortonCodePass>(&spawn_info), "MortonCode Pass");
-  addEdge("VPLVisualize Pass", "CounterBuffer", "MortonCode Pass",
+  addEdge("VPLSpawn Pass", "CounterBuffer", "MortonCode Pass",
           "CounterBuffer");
-  addEdge("VPLVisualize Pass", "VPLPositions", "MortonCode Pass",
+  addEdge("VPLSpawn Pass", "VPLPositions", "MortonCode Pass",
           "VPLPositions");
   // sort pass
   addSubgraph(std::make_unique<Addon::BitonicSort::BitonicSort>(&sort_info),
               "SortMorton Pass");
   addEdge("MortonCode Pass", "KeyIndexBuffer", "SortMorton Pass", "Input");
-  addEdge("VPLVisualize Pass", "CounterBuffer", "SortMorton Pass",
+  addEdge("VPLSpawn Pass", "CounterBuffer", "SortMorton Pass",
           "CounterBuffer");
   // gen level 0 pass
   addPass(std::make_unique<GenLevel0Pass>(&spawn_info), "GenLevel0 Pass");
@@ -607,9 +606,12 @@ SLCTestGraph::SLCTestGraph() {
   }
 
   // visualize SLC
-  addPass(std::make_unique<SLCVisualizePass>(&spawn_info), "VisSLC Pass");
-  addEdge(prevName, "NodesBuffer", "VisSLC Pass", "NodesBuffer");
-  addEdge("VPLVisualize Pass", "Color", "VisSLC Pass", "Color");
+  bool visualize_slc = false;
+  if (visualize_slc) {
+    addPass(std::make_unique<SLCVisualizePass>(&spawn_info), "VisSLC Pass");
+    addEdge(prevName, "NodesBuffer", "VisSLC Pass", "NodesBuffer");
+    addEdge("VPLSpawn Pass", "Color", "VisSLC Pass", "Color");  
+  }
 
   // VBuffer Pass
   addPass(std::make_unique<Addon::VBuffer::RayTraceVBuffer>(), "VBuffer Pass");
@@ -623,6 +625,9 @@ SLCTestGraph::SLCTestGraph() {
 
   addPass(std::make_unique<Postprocess::AccumulatePass>(), "Accumulation Pass");
   addEdge("SLC GI Pass", "Color", "Accumulation Pass", "Input");
+  
+  addPass(std::make_unique<Addon::Postprocess::ToneMapperPass>(), "ToneMapper Pass");
+  addEdge("Accumulation Pass", "Output", "ToneMapper Pass", "Input");
 
   
   markOutput("Accumulation Pass", "Output");

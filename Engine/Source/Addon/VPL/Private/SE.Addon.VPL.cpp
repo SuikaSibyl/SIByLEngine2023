@@ -85,56 +85,42 @@ auto VPLSpawnPass::reflect() noexcept -> RDG::PassReflection {
   RDG::PassReflection reflector;
 
   reflector.addOutput("VPLPositions")
-      .isBuffer()
-      .withSize(info->maxNumber * sizeof(Math::vec4))
+      .isBuffer().withSize(info->maxNumber * info->maxDepth * sizeof(Math::vec4))
       .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
-      .consume(
-          RDG::BufferInfo::ConsumeEntry{}
+      .consume(RDG::BufferInfo::ConsumeEntry{}
               .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT |
                          (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
-              .addStage(
-                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
-
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
   reflector.addOutput("VPLNormals")
-      .isBuffer()
-      .withSize(info->maxNumber * sizeof(Math::vec4))
+      .isBuffer().withSize(info->maxNumber * info->maxDepth * sizeof(Math::vec4))
       .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
-      .consume(
-          RDG::BufferInfo::ConsumeEntry{}
+      .consume(RDG::BufferInfo::ConsumeEntry{}
               .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT |
                          (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
-              .addStage(
-                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
-
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
   reflector.addOutput("VPLColors")
-      .isBuffer()
-      .withSize(info->maxNumber * sizeof(Math::vec4))
+      .isBuffer().withSize(info->maxNumber * info->maxDepth * sizeof(Math::vec4))
       .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
-      .consume(
-          RDG::BufferInfo::ConsumeEntry{}
+      .consume(RDG::BufferInfo::ConsumeEntry{}
               .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT |
                          (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
-              .addStage(
-                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
-
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
   reflector.addInputOutput("CounterBuffer")
-      .isBuffer()
-      .withSize(64) // potential alignment requirement, could be waste of memory
+      .isBuffer().withSize(64) // potential alignment requirement, could be waste of memory
       // as we only need to use a single int type here actually ...
       // But for clear meaning, we just alloc this explicitly for now.
       .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
-      .consume(
-          RDG::BufferInfo::ConsumeEntry{}
+      .consume(RDG::BufferInfo::ConsumeEntry{}
               .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT |
                          (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
               .addStage(
                   (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
-
   return reflector;
 }
 
 auto VPLSpawnPass::renderUI() noexcept -> void {
   ImGui::Checkbox("Respawn", &info->respawn);
+  ImGui::DragInt("Max Depth", reinterpret_cast<int*>(&info->maxDepth), 1, 1);
 }
 
 auto VPLSpawnPass::execute(RDG::RenderContext* context,
@@ -160,13 +146,12 @@ auto VPLSpawnPass::execute(RDG::RenderContext* context,
     Math::vec4 boundSphere;
     uint32_t sample_batch;
     int max_depth;
-  } pConst = {Math::vec4{center, radius}, renderData.getUInt("AccumIdx"), 1};
+  } pConst = {Math::vec4{center, radius}, renderData.getUInt("AccumIdx"),
+              info->maxDepth};
 
   encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::RAYGEN, 0,
                          sizeof(PushConstant));
-
   if (info->respawn) encoder->traceRays(1, info->maxNumber, 1);
-
   encoder->end();
 }
 
@@ -282,7 +267,7 @@ auto VPLVisualizePass::renderUI() noexcept -> void {
 }
 
 VPLTestGraph::VPLTestGraph() {
-  spawn_info.maxDepth = 1;
+  spawn_info.maxDepth = 2;
   spawn_info.maxNumber = 512 * 256;
 
   // counter invalid pass

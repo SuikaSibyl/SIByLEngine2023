@@ -16,6 +16,7 @@ cbuffer PushConstants {
         uint2 resolution;
         uint sample_batch;
         uint strategy;
+        bool adaption;
     } pConst;
 };
 
@@ -59,7 +60,7 @@ void RgenMain() {
     // --------------------------------------------------------------------
     float3 vplColor = float3(0);
     float3 bsdfRadiance = float3(0);
-
+    
     float bsdf_pdf;
     Ray bsdfRay = SpawnBsdfRay(hit, -primaryRay.direction, RNG, bsdf_pdf);
     bsdf_pdf = PdfBsdfSample(hit, -primaryRay.direction, bsdfRay.direction);
@@ -80,7 +81,7 @@ void RgenMain() {
     // Load the vMF statistics
     // --------------------------------------------------------------------
     vMFMLEStatistics vMFStat = vMFMLEStatistics(u_vMFStatistics[pixel]);
-
+ 
     // Guided sampling
     // --------------------------------------------------------------------
     vMFDistribution vMF = vMFDistribution(vMFStat);
@@ -126,10 +127,10 @@ void RgenMain() {
             radiance += bsdfRadiance;
         }
     }
-    
+
     // Update the vFM lobe statistics
     // --------------------------------------------------------------------
-    if (irradiance > 0) {
+    if (irradiance > 0 && pConst.adaption) {
         uint epochCount = clamp(u_epochCounter[pixel], 0, 10);
         // exponential smoothing vMF
         const float alpha = pow(0.7, epochCount);

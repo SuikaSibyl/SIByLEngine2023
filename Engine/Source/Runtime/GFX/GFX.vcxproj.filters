@@ -30,6 +30,9 @@
     <ClCompile Include="Private\SE.GFX-GFXConfig.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Private\SE.GFX-Utils.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Public\SE.GFX-SerializeUtils.hpp">
@@ -51,6 +54,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="Public\SE.GFX.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.GFX-Utils.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

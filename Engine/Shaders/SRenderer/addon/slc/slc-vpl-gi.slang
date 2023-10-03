@@ -17,6 +17,7 @@ cbuffer PushConstants {
         float4 bounding_sphere;
         float inv_vpl_paths;
         uint slc_config;
+        int spp;
     } pConst;
 };
 
@@ -63,42 +64,40 @@ void RgenMain() {
         const float3 p = hit.position;
         const float3 N = hit.geometryNormal;
         const float3 v = normalize(globalUniform.cameraData.posW - p);
-        double nprob;
-        int nodeChosen = TraverseLightTree(
-            1, pConst.leaf_start_index, p, N, v,
-            GetNextRandom(RNG), nprob, config, u_nodeBuffer);
-            
-        SLCNode node = u_nodeBuffer[nodeChosen];
-        float4 debugColor = float4(0);
 
-        if (nodeChosen != -1 && node.intensity > 0.0f) {
-            const int vplChosen = node.ID;
-            const float3 vplPos = u_vplPositions[vplChosen].xyz;
-            const float3 vplNormal = u_vplNormals[vplChosen].xyz;
-            const float3 vplColor = u_vplColors[vplChosen].xyz;
-            float4 ray_direction;
-            const float3 atten = AttenFuncVPL(p, N, vplPos, vplNormal, pConst.inv_vpl_paths, ray_direction);
+        for (int i = 0; i < pConst.spp; ++i) {
+            double nprob;
+            int nodeChosen = TraverseLightTree(
+                1, pConst.leaf_start_index, p, N, v,
+                GetNextRandom(RNG), nprob, config, u_nodeBuffer);
 
-            float3 first_bsdf = EvalBsdf(hit, -primaryRay.direction, ray_direction.xyz);
-            first_bsdf /= saturate(dot(N, ray_direction.xyz));
-            
-            // Trace shadow ray
-            Ray shadowRay = SpawnOcclusionRay(hit, vplPos, vplNormal, ray_direction.xyz);
-            debugColor = float4(shadowRay.direction, 0);
-            shadowRay.tMax = shadowRay.tMax - 0.01f;
-            // If not occluded, add the contribution
-            if (!TraceOccludeRay(shadowRay, RNG, SceneBVH)) {
-                radiance += float3(first_bsdf * atten * vplColor * (nprob == 0.0 ? 0.0 : 1.0 / nprob));
-            }
-            else {
-                debugColor.w = 1.f;
+            SLCNode node = u_nodeBuffer[nodeChosen];
+
+            if (nodeChosen != -1 && node.intensity > 0.0f) {
+                const int vplChosen = node.ID;
+                const float3 vplPos = u_vplPositions[vplChosen].xyz;
+                const float3 vplNormal = u_vplNormals[vplChosen].xyz;
+                const float3 vplColor = u_vplColors[vplChosen].xyz;
+                float4 ray_direction;
+                const float3 atten = AttenFuncVPL(p, N, vplPos, vplNormal, pConst.inv_vpl_paths, ray_direction);
+                
+                float3 first_bsdf = EvalBsdf(hit, -primaryRay.direction, ray_direction.xyz);
+                first_bsdf /= saturate(dot(N, ray_direction.xyz));
+
+                // Trace shadow ray
+                Ray shadowRay = SpawnOcclusionRay(hit, vplPos, vplNormal, ray_direction.xyz);
+                shadowRay.tMax = shadowRay.tMax - 0.01f;
+                // If not occluded, add the contribution
+                if (!TraceOccludeRay(shadowRay, RNG, SceneBVH)) {
+                    radiance += float3(first_bsdf * atten * vplColor * (nprob == 0.0 ? 0.0 : 1.0 / nprob));
+                }
             }
         }
 
-        u_debug[pixel] = debugColor;
+        u_debug[pixel] = float4(0);
         if (any(isnan(radiance))) {
             radiance = float3(0);
         }
-        u_color[pixel] = float4(radiance, 1);
+        u_color[pixel] = float4(radiance / pConst.spp, 1);
     }
 }

@@ -51,15 +51,6 @@ VertexStageOutput vertexMain(
     const int nodeId = vplIdOffset + assembledVertex.instanceId;
 
   TreeNode node = u_Nodes[nodeId];
-//   if (node.parent_idx != 0xFFFFFFFF) {
-//       const TreeNode parent_node = u_Nodes[node.parent_idx];
-//       const VPLData parent_vpl = u_VPLData[parent_node.vpl_idx];
-//       if (parent_vpl.getEarlyStop() != 0.f) {
-//           VertexStageOutput output;
-//           output.sv_position = float4(-10.f, -10.f, -10.f, -10.f);
-//           return output;
-//       }
-//   }
 
   const VPLData vpl = u_VPLData[node.vpl_idx];
   if (vpl.isInvalid() || vpl.getEarlyStop() == 0.f) {
@@ -82,15 +73,8 @@ VertexStageOutput vertexMain(
           output.sv_position = float4(-10.f, -10.f, -10.f, -10.f);
           return output;
       }
-      //   if(parent_node.left_idx == nodeId || parent_node.right_idx == nodeId) {
-    //       VertexStageOutput output;
-    //       output.sv_position = float4(-10.f, -10.f, -10.f, -10.f);
-    //       return output;
-    //   }
   }
-
-
-
+  
   const float3 position = vpl.getPosW();
   const float3 variance = vpl.getVariance();
   const float3 normal = vpl.getNormW();

@@ -9,6 +9,7 @@ StructuredBuffer<uint4> u_pMax;
 ByteAddressBuffer u_vxCounter;
 StructuredBuffer<uint> u_pCompactIndex;
 const Texture3D<uint> u_IrradianceMap;
+const Texture3D<uint> u_VPLCount;
 
 RWStructuredBuffer<float4> u_vxNormal;
 RWStructuredBuffer<float> u_vxIrradiance;
@@ -32,7 +33,7 @@ void LoadNeighbors(
                     neighbors[offset.x + 1][offset.y + 1][offset.z + 1] = 0;
                 }
                 else {
-                    neighbors[offset.x + 1][offset.y + 1][offset.z + 1] = u_IrradianceMap[neighborPos];
+                    neighbors[offset.x + 1][offset.y + 1][offset.z + 1] = u_IrradianceMap[neighborPos].x;
                 }
             }
         }
@@ -56,9 +57,9 @@ void ComputeMain(
     const float3 normalColor = GetNormal(neighbors);
     u_vxNormal[DTid.x] = float4(normalize(normalColor), 0.0f);
     u_associate[DTid.x] = -1;
-    
-    float irradiance = UnpackIrradiance(u_IrradianceMap[mapPos]);
 
+    float irradiance = UnpackIrradiance(u_IrradianceMap[mapPos]) / u_VPLCount[mapPos];
+    
     VoxelTexInfo info = CreateVoxelTexInfo(gVD);
     AABB aabb = VoxelToBound(mapPos, 0, info);
     AABB compact_bound = UnpackCompactAABB(aabb, u_pMin[voxelID].xyz, u_pMax[voxelID].xyz);

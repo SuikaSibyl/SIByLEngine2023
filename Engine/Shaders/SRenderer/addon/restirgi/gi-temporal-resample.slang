@@ -26,7 +26,6 @@ cbuffer PushConstants {
 };
 
 RWStructuredBuffer<PackedGIReservoir> u_GIReservoirs;
-RWTexture2D<float4> u_debug;
 
 [shader("raygeneration")]
 void RgenMain() {
@@ -65,11 +64,15 @@ void RgenMain() {
         // Age threshold should vary.
         // This is to avoid to die a bunch of GI reservoirs at once at a disoccluded area.
         tParams.maxReservoirAge = uint(giReservoirMaxAge * (0.5 + GetNextRandom(RNG) * 0.5));
-
+        
         // Execute resampling.
         curReservoir = GITemporalResampling(
             pixel, surface, reservoir, tParams, runtimeParams,
-            prevGlobalUniform.cameraData, globalUniform.cameraData, u_GIReservoirs, RNG, u_debug);
+            prevGlobalUniform.cameraData, globalUniform.cameraData, u_GIReservoirs, RNG);
+        
+        // if (true) {
+        //     curReservoir = reservoir;
+        // }
     }
 
     StoreGIReservoir(curReservoir, runtimeParams, pixel, temporalOutputBufferIndex, u_GIReservoirs);

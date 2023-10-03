@@ -20,7 +20,7 @@ cbuffer PushConstants {
 Texture2D<float4> u_vMFStatistics;
 Texture2D<uint4> u_vBuffer;
 
-RWTexture2D<float4> u_output;
+RWTexture2D<float> u_PdfNormalizing;
 
 [shader("raygeneration")]
 void RgenMain() {
@@ -28,41 +28,17 @@ void RgenMain() {
     const int2 pixel = int2(DispatchRaysIndex().xy);
     const VBufferData vhit = UnpackVBufferData(u_vBuffer[debugPixel]);
     if (IsInvalid(vhit)) {
-        u_output[pixel] = float4(1, 0, 1, 1); // error color
+        u_PdfNormalizing[pixel] = 0.f; // error color
         return;
     }
 
     const float2 uv = (float2(pixel) + 0.5f) / float2(512);
-    const float3 dir = CylindricalToUnitVector(UniformToCylindrical(uv));
-
+    const float3 dir = CylindricalToUnitVector(UnitToCylindrical(uv));
+    
     const vMFMLEStatistics vMFS = vMFMLEStatistics(u_vMFStatistics[debugPixel]);
     const vMFDistribution vMF = vMFDistribution(vMFS);
     const float importance = vMF.Pdf(dir);
     
-    if (mode == 0) {
-        u_output[pixel] = float4(float3(importance * scalar), 1);
-    }
-    else {
-        RandomSamplerState RNG = InitRandomSampler(pixel, 0);
-        const Ray primaryRay = generateRay(
-            debugPixel,
-            int2(resolution),
-            false,
-            globalUniform.cameraData);
-        const GeometryHit hit = GetGeometryHit(vhit, primaryRay);
-        const Ray secondaryRay = SpawnRay(
-            hit,
-            dir);
-        PrimaryPayload payload;
-        TraceRay(SceneBVH, RAY_FLAG_NONE, 0xff, 0, 0, 0, ToRayDesc(secondaryRay), payload);
-        if (HasHit(payload.hit) == false) {
-            u_output[pixel] = float4(importance * scalar, 0, 0, 1);
-        }
-        else {
-            const PolymorphicLightInfo light = lights[0];
-            const float3 color = EvaluateDirectLight(secondaryRay, payload.hit, light, RNG);
-            const float irradiance = luminance(color);
-            u_output[pixel] = float4(importance * scalar, irradiance, 0, 1);
-        }
-    }
+    u_PdfNormalizing[pixel] = importance;
 }
+

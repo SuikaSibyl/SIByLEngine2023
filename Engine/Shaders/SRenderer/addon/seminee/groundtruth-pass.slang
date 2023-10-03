@@ -11,6 +11,9 @@ cbuffer PushConstants {
         uint2 resolution;
         uint sample_batch;
         int renderMode;
+        int bounce_count;
+        int spp;
+        int one_bounce_spp;
     } pConst;
 };
 
@@ -35,34 +38,69 @@ float3 unidirectional_path_tracing(in_ref(Ray) primaryRay, inout_ref(RandomSampl
 
     if (HasHit(payload.hit) == false)
         return float3(0, 0, 0);
-    else {
+    else if (pConst.renderMode == 0) {
+        const PolymorphicLightInfo light = lights[0];
+        di += EvaluateDirectLight(primaryRay, payload.hit, light, RNG);
+        return di;
+    }
+    else if (pConst.renderMode == 2 || pConst.renderMode == 3) {
         const PolymorphicLightInfo light = lights[0];
         di += EvaluateDirectLight(primaryRay, payload.hit, light, RNG);
     }
-    float3 geometry_normal = payload.hit.geometryNormal;
 
-    float bsdf_pdf;
-    Ray bsdfRay = SpawnBsdfRay(payload.hit, -primaryRay.direction, RNG, bsdf_pdf);
-    float3 first_bsdf = EvalBsdf(payload.hit, -primaryRay.direction, bsdfRay.direction);
-    float3 throughput = first_bsdf / bsdf_pdf;
-    if (bsdf_pdf == 0) throughput = float3(0, 0, 0);
-
-    Intersection(bsdfRay, SceneBVH, payload, RNG);
-
-    if (HasHit(payload.hit)) {
-        const PolymorphicLightInfo light = lights[0];
-        gi += EvaluateDirectLight(bsdfRay, payload.hit, light, RNG) * throughput;
+    float3 multi_bounce = float3(0);
+    GeometryHit primalHit = payload.hit;
+    for (int i = 0; i < pConst.spp; ++i) {
+        payload.hit = primalHit;
+        // compute first bounce
+        float bsdf_pdf;
+        Ray bsdfRay = SpawnBsdfRay(payload.hit, -primaryRay.direction, RNG, bsdf_pdf);
+        float3 first_bsdf = EvalBsdf(payload.hit, -primaryRay.direction, bsdfRay.direction);
+        float3 throughput = first_bsdf / bsdf_pdf;
+        if (bsdf_pdf == 0) throughput = float3(0, 0, 0);
+        Intersection(bsdfRay, SceneBVH, payload, RNG);
+        if (HasHit(payload.hit)) {
+            const PolymorphicLightInfo light = lights[0];
+            gi += EvaluateDirectLight(bsdfRay, payload.hit, light, RNG) * throughput;
+            // further bounces
+            multi_bounce += EvaluateMultibounceIndirect(bsdfRay, pConst.bounce_count, throughput, payload, RNG);
+        }
     }
+    for (int i = 0; i < pConst.one_bounce_spp; ++i) {
+        payload.hit = primalHit;
+        // compute first bounce
+        float bsdf_pdf;
+        Ray bsdfRay = SpawnBsdfRay(payload.hit, -primaryRay.direction, RNG, bsdf_pdf);
+        float3 first_bsdf = EvalBsdf(payload.hit, -primaryRay.direction, bsdfRay.direction);
+        float3 throughput = first_bsdf / bsdf_pdf;
+        if (bsdf_pdf == 0) throughput = float3(0, 0, 0);
+        Intersection(bsdfRay, SceneBVH, payload, RNG);
+        if (HasHit(payload.hit)) {
+            const PolymorphicLightInfo light = lights[0];
+            gi += EvaluateDirectLight(bsdfRay, payload.hit, light, RNG) * throughput;
+        }
+    }
+
+    gi /= (pConst.spp + pConst.one_bounce_spp);
+    multi_bounce /= pConst.spp;
 
     if (pConst.renderMode == 0) {
         return di;
     }
     else if (pConst.renderMode == 1) {
+        // if (HasHit(payload.hit)) {
+        //     const PolymorphicLightInfo light = lights[0];
+        //     gi += EvaluateDirectLight(bsdfRay, payload.hit, light, RNG) * throughput;
+        // }
         return gi;
     }
-    else {
-        return geometry_normal * 0.5f + 0.5f;
+    else if (pConst.renderMode == 2) {
+        return gi + multi_bounce;
     }
+    else if (pConst.renderMode == 3) {
+        return gi + multi_bounce + di;
+    }
+    return float3(0, 0, 0);
 }
 
 [shader("raygeneration")]
