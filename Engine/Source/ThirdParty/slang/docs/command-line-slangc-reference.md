@@ -16,9 +16,10 @@ slangc -help-style markdown -h
 * [Target](#Target)
 * [Downstream](#Downstream)
 * [Debugging](#Debugging)
+* [Repro](#Repro)
 * [Experimental](#Experimental)
 * [Internal](#Internal)
-* [Depreciated](#Depreciated)
+* [Deprecated](#Deprecated)
 * [compiler](#compiler)
 * [language](#language)
 * [archive-type](#archive-type)
@@ -238,6 +239,11 @@ Treat the rest of the command line as input files.
 Reports the time spent in the downstream compiler. 
 
 
+<a id="report-perf-benchmark"></a>
+## -report-perf-benchmark
+Reports compiler performance benchmark results. 
+
+
 <a id="source-embed-style-1"></a>
 ## -source-embed-style
 
@@ -350,9 +356,15 @@ Force using scalar block layout for uniform and shader storage buffers in GLSL o
 <a id="fvk-b-shift"></a>
 ## -fvk-b-shift, -fvk-s-shift, -fvk-t-shift, -fvk-u-shift
 
-**-vk-&lt;[vulkan-shift](#vulkan-shift)&gt;-shift &lt;N&gt; &lt;space&gt;**
+**-fvk-&lt;[vulkan-shift](#vulkan-shift)&gt;-shift &lt;N&gt; &lt;space&gt;**
 
-For example '-vk-b-shift &lt;N&gt; &lt;space&gt;' shifts by N the inferred binding numbers for all resources in 'b' registers of space &lt;space&gt;. For a resource attached with :register(bX, &lt;space&gt;) but not \[vk::binding(...)\], sets its Vulkan descriptor set to &lt;space&gt; and binding number to X + N. If you need to shift the inferred binding numbers for more than one space, provide more than one such option. If more than one such option is provided for the same space, the last one takes effect. If you need to shift the inferred binding numbers for all sets, use 'all' as &lt;space&gt;. 
+For example '-fvk-b-shift &lt;N&gt; &lt;space&gt;' shifts by N the inferred binding numbers for all resources in 'b' registers of space &lt;space&gt;. For a resource attached with :register(bX, &lt;space&gt;) but not \[vk::binding(...)\], sets its Vulkan descriptor set to &lt;space&gt; and binding number to X + N. If you need to shift the inferred binding numbers for more than one space, provide more than one such option. If more than one such option is provided for the same space, the last one takes effect. If you need to shift the inferred binding numbers for all sets, use 'all' as &lt;space&gt;. 
+
+* \[DXC description\](https://github.com/Microsoft/DirectXShaderCompiler/blob/main/docs/SPIR-V.rst#implicit-binding-number-assignment) 
+
+* \[GLSL wiki\](https://github.com/KhronosGroup/glslang/wiki/HLSL-FAQ#auto-mapped-binding-numbers) 
+
+
 
 
 <a id="fvk-bind-globals"></a>
@@ -363,9 +375,39 @@ For example '-vk-b-shift &lt;N&gt; &lt;space&gt;' shifts by N the inferred bindi
 Places the $Globals cbuffer at descriptor set &lt;descriptor-set&gt; and binding &lt;N&gt;. 
 
 
+<a id="fvk-invert-y"></a>
+## -fvk-invert-y
+Negates (additively inverts) SV_Position.y before writing to stage output. 
+
+
+<a id="fvk-use-entrypoint-name"></a>
+## -fvk-use-entrypoint-name
+Uses the entrypoint name from the source instead of 'main' in the spirv output. 
+
+
+<a id="fvk-use-gl-layout"></a>
+## -fvk-use-gl-layout
+Use std430 layout instead of D3D buffer layout for raw buffer load/stores. 
+
+
 <a id="enable-effect-annotations"></a>
 ## -enable-effect-annotations
 Enables support for legacy effect annotation syntax. 
+
+
+<a id="emit-spirv-via-glsl"></a>
+## -emit-spirv-via-glsl
+Generate SPIR-V output by compiling generated GLSL with glslang (default) 
+
+
+<a id="emit-spirv-directly"></a>
+## -emit-spirv-directly
+Generate SPIR-V output direclty rather than by compiling generated GLSL with glslang 
+
+
+<a id="spirv-core-grammar"></a>
+## -spirv-core-grammar
+A path to a specific spirv.core.grammar.json to use when generating SPIR-V output 
 
 
 
@@ -375,7 +417,7 @@ Enables support for legacy effect annotation syntax.
 Downstream compiler options 
 
 <a id="none-path"></a>
-## -none-path, -fxc-path, -dxc-path, -glslang-path, -visualstudio-path, -clang-path, -gcc-path, -genericcpp-path, -nvrtc-path, -llvm-path
+## -none-path, -fxc-path, -dxc-path, -glslang-path, -spirv-dis-path, -visualstudio-path, -clang-path, -gcc-path, -genericcpp-path, -nvrtc-path, -llvm-path
 
 **-&lt;[compiler](#compiler)&gt;-path &lt;path&gt;**
 
@@ -444,45 +486,9 @@ Dump the IR for debugging.
 Dump the IDs with [-dump-ir](#dump-ir) (debug builds only) 
 
 
-<a id="dump-repro"></a>
-## -dump-repro
-Dump a `.slang-repro` file that can be used to reproduce a compilation on another machine. 
-
-
-
-
-<a id="dump-repro-on-error"></a>
-## -dump-repro-on-error
-Dump `.slang-repro` file on any compilation error. 
-
-
 <a id="E"></a>
 ## -E, -output-preprocessor
 Output the preprocessing result and exit. 
-
-
-<a id="extract-repro"></a>
-## -extract-repro
-
-**-extract-repro &lt;name&gt;**
-
-Extract the repro files into a folder. 
-
-
-<a id="load-repro-directory"></a>
-## -load-repro-directory
-
-**-load-repro-directory &lt;path&gt;**
-
-Use repro along specified path 
-
-
-<a id="load-repro"></a>
-## -load-repro
-
-**-load-repro &lt;name&gt;**
-
-Load repro 
 
 
 <a id="no-codegen"></a>
@@ -493,14 +499,6 @@ Skip the code generation step, just check the code and generate layout.
 <a id="output-includes"></a>
 ## -output-includes
 Print the hierarchy of the processed source files. 
-
-
-<a id="repro-file-system"></a>
-## -repro-file-system
-
-**-repro-file-system &lt;name&gt;**
-
-Use a repro as a file system 
 
 
 <a id="serial-ir"></a>
@@ -529,15 +527,76 @@ Verify IR in the front-end.
 
 
 
+<a id="Repro"></a>
+# Repro
+
+Slang repro system related 
+
+<a id="dump-repro-on-error"></a>
+## -dump-repro-on-error
+Dump `.slang-repro` file on any compilation error. 
+
+
+<a id="extract-repro"></a>
+## -extract-repro
+
+**-extract-repro &lt;name&gt;**
+
+Extract the repro files into a folder. 
+
+
+<a id="load-repro-directory"></a>
+## -load-repro-directory
+
+**-load-repro-directory &lt;path&gt;**
+
+Use repro along specified path 
+
+
+<a id="load-repro"></a>
+## -load-repro
+
+**-load-repro &lt;name&gt;**
+
+Load repro 
+
+
+<a id="repro-file-system"></a>
+## -repro-file-system
+
+**-repro-file-system &lt;name&gt;**
+
+Use a repro as a file system 
+
+
+<a id="dump-repro"></a>
+## -dump-repro
+Dump a `.slang-repro` file that can be used to reproduce a compilation on another machine. 
+
+
+
+
+<a id="repro-fallback-directory"></a>
+## -repro-fallback-directory
+
+**-repro-fallback-directory &lt;path&gt;**
+
+Specify a directory to use if a file isn't found in a repro. Should be specified *before* any repro usage such as `load-repro`. 
+
+There are two *special* &lt;path&gt;s: 
+
+
+
+* 'none:' indicates no fallback, so if the file isn't found in the repro compliation will fail 
+
+* 'default:' is the default (which is the OS file system) 
+
+
+
 <a id="Experimental"></a>
 # Experimental
 
 Experimental options (use at your own risk) 
-
-<a id="emit-spirv-directly"></a>
-## -emit-spirv-directly
-Generate SPIR-V output directly (otherwise through GLSL and using the glslang compiler) 
-
 
 <a id="file-system"></a>
 ## -file-system
@@ -631,8 +690,8 @@ Enable liveness tracking. Places SLANG_LIVE_START, and SLANG_LIVE_END in output 
 
 
 
-<a id="Depreciated"></a>
-# Depreciated
+<a id="Deprecated"></a>
+# Deprecated
 
 Deprecated options (allowed but ignored; may be removed in future) 
 
@@ -651,6 +710,7 @@ Downstream Compilers (aka Pass through)
 * `fxc` : FXC HLSL compiler 
 * `dxc` : DXC HLSL compiler 
 * `glslang` : GLSLANG GLSL compiler 
+* `spirv-dis` : spirv-tools SPIRV disassembler 
 * `visualstudio`, `vs` : Visual Studio C/C++ compiler 
 * `clang` : Clang C/C++ compiler 
 * `gcc` : GCC C/C++ compiler 
@@ -819,10 +879,10 @@ Stage
 
 Vulkan Shift 
 
-* `b` : Vulkan Buffer resource 
-* `s` : Vulkan Sampler resource 
-* `t` : Vulkan Texture resource 
-* `u` : Vulkan Uniform resource 
+* `b` : Constant buffer view 
+* `s` : Sampler 
+* `t` : Shader resource view 
+* `u` : Unorderd access view 
 
 <a id="capability"></a>
 # capability
@@ -831,12 +891,13 @@ A capability describes an optional feature that a target may or may not support.
 
 * `spirv_1_{ 0`, `1`, `2`, `3`, `4`, `5 }` : minimum supported SPIR - V version 
 * `invalid` 
+* `textual_source` 
 * `hlsl` 
 * `glsl` 
 * `c` 
 * `cpp` 
 * `cuda` 
-* `spirv_direct` 
+* `spirv` 
 * `GL_NV_ray_tracing` : enables the GL_NV_ray_tracing extension 
 * `GL_EXT_ray_tracing` : enables the GL_EXT_ray_tracing extension 
 * `GL_NV_fragment_shader_barycentric` : enables the GL_NV_fragment_shader_barycentric extension 

@@ -55,7 +55,7 @@ SE_EXPORT struct VXGuiderGIPass : public RDG::RayTracingPass {
   int mis_mode = 0;
   int visibility_mode = 0;
   bool second = true;
-  int splitbar = 0;
+  int splitbar = 1280;
 };
 
 

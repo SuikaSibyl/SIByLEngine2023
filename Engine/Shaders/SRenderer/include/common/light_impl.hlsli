@@ -16,6 +16,17 @@ struct LightSample {
     float3 normal;
 };
 
+LightSample EmptyLightSample() {
+    LightSample sample;
+    sample.wi = float3(0.f);
+    sample.pdf = 0.f;
+    sample.radiance = float3(0.f);
+    sample.pdf_direction = 0.f;
+    sample.position = float3(0.f);
+    sample.normal = float3(0.f);
+    return sample;
+}
+
 struct LightRaySample {
     Ray ray;
     float3 radiance;
@@ -322,6 +333,7 @@ LightSample SampleLight(
     case PolymorphicLightType::kSpot:
         return sample_li(hit, unpackSpotLight(light));
     }
+    return EmptyLightSample();
 }
 
 struct LightSampleInfo {

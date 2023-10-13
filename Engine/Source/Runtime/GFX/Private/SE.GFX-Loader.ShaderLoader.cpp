@@ -286,6 +286,42 @@ inline auto combineResourceFlags(ShaderReflection::ResourceFlags a,
   return r;
 }
 
+inline auto compare_pushconstant(
+    GFX::ShaderReflection::PushConstantEntry& a,
+    GFX::ShaderReflection::PushConstantEntry& b) noexcept -> bool { 
+    return a.offset < b.offset;
+}
+
+inline auto rearrange_pushconstant(ShaderReflection& reflection) noexcept
+    -> void {
+    if (reflection.pushConstant.size() == 0) return;
+    std::sort(reflection.pushConstant.begin(), reflection.pushConstant.end(),
+              compare_pushconstant);
+    while (true) {
+      bool should_break = false;
+      for (auto iter = reflection.pushConstant.begin();
+        iter != reflection.pushConstant.end();) {
+        // break when reach the end of the push constants
+        auto iter_next = iter + 1;
+        if (iter_next == reflection.pushConstant.end()) {
+          should_break = true;
+          break;
+        } else {
+          if (iter->offset + iter->range <= iter_next->offset) {
+            iter->range = iter_next->offset + iter_next->range - iter->offset;
+            reflection.pushConstant.erase(iter_next);
+          } else {
+            iter++;
+          }
+        }
+      }
+      if (should_break) break;
+    }
+
+    reflection.pushConstant[0].range += reflection.pushConstant[0].offset;
+    reflection.pushConstant[0].offset = 0;
+}
+
 auto SPIRV_TO_Reflection(Core::Buffer* code, RHI::ShaderStages stage) noexcept
     -> ShaderReflection {
   ShaderReflection reflection = {};
@@ -421,6 +457,9 @@ auto SPIRV_TO_Reflection(Core::Buffer* code, RHI::ShaderStages stage) noexcept
           range.index, uint32_t(range.offset), uint32_t(range.range),
           (uint32_t)stage});
   }
+  // rearrange push constants
+  rearrange_pushconstant(reflection);
+
   return reflection;
 }
 

@@ -5029,11 +5029,11 @@ auto RowColumnPresamplePass::execute(
       });
 
   struct PushConstant {
-    Math::ivec2 mapsize;
+    //Math::ivec2 mapsize;
     Math::ivec2 resolution;
     int rand_seed;
   } pConst = {
-      {40,23},
+      //{40,23},
       {1280,720},
       renderData.getUInt("FrameIdx")
   };

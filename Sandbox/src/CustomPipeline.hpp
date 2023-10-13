@@ -1238,7 +1238,7 @@ SE_EXPORT struct VXGuidingGraph : public RDG::Graph {
     addEdge("VisibilityAdditional Pass", "SPixelAvgVisibility", "TreeTopLevel Pass", "SPixelAvgVisibility");
 
     // visualize the bounding voxels by ray marching
-    bool useGuiderViewer = false;
+    bool useGuiderViewer = true;
     if (useGuiderViewer) {
       addPass(std::make_unique<Addon::VXGuiding::VXGuiderViewPass>(&setting), "GuiderViewer Pass");
       addEdge("ImportonInjection Pass", "Irradiance", "GuiderViewer Pass", "Irradiance");

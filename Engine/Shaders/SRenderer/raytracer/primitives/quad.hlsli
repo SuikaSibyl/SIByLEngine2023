@@ -24,6 +24,7 @@ bool RayAAPlaneIntersection_Visibility(
     in_ref(float2) pmin, in_ref(float2) pmax,
     out float t)
 {
+    t = -1.0;
     if (abs(ray.direction.z) < 1e-6)
         return false;
     t = (-ray.origin.z) / ray.direction.z;

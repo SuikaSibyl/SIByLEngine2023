@@ -54,6 +54,7 @@ bool EvaluateFirstChildWeight(
     const float c0_intensity = c0.intensity;
     const float c1_intensity = c1.intensity;
 
+    prob0 = 0;
     if (c0_intensity == 0) {
         if (c1_intensity == 0) return false;
         prob0 = 0; return true;

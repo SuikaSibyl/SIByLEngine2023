@@ -49,6 +49,7 @@ int SampleDiscretePDF8(float pdf[8], float rnd, out float pdf_value) {
     // Compute the cumulative distribution function (CDF)
     float cdf[8];
     float sum = 0.0;
+    pdf_value = 0.0;
     for (int i = 0; i < 8; ++i) {
         if (pdf[i] > 0.0)
             sum += pdf[i];
@@ -153,6 +154,7 @@ float3 SampleSphericalVoxel(
 
     float cdfs[3];
     float sum = 0.0;
+    pdf = 0.0;
     for (int i = 0; i < 3; ++i) {
         if (pdfs[i] > 0.0)
             sum += pdfs[i];
@@ -213,8 +215,9 @@ float3 SampleSphericalVoxel(
     pdfs[0] = (dir_sign.x == 0) || isnan(squads[0].S) ? 0 : squads[0].S;
     pdfs[1] = (dir_sign.y == 0) || isnan(squads[1].S) ? 0 : squads[1].S;
     pdfs[2] = (dir_sign.z == 0) || isnan(squads[2].S) ? 0 : squads[2].S;
-    
+
     float cdfs[3];
+    pdf = 0.0;
     float sum = 0.0;
     for (int i = 0; i < 3; ++i) {
         if (pdfs[i] > 0.0)
@@ -544,7 +547,7 @@ int3 SampleByEstimation(
     // GeometryTermSetting geom_setting;
     // geom_setting.useApproximateCosineBound = false;
 
-    // pdf = 1.f;
+    pdf = 1.f;
     // int3 selectedVox = int3(0);
     // for (int mipLevel = maxMipLevel; mipLevel >= 0; --mipLevel) {
     //     selectedVox *= 2;
@@ -588,6 +591,7 @@ int3 SampleByEstimationTwoPass(
     out_ref(float) pdf,
     in_ref(VXGuidingSetting) setting
 ) {
+    pdf = 0.f;
     // GeometryTermSetting geom_setting;
     // geom_setting.useApproximateCosineBound = false;
 
@@ -697,6 +701,7 @@ bool EvaluateFirstChildWeight(
     const float c0_intensity = c0.intensity;
     const float c1_intensity = c1.intensity;
 
+    prob0 = 0.f;
     if (config.intensity_only) {
         if (c0_intensity == 0) {
             if (c1_intensity == 0) return false;
@@ -919,6 +924,7 @@ int SampleTopLevelTree(
     const int topLevelOffset = spixelID * 64;
     int topIndex = 1;
     double top_pdf = 1.f;
+    pdf = 0.f;
     const float topImportance = top_level_tree[topLevelOffset + topIndex];
     // If the top level node is dead, return -1.
     if (topImportance == 0.f) {
@@ -994,6 +1000,10 @@ float3 EvaluateVPLIndirectLight(
     out_ref(float3) throughput,
     out_ref(Ray) bsdfRay,
 ) {
+    bsdf_pdf = 0;
+    throughput = float3(0);
+    bsdfRay.direction = float3(0);
+    bsdfRay.origin = float3(0);
     const float4 bsdfColor = color[pixel];
     if (any(bsdfPos != 0) && bsdfColor.w != 0) {
         float3 bsdf_direction = normalize(bsdfPos.xyz - primaryHit.position);
@@ -1085,6 +1095,7 @@ SplitShading EvaluateIndirectLightEXSplit(
     inout_ref(RandomSamplerState) RNG,
     out_ref(float3) di
 ) {
+    di = float3(0);
     SplitShading first_bsdf;
     first_bsdf.diffuse = float3(0);
     first_bsdf.specular = float3(0);
@@ -1324,6 +1335,9 @@ float3 SampleVoxelGuiding(
     out_ref(AABB) aabb,
     out_ref(double) pdf
 ) {
+    aabb.min = float3(+k_inf);
+    aabb.max = float3(-k_inf);
+    pdf = 0.f;
     int vxFlatten = -1;
     int3 vxID = currVXID;
     if (config.type == VoxelGuidingType::VG_Uniform) {

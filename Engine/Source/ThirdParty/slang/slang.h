@@ -287,8 +287,7 @@ convention for interface methods.
 #endif
 
 #ifndef SLANG_COMPILE_TIME_ASSERT
-//  TODO(C++17), can use terse static_assert
-#   define SLANG_COMPILE_TIME_ASSERT(x) static_assert(x, #x)
+#   define SLANG_COMPILE_TIME_ASSERT(x) static_assert(x)
 #endif
 
 #ifndef SLANG_OFFSET_OF
@@ -634,12 +633,14 @@ extern "C"
         SLANG_PASS_THROUGH_FXC,
         SLANG_PASS_THROUGH_DXC,
         SLANG_PASS_THROUGH_GLSLANG,
+        SLANG_PASS_THROUGH_SPIRV_DIS,
         SLANG_PASS_THROUGH_CLANG,                   ///< Clang C/C++ compiler 
         SLANG_PASS_THROUGH_VISUAL_STUDIO,           ///< Visual studio C/C++ compiler
         SLANG_PASS_THROUGH_GCC,                     ///< GCC C/C++ compiler
         SLANG_PASS_THROUGH_GENERIC_C_CPP,           ///< Generic C or C++ compiler, which is decided by the source type
         SLANG_PASS_THROUGH_NVRTC,                   ///< NVRTC Cuda compiler
         SLANG_PASS_THROUGH_LLVM,                    ///< LLVM 'compiler' - includes LLVM and Clang
+        SLANG_PASS_THROUGH_SPIRV_OPT,               ///< SPIRV-opt
         SLANG_PASS_THROUGH_COUNT_OF,
     };
 
@@ -698,9 +699,14 @@ extern "C"
         /* When set, will dump out the IR between intermediate compilation steps.*/
         SLANG_TARGET_FLAG_DUMP_IR = 1 << 9,
 
-        /* When set, will generate SPIRV directly instead of going through glslang. */
+        /* When set, will generate SPIRV directly rather than via glslang. */
         SLANG_TARGET_FLAG_GENERATE_SPIRV_DIRECTLY = 1 << 10,
     };
+#if defined(SLANG_CONFIG_DEFAULT_SPIRV_DIRECT)
+    constexpr static SlangTargetFlags kDefaultTargetFlags = SLANG_TARGET_FLAG_GENERATE_SPIRV_DIRECTLY;
+#else
+    constexpr static SlangTargetFlags kDefaultTargetFlags = 0;
+#endif
 
     /*!
     @brief Options to control floating-point precision guarantees for a target.
@@ -736,6 +742,7 @@ extern "C"
         SLANG_SOURCE_LANGUAGE_C,
         SLANG_SOURCE_LANGUAGE_CPP,
         SLANG_SOURCE_LANGUAGE_CUDA,
+        SLANG_SOURCE_LANGUAGE_SPIRV,
         SLANG_SOURCE_LANGUAGE_COUNT_OF,
     };
 
@@ -1094,7 +1101,7 @@ extern "C"
     typedef void(*SlangFuncPtr)(void);
 
     /** 
-    (DEPRECIATED) ISlangSharedLibrary
+    (DEPRECATED) ISlangSharedLibrary
     */
     struct ISlangSharedLibrary_Dep1: public ISlangUnknown
     {
@@ -1943,6 +1950,7 @@ extern "C"
         SLANG_TYPE_KIND_MESH_OUTPUT,
         SLANG_TYPE_KIND_SPECIALIZED,
         SLANG_TYPE_KIND_FEEDBACK,
+        SLANG_TYPE_KIND_POINTER,
         SLANG_TYPE_KIND_COUNT,
     };
 
@@ -2405,7 +2413,7 @@ extern "C"
 
         /// Compute a string hash.
         /// Count should *NOT* include terminating zero.
-    SLANG_API int spComputeStringHash(const char* chars, size_t count);
+    SLANG_API SlangUInt32 spComputeStringHash(const char* chars, size_t count);
 
         /// Get a type layout representing reflection information for the global-scope prameters.
     SLANG_API SlangReflectionTypeLayout* spReflection_getGlobalParamsTypeLayout(
@@ -2476,6 +2484,7 @@ namespace slang
             OutputStream = SLANG_TYPE_KIND_OUTPUT_STREAM,
             Specialized = SLANG_TYPE_KIND_SPECIALIZED,
             Feedback = SLANG_TYPE_KIND_FEEDBACK,
+            Pointer = SLANG_TYPE_KIND_POINTER,
         };
 
         enum ScalarType : SlangScalarTypeIntegral
@@ -3357,7 +3366,7 @@ namespace slang
             SlangPassThrough passThrough,
             char const* path) = 0;
 
-            /** DEPRECIATED: Use setLanguagePrelude
+            /** DEPRECATED: Use setLanguagePrelude
 
             Set the 'prelude' for generated code for a 'downstream compiler'.
             @param passThrough The downstream compiler for generated code that will have the prelude applied to it. 
@@ -3369,7 +3378,7 @@ namespace slang
             SlangPassThrough passThrough,
             const char* preludeText) = 0;
 
-            /** DEPRECIATED: Use getLanguagePrelude
+            /** DEPRECATED: Use getLanguagePrelude
 
             Get the 'prelude' for generated code for a 'downstream compiler'.
             @param passThrough The downstream compiler for generated code that will have the prelude applied to it. 
@@ -3518,6 +3527,12 @@ namespace slang
             /** Get the time in seconds spent in the slang and downstream compiler.
             */
         virtual SLANG_NO_THROW void SLANG_MCALL getCompilerElapsedTime(double* outTotalTime, double* outDownstreamTime) = 0;
+
+            /** Specify a spirv.core.grammar.json file to load and use when
+             * parsing and checking any SPIR-V code
+             */
+        virtual SLANG_NO_THROW SlangResult SLANG_MCALL setSPIRVCoreGrammar(
+            char const* jsonPath) = 0;
     };
 
     #define SLANG_UUID_IGlobalSession IGlobalSession::getTypeGuid()
@@ -4126,6 +4141,8 @@ namespace slang
 
         virtual SLANG_NO_THROW void SLANG_MCALL setReportDownstreamTime(bool value) = 0;
 
+        virtual SLANG_NO_THROW void SLANG_MCALL setReportPerfBenchmark(bool value) = 0;
+
     };
 
     #define SLANG_UUID_ICompileRequest ICompileRequest::getTypeGuid()
@@ -4147,7 +4164,7 @@ namespace slang
         SlangProfileID          profile = SLANG_PROFILE_UNKNOWN;
 
             /** Flags for the code generation target. Currently unused. */
-        SlangTargetFlags        flags = 0;
+        SlangTargetFlags        flags = kDefaultTargetFlags;
 
             /** Default mode to use for floating-point operations on the target.
             */
@@ -4507,6 +4524,18 @@ namespace slang
             SlangInt    targetIndex,
             IBlob**     outCode,
             IBlob**     outDiagnostics = nullptr) = 0;
+
+            /** Get the compilation result as a file system.
+
+            Has the same requirements as getEntryPointCode.
+
+            The result is not written to the actual OS file system, but is made avaiable as an
+            in memory representation.
+            */
+        virtual SLANG_NO_THROW SlangResult SLANG_MCALL getResultAsFileSystem(
+            SlangInt    entryPointIndex,
+            SlangInt    targetIndex, 
+            ISlangMutableFileSystem** outFileSystem) = 0;
 
             /** Compute a hash for the entry point at `entryPointIndex` for the chosen `targetIndex`.
 

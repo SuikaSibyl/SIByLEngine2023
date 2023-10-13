@@ -12,6 +12,7 @@ struct TestDISetting {
 };
 
 bool RayQuadIntersection(in_ref(Ray) ray, in_ref(TestDISetting) setting, out float t) {
+    t = 0.f;
     Ray objRay = ray;
     objRay.direction = mul(float4(ray.direction, 0), setting.localMat).xyz;
     objRay.origin = mul(float4(ray.origin, 1), setting.localMat).xyz;

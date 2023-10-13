@@ -1760,6 +1760,8 @@ public:
         GfxIndex startIndexLocation,
         GfxIndex baseVertexLocation,
         GfxIndex startInstanceLocation) = 0;
+    virtual SLANG_NO_THROW Result SLANG_MCALL
+        drawMeshTasks(int x, int y, int z) = 0;
 };
 
 class IComputeCommandEncoder : public IResourceCommandEncoder
@@ -2204,7 +2206,7 @@ public:
         const char* targetProfile = nullptr; // (optional) Target shader profile. If null this will be set to platform dependent default.
         SlangFloatingPointMode floatingPointMode = SLANG_FLOATING_POINT_MODE_DEFAULT;
         SlangOptimizationLevel optimizationLevel = SLANG_OPTIMIZATION_LEVEL_DEFAULT;
-        SlangTargetFlags targetFlags = 0;
+        SlangTargetFlags targetFlags = kDefaultTargetFlags;
         SlangLineDirectiveMode lineDirectiveMode = SLANG_LINE_DIRECTIVE_MODE_DEFAULT;
     };
 
@@ -2610,6 +2612,11 @@ public:
         void* pipelineDesc,
         void** outPipelineState) = 0;
     virtual SLANG_NO_THROW Result SLANG_MCALL createGraphicsPipelineState(
+        IDevice* device,
+        slang::IComponentType* program,
+        void* pipelineDesc,
+        void** outPipelineState) = 0;
+    virtual SLANG_NO_THROW Result SLANG_MCALL createMeshPipelineState(
         IDevice* device,
         slang::IComponentType* program,
         void* pipelineDesc,

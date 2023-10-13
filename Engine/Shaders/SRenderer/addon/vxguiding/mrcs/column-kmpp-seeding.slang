@@ -7,7 +7,9 @@ RWStructuredBuffer<svoxel_info> u_RowClusterInfo;
 const StructuredBuffer<uint4> u_IndirectArgs;
 const StructuredBuffer<uint4> u_RowVisibility;
 
+#ifndef DESC_TYPE
 #define DESC_TYPE uint4
+#endif
 
 groupshared float warp_prob[32];
 groupshared DESC_TYPE current_center;

@@ -1,9 +1,11 @@
 #ifndef _SRENDERER_VXGUIDING_MCRS_CLUSTER_COMMON_HEADER_
 #define _SRENDERER_VXGUIDING_MCRS_CLUSTER_COMMON_HEADER_
 
+#ifndef DESC_TYPE
 #define DESC_TYPE uint4
+#endif
 
-#if DESC_TYPE == uint4
+// #if DESC_TYPE == uint4
 struct svoxel_info {
     DESC_TYPE desc_info;// descriptor info
     float3 center;      // center (avg pixel pos) of the supervoxel
@@ -14,7 +16,7 @@ struct svoxel_info {
         no_voxels = num;
     }
 };
-#endif
+// #endif
 
 // float ComputeDistance(
 //     in DESC_TYPE a, 

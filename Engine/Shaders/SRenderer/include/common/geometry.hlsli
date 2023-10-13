@@ -261,6 +261,8 @@ bool ray_triangle_intersection_pbrt(
     in_ref(float3) p0, in_ref(float3) p1, in_ref(float3) p2,
     out_ref(float3) barycentricCoord
 ) {
+    // barycentricCoord initialize
+    barycentricCoord = float3(0.0f, 0.0f, 0.0f);
     // Perform ray–triangle intersection test
     // ** Translate vertices based on ray origin
     float3 p0t = p0 - ro;

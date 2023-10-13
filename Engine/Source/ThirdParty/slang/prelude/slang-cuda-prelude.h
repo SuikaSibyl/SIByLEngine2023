@@ -11,6 +11,7 @@
 #else
 
 #include <cstdint>
+#include <stdio.h>
 
 #endif
 
@@ -422,9 +423,11 @@ SLANG_MAKE_VECTOR_FROM_SCALAR(__half)
         return result; \
     }\
 
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 900
 SLANG_CUDA_VECTOR_ATOMIC_BINARY_IMPL(atomicAdd, float, 2)
-SLANG_CUDA_VECTOR_ATOMIC_BINARY_IMPL(atomicAdd, float, 3)
 SLANG_CUDA_VECTOR_ATOMIC_BINARY_IMPL(atomicAdd, float, 4)
+#endif
+SLANG_CUDA_VECTOR_ATOMIC_BINARY_IMPL(atomicAdd, float, 3)
 SLANG_CUDA_VECTOR_ATOMIC_BINARY_IMPL(atomicAdd, int, 2)
 SLANG_CUDA_VECTOR_ATOMIC_BINARY_IMPL(atomicAdd, int, 3)
 SLANG_CUDA_VECTOR_ATOMIC_BINARY_IMPL(atomicAdd, int, 4)
@@ -1248,7 +1251,9 @@ struct ByteAddressBuffer
     SLANG_CUDA_CALL T Load(size_t index) const
     {
         SLANG_BOUND_CHECK_BYTE_ADDRESS(index, sizeof(T), sizeInBytes);
-        return *(const T*)(((const char*)data) + index);
+        T data;
+        memcpy(&data, ((const char*)this->data) + index, sizeof(T));
+        return data;
     }
     
     const uint32_t* data;
@@ -1289,7 +1294,9 @@ struct RWByteAddressBuffer
     SLANG_CUDA_CALL T Load(size_t index) const
     {
         SLANG_BOUND_CHECK_BYTE_ADDRESS(index, sizeof(T), sizeInBytes);
-        return *(const T*)((const char*)data + index);
+        T data;
+        memcpy(&data, ((const char*)this->data) + index, sizeof(T));
+        return data;
     }
     
     SLANG_CUDA_CALL void Store(size_t index, uint32_t v) const 
@@ -1325,7 +1332,7 @@ struct RWByteAddressBuffer
     SLANG_CUDA_CALL void Store(size_t index, T const& value) const
     {
         SLANG_BOUND_CHECK_BYTE_ADDRESS(index, sizeof(T), sizeInBytes);
-        *(T*)(((char*)data) + index) = value;
+        memcpy((char*)data + index, &value, sizeof(T));
     }
     
         /// Can be used in stdlib to gain access
@@ -2197,6 +2204,17 @@ struct TensorView
         return reinterpret_cast<T*>(data + offset);
     }
 
+    template<typename T, unsigned int N>
+    __device__ T* data_ptr_at(uint index[N])
+    {
+        uint64_t offset = 0;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            offset += strides[i] * index[i];
+        }
+        return reinterpret_cast<T*>(data + offset);
+    }
+
     template<typename T>
     __device__ T& load(uint32_t x)
     {
@@ -2208,9 +2226,19 @@ struct TensorView
         return *reinterpret_cast<T*>(data + strides[0] * x + strides[1] * y);
     }
     template<typename T>
+    __device__ T& load(uint2 index)
+    {
+        return *reinterpret_cast<T*>(data + strides[0] * index.x + strides[1] * index.y);
+    }
+    template<typename T>
     __device__ T& load(uint32_t x, uint32_t y, uint32_t z)
     {
         return *reinterpret_cast<T*>(data + strides[0] * x + strides[1] * y + strides[2] * z);
+    }
+    template<typename T>
+    __device__ T& load(uint3 index)
+    {
+        return *reinterpret_cast<T*>(data + strides[0] * index.x + strides[1] * index.y + strides[2] * index.z);
     }
     template<typename T>
     __device__ T& load(uint32_t x, uint32_t y, uint32_t z, uint32_t w)
@@ -2218,10 +2246,28 @@ struct TensorView
         return *reinterpret_cast<T*>(data + strides[0] * x + strides[1] * y + strides[2] * z + strides[3] * w);
     }
     template<typename T>
+    __device__ T& load(uint4 index)
+    {
+        return *reinterpret_cast<T*>(data + strides[0] * index.x + strides[1] * index.y + strides[2] * index.z + strides[3] * index.w);
+    }
+    template<typename T>
     __device__ T& load(uint32_t i0, uint32_t i1, uint32_t i2, uint32_t i3, uint32_t i4)
     {
         return *reinterpret_cast<T*>(data + strides[0] * i0 + strides[1] * i1 + strides[2] * i2 + strides[3] * i3 + strides[4] * i4);
     }
+
+    // Generic version of load
+    template<typename T, unsigned int N>
+    __device__ T& load(uint index[N])
+    {
+        uint64_t offset = 0;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            offset += strides[i] * index[i];
+        }
+        return *reinterpret_cast<T*>(data + offset);
+    }
+
     template<typename T>
     __device__ void store(uint32_t x, T val)
     {
@@ -2233,9 +2279,19 @@ struct TensorView
         *reinterpret_cast<T*>(data + strides[0] * x + strides[1] * y) = val;
     }
     template<typename T>
+    __device__ void store(uint2 index, T val)
+    {
+        *reinterpret_cast<T*>(data + strides[0] * index.x + strides[1] * index.y) = val;
+    }
+    template<typename T>
     __device__ void store(uint32_t x, uint32_t y, uint32_t z, T val)
     {
         *reinterpret_cast<T*>(data + strides[0] * x + strides[1] * y + strides[2] * z) = val;
+    }
+    template<typename T>
+    __device__ void store(uint3 index, T val)
+    {
+        *reinterpret_cast<T*>(data + strides[0] * index.x + strides[1] * index.y + strides[2] * index.z) = val;
     }
     template<typename T>
     __device__ void store(uint32_t x, uint32_t y, uint32_t z, uint32_t w, T val)
@@ -2244,8 +2300,25 @@ struct TensorView
             data + strides[0] * x + strides[1] * y + strides[2] * z + strides[3] * w) = val;
     }
     template<typename T>
+    __device__ void store(uint4 index, T val)
+    {
+        *reinterpret_cast<T*>(data + strides[0] * index.x + strides[1] * index.y + strides[2] * index.z + strides[3] * index.w) = val;
+    }
+    template<typename T>
     __device__ void store(uint32_t i0, uint32_t i1, uint32_t i2, uint32_t i3, uint32_t i4, T val)
     {
         *reinterpret_cast<T*>(data + strides[0] * i0 + strides[1] * i1 + strides[2] * i2 + strides[3] * i3 + strides[4] * i4) = val;
+    }
+
+    // Generic version
+    template<typename T, unsigned int N>
+    __device__ void store(uint index[N], T val)
+    {
+        uint64_t offset = 0;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            offset += strides[i] * index[i];
+        }
+        *reinterpret_cast<T*>(data + offset) = val;
     }
 };

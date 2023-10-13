@@ -6,7 +6,7 @@
 
 [[vk::push_constant]]
 cbuffer PushConstants {
-    int2 map_size;
+    // int2 map_size;
     int2 resolution;
     int rand_seed;
 };

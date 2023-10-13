@@ -9,12 +9,12 @@
 #define inout_ref(X) X &
 #define mutating
 #else
-#define ternary(X, Y, Z) ((X) ? (Y) : (Z))
+#define ternary(X, Y, Z) (select((X), (Y), (Z)))
 #define enum_macro enum
 #define in_ref(X) in X
 #define out_ref(X) out X
 #define inout_ref(X) inout X
-#define select(a, b, c) ((a) ? (b) : (c))
+// #define select(a, b, c) ((a) ? (b) : (c))
 #define mutating [mutating]
 #endif
 

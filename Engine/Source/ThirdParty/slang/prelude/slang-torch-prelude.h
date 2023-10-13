@@ -7,20 +7,6 @@
 #include <stdexcept>
 #include <string>
 
-#ifndef SLANG_NO_THROW
-#   define SLANG_NO_THROW
-#endif
-
-#ifndef SLANG_STDCALL
-#   define SLANG_STDCALL
-#endif
-#ifndef SLANG_MCALL
-#   define SLANG_MCALL SLANG_STDCALL
-#endif
-#ifndef SLANG_FORCE_INLINE
-#    define SLANG_FORCE_INLINE inline
-#endif
-
 #ifdef SLANG_LLVM
 #include "slang-llvm.h"
 #else // SLANG_LLVM
@@ -37,6 +23,8 @@
 #   include <string.h>
 #   include <stdint.h>
 #endif // SLANG_LLVM
+
+#include "../source/core/slang-string.h"
 
 #if defined(_MSC_VER)
 #   define SLANG_PRELUDE_SHARED_LIB_EXPORT __declspec(dllexport)
@@ -55,11 +43,23 @@
 #   define SLANG_PRELUDE_EXTERN_C_END 
 #endif    
 
-
 #define SLANG_PRELUDE_NAMESPACE
 
+#ifndef SLANG_NO_THROW
+#   define SLANG_NO_THROW
+#endif
+#ifndef SLANG_STDCALL
+#   define SLANG_STDCALL
+#endif
+#ifndef SLANG_MCALL
+#   define SLANG_MCALL SLANG_STDCALL
+#endif
+#ifndef SLANG_FORCE_INLINE
+#    define SLANG_FORCE_INLINE inline
+#endif
 #include "slang-cpp-types-core.h"
 #include "slang-cpp-scalar-intrinsics.h"
+
 
 static const int kSlangTorchTensorMaxDim = 5;
 
@@ -72,13 +72,24 @@ struct TensorView
 };
 
 
-TensorView make_tensor_view(torch::Tensor val, const char* name, torch::ScalarType targetScalarType)
+TensorView make_tensor_view(torch::Tensor val, const char* name, torch::ScalarType targetScalarType, bool requireContiguous)
 {
-    // Convert device and scalar types.
+    // We're currently not trying to implicitly cast or transfer to device for two reasons:
+    // 1. There appears to be a bug with .to() where successive calls after the first one fail.
+    // 2. Silent casts like this can cause large memory allocations & unexpected overheads. 
+    //    It's better to be explicit.
+
+    // Expect tensors to be on CUDA device
     if (!val.device().is_cuda())
-        val = val.to(torch::kCUDA);
+        throw std::runtime_error(std::string(name).append(": tensor is not on CUDA device.").c_str());
+
+    // Expect tensors to be the right type.
     if (val.dtype() != targetScalarType)
-        val = val.to(targetScalarType);
+        throw std::runtime_error(std::string(name).append(": tensor is not of the expected type.").c_str());
+
+    // Check that the tensor is contiguous
+    if (requireContiguous && !val.is_contiguous())
+        throw std::runtime_error(std::string(name).append(": tensor is not contiguous.").c_str());
 
     TensorView res = {};
     res.dimensionCount = val.dim();
@@ -115,6 +126,10 @@ TensorView make_tensor_view(torch::Tensor val, const char* name, torch::ScalarTy
     case torch::kInt64:
         elementSize = 8;
         res.data = (uint8_t*)val.data_ptr<int64_t>();
+        break;
+    case torch::kBool:
+        elementSize = 1;
+        res.data = (uint8_t*)val.data_ptr<bool>();
         break;
     }
 
