@@ -134,6 +134,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
                     SRenderer::meshLoadConfig;
 
 		scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/test_scene.scene");
+		//scene.deserialize("C:/Users/suika/Desktop/testscene/bedroom_mask.scene");
 
 		GFX::GFXManager::get()->commonSampler.defaultSampler = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Sampler>();
 		GFX::GFXManager::get()->registerSamplerResource(GFX::GFXManager::get()->commonSampler.defaultSampler, RHI::SamplerDescriptor{
@@ -149,14 +150,19 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		InvalidScene();
 		device->waitIdle();
 
-		//pipeline1 = std::make_unique<CustomPipeline>();
 		pipeline1 = std::make_unique<CustomPipeline>();
-		pipeline2 = std::make_unique<GTPipeline>();
-        rtgi_pipeline = std::make_unique<RestirGIPipeline>();
+		//pipeline1 = std::make_unique<CustomPipeline>();
+		//pipeline2 = std::make_unique<VXPGReSTIRPipeline>();
+  //      rtgi_pipeline = std::make_unique<RestirGIPipeline>();
+		//pipeline1 = std::make_unique<Addon::SLC::SLCTestPipeline>();
+		pipeline2 = std::make_unique<Addon::SST::SSTTestPipeline>();
+        rtgi_pipeline = std::make_unique<VXPGReSTIRPipeline>();
+
 		//geoinsp_pipeline = std::make_unique<SSPGP_GMM_Pipeline>();
-        geoinsp_pipeline = std::make_unique<SRP::GeoInspectPipeline>();
-		//vxgi_pipeline = std::make_unique<SSPGP_GMM_Pipeline>();
-        vxgi_pipeline = std::make_unique<VXPGASVGFPipeline>();
+        geoinsp_pipeline = std::make_unique<GTPipeline>();
+        //geoinsp_pipeline = std::make_unique<SRP::GeoInspectPipeline>();
+		vxgi_pipeline = std::make_unique<SSPGP_GMM_Pipeline>();
+        //vxgi_pipeline = std::make_unique<VXPGASVGFPipeline>();
         vxdi_pipeline = std::make_unique<VXPGPipeline>();
 		pipeline1->build();
 		pipeline2->build();
@@ -187,6 +193,26 @@ struct SandBoxApplication :public Application::ApplicationBase {
             srenderer->sceneDataPack.geometry_buffer_cpu);
 	}
 
+	void AnimateScene() {
+        ImGui::Begin("Animate");
+        static float speed = 1.f;
+        ImGui::DragFloat("speed", &speed, 0.01);
+        ImGui::End();
+
+		auto view = Core::ComponentManager::get()->view<GFX::TagComponent, GFX::TransformComponent>();
+        for (auto& [entity, tag, transform] : view) {
+			if (tag.name == "mask.fbx") {
+				transform.eulerAngles.y = timer.totalTime() * speed;
+			}
+			if (tag.name == "sphere.fbx") {
+				transform.translation.y = 2 + 1.5 * std::cos(timer.totalTime() * speed);
+			}
+			//if (tag.name == "DirectionalLight") {
+			//	transform.eulerAngles.z = 25 * std::cos(timer.totalTime() * speed * 0.6);
+			//}
+        }
+	}
+
 	/** Update the application every loop */
     virtual auto Update(double deltaTime) noexcept -> void override {
         RHI::Device* device = rhiLayer->getDevice();
@@ -196,6 +222,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
           device->waitIdle();
           scene.isDirty = false;
 		}
+		device->waitIdle();
 
 		int width, height;
 		mainWindow->getFramebufferSize(&width, &height);
@@ -309,6 +336,8 @@ struct SandBoxApplication :public Application::ApplicationBase {
                         }
                 }
                 ImGui::End();
+
+				AnimateScene();
 
 
 		srenderer->invalidScene(scene);

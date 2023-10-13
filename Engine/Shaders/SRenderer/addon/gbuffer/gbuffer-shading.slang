@@ -58,26 +58,10 @@ void RgenMain() {
     const int spp = 2;
     
     if (IsShadingSurfaceValid(surface)) {
-        float bsdf_pdf;
-
         PrimaryPayload payload;
         float3 throughput = float3(1);
         for (int i = 0; i < spp; ++i) {
-            // // compute first bounce
-            // float bsdf_pdf;
-            // Ray bsdfRay = SpawnBsdfRay(surface, -primaryRay.direction, RNG, bsdf_pdf);
-            // SplitShading gi = EvalBsdfSplit(surface, -primaryRay.direction, bsdfRay.direction);
-            // if (bsdf_pdf == 0) throughput = float3(0, 0, 0);
-            // Intersection(bsdfRay, SceneBVH, payload, RNG);
-            // if (HasHit(payload.hit)) {
-            //     const PolymorphicLightInfo light = lights[0];
-            //     float3 radiance = EvaluateDirectLight(bsdfRay, payload.hit, light, RNG) * throughput;
-            //     // further bounces
-            //     radiance += EvaluateMultibounceIndirect(bsdfRay, 1, throughput, payload, RNG);
-                
-            //     shading.diffuse += radiance * gi.diffuse / bsdf_pdf;
-            //     shading.specular += radiance * gi.specular / bsdf_pdf;
-            // }
+
             float bsdf_pdf;
             Ray bsdfRay = SpawnBsdfRay(surface, -primaryRay.direction, RNG, bsdf_pdf);
             SplitShading gi = EvalBsdfSplit(surface, -primaryRay.direction, bsdfRay.direction);
@@ -88,8 +72,7 @@ void RgenMain() {
                 const PolymorphicLightInfo light = lights[0];
                 float3 radiance = EvaluateDirectLight(bsdfRay, payload.hit, light, RNG);
                 // further bounces
-                // radiance += EvaluateMultibounceIndirect(bsdfRay, 1, throughput, payload, RNG);
-
+                radiance += EvaluateMultibounceIndirect(bsdfRay, 1, throughput, payload, RNG);
                 shading.diffuse += radiance * gi.diffuse / bsdf_pdf;
                 shading.specular += radiance * gi.specular / bsdf_pdf;
             }

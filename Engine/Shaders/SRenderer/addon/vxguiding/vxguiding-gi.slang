@@ -19,6 +19,7 @@ cbuffer PushConstants {
         uint sample_batch;
         uint sampleStragegy;
         bool secondbounce;
+        uint split_line;
     } pConst;
 };
 
@@ -90,7 +91,39 @@ void RgenMain() {
     const int vxg_type = (pConst.sampleStragegy >> 4) & 0x3;
     const bool power_mis = ((pConst.sampleStragegy >> 6) & 0x1) != 0;
     const VisibilityType visibility = VisibilityType((pConst.sampleStragegy >> 7) & 0x3);
-    
+
+    if (pConst.split_line > 0 && pConst.split_line != 1280) {
+        if (abs(pixel.x - int(pConst.split_line)) < 3) {
+            u_Color[pixel] = float4(1, 1, 1, 1);
+            return;
+        }
+    }
+    if (pixel.x > pConst.split_line) {
+        // BSDF
+        for (int i = 0; i < 2; ++i) {
+            payload.hit = hit;
+            // compute first bounce
+            float bsdf_pdf;
+            Ray bsdfRay = SpawnBsdfRay(payload.hit, -primaryRay.direction, RNG, bsdf_pdf);
+            float3 first_bsdf = EvalBsdf(payload.hit, -primaryRay.direction, bsdfRay.direction);
+            float3 throughput = first_bsdf / bsdf_pdf;
+            if (bsdf_pdf == 0) throughput = float3(0, 0, 0);
+            Intersection(bsdfRay, SceneBVH, payload, RNG);
+            if (HasHit(payload.hit)) {
+                const PolymorphicLightInfo light = lights[0];
+                radiance += EvaluateDirectLight(bsdfRay, payload.hit, light, RNG) * throughput;
+                // further bounces
+                radiance += EvaluateMultibounceIndirect(bsdfRay, 1, throughput, payload, RNG);
+            }
+        }
+        radiance /= 2;
+        // const PolymorphicLightInfo light = lights[0];
+        // radiance += EvaluateDirectLight(primaryRay, hit, light, RNG);
+
+        u_Color[pixel] = float4(radiance, 1);
+        return;
+    }
+
     // 1 spp : spawn a new BSDF ray.
     float2 uv = float2(GetNextRandom(RNG), GetNextRandom(RNG));
     if (sample_stragegy == 0) {
@@ -386,66 +419,66 @@ void RgenMain() {
                 // radiance += indirect;
             }
 
-            // multibounce
-            if (pConst.secondbounce & HasHit(payload.hit) && any(throughput != float3(0))) {
-                float3 multi_bounce = float3(0);
-                Ray prev_bsdf_ray = bsdfRay;
-                GeometryHit secondary_hit = payload.hit;
-                // extra bounce testing
-                // MIS the bsdf sampling and voxel guider sampling
-                VoxelGuidingConfig config;
-                config.type = VoxelGuidingType::VG_Irradiance;
-                config.visibility = VisibilityType::None;
-                int VXCount = u_vxCounter.Load(0);
-                const int3 currVXID = int3(WorldToVoxel(secondary_hit.position.xyz, info) * info.volumeDimension);
-                { // BSDF sampling, we really sample the bsdf sampling
-                    float bsdf_pdf;
-                    Ray bsdf_ray = SpawnBsdfRay(secondary_hit, -prev_bsdf_ray.direction, RNG, bsdf_pdf);
-                    float3 gi = EvaluateIndirectLight(
-                        prev_bsdf_ray, bsdf_ray,
-                        double(bsdf_pdf),
-                        secondary_hit, payload, RNG);
-                    const float3 indirect = gi * throughput;
-                    if (any(indirect > 0)) {
-                        const int3 vxID = int3(WorldToVoxel(payload.hit.position.xyz, info) * info.volumeDimension);
-                        float w1 = bsdf_pdf;
-                        float w2 = float(PdfVoxelGuiding(
-                            VXCount, vxID, currVXID, secondary_hit, info, config,
-                            u_pMin, u_pMax, u_pCompactIndex, u_TreeNodes, u_inverseIndex, u_compact2leaf, u_pIrradiance));
-                        if (power_mis) {
-                            w1 *= w1;
-                            w2 *= w2;
-                        }
-                        radiance += indirect * w1 / (w1 + w2);
-                    }
-                }
-                { // Semi NEE - voxel2sphere
-                    double pdf;
-                    AABB aabb;
-                    const float3 guidedDir = SampleVoxelGuiding(
-                        VXCount, pixel, uv, currVXID, secondary_hit, info, config, RNG,
-                        u_pMin, u_pMax, u_pCompactIndex, u_TreeNodes,
-                        u_spixelIdx, u_fuzzyWeight, u_fuzzyIDX, u_topLevelTree, u_clusterRoots,
-                        aabb, pdf);
-                    Ray guidedRay = SpawnRay(secondary_hit, guidedDir);
-                    float3 gi = EvaluateIndirectLight(
-                        prev_bsdf_ray, guidedRay,
-                        pdf,
-                        secondary_hit, payload, RNG);
+            // // multibounce
+            // if (pConst.secondbounce & HasHit(payload.hit) && any(throughput != float3(0))) {
+            //     float3 multi_bounce = float3(0);
+            //     Ray prev_bsdf_ray = bsdfRay;
+            //     GeometryHit secondary_hit = payload.hit;
+            //     // extra bounce testing
+            //     // MIS the bsdf sampling and voxel guider sampling
+            //     VoxelGuidingConfig config;
+            //     config.type = VoxelGuidingType::VG_Irradiance;
+            //     config.visibility = VisibilityType::None;
+            //     int VXCount = u_vxCounter.Load(0);
+            //     const int3 currVXID = int3(WorldToVoxel(secondary_hit.position.xyz, info) * info.volumeDimension);
+            //     { // BSDF sampling, we really sample the bsdf sampling
+            //         float bsdf_pdf;
+            //         Ray bsdf_ray = SpawnBsdfRay(secondary_hit, -prev_bsdf_ray.direction, RNG, bsdf_pdf);
+            //         float3 gi = EvaluateIndirectLight(
+            //             prev_bsdf_ray, bsdf_ray,
+            //             double(bsdf_pdf),
+            //             secondary_hit, payload, RNG);
+            //         const float3 indirect = gi * throughput;
+            //         if (any(indirect > 0)) {
+            //             const int3 vxID = int3(WorldToVoxel(payload.hit.position.xyz, info) * info.volumeDimension);
+            //             float w1 = bsdf_pdf;
+            //             float w2 = float(PdfVoxelGuiding(
+            //                 VXCount, vxID, currVXID, secondary_hit, info, config,
+            //                 u_pMin, u_pMax, u_pCompactIndex, u_TreeNodes, u_inverseIndex, u_compact2leaf, u_pIrradiance));
+            //             if (power_mis) {
+            //                 w1 *= w1;
+            //                 w2 *= w2;
+            //             }
+            //             radiance += indirect * w1 / (w1 + w2);
+            //         }
+            //     }
+            //     { // Semi NEE - voxel2sphere
+            //         double pdf;
+            //         AABB aabb;
+            //         const float3 guidedDir = SampleVoxelGuiding(
+            //             VXCount, pixel, uv, currVXID, secondary_hit, info, config, RNG,
+            //             u_pMin, u_pMax, u_pCompactIndex, u_TreeNodes,
+            //             u_spixelIdx, u_fuzzyWeight, u_fuzzyIDX, u_topLevelTree, u_clusterRoots,
+            //             aabb, pdf);
+            //         Ray guidedRay = SpawnRay(secondary_hit, guidedDir);
+            //         float3 gi = EvaluateIndirectLight(
+            //             prev_bsdf_ray, guidedRay,
+            //             pdf,
+            //             secondary_hit, payload, RNG);
 
-                    if ((all(payload.hit.position >= aabb.min) && all(payload.hit.position <= aabb.max))) {
-                        if (any(gi > 0)) {
-                            float w1 = PdfBsdfSample(secondary_hit, -prev_bsdf_ray.direction, guidedRay.direction);
-                            float w2 = float(pdf);
-                            if (power_mis) {
-                                w1 *= w1;
-                                w2 *= w2;
-                            }
-                            radiance += gi * throughput * w2 / (w1 + w2);
-                        }
-                    }
-                }
-            }
+            //         if ((all(payload.hit.position >= aabb.min) && all(payload.hit.position <= aabb.max))) {
+            //             if (any(gi > 0)) {
+            //                 float w1 = PdfBsdfSample(secondary_hit, -prev_bsdf_ray.direction, guidedRay.direction);
+            //                 float w2 = float(pdf);
+            //                 if (power_mis) {
+            //                     w1 *= w1;
+            //                     w2 *= w2;
+            //                 }
+            //                 radiance += gi * throughput * w2 / (w1 + w2);
+            //             }
+            //         }
+            //     }
+            // }
         }
         if (topIndex != -1) {
             const int clusterRoot = u_clusterRoots[topIndex];
@@ -576,9 +609,9 @@ void RgenMain() {
         }
     }
     
-    // radiance += material.emissiveColor;
-    const PolymorphicLightInfo light = lights[0];
-    radiance += EvaluateDirectLight(primaryRay, hit, light, RNG);
+    // // radiance += material.emissiveColor;
+    // const PolymorphicLightInfo light = lights[0];
+    // radiance += EvaluateDirectLight(primaryRay, hit, light, RNG);
 
     if (any(isnan(radiance))) {
         radiance = float3(0,0, 0);

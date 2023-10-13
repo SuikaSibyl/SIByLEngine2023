@@ -1076,6 +1076,33 @@ float3 EvaluateIndirectLightEX(
     else return float3(0, 0, 0);
 }
 
+SplitShading EvaluateIndirectLightEXSplit(
+    in_ref(Ray) primaryRay,
+    in_ref(Ray) secondRay,
+    double pdf,
+    in_ref(ShadingSurface) surface,
+    inout_ref(PrimaryPayload) payload,
+    inout_ref(RandomSamplerState) RNG,
+    out_ref(float3) di
+) {
+    SplitShading first_bsdf;
+    first_bsdf.diffuse = float3(0);
+    first_bsdf.specular = float3(0);
+    if (pdf <= 0) return first_bsdf;
+    // trace the second ray
+    Intersection(secondRay, SceneBVH, payload, RNG);
+    first_bsdf = EvalBsdfSplit(surface, -primaryRay.direction, secondRay.direction);
+    // divide float(pdf). leave it to return line;
+    if (HasHit(payload.hit)) {
+        const PolymorphicLightInfo light = lights[0];
+        di = EvaluateDirectLight(secondRay, payload.hit, light, RNG);
+        first_bsdf.diffuse *= di / float(pdf);
+        first_bsdf.specular *= di / float(pdf);
+        return first_bsdf;
+    }
+    else return first_bsdf;
+}
+
 float3 EvaluateIndirectLightEXX(
     in_ref(Ray) primaryRay,
     in_ref(Ray) secondRay,

@@ -1060,7 +1060,7 @@ void LookAt(const float* eye, const float* at, const float* up, float* m16) {
 /** draw gui*/
 auto ViewportWidget::onDrawGui() noexcept -> void {
    ImGui::Begin(name.c_str(), 0, ImGuiWindowFlags_MenuBar);
-
+   static bool draw_gizmo = true;
    ImGui::PushItemWidth(ImGui::GetFontSize() * -12);
    if (ImGui::BeginMenuBar()) {
     if (ImGui::Button("capture")) {
@@ -1068,6 +1068,7 @@ auto ViewportWidget::onDrawGui() noexcept -> void {
         captureImage(texture->guid);
       }
     }
+    ImGui::Checkbox("Gizmo", &draw_gizmo);
     // menuBarSize = ImGui::GetWindowSize();
     ImGui::EndMenuBar();
    }
@@ -1110,126 +1111,131 @@ auto ViewportWidget::onDrawGui() noexcept -> void {
       proj.data[i][j] *= neg_proj;
     }
 
+   if (draw_gizmo) {
     ImGuizmo::SetOrthographic(false);
     ImGuizmo::SetDrawlist();
 
     float windowWidth = (float)ImGui::GetWindowWidth();
-   float windowHeight = (float)ImGui::GetWindowHeight();
+    float windowHeight = (float)ImGui::GetWindowHeight();
     ImVec2 wp = ImGui::GetWindowPos();
 
-   ImGuizmo::SetRect(wp.x + currPos.x, wp.y + currPos.y, width,
-                     height);
+    ImGuizmo::SetRect(wp.x + currPos.x, wp.y + currPos.y, width, height);
 
-   //Math::mat4 transform = tc.getAccumulativeTransform();
-   Math::mat4 transform;
+    // Math::mat4 transform = tc.getAccumulativeTransform();
+    Math::mat4 transform;
 
-   ImGuiWindow* window = ImGui::GetCurrentWindow();
-   //ImGuizmo::DrawGrid(&view.data[0][0], &proj.data[0][0], identityMatrix,
-   //                   100.f);
-   bool test = false;
-   {
-    if (ImGui::IsKeyPressed(ImGuiKey_R))
-      gizmoState.mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
-    if (ImGui::IsKeyPressed(ImGuiKey_T))
-      gizmoState.mCurrentGizmoOperation = ImGuizmo::ROTATE;
-    if (ImGui::IsKeyPressed(ImGuiKey_Y))  // r Key
-      gizmoState.mCurrentGizmoOperation = ImGuizmo::SCALE;
-    if (ImGui::IsKeyPressed(ImGuiKey_U))
-      gizmoState.mCurrentGizmoOperation = ImGuizmo::UNIVERSAL;
-   }
+    ImGuiWindow* window = ImGui::GetCurrentWindow();
+    // ImGuizmo::DrawGrid(&view.data[0][0], &proj.data[0][0], identityMatrix,
+    //                    100.f);
+    bool test = false;
+    {
+      if (ImGui::IsKeyPressed(ImGuiKey_R))
+        gizmoState.mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
+      if (ImGui::IsKeyPressed(ImGuiKey_T))
+        gizmoState.mCurrentGizmoOperation = ImGuizmo::ROTATE;
+      if (ImGui::IsKeyPressed(ImGuiKey_Y))  // r Key
+        gizmoState.mCurrentGizmoOperation = ImGuizmo::SCALE;
+      if (ImGui::IsKeyPressed(ImGuiKey_U))
+        gizmoState.mCurrentGizmoOperation = ImGuizmo::UNIVERSAL;
+    }
     Math::mat4 objectTransform;
     Math::mat4 objectTransformPrecursor;
-   if (selectedGO.has_value() && selectedScene != nullptr) {
-    {//first compute the transform
-       //  get transform
-      float oddScaling = 1.f;
-      Math::vec3 scaling = Math::vec3{1, 1, 1};
-      {  // get mesh transform matrix
-        GFX::GameObject* go = selectedScene->getGameObject(selectedGO.value());
-        GFX::TransformComponent* transform =
-            go->getEntity().getComponent<GFX::TransformComponent>();
-        objectTransform = transform->getTransform() * objectTransform;
-        oddScaling *=
-            transform->scale.x * transform->scale.y * transform->scale.z;
-        scaling *= transform->scale;
-        while (go->parent != Core::NULL_ENTITY) {
-          test = true;
-          go = selectedScene->getGameObject(go->parent);
+    if (selectedGO.has_value() && selectedScene != nullptr) {
+      {  // first compute the transform
+         //   get transform
+        float oddScaling = 1.f;
+        Math::vec3 scaling = Math::vec3{1, 1, 1};
+        {  // get mesh transform matrix
+          GFX::GameObject* go =
+              selectedScene->getGameObject(selectedGO.value());
           GFX::TransformComponent* transform =
               go->getEntity().getComponent<GFX::TransformComponent>();
           objectTransform = transform->getTransform() * objectTransform;
-          objectTransformPrecursor =
-              transform->getTransform() * objectTransformPrecursor;
           oddScaling *=
               transform->scale.x * transform->scale.y * transform->scale.z;
           scaling *= transform->scale;
+          while (go->parent != Core::NULL_ENTITY) {
+            test = true;
+            go = selectedScene->getGameObject(go->parent);
+            GFX::TransformComponent* transform =
+                go->getEntity().getComponent<GFX::TransformComponent>();
+            objectTransform = transform->getTransform() * objectTransform;
+            objectTransformPrecursor =
+                transform->getTransform() * objectTransformPrecursor;
+            oddScaling *=
+                transform->scale.x * transform->scale.y * transform->scale.z;
+            scaling *= transform->scale;
+          }
         }
       }
-    }
-    objectTransform = Math::transpose(objectTransform);
-    ImGuizmo::Manipulate(
-        &view.data[0][0], &proj.data[0][0], gizmoState.mCurrentGizmoOperation,
-        gizmoState.mCurrentGizmoMode, &objectTransform.data[0][0], NULL,
-        gizmoState.useSnap ? &gizmoState.snap[0] : NULL, NULL, NULL);
+      objectTransform = Math::transpose(objectTransform);
+      ImGuizmo::Manipulate(
+          &view.data[0][0], &proj.data[0][0], gizmoState.mCurrentGizmoOperation,
+          gizmoState.mCurrentGizmoMode, &objectTransform.data[0][0], NULL,
+          gizmoState.useSnap ? &gizmoState.snap[0] : NULL, NULL, NULL);
 
-    if (test) {
-      float a = 1.f;
-    }
-    float matrixTranslation[3], matrixRotation[3], matrixScale[3];
-
-    Math::mat4 inv = Math::transpose(Math::inverse(objectTransformPrecursor));
-    Math::mat4 thisMatrix = objectTransform * inv;
-    ImGuizmo::DecomposeMatrixToComponents(
-        &thisMatrix.data[0][0], matrixTranslation,
-                                          matrixRotation, matrixScale);
-    //ImGuizmo::RecomposeMatrixFromComponents(
-    //    matrixTranslation, matrixRotation, matrixScale, &thisMatrix.data[0][0]);
-
-    GFX::GameObject* go = selectedScene->getGameObject(selectedGO.value());
-    GFX::TransformComponent* transform =
-        go->getEntity().getComponent<GFX::TransformComponent>();
-    transform->translation = Math::vec3{
-        matrixTranslation[0], matrixTranslation[1], matrixTranslation[2]};
-    transform->eulerAngles =
-        Math::vec3{matrixRotation[0], matrixRotation[1], matrixRotation[2]};
-    transform->scale =
-        Math::vec3{matrixScale[0], matrixScale[1], matrixScale[2]};
-   }
-   float viewManipulateRight = wp.x + currPos.x + width;
-   float viewManipulateTop = wp.y + currPos.y;
-   Math::mat4 view_origin = view;
-   ImGuizmo::ManipulateResult result = ImGuizmo::ViewManipulate_Custom(
-       &view.data[0][0], 5,
-       ImVec2(viewManipulateRight - 128, viewManipulateTop), ImVec2(128, 128),
-       0x10101010);
-
-   if (selectedGO.has_value() && selectedScene != nullptr && result.edited) {
-    view = Math::transpose(view);
-    for (int i = 0; i < 4; i++)
-      for (int j = 0; j < 4; j++) {
-        float neg_view = (j == 0 || (i == 3 && j == 3)) ? 1 : -1;
-        view.data[i][j] *= neg_view;
+      if (test) {
+        float a = 1.f;
       }
-    Math::vec4 target =
-        Math::transpose(objectTransform) * Math::vec4(0, 0, 0, 1);
-    
-    //Math::mat4::rotateZ(eulerAngles.z) * Math::mat4::rotateY(eulerAngles.y) *
-    //    Math::mat4::rotateX(eulerAngles.x)
-    Math::vec3 forward =
-        Math::vec3{result.newDir[0], result.newDir[1], result.newDir[2]};
-    Math::vec3 cameraPos =
-        Math::vec3{target.x, target.y, target.z} + forward * 5;
-    camera_transform_ref->translation =
-        Math::vec3{cameraPos.data[0], cameraPos.data[1], cameraPos.data[2]};
+      float matrixTranslation[3], matrixRotation[3], matrixScale[3];
 
-    float pitch = std::atan2(forward.z, sqrt(forward.x * forward.x + forward.y * forward.y));
-    float yaw = std::atan2(forward.x, forward.y);
-    pitch *= 180. / IM_PI;
-    yaw *= 180. / IM_PI;
-    yaw = 180. - yaw;
-    camera_transform_ref->eulerAngles = {pitch, yaw, 0};
+      Math::mat4 inv = Math::transpose(Math::inverse(objectTransformPrecursor));
+      Math::mat4 thisMatrix = objectTransform * inv;
+      ImGuizmo::DecomposeMatrixToComponents(&thisMatrix.data[0][0],
+                                            matrixTranslation, matrixRotation,
+                                            matrixScale);
+      // ImGuizmo::RecomposeMatrixFromComponents(
+      //     matrixTranslation, matrixRotation, matrixScale,
+      //     &thisMatrix.data[0][0]);
 
-    *forceReset = true;
+      GFX::GameObject* go = selectedScene->getGameObject(selectedGO.value());
+      GFX::TransformComponent* transform =
+          go->getEntity().getComponent<GFX::TransformComponent>();
+      transform->translation = Math::vec3{
+          matrixTranslation[0], matrixTranslation[1], matrixTranslation[2]};
+      transform->eulerAngles =
+          Math::vec3{matrixRotation[0], matrixRotation[1], matrixRotation[2]};
+      transform->scale =
+          Math::vec3{matrixScale[0], matrixScale[1], matrixScale[2]};
+    }
+    float viewManipulateRight = wp.x + currPos.x + width;
+    float viewManipulateTop = wp.y + currPos.y;
+    Math::mat4 view_origin = view;
+    ImGuizmo::ManipulateResult result = ImGuizmo::ViewManipulate_Custom(
+        &view.data[0][0], 5,
+        ImVec2(viewManipulateRight - 128, viewManipulateTop), ImVec2(128, 128),
+        0x10101010);
+
+    if (selectedGO.has_value() && selectedScene != nullptr && result.edited) {
+      view = Math::transpose(view);
+      for (int i = 0; i < 4; i++)
+        for (int j = 0; j < 4; j++) {
+          float neg_view = (j == 0 || (i == 3 && j == 3)) ? 1 : -1;
+          view.data[i][j] *= neg_view;
+        }
+      Math::vec4 target =
+          Math::transpose(objectTransform) * Math::vec4(0, 0, 0, 1);
+
+      // Math::mat4::rotateZ(eulerAngles.z) * Math::mat4::rotateY(eulerAngles.y)
+      // *
+      //     Math::mat4::rotateX(eulerAngles.x)
+      Math::vec3 forward =
+          Math::vec3{result.newDir[0], result.newDir[1], result.newDir[2]};
+      Math::vec3 cameraPos =
+          Math::vec3{target.x, target.y, target.z} + forward * 5;
+      camera_transform_ref->translation =
+          Math::vec3{cameraPos.data[0], cameraPos.data[1], cameraPos.data[2]};
+
+      float pitch = std::atan2(
+          forward.z, sqrt(forward.x * forward.x + forward.y * forward.y));
+      float yaw = std::atan2(forward.x, forward.y);
+      pitch *= 180. / IM_PI;
+      yaw *= 180. / IM_PI;
+      yaw = 180. - yaw;
+      camera_transform_ref->eulerAngles = {pitch, yaw, 0};
+
+      *forceReset = true;
+    }
    }
    ImGui::End();
 }

@@ -77,7 +77,8 @@ void RgenMain() {
         }
     }
     const float irradiance = luminance(vplColor);
-
+    const float2 cylcoord = CylindricalToUnit(UnitVectorToCylindrical(bsdf_dir));
+    
     // Load the GMM statistics
     // --------------------------------------------------------------------
     const float4 pack0 = u_gmmStatisticsPack0[pixel];
@@ -124,7 +125,6 @@ void RgenMain() {
 
     // Add the bsdf sample contribution
     // --------------------------------------------------------------------
-    const float2 cylcoord = CylindricalToUnit(UnitVectorToCylindrical(bsdf_dir));
     if (irradiance > 0) {
         const float guided_pdf = GMM.Pdf(cylcoord) / float(4 * k_pi);
         if (pConst.strategy == 0) {
@@ -138,7 +138,7 @@ void RgenMain() {
             radiance += bsdfRadiance;
         }
     }
-
+    
     // Update the vFM lobe statistics
     // --------------------------------------------------------------------
     if (irradiance > 0 && pConst.adaption) {
@@ -157,6 +157,10 @@ void RgenMain() {
         u_gmmStatisticsPack0[pixel] = update_pack0;
         u_gmmStatisticsPack1[pixel] = float4(update_pack1, epoch_count, 0);
     }
+
+    // // radiance += material.emissiveColor;
+    // const PolymorphicLightInfo light = lights[0];
+    // radiance += EvaluateDirectLight(primaryRay, hit, light, RNG);
     
     u_color[pixel] = float4(radiance, 1);
 }

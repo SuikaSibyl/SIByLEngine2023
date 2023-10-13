@@ -1,12 +1,14 @@
-#include "../../raytracer/spt_interface.hlsli"
-#include "../../raytracer/lights/directional.hlsli"
+#include "../../include/common/light_impl.hlsli"
 #include "../../include/common/random.hlsli"
 #include "../../include/common/sampling.hlsli"
 #include "../../include/raytracer_descriptor_set.hlsli"
 #include "../../include/scene_descriptor_set.hlsli"
-#include "../vpl/vpl_interface.hlsli"
+#include "../../raytracer/lights/directional.hlsli"
+#include "../../raytracer/spt_interface.hlsli"
 #include "../vbuffer/vbuffer.hlsli"
+#include "../vpl/vpl_interface.hlsli"
 #include "include/slc_interface.hlsli"
+
 
 [[vk::push_constant]]
 cbuffer PushConstants {
@@ -98,6 +100,12 @@ void RgenMain() {
         if (any(isnan(radiance))) {
             radiance = float3(0);
         }
+        
+        radiance / pConst.spp;
+        // radiance += material.emissiveColor;
+        const PolymorphicLightInfo light = lights[0];
+        radiance += EvaluateDirectLight(primaryRay, hit, light, RNG);
+
         u_color[pixel] = float4(radiance / pConst.spp, 1);
     }
 }

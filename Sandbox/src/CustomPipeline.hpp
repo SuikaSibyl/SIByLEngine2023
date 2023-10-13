@@ -157,7 +157,7 @@ SE_EXPORT struct CustomGraph : public RDG::Graph {
 
     // Blit history GBuffer
     addSubgraph(std::make_unique<Addon::GBufferHolderGraph>(), "GBuffer Blit Pass");
-    Addon::GBufferUtils::addBlitPrevGBufferEdges(this, "GBufferShading Pass", "ASVGF-GradProj Pass", "GBuffer Blit Pass");
+    Addon::GBufferUtils::addBlitPrevGBufferEdges(this, "GBufferShading Pass", "ASVGF-Temporal Pass", "GBuffer Blit Pass");
     
     //markOutput("GBufferShading Pass", "Debug");
 
@@ -665,34 +665,20 @@ SE_EXPORT struct VXGuidingASVGFGraph : public RDG::Graph {
     addPass(std::make_unique<Addon::ASVGF::Prelude>(), "ASVGF-Prelude Pass");
 
     {
-      //// Sanity check: Consume current & previous GBuffer
-      // addPass(std::make_unique<Addon::GBufferTemporalInspectorPass>(),
-      // "GBuffer Inspect Pass"); Addon::GBufferUtils::addGBufferEdges(this,
-      // "VBuffer2GBuffer Pass", "GBuffer Inspect Pass");
-      // Addon::GBufferUtils::addPrevGBufferEdges(this, "GBufferPrev Pass",
-      // "GBuffer Inspect Pass");
-
       // ASVGF :: Gradient Reprojection
-      addPass(std::make_unique<Addon::ASVGF::GradientReprojection>(),
-              "ASVGF-GradProj Pass");
+      addPass(std::make_unique<Addon::ASVGF::GradientReprojection>(), "ASVGF-GradProj Pass");
       addEdge("VBuffer Pass", "VBuffer", "ASVGF-GradProj Pass", "VBuffer");
-      addEdge("ASVGF-Prelude Pass", "GradSamplePosPrev", "ASVGF-GradProj Pass",
-              "GradSamplePosPrev");
+      addEdge("ASVGF-Prelude Pass", "GradSamplePosPrev", "ASVGF-GradProj Pass", "GradSamplePosPrev");
       addEdge("ASVGF-Prelude Pass", "HFPrev", "ASVGF-GradProj Pass", "HFPrev");
-      addEdge("ASVGF-Prelude Pass", "SpecPrev", "ASVGF-GradProj Pass",
-              "SpecPrev");
-      addEdge("ASVGF-Prelude Pass", "VBufferPrev", "ASVGF-GradProj Pass",
-              "VBufferPrev");
-      addEdge("ASVGF-Prelude Pass", "RandPrev", "ASVGF-GradProj Pass",
-              "RandPrev");
-      Addon::GBufferUtils::addGBufferEdges(this, "VBuffer2GBuffer Pass",
-                                           "ASVGF-GradProj Pass");
-      Addon::GBufferUtils::addPrevGBufferEdges(this, "GBufferPrev Pass",
-                                               "ASVGF-GradProj Pass");
+      addEdge("ASVGF-Prelude Pass", "SpecPrev", "ASVGF-GradProj Pass", "SpecPrev");
+      addEdge("ASVGF-Prelude Pass", "VBufferPrev", "ASVGF-GradProj Pass", "VBufferPrev");
+      addEdge("ASVGF-Prelude Pass", "RandPrev", "ASVGF-GradProj Pass", "RandPrev");
+      Addon::GBufferUtils::addGBufferEdges(this, "VBuffer2GBuffer Pass", "ASVGF-GradProj Pass");
+      Addon::GBufferUtils::addPrevGBufferEdges(this, "GBufferPrev Pass", "ASVGF-GradProj Pass");
     }
 
-    addPass(std::make_unique<Addon::VXGuiding::VXGuiderLightInjection>(&setting, &vxgSetting), "ImportonInjection Pass");
-    //addPass(std::make_unique<Addon::VXGuiding::VXGuider1stBounceInjection>(&setting, &vxgSetting), "ImportonInjection Pass");
+    //addPass(std::make_unique<Addon::VXGuiding::VXGuiderLightInjection>(&setting, &vxgSetting), "ImportonInjection Pass");
+    addPass(std::make_unique<Addon::VXGuiding::VXGuider1stBounceInjection>(&setting, &vxgSetting), "ImportonInjection Pass");
     addEdge("VBuffer Pass", "VBuffer", "ImportonInjection Pass", "VBuffer");
     addEdge("GuiderClear Pass", "Irradiance", "ImportonInjection Pass", "Irradiance");
     addEdge("GuiderClear Pass", "VPLCount", "ImportonInjection Pass", "VPLCount");
@@ -867,10 +853,10 @@ SE_EXPORT struct VXGuidingASVGFGraph : public RDG::Graph {
     {
       // Now blit HF, Spec, GradSamplePos and VBuffer img for next frame
       addPass(std::make_unique<BlitPass>(BlitPass::Descriptor{0, 0, 0, 0, BlitPass::SourceType::UINT}), "ASVGF Blit Diffuse");
-      addEdge("VXGuiderGI Pass", "Diffuse", "ASVGF Blit Diffuse", "Source");
+      addEdge("VXGuiderGI Pass", "DiffuseBSDF", "ASVGF Blit Diffuse", "Source");
       addEdge("ASVGF-GradProj Pass", "HFPrev", "ASVGF Blit Diffuse", "Target");
       addPass(std::make_unique<BlitPass>(BlitPass::Descriptor{0, 0, 0, 0, BlitPass::SourceType::UINT}), "ASVGF Blit Specular");
-      addEdge("VXGuiderGI Pass", "Specular", "ASVGF Blit Specular", "Source");
+      addEdge("VXGuiderGI Pass", "SpecularBSDF", "ASVGF Blit Specular", "Source");
       addEdge("ASVGF-GradProj Pass", "SpecPrev", "ASVGF Blit Specular", "Target");
       addPass(std::make_unique<BlitPass>(BlitPass::Descriptor{0, 0, 0, 0, BlitPass::SourceType::UINT}), "ASVGF Blit GradSamplePos");
       addEdge("ASVGF-GradProj Pass", "GradSamplePos", "ASVGF Blit GradSamplePos", "Source");
@@ -883,8 +869,8 @@ SE_EXPORT struct VXGuidingASVGFGraph : public RDG::Graph {
       addPass(std::make_unique<Addon::ASVGF::GradientImagePass>(), "ASVGF-GradImg Pass");
       addEdge("ASVGF-GradProj Pass", "GradSamplePos", "ASVGF-GradImg Pass", "GradSamplePos");
       addEdge("ASVGF-GradProj Pass", "HfSpecLumPrev", "ASVGF-GradImg Pass", "HfSpecLumPrev");
-      addEdge("VXGuiderGI Pass", "Diffuse", "ASVGF-GradImg Pass", "HF");
-      addEdge("VXGuiderGI Pass", "Specular", "ASVGF-GradImg Pass", "Spec");
+      addEdge("VXGuiderGI Pass", "DiffuseBSDF", "ASVGF-GradImg Pass", "HF");
+      addEdge("VXGuiderGI Pass", "SpecularBSDF", "ASVGF-GradImg Pass", "Spec");
     
       // atrous gradient image
       addPass(std::make_unique<Addon::ASVGF::GradientAtrousPass>(0), "ASVGF-GradAtrous-0 Pass");
@@ -970,7 +956,7 @@ SE_EXPORT struct VXGuidingASVGFGraph : public RDG::Graph {
 
     // Blit history GBuffer
     addSubgraph(std::make_unique<Addon::GBufferHolderGraph>(), "GBuffer Blit Pass");
-    Addon::GBufferUtils::addBlitPrevGBufferEdges(this, "VXGuiderGI Pass", "ASVGF-GradProj Pass", "GBuffer Blit Pass");
+    Addon::GBufferUtils::addBlitPrevGBufferEdges(this, "VXGuiderGI Pass", "ASVGF-Temporal Pass", "GBuffer Blit Pass");
     
     addPass(std::make_unique<AccumulatePass>(), "Accum Pass");
     addEdge("ASVGF-Atrous-3 Pass", "Composite", "Accum Pass", "Input");

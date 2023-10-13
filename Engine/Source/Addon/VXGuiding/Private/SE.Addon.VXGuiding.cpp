@@ -426,12 +426,13 @@ auto VXGuiderGIPass::execute(
     uint32_t sample_batch;
     uint32_t sample_strategy;
     uint32_t second_bounce;
+    uint32_t split_bar;
   };
   PushConstant pConst = {1280, 720, batchIdx,
                          (strategy & 0xf) | ((traverse_mode & 0x3) << 4) |
                              ((mis_mode & 0x1) << 6) |
                              ((visibility_mode & 0x3) << 7),
-                         second ? 1 : 0};
+                         second ? 1 : 0,splitbar};
   encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::RAYGEN, 0,
                          sizeof(PushConstant));
   encoder->traceRays(1280, 720, 1);
@@ -467,6 +468,7 @@ auto VXGuiderGIPass::renderUI() noexcept -> void {
                  IM_ARRAYSIZE(item_names));
   }
   ImGui::Checkbox("Second Bounce", &second);
+  ImGui::DragInt("Split Bar", &splitbar, 5, 0, 1280);
   }
 
 VXGuiderGIASVGFPass::VXGuiderGIASVGFPass(
@@ -496,6 +498,20 @@ auto VXGuiderGIASVGFPass::reflect() noexcept -> RDG::PassReflection {
               RDG::TextureInfo::ConsumeType::StorageBinding}
               .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
   reflector.addOutput("Specular")
+      .isTexture().withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::R32_UINT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addOutput("DiffuseBSDF")
+      .isTexture().withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::R32_UINT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addOutput("SpecularBSDF")
       .isTexture().withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::R32_UINT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
@@ -701,12 +717,14 @@ auto VXGuiderGIASVGFPass::execute(
 
   GFX::Texture* diffuse = renderData.getTexture("Diffuse");
   GFX::Texture* specular = renderData.getTexture("Specular");
+  GFX::Texture* diffuseBSDF = renderData.getTexture("DiffuseBSDF");
+  GFX::Texture* specularBSDF = renderData.getTexture("SpecularBSDF");
   GFX::Texture* rand = renderData.getTexture("RandSeed");
   GFX::Texture* seedprev = renderData.getTexture("RandPrev");
-  updateBinding(context, "u_Diffuse",
-                RHI::BindingResource{{diffuse->getUAV(0, 0, 1)}});
-  updateBinding(context, "u_Specular",
-                RHI::BindingResource{{specular->getUAV(0, 0, 1)}});
+  updateBinding(context, "u_Diffuse", RHI::BindingResource{{diffuse->getUAV(0, 0, 1)}});
+  updateBinding(context, "u_Specular", RHI::BindingResource{{specular->getUAV(0, 0, 1)}});
+  updateBinding(context, "u_DiffuseBSDF", RHI::BindingResource{{diffuseBSDF->getUAV(0, 0, 1)}});
+  updateBinding(context, "u_SpecularBSDF", RHI::BindingResource{{specularBSDF->getUAV(0, 0, 1)}});
   updateBinding(context, "u_RNGSeed",
                 RHI::BindingResource{{rand->getUAV(0, 0, 1)}});
   updateBinding(context, "u_RNGPrev",

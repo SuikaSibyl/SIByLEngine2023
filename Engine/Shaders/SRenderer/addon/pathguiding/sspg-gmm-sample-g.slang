@@ -211,5 +211,9 @@ void RgenMain() {
     u_gmmStatisticsPack0[pixel] = pack0;
     u_gmmStatisticsPack1[pixel] = pack1;
 
+    // radiance += material.emissiveColor;
+    const PolymorphicLightInfo light = lights[0];
+    radiance += EvaluateDirectLight(primaryRay, surface, light, RNG);
+    
     u_color[pixel] = float4(radiance, 1);
 }

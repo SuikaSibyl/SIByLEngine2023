@@ -1264,7 +1264,7 @@ auto GroundTruthPass::execute(RDG::RenderContext* context,
 
   RHI::RayTracingPassEncoder* encoder = beginPass(context);
 
-  uint32_t batchIdx = renderData.getUInt("AccumIdx");
+  uint32_t batchIdx = renderData.getUInt("FrameIdx");
 
   struct PushConstant {
     uint32_t width;
