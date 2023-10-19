@@ -244,6 +244,43 @@ auto EXR::writeEXR(std::filesystem::path const& path, uint32_t width,
   free(header.requested_pixel_types);
 }
 
+auto EXR::fromEXR(std::filesystem::path const& path) noexcept
+-> std::unique_ptr<Image<COLOR_R32G32B32A32_FLOAT>> {
+  std::string const& str_path = path.string();
+  const char* input = str_path.c_str();
+  float* out;  // width * height * RGBA
+  int width;
+  int height;
+  const char* err = nullptr;
+
+  int ret = LoadEXR(&out, &width, &height, input, &err);
+
+  if (ret != TINYEXR_SUCCESS) {
+    if (err) {
+      fprintf(stderr, "ERR : %s\n", err);
+      FreeEXRErrorMessage(err);  // release memory of error message.
+    }
+  } else {
+    std::unique_ptr<Image<COLOR_R32G32B32A32_FLOAT>> image =
+        std::make_unique<Image<COLOR_R32G32B32A32_FLOAT>>(width, height);
+    //std::vector<float> data(width * height * 4);
+    //uint32_t stride = width * height;
+    //for (int i = 0; i < width * height; i++) {
+    //  data[4 * i + 0] = out[stride * 2 + i];
+    //  data[4 * i + 1] = out[stride * 1 + i];
+    //  data[4 * i + 2] = out[stride * 0 + i];
+    //  data[4 * i + 3] = 1.f;
+    //}
+
+    image->data = Core::Buffer(width * height * sizeof(COLOR_R32G32B32A32_FLOAT));
+    memcpy(image->data.data, out, width * height * sizeof(COLOR_R32G32B32A32_FLOAT));
+
+    free(out);  // release memory of image data
+    return image;
+  }
+  return nullptr;
+}
+
 inline auto getRHIFormat(ddspp::DXGIFormat format) noexcept
     -> RHI::TextureFormat {
   switch (format) {
@@ -526,6 +563,19 @@ auto ImageLoader::load_rgba8(std::filesystem::path const& path) noexcept
     return Image::PNG::fromPNG(path);
   else if (path.extension() == ".tga" || path.extension() == ".TGA")
     return Image::TGA::fromTGA(path);
+  else {
+    Core::LogManager::Error(
+        std::format("Image :: Image Loader failed when loading {0}, \
+					as format extension {1} not supported. ",
+                    path.string(), path.extension().string()));
+  }
+  return nullptr;
+}
+
+auto ImageLoader::load_rgba32(std::filesystem::path const& path) noexcept
+    -> std::unique_ptr<Image::Image<Image::COLOR_R32G32B32A32_FLOAT>> {
+  if (path.extension() == ".exr")
+    return Image::EXR::fromEXR(path);
   else {
     Core::LogManager::Error(
         std::format("Image :: Image Loader failed when loading {0}, \

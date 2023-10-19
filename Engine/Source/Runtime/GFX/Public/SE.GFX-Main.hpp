@@ -631,6 +631,9 @@ SE_EXPORT struct GFXManager : public Core::Manager {
   auto registerTextureResource(
       Core::GUID guid, Image::Image<Image::COLOR_R8G8B8A8_UINT>* image) noexcept
       -> void;
+  auto registerTextureResource(
+      Core::GUID guid, Image::Image<Image::COLOR_R32G32B32A32_FLOAT>* image) noexcept
+      -> void;
   auto registerTextureResource(Core::GUID guid,
                                Image::Texture_Host* image) noexcept -> void;
   auto registerTextureResource(char const* filepath) noexcept -> Core::GUID;

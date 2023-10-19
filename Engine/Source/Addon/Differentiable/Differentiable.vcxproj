@@ -21,10 +21,10 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{78b68d1c-1cba-439a-a998-1d92ad9e5f3e}</ProjectGuid>
-    <RootNamespace>PathGuiding</RootNamespace>
+    <ProjectGuid>{fbe7dbb9-772a-4553-ab10-c16ff1f3ad33}</ProjectGuid>
+    <RootNamespace>Differentiable</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>PathGuiding</ProjectName>
+    <ProjectName>Addon-Differentiable</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -74,12 +74,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\imguizmo\include;$(SolutionDir)Engine\Source\ThirdParty\glad\include;$(SolutionDir)Engine\Shaders\SRenderer;$(SolutionDir)Engine\Source\Addon\RestirGI\Public;$(SolutionDir)Engine\Source\Addon\GBuffer\Public;$(SolutionDir)Engine\Source\Addon\VXGI\Public;$(SolutionDir)Engine\Source\Runtime\Application\Public;$(SolutionDir)Engine\Source\Runtime\Core\Public;$(SolutionDir)Engine\Source\ThirdParty\tinygltf\include;$(SolutionDir)Engine\Source\ThirdParty\imgui\includes;$(IncludePath);$(SolutionDir)Engine\Source\ThirdParty\vulkan\Include;$(SolutionDir)Engine\Source\ThirdParty\tinyobjloader;$(SolutionDir)Engine\Source\Editor\Editor\Public;$(SolutionDir)Engine\Source\Editor\EditorRDG\Public;$(SolutionDir)Engine\Source\Editor\EditorGFX\Public;$(SolutionDir)Engine\Source\Editor\EditorCore\Public;$(SolutionDir)Engine\Source\Runtime\Prelude\Public;$(SolutionDir)Engine\Source\Runtime\Image\Public;$(SolutionDir)Engine\Source\Runtime\RDG\Public;$(SolutionDir)Engine\Source\Runtime\Video\Public;$(SolutionDir)Engine\Source\Runtime\Math\Public;$(SolutionDir)Engine\Source\Runtime\RHI\Public;$(SolutionDir)Engine\Source\Runtime\SRenderer\Public;$(SolutionDir)Engine\Source\Runtime\GFX\Public;$(SolutionDir)Engine\Source\Runtime\Platform\Public;$(SolutionDir)Engine\Source\ThirdParty\glfw\include;$(SolutionDir)Engine\Source\ThirdParty\vma\include;$(SolutionDir)Engine\Source\ThirdParty\yaml\include;$(SolutionDir)Engine\Source\ThirdParty\spirvcross\include;$(SolutionDir)Engine\Source\ThirdParty\openfbx;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\imguizmo\include;$(SolutionDir)Engine\Source\ThirdParty\glad\include;$(SolutionDir)Engine\Source\Runtime\Application\Public;$(SolutionDir)Engine\Source\Runtime\Core\Public;$(SolutionDir)Engine\Source\ThirdParty\tinygltf\include;$(SolutionDir)Engine\Source\ThirdParty\imgui\includes;$(IncludePath);$(SolutionDir)Engine\Source\ThirdParty\vulkan\Include;$(SolutionDir)Engine\Source\ThirdParty\tinyobjloader;$(SolutionDir)Engine\Source\Editor\Editor\Public;$(SolutionDir)Engine\Source\Editor\EditorRDG\Public;$(SolutionDir)Engine\Source\Editor\EditorGFX\Public;$(SolutionDir)Engine\Source\Editor\EditorCore\Public;$(SolutionDir)Engine\Source\Runtime\Prelude\Public;$(SolutionDir)Engine\Source\Runtime\Image\Public;$(SolutionDir)Engine\Source\Runtime\RDG\Public;$(SolutionDir)Engine\Source\Runtime\Video\Public;$(SolutionDir)Engine\Source\Runtime\Math\Public;$(SolutionDir)Engine\Source\Runtime\RHI\Public;$(SolutionDir)Engine\Source\Runtime\SRenderer\Public;$(SolutionDir)Engine\Source\Runtime\GFX\Public;$(SolutionDir)Engine\Source\Runtime\Platform\Public;$(SolutionDir)Engine\Source\ThirdParty\glfw\include;$(SolutionDir)Engine\Source\ThirdParty\vma\include;$(SolutionDir)Engine\Source\ThirdParty\yaml\include;$(SolutionDir)Engine\Source\ThirdParty\spirvcross\include;$(SolutionDir)Engine\Source\ThirdParty\openfbx;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\imguizmo\include;$(SolutionDir)Engine\Source\ThirdParty\glad\include;$(SolutionDir)Engine\Shaders\SRenderer;$(SolutionDir)Engine\Source\Addon\RestirGI\Public;$(SolutionDir)Engine\Source\Addon\GBuffer\Public;$(SolutionDir)Engine\Source\Addon\VXGI\Public;$(SolutionDir)Engine\Source\Runtime\Application\Public;$(SolutionDir)Engine\Source\Runtime\Core\Public;$(SolutionDir)Engine\Source\ThirdParty\tinygltf\include;$(SolutionDir)Engine\Source\ThirdParty\imgui\includes;$(IncludePath);$(SolutionDir)Engine\Source\ThirdParty\vulkan\Include;$(SolutionDir)Engine\Source\ThirdParty\tinyobjloader;$(SolutionDir)Engine\Source\Editor\Editor\Public;$(SolutionDir)Engine\Source\Editor\EditorRDG\Public;$(SolutionDir)Engine\Source\Editor\EditorGFX\Public;$(SolutionDir)Engine\Source\Editor\EditorCore\Public;$(SolutionDir)Engine\Source\Runtime\Prelude\Public;$(SolutionDir)Engine\Source\Runtime\Image\Public;$(SolutionDir)Engine\Source\Runtime\RDG\Public;$(SolutionDir)Engine\Source\Runtime\Video\Public;$(SolutionDir)Engine\Source\Runtime\Math\Public;$(SolutionDir)Engine\Source\Runtime\RHI\Public;$(SolutionDir)Engine\Source\Runtime\SRenderer\Public;$(SolutionDir)Engine\Source\Runtime\GFX\Public;$(SolutionDir)Engine\Source\Runtime\Platform\Public;$(SolutionDir)Engine\Source\ThirdParty\glfw\include;$(SolutionDir)Engine\Source\ThirdParty\vma\include;$(SolutionDir)Engine\Source\ThirdParty\yaml\include;$(SolutionDir)Engine\Source\ThirdParty\spirvcross\include;$(SolutionDir)Engine\Source\ThirdParty\openfbx;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\imguizmo\include;$(SolutionDir)Engine\Source\ThirdParty\glad\include;$(SolutionDir)Engine\Source\Runtime\Application\Public;$(SolutionDir)Engine\Source\Runtime\Core\Public;$(SolutionDir)Engine\Source\ThirdParty\tinygltf\include;$(SolutionDir)Engine\Source\ThirdParty\imgui\includes;$(IncludePath);$(SolutionDir)Engine\Source\ThirdParty\vulkan\Include;$(SolutionDir)Engine\Source\ThirdParty\tinyobjloader;$(SolutionDir)Engine\Source\Editor\Editor\Public;$(SolutionDir)Engine\Source\Editor\EditorRDG\Public;$(SolutionDir)Engine\Source\Editor\EditorGFX\Public;$(SolutionDir)Engine\Source\Editor\EditorCore\Public;$(SolutionDir)Engine\Source\Runtime\Prelude\Public;$(SolutionDir)Engine\Source\Runtime\Image\Public;$(SolutionDir)Engine\Source\Runtime\RDG\Public;$(SolutionDir)Engine\Source\Runtime\Video\Public;$(SolutionDir)Engine\Source\Runtime\Math\Public;$(SolutionDir)Engine\Source\Runtime\RHI\Public;$(SolutionDir)Engine\Source\Runtime\SRenderer\Public;$(SolutionDir)Engine\Source\Runtime\GFX\Public;$(SolutionDir)Engine\Source\Runtime\Platform\Public;$(SolutionDir)Engine\Source\ThirdParty\glfw\include;$(SolutionDir)Engine\Source\ThirdParty\vma\include;$(SolutionDir)Engine\Source\ThirdParty\yaml\include;$(SolutionDir)Engine\Source\ThirdParty\spirvcross\include;$(SolutionDir)Engine\Source\ThirdParty\openfbx;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -113,7 +113,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_NEED_LOG;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
@@ -128,7 +128,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_NEED_LOG;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
@@ -140,10 +140,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="Public\SE.Addon.SSGuiding.hpp" />
+    <ClInclude Include="Public\SE.Addon.Differentiable.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Private\SE.Addon.SSGuiding.cpp" />
+    <ClCompile Include="Private\SE.Addon.Differentiable.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Editor\EditorCore\EditorCore.vcxproj">
@@ -155,8 +155,8 @@
     <ProjectReference Include="..\..\Editor\EditorRDG\EditorRDG.vcxproj">
       <Project>{ada03319-6a25-448b-8828-e52873cd92d6}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\..\Editor\Editor\Editor.vcxproj">
-      <Project>{5c249b31-dafc-4968-a25a-537dfe0524d7}</Project>
+    <ProjectReference Include="..\..\Runtime\Application\Application.vcxproj">
+      <Project>{b47595dd-25c9-4b07-808a-7cce497a61d1}</Project>
     </ProjectReference>
     <ProjectReference Include="..\..\Runtime\Core\Core.vcxproj">
       <Project>{cadb2da2-56fd-47f9-817b-aafa42378dd9}</Project>
@@ -191,14 +191,11 @@
     <ProjectReference Include="..\..\ThirdParty\imgui\imgui.vcxproj">
       <Project>{558eb959-b88f-4796-b989-c8ab8f43a1b7}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\..\ThirdParty\yaml\yaml.vcxproj">
+      <Project>{50237cf2-0a0c-4c57-8a09-9eb617f025d6}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\GBuffer\GBuffer.vcxproj">
       <Project>{c2e0d5fe-63aa-4273-81fc-ea3a179b0123}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\RestirGI\RestirGI.vcxproj">
-      <Project>{c7e55f80-12cf-4e1c-b397-60c6c4a4997d}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\VBuffer\VBuffer.vcxproj">
-      <Project>{c53c9f97-6aac-4e1b-a5b9-da2f3586d74b}</Project>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

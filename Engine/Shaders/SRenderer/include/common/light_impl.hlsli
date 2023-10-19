@@ -377,6 +377,25 @@ float3 EvaluateDirectLight(
     return lightSample.radiance * bsdf * visibility / lightSample.pdf + emission;
 }
 
+SplitShading EvaluateDirectLightSplit(
+    in_ref(Ray) previousRay,
+    in_ref(GeometryHit) hit,
+    in_ref(PolymorphicLightInfo) light,
+    inout_ref(RandomSamplerState) RNG
+) {
+    const LightSample lightSample = SampleLight(hit, light);
+    Ray shadowRay = SpawnRay(hit, lightSample.wi);
+    shadowRay.tMax = distance(lightSample.position, hit.position) - 0.01;
+    const bool occluded = TraceOccludeRay(shadowRay, RNG, SceneBVH);
+    const float visibility = occluded ? 0.0f : 1.0f;
+    const SplitShading bsdf = EvalBsdfSplit(hit, -previousRay.direction, lightSample.wi);
+    const float3 tmp = lightSample.radiance * visibility / lightSample.pdf;
+    SplitShading split;
+    split.diffuse = tmp * bsdf.diffuse;
+    split.specular = tmp * bsdf.specular;
+    return split;
+}
+
 float3 EvaluateMultibounceIndirect(
     in_ref(Ray) previousRay,
     in_ref(int) bounce_count,
@@ -447,4 +466,51 @@ SplitShading EvaluateDirectLightSplit(
     return split;
 }
 
+float3 EvaluateIndirectIllumination(
+    in_ref(Ray) primaryRay,
+    in_ref(Ray) secondRay,
+    double pdf,
+    in_ref(ShadingSurface) surface,
+    inout_ref(PrimaryPayload) payload,
+    inout_ref(RandomSamplerState) RNG,
+    out_ref(float3) di,
+    out_ref(float3) throughput
+) {
+    di = float3(0);
+    throughput = float3(0);
+    if (pdf <= 0) return float3(0);
+    // trace the second ray
+    Intersection(secondRay, SceneBVH, payload, RNG);
+    const float3 first_bsdf = EvalBsdf(surface, -primaryRay.direction, secondRay.direction);
+    throughput = first_bsdf / float(pdf); // divide float(pdf). leave it to return line;
+    if (HasHit(payload.hit)) {
+        const PolymorphicLightInfo light = lights[0];
+        di = EvaluateDirectLight(secondRay, payload.hit, light, RNG);
+        return di * throughput;
+    }
+    else return float3(0, 0, 0);
+}
+
+float3 EvaluateIndirectIllumination(
+    in_ref(Ray) primaryRay,
+    in_ref(Ray) secondRay,
+    double pdf,
+    in_ref(GeometryHit) hit,
+    inout_ref(PrimaryPayload) payload,
+    inout_ref(RandomSamplerState) RNG,
+    out_ref(float3) di
+) {
+    di = float3(0);
+    if (pdf <= 0) return float3(0);
+    // trace the second ray
+    Intersection(secondRay, SceneBVH, payload, RNG);
+    const float3 first_bsdf = EvalBsdf(hit, -primaryRay.direction, secondRay.direction);
+    const float3 throughput = first_bsdf; // divide float(pdf). leave it to return line;
+    if (HasHit(payload.hit)) {
+        const PolymorphicLightInfo light = lights[0];
+        di = EvaluateDirectLight(secondRay, payload.hit, light, RNG);
+        return di * throughput / float(pdf);
+    }
+    else return float3(0, 0, 0);
+}
 #endif // _SRENDERER_LIGHT_IMPL_HEADER_

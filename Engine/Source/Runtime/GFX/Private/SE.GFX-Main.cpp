@@ -1276,6 +1276,89 @@ auto GFXManager::registerTextureResource(
   Core::ResourceManager::get()->addResource(guid, std::move(textureResource));
 }
 
+auto GFXManager::registerTextureResource(
+    Core::GUID guid, Image::Image<Image::COLOR_R32G32B32A32_FLOAT>* image) noexcept
+    -> void {
+  GFX::Texture textureResource = {};
+  RHI::BufferDescriptor stagingBufferDescriptor;
+  stagingBufferDescriptor.size = image->data.size;
+  stagingBufferDescriptor.usage = (uint32_t)RHI::BufferUsage::COPY_SRC;
+  stagingBufferDescriptor.memoryProperties =
+      (uint32_t)RHI::MemoryProperty::HOST_VISIBLE_BIT |
+      (uint32_t)RHI::MemoryProperty::HOST_COHERENT_BIT;
+  stagingBufferDescriptor.mappedAtCreation = true;
+  std::unique_ptr<RHI::Buffer> stagingBuffer =
+      rhiLayer->getDevice()->createBuffer(stagingBufferDescriptor);
+  std::future<bool> mapped =
+      stagingBuffer->mapAsync(0, 0, stagingBufferDescriptor.size);
+  if (mapped.get()) {
+    void* mapdata =
+        stagingBuffer->getMappedRange(0, stagingBufferDescriptor.size);
+    memcpy(mapdata, image->data.data, (size_t)stagingBufferDescriptor.size);
+    stagingBuffer->unmap();
+  }
+  std::unique_ptr<RHI::CommandEncoder> commandEncoder =
+      rhiLayer->getDevice()->createCommandEncoder({nullptr});
+  // create texture image
+  textureResource.texture =
+      rhiLayer->getDevice()->createTexture(RHI::TextureDescriptor{
+          {(uint32_t)image->width, (uint32_t)image->height, 1},
+          1,
+          1,
+          1,
+          RHI::TextureDimension::TEX2D,
+          RHI::TextureFormat::RGBA32_FLOAT,
+          (uint32_t)RHI::TextureUsage::COPY_DST |
+              (uint32_t)RHI::TextureUsage::TEXTURE_BINDING,
+          {RHI::TextureFormat::RGBA32_FLOAT}});
+
+  commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+      (uint32_t)RHI::PipelineStages::TOP_OF_PIPE_BIT,
+      (uint32_t)RHI::PipelineStages::TRANSFER_BIT,
+      (uint32_t)RHI::DependencyType::NONE,
+      {},
+      {},
+      {RHI::TextureMemoryBarrierDescriptor{
+          textureResource.texture.get(),
+          RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,
+                                     1, 0, 1},
+          (uint32_t)RHI::AccessFlagBits::NONE,
+          (uint32_t)RHI::AccessFlagBits::TRANSFER_WRITE_BIT,
+          RHI::TextureLayout::UNDEFINED,
+          RHI::TextureLayout::TRANSFER_DST_OPTIMAL}}});
+
+  commandEncoder->copyBufferToTexture(
+      {0, 0, 0, stagingBuffer.get()},
+      {textureResource.texture.get(),
+       0,
+       {},
+       (uint32_t)RHI::TextureAspect::COLOR_BIT},
+      {textureResource.texture->width(), textureResource.texture->height(), 1});
+
+  commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{
+      (uint32_t)RHI::PipelineStages::TRANSFER_BIT,
+      (uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT,
+      (uint32_t)RHI::DependencyType::NONE,
+      {},
+      {},
+      {RHI::TextureMemoryBarrierDescriptor{
+          textureResource.texture.get(),
+          RHI::ImageSubresourceRange{(uint32_t)RHI::TextureAspect::COLOR_BIT, 0,
+                                     1, 0, 1},
+          (uint32_t)RHI::AccessFlagBits::TRANSFER_WRITE_BIT,
+          (uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT,
+          RHI::TextureLayout::TRANSFER_DST_OPTIMAL,
+          RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL}}});
+
+  rhiLayer->getDevice()->getGraphicsQueue()->submit(
+      {commandEncoder->finish({})});
+  rhiLayer->getDevice()->getGraphicsQueue()->waitIdle();
+  textureResource.originalView = textureResource.texture->createView(
+      RHI::TextureViewDescriptor{RHI::TextureFormat::RGBA32_FLOAT});
+  textureResource.guid = guid;
+  Core::ResourceManager::get()->addResource(guid, std::move(textureResource));
+}
+
 auto GFXManager::registerTextureResource(Core::GUID guid,
                                          Image::Texture_Host* image) noexcept
     -> void {
@@ -1591,6 +1674,28 @@ auto GFXManager::registerTextureResource(char const* filepath) noexcept
     Core::ORID img_orid = Core::requestORID();
     Core::ResourceManager::get()->database.registerResource(img_orid, img_guid);
     GFX::GFXManager::get()->registerTextureResource(img_guid, dds_tex.get());
+    GFX::Texture* texture =
+        Core::ResourceManager::get()->getResource<GFX::Texture>(img_guid);
+    texture->orid = img_orid;
+    texture->guid = img_guid;
+    uint32_t relative_length = relative_path.string().length();
+    texture->resourcePath =
+        (relative_length == 0) ? path.string() : relative_path.string();
+    texture->serialize();
+    texture->texture->setName("external_image::" +
+                              texture->resourcePath.value());
+    return img_guid;
+  } else if (path.extension() == ".exr") {
+    std::filesystem::path current_path = std::filesystem::current_path();
+    std::filesystem::path relative_path =
+        std::filesystem::relative(path, current_path);
+    std::unique_ptr<Image::Image<Image::COLOR_R32G32B32A32_FLOAT>> img =
+        ImageLoader::load_rgba32(path);
+    Core::GUID img_guid =
+        Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
+    Core::ORID img_orid = Core::requestORID();
+    Core::ResourceManager::get()->database.registerResource(img_orid, img_guid);
+    GFX::GFXManager::get()->registerTextureResource(img_guid, img.get());
     GFX::Texture* texture =
         Core::ResourceManager::get()->getResource<GFX::Texture>(img_guid);
     texture->orid = img_orid;

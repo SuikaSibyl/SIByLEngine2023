@@ -1,19 +1,22 @@
-
 #include "../../include/common/light_impl.hlsli"
 #include "../../include/common/random.hlsli"
 #include "../../include/common/sampling.hlsli"
+#include "../../include/common/vmf.hlsli"
 #include "../../include/raytracer_descriptor_set.hlsli"
 #include "../../include/scene_descriptor_set.hlsli"
+#include "../../raytracer/primitives/quad.hlsli"
+#include "../../raytracer/primitives/sphere.hlsli"
 #include "../../raytracer/spt_interface.hlsli"
 #include "../gbuffer/gbuffer_interface.hlsli"
 #include "../gbuffer/gbuffer_prev_interface.hlsli"
-
-#include "../../include/common/vmf.hlsli"
+#include "../restirgi/include/GIResamplingFunctions.hlsli"
+#include "../restirgi/include/GIReservoir.hlsli "
 #include "include/pathguiding.hlsli"
 
 [[vk::push_constant]]
 cbuffer PushConstants {
     struct PushConstants {
+        GIResamplingRuntimeParameters runtimeParams;
         uint2 resolution;
         uint sample_batch;
         uint strategy;
@@ -23,6 +26,7 @@ cbuffer PushConstants {
         int spp;
         bool extra_half_spp;
         bool learn_first;
+        uint initialOutputBufferIndex;
     } pConst;
 };
 
@@ -34,17 +38,19 @@ RWTexture2D<float4> u_vpl0;
 RWTexture2D<float4> u_vpl1;
 RWTexture2D<float4> u_color;
 RWTexture2D<float4> u_vMFStatistics;
+RWStructuredBuffer<PackedGIReservoir> u_GIReservoirs;
 
 [shader("raygeneration")]
 void RgenMain() {
-    // Initialize stage
-    // --------------------------------------------------------------------
     // The resolution of the image, which is the same as the launch size:
     const int2 resolution = int2(pConst.resolution);
     const int2 pixel = int2(DispatchRaysIndex().xy);
     // If the pixel is outside of the image, don't do anything:
     if (any(pixel >= resolution)) return;
     RandomSamplerState RNG = InitRandomSampler(pixel, pConst.sample_batch);
+    // Reservoir for ReSTIR
+    GIReservoir reservoir = EmptyGIReservoir();
+    float selectedTargetPdf = 0.0f;
 
     // Load Primary Hit from VBuffer
     // --------------------------------------------------------------------
@@ -64,7 +70,9 @@ void RgenMain() {
         u_epochCounter[pixel] = 0;
         u_vpl0[pixel] = float4(0);
         u_vpl1[pixel] = float4(0);
-        u_color[pixel] = float4(float3(0), 1);
+        // save the reservoir
+        StoreGIReservoir(reservoir, pConst.runtimeParams, pixel, 
+            pConst.initialOutputBufferIndex, u_GIReservoirs);
         return;
     }
 
@@ -88,7 +96,7 @@ void RgenMain() {
     }
     vMFDistribution vMF = vMFDistribution(vMFStat);
     float3 radiance = float3(0);
-    
+
     // Begin the sampling
     // --------------------------------------------------------------------
     PrimaryPayload payload; payload.RND = RNG;
@@ -105,14 +113,21 @@ void RgenMain() {
         if (pConst.extra_bounce) {
             indirect += EvaluateMultibounceIndirect(bsdfRay, 1, throughput, payload, RNG);
         }
-        
+
         if (any(indirect > 0)) {
             float w1 = bsdf_pdf;
             float w2 = vMF.Pdf(bsdfRay.direction);
             // power heuristic
             w1 = w1 * w1;
             w2 = w2 * w2;
-            radiance += indirect * w1 / (w1 + w2);
+            float mis_weight = w1 / (w1 + w2);
+            radiance += indirect * mis_weight;
+            // Add the first sample to the reservoir
+            GIReservoir local = MakeGIReservoir(payload.hit.position, payload.hit.geometryNormal, di, bsdf_pdf, RNGState);
+            const float target_pdf = GetGISampleTargetPdfForSurface(local.position, local.radiance, surface, globalUniform.cameraData.posW);
+            if (CombineGIReservoirs(reservoir, local, GetNextRandom(RNG), target_pdf * mis_weight)) {
+                selectedTargetPdf = target_pdf;
+            }
         }
         // Save the first sample to the VPL buffer
         const float sumweight = (bsdf_pdf != 0) ? luminance(di) / bsdf_pdf : 0;
@@ -138,19 +153,28 @@ void RgenMain() {
             w1 = w1 * w1;
             w2 = w2 * w2;
             if (isnan(w1)) w1 = 0;
+            float mis_weight = w2 / (w1 + w2);
+            radiance += indirect * mis_weight;
             // Add the second sample to the reservoir
-            radiance += indirect * w2 / (w1 + w2);
+            GIReservoir local = MakeGIReservoir(payload.hit.position, payload.hit.geometryNormal, di, guidedPdf, 0);
+            const float target_pdf = GetGISampleTargetPdfForSurface(local.position, local.radiance, surface, globalUniform.cameraData.posW);
+            if (CombineGIReservoirs(reservoir, local, GetNextRandom(RNG), target_pdf * mis_weight)) {
+                selectedTargetPdf = target_pdf;
+            }
         }
         // Save the second sample to the VPL buffer
         const float sumweight = (guidedPdf != 0) ? luminance(di) / guidedPdf : 0;
         u_vpl1[pixel] = float4(vpl_position, sumweight);
     }
 
-    // Add the direct light
-    const PolymorphicLightInfo light = lights[0];
-    radiance += EvaluateDirectLight(primaryRay, surface, light, RNG);
-
-    u_color[pixel] = float4(radiance, 1);
     u_vMFStatistics[pixel] = vMFStat.Pack();
     u_epochCounter[pixel] = epochCounter;
+    u_color[pixel] = float4(radiance, 1);
+    
+    // Finalize the sampling for ReSTIR
+    reservoir.M = 1;
+    const float normalizationNumerator = 1.0;
+    const float normalizationDenominator = selectedTargetPdf;
+    FinalizeGIResampling(reservoir, normalizationNumerator, normalizationDenominator);
+    StoreGIReservoir(reservoir, pConst.runtimeParams, pixel, pConst.initialOutputBufferIndex, u_GIReservoirs);
 }

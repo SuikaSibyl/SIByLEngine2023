@@ -11,7 +11,5 @@ RWTexture2D<uint> u_epochCounter;
 void ComputeMain(int3 dtid: SV_DispatchThreadID) {
     if (any(dtid.xy >= resolution)) return;
     
-    if (clearAll) {
-        u_epochCounter[dtid.xy] = 0;
-    }
+    if (clearAll) { u_epochCounter[dtid.xy] = 0; }
 }

@@ -150,19 +150,19 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		InvalidScene();
 		device->waitIdle();
 
-		pipeline1 = std::make_unique<CustomPipeline>();
+		pipeline1 = std::make_unique<ADPipeline>();
 		//pipeline1 = std::make_unique<CustomPipeline>();
 		//pipeline2 = std::make_unique<VXPGReSTIRPipeline>();
-  //      rtgi_pipeline = std::make_unique<RestirGIPipeline>();
 		//pipeline1 = std::make_unique<Addon::SLC::SLCTestPipeline>();
-		pipeline2 = std::make_unique<Addon::SLC::SLCTestPipeline>();
+		pipeline2 = std::make_unique<SSPGReSTIRPipeline>();
+  //      rtgi_pipeline = std::make_unique<RestirGIPipeline>();
         rtgi_pipeline = std::make_unique<RestirGIPipeline>();
 
 		//geoinsp_pipeline = std::make_unique<SSPGP_GMM_Pipeline>();
         geoinsp_pipeline = std::make_unique<GTPipeline>();
         //geoinsp_pipeline = std::make_unique<SRP::GeoInspectPipeline>();
 		//vxgi_pipeline = std::make_unique<SSPGP_GMM_Pipeline>();
-        vxgi_pipeline = std::make_unique<VXPGASVGFPipeline>();
+        vxgi_pipeline = std::make_unique<SSPGPipeline>();
         vxdi_pipeline = std::make_unique<VXPGPipeline>();
 		pipeline1->build();
 		pipeline2->build();

@@ -431,6 +431,33 @@ float3 EvalBsdf(
     return cBSDFEvalQuery.bsdf;
 }
 
+SplitShading EvalBsdfSplit(
+    in_ref(GeometryHit) hit,
+    in_ref(float3) dir_in,
+    in_ref(float3) dir_out,
+    in const uint transport_mode = 0,
+) {
+    uint materialID = geometries[hit.geometryID].materialID;
+    BSDFEvalQuery cBSDFEvalQuery;
+    uint bsdf_type = materials[materialID].bsdfID;
+    cBSDFEvalQuery.dir_in = dir_in;
+    cBSDFEvalQuery.dir_out = dir_out;
+    cBSDFEvalQuery.mat_id = materialID;
+    cBSDFEvalQuery.geometric_normal = hit.geometryNormal;
+    cBSDFEvalQuery.uv = hit.texcoord;
+    cBSDFEvalQuery.frame = createONB(hit.shadingNormal);
+    QueryBitfield flag;
+    flag.transport_mode = transport_mode;
+    flag.face_forward = IsFaceForward(hit);
+    flag.split_query = true;
+    cBSDFEvalQuery.misc_flag = PackQueryBitfield(flag);
+    CallShader(BSDF_EVAL_IDX(bsdf_type), cBSDFEvalQuery);
+    // unpack the result
+    SplitShading result;
+    result.diffuse = cBSDFEvalQuery.bsdf;
+    result.specular = cBSDFEvalQuery.dir_out;
+    return result;
+}
 /**
  * Evaluate the BSDF.
  * @param surface The shading surface.

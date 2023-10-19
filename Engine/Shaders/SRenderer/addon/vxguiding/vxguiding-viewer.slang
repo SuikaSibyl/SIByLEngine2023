@@ -43,7 +43,7 @@ float middle(float3 vector) {
 
 bool IsEdge(float3 pos, float threshold) {
     float3 offset = abs(fmod(pos, 1));
-    offset = (offset < float3(0.5)) ? offset : 1 - offset;
+    offset = ternary((offset < float3(0.5)), offset, 1 - offset);
     if (middle(offset) < threshold) {
         return true;
     }
@@ -123,7 +123,7 @@ float4 fragmentMain(in float2 uv: Coord) : SV_Target {
             if (tMin > 0) {
                 const float3 hitPoint = primaryRay.origin + primaryRay.direction * tMin;
                 float3 offset = abs(fmod(hitPoint, 1));
-                offset = (offset < float3(0.5)) ? offset : 1 - offset;
+                offset = ternary((offset < float3(0.5)), offset, 1 - offset);
                 if (middle(offset) < edgeThreshold) {
                     edge = true;
                 }

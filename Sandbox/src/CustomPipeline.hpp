@@ -16,6 +16,7 @@
 #include <SE.Addon.ASVGF.hpp>
 #include <SE.Addon.RestirGI.hpp>
 #include <SE.Addon.Postprocess.hpp>
+#include <SE.Addon.Differentiable.hpp>
 
 namespace SIByL {
 SE_EXPORT struct CustomGraph : public RDG::Graph {
@@ -215,7 +216,7 @@ SE_EXPORT struct RestirGIGraph : public RDG::Graph {
     addPass(std::make_unique<Addon::Postprocess::ToneMapperPass>(), "ToneMapper Pass");
     addEdge("Accum Pass", "Output", "ToneMapper Pass", "Input");
 
-    markOutput("Accum Pass", "Output");
+    markOutput("ToneMapper Pass", "Output");
   }
   Addon::RestirGI::GIResamplingRuntimeParameters restirgi_param;
 };
@@ -520,39 +521,122 @@ SE_EXPORT struct VXGIGraph : public RDG::Graph {
 
 SE_EXPORT struct SSPGGraph : public RDG::Graph {
   SSPGGraph() {
-    addPass(std::make_unique<Addon::VBuffer::RayTraceVBuffer>(),
-            "VBuffer Pass");
-    addPass(std::make_unique<Addon::SSGuiding::SSPGvMF_ClearPass>(),
-            "GuiderClear Pass");
-    addPass(std::make_unique<Addon::SSGuiding::SSPGvMF_SamplePass>(),
-            "Sample Pass");
-    addEdge("VBuffer Pass", "VBuffer", "Sample Pass", "VBuffer");
+    // Get the gbuffer
+    addPass(std::make_unique<Addon::VBuffer::RayTraceVBuffer>(), "VBuffer Pass");
+    addPass(std::make_unique<Addon::VBuffer::VBuffer2GBufferPass>(), "VBuffer2GBuffer Pass");
+    addEdge("VBuffer Pass", "VBuffer", "VBuffer2GBuffer Pass", "VBuffer");
+    addPass(std::make_unique<Addon::GBufferHolderSource>(), "GBufferPrev Pass");
+    // Screen space pth guiding
+    addPass(std::make_unique<Addon::SSGuiding::SSPGvMF_ClearPass>(), "GuiderClear Pass");
+    addPass(std::make_unique<Addon::SSGuiding::SSPGvMF_SamplePass>(), "Sample Pass");
+    Addon::GBufferUtils::addGBufferEdges(this, "VBuffer2GBuffer Pass", "Sample Pass");
+    Addon::GBufferUtils::addPrevGBufferEdges(this, "GBufferPrev Pass", "Sample Pass");
     addEdge("GuiderClear Pass", "vMFStatistics", "Sample Pass", "vMFStatistics");
     addEdge("GuiderClear Pass", "EpochCounter", "Sample Pass", "EpochCounter");
-    
-    addPass(std::make_unique<Addon::SSGuiding::PdfNormalize_ClearPass>(), "PdfClear Pass");
-    addPass(std::make_unique<Addon::SSGuiding::SSPGvMF_VisPass>(), "Vis Pass");
-    addEdge("VBuffer Pass", "VBuffer", "Vis Pass", "VBuffer");
-    addEdge("Sample Pass", "vMFStatistics", "Vis Pass", "vMFStatistics");
-    addEdge("PdfClear Pass", "PdfNormalizing", "Vis Pass", "PdfNormalizing");
-    addPass(std::make_unique<Addon::SSGuiding::PdfNormalize_SumPass>(), "PdfNormalize Pass");
-    addEdge("PdfClear Pass", "PdfNormalizingInfo", "PdfNormalize Pass", "PdfNormalizingInfo");
-    addEdge("Vis Pass", "PdfNormalizing", "PdfNormalize Pass", "PdfNormalizing");
-    addPass(std::make_unique<Addon::SSGuiding::PdfNormalize_ViewerPass>(), "PdfViewer Pass");
-    addEdge("PdfNormalize Pass", "PdfNormalizingInfo", "PdfViewer Pass", "PdfNormalizingInfo");
-    addEdge("PdfNormalize Pass", "PdfNormalizing", "PdfViewer Pass", "PdfNormalizing");
+    addEdge("GuiderClear Pass", "vMFStatisticsPrev", "Sample Pass", "vMFStatisticsPrev");
+    addEdge("GuiderClear Pass", "EpochCounterPrev", "Sample Pass", "EpochCounterPrev");
 
-
+    addPass(std::make_unique<Addon::SSGuiding::SSPGvMF_LearnPass>(), "Learn Pass");
+    addEdge("Sample Pass", "vMFStatistics", "Learn Pass", "vMFStatistics");
+    addEdge("Sample Pass", "EpochCounter", "Learn Pass", "EpochCounter");
+    addEdge("Sample Pass", "VPL0", "Learn Pass", "VPL0");
+    addEdge("Sample Pass", "VPL1", "Learn Pass", "VPL1");
+    addEdge("VBuffer Pass", "VBuffer", "Learn Pass", "VBuffer");
+    // Gbuffer temporal copy
+    addSubgraph(std::make_unique<Addon::GBufferHolderGraph>(), "GBuffer Blit Pass");
+    Addon::GBufferUtils::addBlitPrevGBufferEdges(
+        this, "VBuffer2GBuffer Pass", "Sample Pass", "GBuffer Blit Pass");
+    // Post processing
     addPass(std::make_unique<AccumulatePass>(), "Accum Pass");
     addEdge("Sample Pass", "Color", "Accum Pass", "Input");
+    addPass(std::make_unique<Addon::Postprocess::ToneMapperPass>(), "ToneMapper Pass");
+    addEdge("Accum Pass", "Output", "ToneMapper Pass", "Input");
 
-    markOutput("Accum Pass", "Output");
+    addPass(std::make_unique<BlitPass>(BlitPass::Descriptor{0, 0, 0, 0, BlitPass::SourceType::FLOAT4}), "BlitPack0");
+    addEdge("Learn Pass", "vMFStatistics", "BlitPack0", "Source");
+    addEdge("Sample Pass", "vMFStatisticsPrev", "BlitPack0", "Target");
+    addPass(std::make_unique<BlitPass>(BlitPass::Descriptor{0, 0, 0, 0, BlitPass::SourceType::UINT}), "BlitPack1");
+    addEdge("Learn Pass", "EpochCounter", "BlitPack1", "Source");
+    addEdge("Sample Pass", "EpochCounterPrev", "BlitPack1", "Target");
+
+    // output the accum result
+    markOutput("ToneMapper Pass", "Output");
   }
 };
 
 SE_EXPORT struct SSPGPipeline : public RDG::SingleGraphPipeline {
   SSPGPipeline() { pGraph = &graph; }
   SSPGGraph graph;
+};
+
+SE_EXPORT struct SSPGReSTIRGraph : public RDG::Graph {
+  SSPGReSTIRGraph() {
+    restirgi_param = Addon::RestirGI::InitializeParameters(1280, 720);
+
+    // Get the gbuffer
+    addPass(std::make_unique<Addon::VBuffer::RayTraceVBuffer>(), "VBuffer Pass");
+    addPass(std::make_unique<Addon::VBuffer::VBuffer2GBufferPass>(), "VBuffer2GBuffer Pass");
+    addEdge("VBuffer Pass", "VBuffer", "VBuffer2GBuffer Pass", "VBuffer");
+    addPass(std::make_unique<Addon::GBufferHolderSource>(), "GBufferPrev Pass");
+    // Screen space pth guiding
+    addPass(std::make_unique<Addon::SSGuiding::SSPGvMF_ClearPass>(), "GuiderClear Pass");
+    addPass(std::make_unique<Addon::SSGuiding::SSPGvMF_SampleReSTIRPass>(&restirgi_param), "Sample Pass");
+    Addon::GBufferUtils::addGBufferEdges(this, "VBuffer2GBuffer Pass", "Sample Pass");
+    Addon::GBufferUtils::addPrevGBufferEdges(this, "GBufferPrev Pass", "Sample Pass");
+    addEdge("GuiderClear Pass", "vMFStatistics", "Sample Pass", "vMFStatistics");
+    addEdge("GuiderClear Pass", "EpochCounter", "Sample Pass", "EpochCounter");
+    addEdge("GuiderClear Pass", "vMFStatisticsPrev", "Sample Pass", "vMFStatisticsPrev");
+    addEdge("GuiderClear Pass", "EpochCounterPrev", "Sample Pass", "EpochCounterPrev");
+
+    addPass(std::make_unique<Addon::SSGuiding::SSPGvMF_LearnPass>(), "Learn Pass");
+    addEdge("Sample Pass", "vMFStatistics", "Learn Pass", "vMFStatistics");
+    addEdge("Sample Pass", "EpochCounter", "Learn Pass", "EpochCounter");
+    addEdge("Sample Pass", "VPL0", "Learn Pass", "VPL0");
+    addEdge("Sample Pass", "VPL1", "Learn Pass", "VPL1");
+    addEdge("VBuffer Pass", "VBuffer", "Learn Pass", "VBuffer");
+    
+    addPass(std::make_unique<BlitPass>(BlitPass::Descriptor{0, 0, 0, 0, BlitPass::SourceType::FLOAT4}), "BlitPack0");
+    addEdge("Learn Pass", "vMFStatistics", "BlitPack0", "Source");
+    addEdge("Sample Pass", "vMFStatisticsPrev", "BlitPack0", "Target");
+    addPass(std::make_unique<BlitPass>(BlitPass::Descriptor{0, 0, 0, 0, BlitPass::SourceType::UINT}), "BlitPack1");
+    addEdge("Learn Pass", "EpochCounter", "BlitPack1", "Source");
+    addEdge("Sample Pass", "EpochCounterPrev", "BlitPack1", "Target");
+
+    // ReSTIR process
+    // --------------------------------------------------------------------------------
+    // Execute temporal resampling
+    addPass(std::make_unique<Addon::RestirGI::TemporalResampling>(&restirgi_param), "TemporalResampling Pass");
+    Addon::GBufferUtils::addGBufferEdges(this, "VBuffer2GBuffer Pass", "TemporalResampling Pass");
+    Addon::GBufferUtils::addPrevGBufferEdges(this, "GBufferPrev Pass", "TemporalResampling Pass");
+    addEdge("Sample Pass", "GIReservoir", "TemporalResampling Pass", "GIReservoir");
+
+    // Execute spatial resampling
+    addPass(std::make_unique<Addon::RestirGI::SpatialResampling>(&restirgi_param), "SpatialResampling Pass");
+    Addon::GBufferUtils::addGBufferEdges(this, "VBuffer2GBuffer Pass", "SpatialResampling Pass");
+    addEdge("TemporalResampling Pass", "GIReservoir", "SpatialResampling Pass", "GIReservoir");
+
+    // Execute final shading
+    addPass(std::make_unique<Addon::RestirGI::FinalShading>(&restirgi_param), "FinalShading Pass");
+    Addon::GBufferUtils::addGBufferEdges(this, "VBuffer2GBuffer Pass", "FinalShading Pass");
+    addEdge("SpatialResampling Pass", "GIReservoir", "FinalShading Pass", "GIReservoir");
+
+    // All post-processing stuff ...
+    addPass(std::make_unique<AccumulatePass>(), "Accum Pass");
+    addEdge("FinalShading Pass", "Diffuse", "Accum Pass", "Input");
+    addSubgraph(std::make_unique<Addon::GBufferHolderGraph>(), "GBuffer Blit Pass");
+    Addon::GBufferUtils::addBlitPrevGBufferEdges(this, "VBuffer2GBuffer Pass", "TemporalResampling Pass", "GBuffer Blit Pass");
+    addPass(std::make_unique<Addon::Postprocess::ToneMapperPass>(), "ToneMapper Pass");
+    addEdge("Accum Pass", "Output", "ToneMapper Pass", "Input");
+
+    markOutput("ToneMapper Pass", "Output");
+  }
+
+  Addon::RestirGI::GIResamplingRuntimeParameters restirgi_param;
+};
+
+SE_EXPORT struct SSPGReSTIRPipeline : public RDG::SingleGraphPipeline {
+  SSPGReSTIRPipeline() { pGraph = &graph; }
+  SSPGReSTIRGraph graph;
 };
 
 SE_EXPORT struct SSPG_GMM_Graph : public RDG::Graph {
@@ -1238,7 +1322,7 @@ SE_EXPORT struct VXGuidingGraph : public RDG::Graph {
     addEdge("VisibilityAdditional Pass", "SPixelAvgVisibility", "TreeTopLevel Pass", "SPixelAvgVisibility");
 
     // visualize the bounding voxels by ray marching
-    bool useGuiderViewer = true;
+    bool useGuiderViewer = false;
     if (useGuiderViewer) {
       addPass(std::make_unique<Addon::VXGuiding::VXGuiderViewPass>(&setting), "GuiderViewer Pass");
       addEdge("ImportonInjection Pass", "Irradiance", "GuiderViewer Pass", "Irradiance");
@@ -1665,6 +1749,35 @@ SE_EXPORT struct VXPGReSTIRPipeline : public RDG::Pipeline {
 
   VXGuidingPrebakeGraph prebake_graph;
   VXPGRestirGIGraph runtime_graph;
+};
+
+SE_EXPORT struct ADGTGraph : public RDG::Graph {
+  Addon::VXGI::VXGISetting setting;
+  ADGTGraph() {
+    addPass(std::make_unique<Addon::Differentiable::TestGTPass>(), "TestGT Pass");
+    addPass(std::make_unique<AccumulatePass>(), "Accum Pass");
+    addEdge("TestGT Pass", "Output", "Accum Pass", "Input");
+    
+    markOutput("Accum Pass", "Output");
+  }
+};
+
+SE_EXPORT struct ADGTPipeline : public RDG::SingleGraphPipeline {
+  ADGTPipeline() { pGraph = &graph; }
+  ADGTGraph graph;
+};
+
+SE_EXPORT struct ADGraph : public RDG::Graph {
+  Addon::VXGI::VXGISetting setting;
+  ADGraph() {
+    addPass(std::make_unique<Addon::Differentiable::TestADPass>(), "TestAD Pass");
+    markOutput("TestAD Pass", "RGBA32");
+  }
+};
+
+SE_EXPORT struct ADPipeline : public RDG::SingleGraphPipeline {
+  ADPipeline() { pGraph = &graph; }
+  ADGraph graph;
 };
 
 }  // namespace SIByL

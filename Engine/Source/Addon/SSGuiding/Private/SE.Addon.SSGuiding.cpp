@@ -17,21 +17,31 @@ SSPGvMF_ClearPass::SSPGvMF_ClearPass() {
 auto SSPGvMF_ClearPass::reflect() noexcept -> RDG::PassReflection {
   RDG::PassReflection reflector;
   reflector.addOutput("vMFStatistics")
-      .isTexture()
-      .withSize(Math::vec3(1.f))
+      .isTexture().withSize(Math::vec3(1.f))
       .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
-      .consume(
-          RDG::TextureInfo::ConsumeEntry{
+      .consume(RDG::TextureInfo::ConsumeEntry{
               RDG::TextureInfo::ConsumeType::StorageBinding}
               .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
   reflector.addOutput("EpochCounter")
-      .isTexture()
-      .withSize(Math::vec3(1.f))
+      .isTexture().withSize(Math::vec3(1.f))
       .withFormat(RHI::TextureFormat::R16_UINT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
-      .consume(
-          RDG::TextureInfo::ConsumeEntry{
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addOutput("vMFStatisticsPrev")
+      .isTexture().withSize(Math::vec3(1.f))
+      .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
+  reflector.addOutput("EpochCounterPrev")
+      .isTexture().withSize(Math::vec3(1.f))
+      .withFormat(RHI::TextureFormat::R16_UINT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
               RDG::TextureInfo::ConsumeType::StorageBinding}
               .addStage((uint32_t)RHI::PipelineStages::COMPUTE_SHADER_BIT));
   return reflector;
@@ -81,48 +91,62 @@ SSPGvMF_SamplePass::SSPGvMF_SamplePass() {
 auto SSPGvMF_SamplePass::reflect() noexcept -> RDG::PassReflection {
   RDG::PassReflection reflector;
   reflector.addInputOutput("vMFStatistics")
-      .isTexture()
-      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
-      .consume(
-          RDG::TextureInfo::ConsumeEntry{
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
               RDG::TextureInfo::ConsumeType::StorageBinding}
-              .addStage(
-                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
   reflector.addInputOutput("EpochCounter")
-      .isTexture()
-      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
-      .consume(
-          RDG::TextureInfo::ConsumeEntry{
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
               RDG::TextureInfo::ConsumeType::StorageBinding}
-              .addStage(
-                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
-  reflector.addInput("VBuffer")
-      .isTexture()
-      .withSize(Math::vec3(1, 1, 1))
-      .withFormat(RHI::TextureFormat::RGBA32_UINT)
-      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
-      .consume(
-          RDG::TextureInfo::ConsumeEntry{
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInputOutput("vMFStatisticsPrev")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
               RDG::TextureInfo::ConsumeType::StorageBinding}
-              .addStage(
-                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInputOutput("EpochCounterPrev")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
   reflector.addOutput("Color")
-      .isTexture()
-      .withSize(Math::vec3(1.f))
+      .isTexture().withSize(Math::vec3(1.f))
       .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
       .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
-      .consume(
-          RDG::TextureInfo::ConsumeEntry{
+      .consume(RDG::TextureInfo::ConsumeEntry{
               RDG::TextureInfo::ConsumeType::StorageBinding}
-              .addStage(
-                  (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addOutput("VPL0")
+      .isTexture().withSize(Math::vec3(1.f))
+      .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addOutput("VPL1")
+      .isTexture().withSize(Math::vec3(1.f))
+      .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  GBufferUtils::addGBufferInput(
+      reflector, (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR);
+  GBufferUtils::addPrevGbufferInputOutput(
+      reflector, (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR);
   return reflector;
 }
 
 auto SSPGvMF_SamplePass::renderUI() noexcept -> void {
   ImGui::DragInt("Strategy", &strategy);
+  ImGui::DragInt("SPP", &spp);
   ImGui::Checkbox("Learn", &learn);
   ImGui::Checkbox("Learn one frame", &learn_one_frame);
+  ImGui::Checkbox("Extra half spp", &extra_half_spp);
+  ImGui::DragFloat("Exponential Factor", &expon_factor);
+  ImGui::Checkbox("Multi Bounce", &multi_bounce);
+  ImGui::Checkbox("Learn First", &learn_first);
 }
 
 auto SSPGvMF_SamplePass::execute(RDG::RenderContext* context,
@@ -134,20 +158,28 @@ auto SSPGvMF_SamplePass::execute(RDG::RenderContext* context,
   std::vector<RHI::BindGroupEntry>* set_1_entries =
       renderData.getBindGroupEntries("CommonRT");
   getBindGroup(context, 1)->updateBinding(*set_1_entries);
+  // Bind gbuffer for RT
+  GBufferUtils::bindGBufferResource(this, context, renderData);
+  GBufferUtils::bindPrevGBufferResource(this, context, renderData);
 
-  GFX::Texture* vbuffer = renderData.getTexture("VBuffer");
   GFX::Texture* ec = renderData.getTexture("EpochCounter");
   GFX::Texture* vs = renderData.getTexture("vMFStatistics");
+  GFX::Texture* ecp = renderData.getTexture("EpochCounterPrev");
+  GFX::Texture* vsp = renderData.getTexture("vMFStatisticsPrev");
   GFX::Texture* color = renderData.getTexture("Color");
+  GFX::Texture* vpl0 = renderData.getTexture("VPL0");
+  GFX::Texture* vpl1 = renderData.getTexture("VPL1");
 
-  updateBinding(context, "u_vBuffer",
-                RHI::BindingResource{vbuffer->getSRV(0, 1, 0, 1)});
-  updateBinding(context, "u_vMFStatistics",
-                RHI::BindingResource{vs->getSRV(0, 1, 0, 1)});
-  updateBinding(context, "u_epochCounter",
-                RHI::BindingResource{ec->getSRV(0, 1, 0, 1)});
-  updateBinding(context, "u_color",
-                RHI::BindingResource{color->getSRV(0, 1, 0, 1)});
+  updateBindings(context, {
+    {"u_epochCounterPrev", RHI::BindingResource{ecp->getSRV(0, 1, 0, 1)}},
+    {"u_vMFStatisticsPrev", RHI::BindingResource{vsp->getSRV(0, 1, 0, 1)}},
+    {"u_epochCounter", RHI::BindingResource{ec->getUAV(0, 0, 1)}},
+    {"u_vMFStatistics", RHI::BindingResource{vs->getUAV(0, 0, 1)}},
+    {"u_color", RHI::BindingResource{color->getUAV(0, 0, 1)}},
+    {"u_vpl0", RHI::BindingResource{vpl0->getUAV(0, 0, 1)}},
+    {"u_vpl1", RHI::BindingResource{vpl1->getUAV(0, 0, 1)}},
+    {"PrevGlobalUniforms", renderData.getBindingResource("PrevGlobalUniforms").value()},
+  });
 
   RHI::RayTracingPassEncoder* encoder = beginPass(context);
 
@@ -156,15 +188,290 @@ auto SSPGvMF_SamplePass::execute(RDG::RenderContext* context,
     uint32_t sample_batch;
     uint32_t strategy;
     uint32_t learn;
-  } pConst = {{1280, 720}, renderData.getUInt("FrameIdx"), strategy};
-    pConst.learn = learn ? 1 : 0;
+    float expon;
+    uint32_t multi_bounce;
+    int spp;
+    int extra_half_spp;
+    int learn_first;
+  } pConst = {
+      {1280, 720}, renderData.getUInt("FrameIdx"), strategy, 0, expon_factor};
+  pConst.learn = learn ? 1 : 0;
+  pConst.spp = spp;
+  pConst.multi_bounce = multi_bounce ? 1 : 0;
+  pConst.extra_half_spp = extra_half_spp ? 1 : 0;
+  pConst.learn_first = learn_first ? 1 : 0;
   if (learn_one_frame) {
     pConst.learn = 1;
     learn_one_frame = false;
   }
-  encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::RAYGEN, 0,
-                         sizeof(PushConstant));
+
+  encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::RAYGEN, 0, sizeof(PushConstant));
   encoder->traceRays(1280, 720, 1);
+  encoder->end();
+}
+
+SSPGvMF_SampleReSTIRPass::SSPGvMF_SampleReSTIRPass(
+    RestirGI::GIResamplingRuntimeParameters* param)
+    : param(param) {
+  auto [rgen] = GFX::ShaderLoader_SLANG::load<1u>(
+      "../Engine/Shaders/SRenderer/addon/"
+      "pathguiding/sspg-vMF-restir-sample.slang",
+      std::array<std::pair<std::string, RHI::ShaderStages>, 1>{
+          std::make_pair("RgenMain", RHI::ShaderStages::RAYGEN),
+      });
+
+  GFX::SBTsDescriptor sbt = RTCommon::get()->getSBTDescriptor();
+  sbt.rgenSBT = GFX::SBTsDescriptor::RayGenerationSBT{
+      {Core::ResourceManager::get()->getResource<GFX::ShaderModule>(rgen)}};
+
+  RayTracingPass::init(sbt, 1);
+}
+
+auto SSPGvMF_SampleReSTIRPass::reflect() noexcept -> RDG::PassReflection {
+  RDG::PassReflection reflector;
+  reflector.addInputOutput("vMFStatistics")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInputOutput("EpochCounter")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInputOutput("vMFStatisticsPrev")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInputOutput("EpochCounterPrev")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addOutput("GIReservoir")
+      .isBuffer().withSize(sizeof(uint32_t) * 8 * (1280 * 720 * 2))
+      .withUsages((uint32_t)RHI::BufferUsage::STORAGE)
+      .consume(RDG::BufferInfo::ConsumeEntry{}
+              .setAccess((uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT |
+                         (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT)
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addOutput("VPL0")
+      .isTexture().withSize(Math::vec3(1.f))
+      .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addOutput("VPL1")
+      .isTexture().withSize(Math::vec3(1.f))
+      .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addOutput("Color")
+      .isTexture().withSize(Math::vec3(1.f))
+      .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  GBufferUtils::addGBufferInput(
+      reflector, (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR);
+  GBufferUtils::addPrevGbufferInputOutput(
+      reflector, (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR);
+  return reflector;
+}
+
+auto SSPGvMF_SampleReSTIRPass::renderUI() noexcept -> void {
+  ImGui::DragInt("Strategy", &strategy);
+  ImGui::DragInt("SPP", &spp);
+  ImGui::Checkbox("Learn", &learn);
+  ImGui::Checkbox("Learn one frame", &learn_one_frame);
+  ImGui::Checkbox("Extra half spp", &extra_half_spp);
+  ImGui::DragFloat("Exponential Factor", &expon_factor);
+  ImGui::Checkbox("Multi Bounce", &multi_bounce);
+  ImGui::Checkbox("Learn First", &learn_first);
+}
+
+// 32 bit Jenkins hash
+static uint32_t JenkinsHash(uint32_t a) {
+  // http://burtleburtle.net/bob/hash/integer.html
+  a = (a + 0x7ed55d16) + (a << 12);
+  a = (a ^ 0xc761c23c) ^ (a >> 19);
+  a = (a + 0x165667b1) + (a << 5);
+  a = (a + 0xd3a2646c) ^ (a << 9);
+  a = (a + 0xfd7046c5) + (a << 3);
+  a = (a ^ 0xb55a4f09) ^ (a >> 16);
+  return a;
+}
+
+auto SSPGvMF_SampleReSTIRPass::execute(RDG::RenderContext* context,
+                           RDG::RenderData const& renderData) noexcept -> void {
+  // Bind common for RT
+  std::vector<RHI::BindGroupEntry>* set_0_entries =
+      renderData.getBindGroupEntries("CommonScene");
+  getBindGroup(context, 0)->updateBinding(*set_0_entries);
+  std::vector<RHI::BindGroupEntry>* set_1_entries =
+      renderData.getBindGroupEntries("CommonRT");
+  getBindGroup(context, 1)->updateBinding(*set_1_entries);
+  // Bind gbuffer for RT
+  GBufferUtils::bindGBufferResource(this, context, renderData);
+  GBufferUtils::bindPrevGBufferResource(this, context, renderData);
+
+  GFX::Texture* ec = renderData.getTexture("EpochCounter");
+  GFX::Texture* vs = renderData.getTexture("vMFStatistics");
+  GFX::Texture* ecp = renderData.getTexture("EpochCounterPrev");
+  GFX::Texture* vsp = renderData.getTexture("vMFStatisticsPrev");
+  GFX::Texture* vpl0 = renderData.getTexture("VPL0");
+  GFX::Texture* vpl1 = renderData.getTexture("VPL1");
+  GFX::Texture* color = renderData.getTexture("Color");
+  GFX::Buffer* reservoir = renderData.getBuffer("GIReservoir");
+
+  updateBindings(context, {
+    {"u_epochCounterPrev", RHI::BindingResource{ecp->getSRV(0, 1, 0, 1)}},
+    {"u_vMFStatisticsPrev", RHI::BindingResource{vsp->getSRV(0, 1, 0, 1)}},
+    {"u_epochCounter", RHI::BindingResource{ec->getUAV(0, 0, 1)}},
+    {"u_vMFStatistics", RHI::BindingResource{vs->getUAV(0, 0, 1)}},
+    {"u_GIReservoirs", RHI::BindingResource{{reservoir->buffer.get(), 0, reservoir->buffer->size()}}},
+    {"u_vpl0", RHI::BindingResource{vpl0->getUAV(0, 0, 1)}},
+    {"u_vpl1", RHI::BindingResource{vpl1->getUAV(0, 0, 1)}},
+    {"u_color", RHI::BindingResource{color->getUAV(0, 0, 1)}},
+    {"PrevGlobalUniforms", renderData.getBindingResource("PrevGlobalUniforms").value()},
+  });
+
+  RHI::RayTracingPassEncoder* encoder = beginPass(context);
+
+  struct PushConstant {
+    RestirGI::GIResamplingRuntimeParameters params;
+    Math::ivec2 resolution;
+    uint32_t sample_batch;
+    uint32_t strategy;
+    uint32_t learn;
+    float expon;
+    uint32_t multi_bounce;
+    int spp;
+    int extra_half_spp;
+    int learn_first;
+    uint32_t initialOutputBufferIndex;
+  } pConst = {
+      *param, {1280, 720}, renderData.getUInt("FrameIdx"), strategy, 0, expon_factor};
+  pConst.learn = learn ? 1 : 0;
+  pConst.spp = spp;
+  pConst.multi_bounce = multi_bounce ? 1 : 0;
+  pConst.extra_half_spp = extra_half_spp ? 1 : 0;
+  pConst.learn_first = learn_first ? 1 : 0;
+  pConst.initialOutputBufferIndex = 0;
+  if (learn_one_frame) {
+    pConst.learn = 1;
+    learn_one_frame = false;
+  }
+
+  encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::RAYGEN, 0, sizeof(PushConstant));
+  encoder->traceRays(1280, 720, 1);
+  encoder->end();
+
+  const uint32_t frameID = renderData.getUInt("FrameIdx");
+  // update params
+  {
+    param->uniformRandomNumber = JenkinsHash(frameID);
+    param->neighborOffsetMask = 8192 - 1;
+  }
+}
+
+SSPGvMF_LearnPass::SSPGvMF_LearnPass() {
+  auto [comp] = GFX::ShaderLoader_SLANG::load(
+      "../Engine/Shaders/SRenderer/addon/pathguiding/"
+      "sspg-vMF-learning.slang",
+      std::array<std::pair<std::string, RHI::ShaderStages>, 1>{
+          std::make_pair("ComputeMain", RHI::ShaderStages::COMPUTE),
+      });
+
+  RDG::ComputePass::init(
+      Core::ResourceManager::get()->getResource<GFX::ShaderModule>(comp));
+}
+
+auto SSPGvMF_LearnPass::reflect() noexcept -> RDG::PassReflection {
+  RDG::PassReflection reflector;
+  reflector.addInputOutput("vMFStatistics")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInputOutput("EpochCounter")
+      .isTexture().withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("VPL0")
+      .isTexture().withSize(Math::vec3(1.f))
+      .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("VPL1")
+      .isTexture().withSize(Math::vec3(1.f))
+      .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  reflector.addInput("VBuffer")
+      .isTexture().withSize(Math::vec3(1, 1, 1))
+      .withFormat(RHI::TextureFormat::RGBA32_UINT)
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{
+              RDG::TextureInfo::ConsumeType::StorageBinding}
+              .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
+  return reflector;
+}
+
+auto SSPGvMF_LearnPass::renderUI() noexcept -> void {
+  ImGui::Checkbox("Learn", &learn);
+  ImGui::Checkbox("Learn one frame", &learn_one_frame);
+  ImGui::DragInt("Extra sample", &extra_sample);
+}
+
+auto SSPGvMF_LearnPass::execute(RDG::RenderContext* context,
+                           RDG::RenderData const& renderData) noexcept -> void {
+  // Bind common for RT
+  std::vector<RHI::BindGroupEntry>* set_0_entries =
+      renderData.getBindGroupEntries("CommonScene");
+  getBindGroup(context, 0)->updateBinding(*set_0_entries);
+    
+  GFX::Texture* vs = renderData.getTexture("vMFStatistics");
+  GFX::Texture* ec = renderData.getTexture("EpochCounter");
+  GFX::Texture* vbuffer = renderData.getTexture("VBuffer");
+  GFX::Texture* vpl0 = renderData.getTexture("VPL0");
+  GFX::Texture* vpl1 = renderData.getTexture("VPL1");
+
+  updateBindings(context, {
+      {"u_vMFStatistics", RHI::BindingResource{vs->getUAV(0, 0, 1)}},
+      {"u_epochCounter", RHI::BindingResource{ec->getUAV(0, 0, 1)}},
+      {"u_vBuffer", RHI::BindingResource{vbuffer->getUAV(0, 0, 1)}},
+      {"u_vpl0", RHI::BindingResource{vpl0->getUAV(0, 0, 1)}},
+      {"u_vpl1", RHI::BindingResource{vpl1->getUAV(0, 0, 1)}},
+  });
+
+  struct PushConstant {
+    Math::ivec2 resolution;
+    int reuse_number;
+    float exponential_factor;
+    int learn;
+    //int random_seed;
+  } pConst = {{1280, 720}, extra_sample, 0.7
+  };
+  pConst.learn = learn ? 1 : 0;
+  if (learn_one_frame) {
+    pConst.learn = 1;
+    learn_one_frame = false;
+  }
+  RHI::ComputePassEncoder* encoder = beginPass(context);
+  encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::COMPUTE, 0,
+                         sizeof(PushConstant));
+  encoder->dispatchWorkgroups((1280 + 15) / 16, (720 + 15) / 16, 1);
   encoder->end();
 }
 

@@ -17,6 +17,7 @@ SE_EXPORT enum struct ColorType {
 SE_EXPORT struct COLOR_R8G8B8_UINT : public Math::Vector3<uint8_t> {};
 SE_EXPORT struct COLOR_R8G8B8A8_UINT : public Math::Vector4<uint8_t> {};
 SE_EXPORT struct COLOR_R32G32B32_FLOAT : public Math::Vector3<float> {};
+SE_EXPORT struct COLOR_R32G32B32A32_FLOAT : public Math::Vector4<float> {};
 
 
 SE_EXPORT template <class ColorStruct>
@@ -125,8 +126,9 @@ SE_EXPORT struct HDR {
 
 SE_EXPORT struct EXR {
   static auto writeEXR(std::filesystem::path const& path, uint32_t width,
-                       uint32_t height, uint32_t channel, float* data) noexcept
-      -> void;
+                       uint32_t height, uint32_t channel, float* data) noexcept -> void;
+  static auto fromEXR(std::filesystem::path const& path) noexcept
+      -> std::unique_ptr<Image<COLOR_R32G32B32A32_FLOAT>>;
 };
 
 SE_EXPORT struct BMP {
@@ -148,5 +150,7 @@ namespace SIByL {
 SE_EXPORT struct ImageLoader {
   static auto load_rgba8(std::filesystem::path const& path) noexcept
       -> std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>>;
+  static auto load_rgba32(std::filesystem::path const& path) noexcept
+      -> std::unique_ptr<Image::Image<Image::COLOR_R32G32B32A32_FLOAT>>;
 };
 }  // namespace SIByL

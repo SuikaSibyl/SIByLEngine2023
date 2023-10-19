@@ -1,5 +1,6 @@
 #pragma once
 #include <SE.SRenderer.hpp>
+#include <SE.Addon.RestirGI.hpp>
 
 namespace SIByL::Addon::SSGuiding {
 SE_EXPORT struct SSPGvMF_ClearPass : public RDG::ComputePass {
@@ -21,7 +22,42 @@ SE_EXPORT struct SSPGvMF_SamplePass : public RDG::RayTracingPass {
       -> void override;
   int strategy = 0;
   bool learn = true;
+  bool multi_bounce = false;
+  bool extra_half_spp = false;
   bool learn_one_frame = false;
+  float expon_factor = 0.7f;
+  int spp = 1;
+  bool learn_first = false;
+};
+
+SE_EXPORT struct SSPGvMF_SampleReSTIRPass : public RDG::RayTracingPass {
+  SSPGvMF_SampleReSTIRPass(RestirGI::GIResamplingRuntimeParameters* param);
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto renderUI() noexcept -> void override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept
+      -> void override;
+  int strategy = 0;
+  bool learn = true;
+  bool multi_bounce = false;
+  bool extra_half_spp = false;
+  bool learn_one_frame = false;
+  float expon_factor = 0.7f;
+  int spp = 1;
+  bool learn_first = false;
+  RestirGI::GIResamplingRuntimeParameters* param;
+};
+
+SE_EXPORT struct SSPGvMF_LearnPass : public RDG::ComputePass {
+  SSPGvMF_LearnPass();
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept
+      -> void override;
+  virtual auto renderUI() noexcept -> void override;
+  bool learn = true;
+  bool learn_one_frame = false;
+  int extra_sample = 10;
 };
 
 SE_EXPORT struct SSPGvMF_VisPass : public RDG::RayTracingPass {
