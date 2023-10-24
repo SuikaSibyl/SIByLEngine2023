@@ -1309,7 +1309,9 @@ auto GFXManager::registerTextureResource(
           RHI::TextureDimension::TEX2D,
           RHI::TextureFormat::RGBA32_FLOAT,
           (uint32_t)RHI::TextureUsage::COPY_DST |
-              (uint32_t)RHI::TextureUsage::TEXTURE_BINDING,
+          (uint32_t)RHI::TextureUsage::COPY_SRC |
+          (uint32_t)RHI::TextureUsage::STORAGE_BINDING |
+          (uint32_t)RHI::TextureUsage::TEXTURE_BINDING,
           {RHI::TextureFormat::RGBA32_FLOAT}});
 
   commandEncoder->pipelineBarrier(RHI::BarrierDescriptor{

@@ -345,7 +345,7 @@ SE_EXPORT struct GTGraph : public RDG::Graph {
     addEdge("Accum Pass", "Output", "ToneMapper Pass", "Input");
 
 
-    markOutput("ToneMapper Pass", "Output");
+    markOutput("Accum Pass", "Output");
   }
 };
 
@@ -1766,18 +1766,4 @@ SE_EXPORT struct ADGTPipeline : public RDG::SingleGraphPipeline {
   ADGTPipeline() { pGraph = &graph; }
   ADGTGraph graph;
 };
-
-SE_EXPORT struct ADGraph : public RDG::Graph {
-  Addon::VXGI::VXGISetting setting;
-  ADGraph() {
-    addPass(std::make_unique<Addon::Differentiable::TestADPass>(), "TestAD Pass");
-    markOutput("TestAD Pass", "RGBA32");
-  }
-};
-
-SE_EXPORT struct ADPipeline : public RDG::SingleGraphPipeline {
-  ADPipeline() { pGraph = &graph; }
-  ADGraph graph;
-};
-
 }  // namespace SIByL

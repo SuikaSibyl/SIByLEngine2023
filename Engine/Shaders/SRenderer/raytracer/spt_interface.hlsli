@@ -275,7 +275,7 @@ struct BSDFSampleQuery {
     float3x3 frame; // shading frame
     uint misc_flag; // misc flag
 };
-
+// Payload structure for getting sample pdf.
 struct BSDFSamplePDFQuery {
     // input
     float3 dir_in; // ----------- 4 floats
@@ -290,7 +290,21 @@ struct BSDFSamplePDFQuery {
     float pdf;
     float3x3 frame;
 };
-
+// Payload structure for evaluating the bsdf with differential.
+struct BSDFEvalDiffQuery {
+    // input
+    float3 dir_in; // ----------- 4 floats
+    uint mat_id;
+    float3 dir_out; // ---------- 4 floats
+    uint misc_flag;
+    float3 geometric_normal; // - 4 floats
+    float3 adjoint_gradient;
+    float2 uv;
+    // output
+    float3 bsdf;
+    // shading frame - 3x3 floats
+    float3x3 frame; // shading frame
+};
 bool TraceOccludeRay(
     in_ref(Ray) ray,
     inout_ref(RandomSamplerState) RND,

@@ -49,6 +49,7 @@ SE_EXPORT struct RTCommon {
   Core::GUID principled_pdf;
 
   GFX::SBTsDescriptor sbtDesc;
+  std::vector<GFX::SBTsDescriptor::CallableSBT::CallableRecord> diffCallables;
 
   uint32_t accumIDX;
 

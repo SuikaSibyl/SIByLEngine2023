@@ -1258,9 +1258,9 @@ auto GroundTruthPass::execute(RDG::RenderContext* context,
   std::vector<RHI::BindGroupEntry>* set_1_entries =
       renderData.getBindGroupEntries("CommonRT");
   getBindGroup(context, 1)->updateBinding(*set_1_entries);
-  getBindGroup(context, 2)
-      ->updateBinding({RHI::BindGroupEntry{
-          0, RHI::BindingResource{color->getUAV(0, 0, 1)}}});
+  updateBindings(context, {
+    {"u_Color", RHI::BindingResource{color->getUAV(0, 0, 1)}},
+  });
 
   RHI::RayTracingPassEncoder* encoder = beginPass(context);
 

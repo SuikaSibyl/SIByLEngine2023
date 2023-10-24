@@ -1,9 +1,10 @@
 #ifndef _SRENDERER_SPT_MATERIAL_LAMBERTIAN_HEADER_
 #define _SRENDERER_SPT_MATERIAL_LAMBERTIAN_HEADER_
 
-#include "../spt_interface.hlsli"
+#include "../../include/diff_descriptor_set.hlsli"
 #include "../../include/common/sampling.hlsli"
 #include "../../include/scene_descriptor_set.hlsli"
+#include "../spt_interface.hlsli"
 
 /**
  * Evaluate the Lambertian BSDF for the given query.
@@ -77,6 +78,56 @@ void PdfLambertian(inout_ref(BSDFSamplePDFQuery) cBSDFSamplePDFQuery) {
     // Making sure the shading frame is consistent with the view direction.
     float3x3 frame = cBSDFSamplePDFQuery.frame;
     cBSDFSamplePDFQuery.pdf = saturate(dot(frame[2], cBSDFSamplePDFQuery.dir_out)) / k_pi;
+}
+
+/**
+ * Evaluate the Lambertian BSDF for the given query with consider of differentiable.
+ * At the same time, evaluate the gradient for every differentiable parameter.
+ * @param cBSDFEvalQuery The query to evaluate.
+ */
+[shader("callable")]
+void EvalDiffLambertian(inout_ref(BSDFEvalDiffQuery) cBSDFEvalDiffQuery) {
+    if (dot(cBSDFEvalDiffQuery.geometric_normal, cBSDFEvalDiffQuery.dir_in) < 0 ||
+        dot(cBSDFEvalDiffQuery.geometric_normal, cBSDFEvalDiffQuery.dir_out) < 0) {
+        // No light below the surface
+        cBSDFEvalDiffQuery.bsdf = float3(0);
+        cBSDFEvalDiffQuery.dir_out = float3(0); // override specular
+        return;
+    }
+    // Making sure the shading frame is consistent with the view direction.
+    float3x3 frame = cBSDFEvalDiffQuery.frame;
+    const QueryBitfield bitfield = UnpackQueryBitfield(cBSDFEvalDiffQuery.misc_flag);
+
+    // Evaluate bsdf
+    float3 albedo;
+    int albedo_diff_id = -1;
+    if (cBSDFEvalDiffQuery.mat_id == 0xFFFFFFFF) {
+        albedo = UnpackRGBE(asuint(cBSDFEvalDiffQuery.bsdf.x));
+    }
+    else {
+        const MaterialInfo material = materials[cBSDFEvalDiffQuery.mat_id];
+        const int albedo_tex_id = material.baseOrDiffuseTextureIndex;
+        albedo_diff_id = DiffableTextureIndices[albedo_tex_id];
+        const float3 texAlbedo = textures[albedo_tex_id].Sample(cBSDFEvalDiffQuery.uv, 0).xyz;
+        albedo = material.baseOrDiffuseColor * texAlbedo;
+    }
+    const float3 demodulate = saturate(dot(frame[2], cBSDFEvalDiffQuery.dir_out)) / k_pi;
+    cBSDFEvalDiffQuery.bsdf = bitfield.split_query ? demodulate : albedo * demodulate;
+    cBSDFEvalDiffQuery.dir_out = float3(0); // override specular
+
+    if (albedo_diff_id != -1) { // if the albedo texture if a differentiable resource
+        cBSDFEvalDiffQuery.dir_out = float3(1, 0, 1);
+        const DiffResourceDesc diff_desc = DiffResourcesDescs[albedo_diff_id];
+        float3 albedo_gradient = cBSDFEvalDiffQuery.adjoint_gradient * demodulate;
+        const int width = (diff_desc.data_extend >> 0) & 0xFFFF;
+        const int height = (diff_desc.data_extend >> 16) & 0xFFFF;
+        const int2 texcoord = int2(cBSDFEvalDiffQuery.uv * int2(width, height));
+        const uint flatten = FlattensPixelToIndex(texcoord, width);
+        if (any(isnan(albedo_gradient) || isinf(albedo_gradient))) {
+        } else {
+            InterlockedAddGradFloat3(flatten, albedo_gradient);
+        }
+    }
 }
 
 #endif // !_SRENDERER_SPT_MATERIAL_LAMBERTIAN_HEADER_

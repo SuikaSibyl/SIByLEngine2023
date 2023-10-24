@@ -143,6 +143,7 @@
     <ClCompile Include="Private\SE.RHI-Interface.cpp" />
     <ClCompile Include="Private\SE.RHI-VK.cpp" />
     <ClCompile Include="Private\SE.RHI.Profiler.cpp" />
+    <ClCompile Include="Private\SE.RHI.Reflection.cpp" />
     <ClCompile Include="Private\SE.RHI.RHILayer.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -165,6 +166,7 @@
     <ClInclude Include="Public\SE.RHI-VK.hpp" />
     <ClInclude Include="Public\SE.RHI.hpp" />
     <ClInclude Include="Public\SE.RHI.Profiler.hpp" />
+    <ClInclude Include="Public\SE.RHI.Reflection.hpp" />
     <ClInclude Include="Public\SE.RHI.RHILayer.hpp" />
     <ClInclude Include="Public\SE.RHI.Utility.hpp" />
   </ItemGroup>

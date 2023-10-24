@@ -24,7 +24,7 @@ SE_EXPORT template <class ColorStruct>
 struct Image {
   Image(size_t width, size_t height, size_t channel = 4);
   auto operator[](size_t i) -> ColorStruct*;
-
+  auto fill(ColorStruct const& val) noexcept -> void;
   size_t width, height, channel;
   ColorType type;
   Core::Buffer data;
@@ -35,6 +35,14 @@ Image<ColorStruct>::Image(size_t width, size_t height, size_t channel)
     : width(width), height(height), channel(channel) {
   data = Core::Buffer(width * height * sizeof(ColorStruct));
   memset(data.data, 0, data.size);
+}
+
+template <class ColorStruct>
+auto Image<ColorStruct>::fill(ColorStruct const& val) noexcept -> void {
+  ColorStruct* data_array = reinterpret_cast<ColorStruct*>(data.data);
+  for (int i = 0; i < width * height; ++i) {
+    data_array[i] = val;
+  }
 }
 
 template <class ColorStruct>

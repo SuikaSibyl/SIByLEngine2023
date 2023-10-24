@@ -150,11 +150,12 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		InvalidScene();
 		device->waitIdle();
 
-		pipeline1 = std::make_unique<ADPipeline>();
+		pipeline1 = std::make_unique<Addon::Differentiable::AutoDiffPipeline>();
 		//pipeline1 = std::make_unique<CustomPipeline>();
 		//pipeline2 = std::make_unique<VXPGReSTIRPipeline>();
 		//pipeline1 = std::make_unique<Addon::SLC::SLCTestPipeline>();
-		pipeline2 = std::make_unique<SSPGReSTIRPipeline>();
+		//pipeline2 = std::make_unique<SSPGReSTIRPipeline>();
+		pipeline2 = std::make_unique<GTPipeline>();
   //      rtgi_pipeline = std::make_unique<RestirGIPipeline>();
         rtgi_pipeline = std::make_unique<RestirGIPipeline>();
 
@@ -171,7 +172,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		vxgi_pipeline->build();
         vxdi_pipeline->build();
 
-		pipeline = geoinsp_pipeline.get();
+		pipeline = pipeline1.get();
 
 		Editor::DebugDraw::Init(pipeline->getOutput(), nullptr);
 
@@ -290,54 +291,54 @@ struct SandBoxApplication :public Application::ApplicationBase {
 				ImGui::End();
 			}
 
-                ImGui::Begin("Pipeline Choose");
-                {  // Select an item type
-                        const char* item_names[] = {
-                            "RayTracing", "Forward", "RTGI Pipeline",  "Geo Inspector",
-                            "VXGI Inspector", "VXDI Inspector"};
-                        static int pipeline_id = 3;
-                        ImGui::Combo("Mode", &pipeline_id, item_names,
-                                     IM_ARRAYSIZE(item_names),
-                                     IM_ARRAYSIZE(item_names));
-                        if (pipeline_id == 0) {
-								frames2capture = 50;
-                                pipeline = pipeline1.get();
-                                editorLayer
-                                    ->getWidget<Editor::RDGViewerWidget>()
-                                    ->pipeline = pipeline;
-                        } else if (pipeline_id == 1) {
-                                pipeline = pipeline2.get();
-                                editorLayer
-                                    ->getWidget<Editor::RDGViewerWidget>()
-                                    ->pipeline = pipeline;
-                        } else if (pipeline_id == 2) {
-                                frames2capture = 50;
-                                pipeline = rtgi_pipeline.get();
-                                editorLayer
-                                    ->getWidget<Editor::RDGViewerWidget>()
-                                    ->pipeline = pipeline;
-                        } else if (pipeline_id == 3) {
-                                pipeline = geoinsp_pipeline.get();
-                                editorLayer
-                                    ->getWidget<Editor::RDGViewerWidget>()
-                                    ->pipeline = pipeline;
-                        } else if (pipeline_id == 4) {
-                                frames2capture = 50;
-                                pipeline = vxgi_pipeline.get();
-                                editorLayer
-                                    ->getWidget<Editor::RDGViewerWidget>()
-                                    ->pipeline = pipeline;
-                        } else if (pipeline_id == 5) {
-                                frames2capture = 50;
-                                pipeline = vxdi_pipeline.get();
-                                editorLayer
-                                    ->getWidget<Editor::RDGViewerWidget>()
-                                    ->pipeline = pipeline;
-                        }
-                }
-                ImGui::End();
+            ImGui::Begin("Pipeline Choose");
+            {  // Select an item type
+                    const char* item_names[] = {
+                        "Auto Diff", "Forward", "RTGI Pipeline",  "Geo Inspector",
+                        "VXGI Inspector", "VXDI Inspector"};
+                    static int pipeline_id = 0;
+                    ImGui::Combo("Mode", &pipeline_id, item_names,
+                                    IM_ARRAYSIZE(item_names),
+                                    IM_ARRAYSIZE(item_names));
+                    if (pipeline_id == 0) {
+							frames2capture = 50;
+                            pipeline = pipeline1.get();
+                            editorLayer
+                                ->getWidget<Editor::RDGViewerWidget>()
+                                ->pipeline = pipeline;
+                    } else if (pipeline_id == 1) {
+                            pipeline = pipeline2.get();
+                            editorLayer
+                                ->getWidget<Editor::RDGViewerWidget>()
+                                ->pipeline = pipeline;
+                    } else if (pipeline_id == 2) {
+                            frames2capture = 50;
+                            pipeline = rtgi_pipeline.get();
+                            editorLayer
+                                ->getWidget<Editor::RDGViewerWidget>()
+                                ->pipeline = pipeline;
+                    } else if (pipeline_id == 3) {
+                            pipeline = geoinsp_pipeline.get();
+                            editorLayer
+                                ->getWidget<Editor::RDGViewerWidget>()
+                                ->pipeline = pipeline;
+                    } else if (pipeline_id == 4) {
+                            frames2capture = 50;
+                            pipeline = vxgi_pipeline.get();
+                            editorLayer
+                                ->getWidget<Editor::RDGViewerWidget>()
+                                ->pipeline = pipeline;
+                    } else if (pipeline_id == 5) {
+                            frames2capture = 50;
+                            pipeline = vxdi_pipeline.get();
+                            editorLayer
+                                ->getWidget<Editor::RDGViewerWidget>()
+                                ->pipeline = pipeline;
+                    }
+            }
+            ImGui::End();
 
-				AnimateScene();
+			AnimateScene();
 
 
 		srenderer->invalidScene(scene);

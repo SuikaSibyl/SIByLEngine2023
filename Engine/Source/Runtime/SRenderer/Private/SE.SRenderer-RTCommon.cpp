@@ -9,15 +9,15 @@ auto RTCommon::getSBTDescriptor() noexcept -> GFX::SBTsDescriptor {
 auto RTCommon::init() noexcept -> void {
   auto [trimesh_ray_rchit, trimesh_anyhit, trimesh_shadow_anyhit,
         sphere_intersection, sphere_ray_rchit, sphere_anyhit,
-        sphere_shadow_anyhit, common_ray_rmiss, shadow_ray_rchit,
-        shadow_ray_rmiss, eval_lambertian, sample_lambertian, pdf_lambertian,
-        eval_roughplastic, sample_roughplastic, pdf_roughplastic,
-        eval_roughdielectric, sample_roughdielectric, pdf_roughdielectric
+        sphere_shadow_anyhit, common_ray_rmiss, shadow_ray_rchit, shadow_ray_rmiss, 
+        eval_lambertian, sample_lambertian, pdf_lambertian, eval_diff_lambertian,
+        eval_roughplastic, sample_roughplastic, pdf_roughplastic, eval_diff_roughplastic,
+        eval_roughdielectric, sample_roughdielectric, pdf_roughdielectric, eval_diff_roughdielectric
   ] =
       GFX::ShaderLoader_SLANG::load(
           "../Engine/Shaders/SRenderer/raytracer/"
           "spt.slang",
-          std::array<std::pair<std::string, RHI::ShaderStages>, 19>{
+          std::array<std::pair<std::string, RHI::ShaderStages>, 22>{
               std::make_pair("TrimeshClosestHit",
                              RHI::ShaderStages::CLOSEST_HIT),
               std::make_pair("TrimeshAnyHit", RHI::ShaderStages::ANY_HIT),
@@ -38,14 +38,17 @@ auto RTCommon::init() noexcept -> void {
               std::make_pair("EvalLambertian", RHI::ShaderStages::CALLABLE),
               std::make_pair("SampleLambertian", RHI::ShaderStages::CALLABLE),
               std::make_pair("PdfLambertian", RHI::ShaderStages::CALLABLE),
+              std::make_pair("EvalDiffLambertian", RHI::ShaderStages::CALLABLE),
               // Material shaders - rough plastic
               std::make_pair("EvalRoughPlastic", RHI::ShaderStages::CALLABLE),
               std::make_pair("SampleRoughPlastic", RHI::ShaderStages::CALLABLE),
               std::make_pair("PdfRoughPlastic", RHI::ShaderStages::CALLABLE),
+              std::make_pair("EvalDiffRoughPlastic", RHI::ShaderStages::CALLABLE),
               // Material shaders - rough dielectric
               std::make_pair("EvalRoughDielectric", RHI::ShaderStages::CALLABLE),
               std::make_pair("SampleRoughDielectric", RHI::ShaderStages::CALLABLE),
               std::make_pair("PdfRoughDielectric", RHI::ShaderStages::CALLABLE),
+              std::make_pair("EvalDiffRoughDielectric", RHI::ShaderStages::CALLABLE),
           });
 
    sbtDesc = GFX::SBTsDescriptor{
@@ -123,27 +126,13 @@ auto RTCommon::init() noexcept -> void {
           //{Core::ResourceManager::get()
           //     ->getResource<GFX::ShaderModule>(
           //         trimesh_sampling_pdf_rcall)},
-          //// principled
-          //{Core::ResourceManager::get()
-          //     ->getResource<GFX::ShaderModule>(
-          //         principled_eval)},
-          //{Core::ResourceManager::get()
-          //     ->getResource<GFX::ShaderModule>(
-          //         principled_sample)},
-          //{Core::ResourceManager::get()
-          //     ->getResource<GFX::ShaderModule>(
-          //         principled_pdf)},
-          //// roughdielectric
-          //{Core::ResourceManager::get()
-          //     ->getResource<GFX::ShaderModule>(
-          //         roughdielectric_eval)},
-          //{Core::ResourceManager::get()
-          //     ->getResource<GFX::ShaderModule>(
-          //         roughdielectric_sample)},
-          //{Core::ResourceManager::get()
-          //     ->getResource<GFX::ShaderModule>(
-          //         roughdielectric_pdf)},
       }},
+  };
+
+  diffCallables = {
+    {Core::ResourceManager::get()->getResource<GFX::ShaderModule>(eval_diff_lambertian)},
+    {Core::ResourceManager::get()->getResource<GFX::ShaderModule>(eval_diff_roughplastic)},
+    {Core::ResourceManager::get()->getResource<GFX::ShaderModule>(eval_diff_roughdielectric)},
   };
   //loadShaders();
   //sbtDesc = GFX::SBTsDescriptor{

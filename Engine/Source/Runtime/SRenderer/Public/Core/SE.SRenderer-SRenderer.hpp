@@ -25,7 +25,6 @@ SE_EXPORT struct SRenderer {
   struct Configuration {
     bool enableRayTracing = true;  // whether use ray tracing
   } config;
-
   /**
    * Standard Data Structure Definition
    * -----------------------------------------------
@@ -246,7 +245,7 @@ SE_EXPORT struct SRenderer {
     bool geometryDirty = false;
     std::unordered_map<GFX::Mesh*, MeshRecord> mesh_record = {};
     std::unordered_map<GFX::Material*, uint32_t> material_record = {};
-    std::unordered_map<RHI::TextureView*, uint32_t> textureview_record = {};
+    std::unordered_map<GFX::Texture*, uint32_t> texture_record = {};
     std::unordered_map<Core::EntityHandle, MeshReferenceRecord>
         mesh_ref_record = {};
     std::unordered_map<Core::EntityHandle, EntityLightRecord>
@@ -334,6 +333,7 @@ SE_EXPORT struct SRenderer {
 
   GlobalUniforms globalUniRecord;
 
+  static SRenderer* singleton;
   static auto init() noexcept -> void;
 };
 }  // namespace SIByL

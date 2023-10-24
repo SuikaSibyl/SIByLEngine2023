@@ -15,6 +15,8 @@
 #include <vector>
 #include <ImGuizmo.h>
 #include <Config/SE.Core.Config.hpp>
+#include <SE.Core.Reflect.hpp>
+#include <SE.RHI.Reflection.hpp>
 
 namespace SIByL::Editor {
 auto drawBoolControl(std::string const& label, bool& value,
@@ -365,13 +367,13 @@ auto TextureElucidator::onDrawGui(Core::GUID guid) noexcept -> void {
   onDrawGui_GUID(guid);
 }
 
-auto TextureElucidator::onDrawGui_GUID(Core::GUID guid) noexcept -> void {
+auto TextureElucidator::onDrawGui_GUID(Core::GUID guid, bool draw_tree) noexcept -> void {
   GFX::Texture* tex =
       Core::ResourceManager::get()->getResource<GFX::Texture>(guid);
-  onDrawGui_PTR(tex);
+  onDrawGui_PTR(tex, draw_tree);
 }
 
-auto TextureElucidator::onDrawGui_PTR(GFX::Texture* tex) noexcept -> void {
+auto TextureElucidator::onDrawGui_PTR(GFX::Texture* tex, bool draw_tree) noexcept -> void {
     const ImGuiTreeNodeFlags treeNodeFlags =
       ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed |
       ImGuiTreeNodeFlags_FramePadding | ImGuiTreeNodeFlags_SpanAvailWidth |
@@ -380,8 +382,9 @@ auto TextureElucidator::onDrawGui_PTR(GFX::Texture* tex) noexcept -> void {
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{4, 4});
     float lineHeight =
         GImGui->Font->FontSize + GImGui->Style.FramePadding.y * 2.0f;
-    ImGui::Separator();
-    bool open = ImGui::TreeNodeEx(tex, treeNodeFlags, "Texture Resource");
+    bool open = true;
+    if (draw_tree)
+        open = ImGui::TreeNodeEx(tex, treeNodeFlags, "Texture Resource");
     ImGui::PopStyleVar();
 
     if (open) {
@@ -404,16 +407,60 @@ auto TextureElucidator::onDrawGui_PTR(GFX::Texture* tex) noexcept -> void {
           if (ImGui::InputText(" ", buffer, sizeof(buffer)))
             tex->texture->setName(std::string(buffer));
         });
-        drawCustomColume("GUID", 100,
-                         [&]() { ImGui::Text(std::to_string(tex->guid).c_str()); });
-        drawCustomColume("Size", 100, [&]() {
-          ImGui::Text((std::string("- width: ") +
-                       std::to_string(tex->texture->width()) +
-                       std::string("  |  - height: ") +
-                       std::to_string(tex->texture->height()))
-                          .c_str());
+        // Showing the GUID the texture image.
+        drawCustomColume("GUID", 100, [&]() { ImGui::Text(std::to_string(tex->guid).c_str()); });
+        // Showing the extend of the texture image.
+        drawCustomColume("Extend", 100, [&]() {
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{0.60f, 0.60f, 0.60f, 1.00f});      
+          ImGui::Text(std::string("width: ").c_str()); ImGui::PopStyleColor(1); ImGui::SameLine();
+          ImGui::Text(std::to_string(tex->texture->width()).c_str()); ImGui::SameLine();
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{0.60f, 0.60f, 0.60f, 1.00f});      
+          ImGui::Text(std::string(" | height: ").c_str()); ImGui::PopStyleColor(1); ImGui::SameLine();
+          ImGui::Text(std::to_string(tex->texture->height()).c_str()); ImGui::SameLine();
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{0.60f, 0.60f, 0.60f, 1.00f});      
+          ImGui::Text(std::string(" | depth: ").c_str()); ImGui::PopStyleColor(1); ImGui::SameLine();
+          ImGui::Text(std::to_string(tex->texture->depthOrArrayLayers()).c_str()); ImGui::SameLine();
         });
-        ImGui::TreePop();
+        // Showing the extend of the texture format.
+        drawCustomColume("Format", 100, [&]() {
+          const RHI::TextureFormat format = tex->texture->format();
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{0.60f, 0.60f, 0.60f, 1.00f});      
+          ImGui::Text(std::string("RHI::TextureFormat::").c_str()); ImGui::PopStyleColor(1); ImGui::SameLine();
+          ImGui::Text(SIByL::to_string(format).c_str());
+        });
+        // Setting differentiable channels for the texture resource.
+        drawCustomColume("Diffable", 100, [&]() {
+          std::function<void()> style_set_differentiable = [&]() {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.35f, 0.35f, 0.35f, 1.00f});
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{0.95f, 0.95f, 0.95f, 1.00f});              
+          };
+          std::function<void()> style_not_differentiable = [&]() {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.05f, 0.05f, 0.05f, 1.00f});
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{0.45f, 0.45f, 0.45f, 1.00f});              
+          };
+          std::function<void(char const*, int)> differentiable_channel =
+              [&](char const* name, int channel) {
+            bool r_differentiable = (tex->differentiable_channels >> channel) & 0b1;
+            if (r_differentiable) style_set_differentiable();
+            else style_not_differentiable();
+            if (ImGui::Button(name)) tex->differentiable_channels ^= (0b1 << channel);
+            ImGui::PopStyleColor(2);
+          };
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{0.60f, 0.60f, 0.60f, 1.00f});      
+          ImGui::Text(std::string("channels: ").c_str()); ImGui::PopStyleColor(1); ImGui::SameLine();
+          differentiable_channel("R", 0); ImGui::SameLine();
+          differentiable_channel("G", 1); ImGui::SameLine();
+          differentiable_channel("B", 2); ImGui::SameLine();
+          differentiable_channel("A", 3); ImGui::SameLine();
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{0.60f, 0.60f, 0.60f, 1.00f});      
+          ImGui::Text(std::string(" | differentiable: ").c_str()); ImGui::PopStyleColor(1); ImGui::SameLine();
+          bool differentiable = (tex->differentiable_channels & 0b1111) != 0;
+          bool toggled = ImGui::Checkbox("##differentiable", &differentiable);
+          if (toggled && differentiable) tex->differentiable_channels = 0b0111;
+          else if (toggled) tex->differentiable_channels = 0;
+        });
+        // End draw texture tree
+        if (draw_tree) ImGui::TreePop();
     }
 }
 
@@ -421,13 +468,13 @@ auto MaterialElucidator::onDrawGui(Core::GUID guid) noexcept -> void {
   onDrawGui_GUID(guid);
 }
 
-auto MaterialElucidator::onDrawGui_GUID(Core::GUID guid) noexcept -> void {
+auto MaterialElucidator::onDrawGui_GUID(Core::GUID guid, bool draw_tree) noexcept -> void {
   GFX::Material* mat =
       Core::ResourceManager::get()->getResource<GFX::Material>(guid);
-  onDrawGui_PTR(mat);
+  onDrawGui_PTR(mat, draw_tree);
 }
 
-auto MaterialElucidator::onDrawGui_PTR(GFX::Material* material) noexcept
+auto MaterialElucidator::onDrawGui_PTR(GFX::Material* material, bool draw_tree) noexcept
     -> void {
   const ImGuiTreeNodeFlags treeNodeFlags =
       ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed |
@@ -437,8 +484,9 @@ auto MaterialElucidator::onDrawGui_PTR(GFX::Material* material) noexcept
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{4, 4});
   float lineHeight =
       GImGui->Font->FontSize + GImGui->Style.FramePadding.y * 2.0f;
-  ImGui::Separator();
-  bool open = ImGui::TreeNodeEx(material, treeNodeFlags, "Material Resource");
+  bool open = true;
+  if (draw_tree)
+    open = ImGui::TreeNodeEx(material, treeNodeFlags, "Material Resource");
   ImGui::PopStyleVar();
 
   if (ImGui::Button("Save")) {
@@ -449,7 +497,7 @@ auto MaterialElucidator::onDrawGui_PTR(GFX::Material* material) noexcept
 
   }
   else if (open && material != nullptr) {
-    drawCustomColume("Material", 150, [&]() {
+    drawCustomColume("Material Name", 150, [&]() {
       char buffer[256];
       memset(buffer, 0, sizeof(buffer));
       strcpy_s(buffer, material->name.c_str());
@@ -467,11 +515,9 @@ auto MaterialElucidator::onDrawGui_PTR(GFX::Material* material) noexcept
         material->isDirty = true;
       }
     });
-        drawCustomColume("Path", 150,
+        drawCustomColume("File Path", 150,
                          [&]() { ImGui::Text(material->path.c_str()); });
-        drawCustomColume("Emissive", 150, [&]() {
-          ImGui::Checkbox("##Emissive", &material->isEmissive);
-        });
+        // Editting the alpha status in the material.
         drawCustomColume("Alpha State", 150, [&]() {
           const char* item_names[] = {
               "Opaque",
@@ -484,37 +530,22 @@ auto MaterialElucidator::onDrawGui_PTR(GFX::Material* material) noexcept
           material->alphaState = GFX::Material::AlphaState(alpha_state);
         });
         drawCustomColume("Alpha Threshold", 150, [&]() {
-          ImGui::DragFloat("##alphathresh", &material->alphaThreshold, 0.05f,
-                           0.f, 1.f);
+          ImGui::DragFloat("##alphathresh", &material->alphaThreshold, 0.05f, 0.f, 1.f);
         });
-        ImGuiColorEditFlags misc_flags =
-            ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_NoDragDrop;
+        // Editting the colors in the material.
+        const ImGuiColorEditFlags misc_flags = ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_NoDragDrop;
         drawCustomColume("Diffuse Color", 150, [&]() {
-          if (ImGui::ColorEdit3("##Basecolor",
-                                (float*)&material->baseOrDiffuseColor,
-                                ImGuiColorEditFlags_NoInputs |
-                                    ImGuiColorEditFlags_NoLabel | misc_flags)) {
-            material->isDirty = true;
-          }
+          if (ImGui::ColorEdit3("##Basecolor", (float*)&material->baseOrDiffuseColor, ImGuiColorEditFlags_NoLabel | misc_flags)) {
+            material->isDirty = true; }
         });
         drawCustomColume("Specular Color", 150, [&]() {
-          if (ImGui::ColorEdit3("##SpecularColor",
-                                (float*)&material->specularColor,
-                                ImGuiColorEditFlags_NoInputs |
-                                    ImGuiColorEditFlags_NoLabel | misc_flags)) {
-            material->isDirty = true;
-          }
+          if (ImGui::ColorEdit3("##SpecularColor", (float*)&material->specularColor, ImGuiColorEditFlags_NoLabel | misc_flags)) {
+            material->isDirty = true; }
         });
         drawCustomColume("Emissive Color", 150, [&]() {
-          if (ImGui::ColorEdit3("##EmissiveColor",
-                                (float*)&material->emissiveColor,
-                                ImGuiColorEditFlags_NoInputs |
-                                    ImGuiColorEditFlags_NoLabel | misc_flags)) {
-            material->isDirty = true;
-          }
-          if (ImGui::InputFloat3("##Emissive", (float*)&material->emissiveColor)) {
-            material->isDirty = true;
-          }
+          if (ImGui::ColorEdit3("##EmissiveColor", (float*)&material->emissiveColor,
+                                ImGuiColorEditFlags_Float | ImGuiColorEditFlags_NoLabel | misc_flags)) {
+            material->isDirty = true; }
         });
         drawCustomColume("Eta", 150, [&]() {
           if (ImGui::DragFloat("##eta", &material->eta, 0.05f, 1.f, 2.f)) {
@@ -532,29 +563,68 @@ auto MaterialElucidator::onDrawGui_PTR(GFX::Material* material) noexcept
       uint32_t id = 0;
       for (auto& [name, texture] : material->textures) {
         ImGui::PushID(id);
-        if (ImGui::TreeNode(
-                (("Texture - " + std::to_string(id) + " - " + name).c_str()))) {
-          if (ImGui::BeginDragDropTarget()) {
-            if (const ImGuiPayload* payload =
-                    ImGui::AcceptDragDropPayload("ASSET")) {
-              const wchar_t* path = (const wchar_t*)payload->Data;
-              std::filesystem::path texturePath = path;
-              Core::GUID guid = GFX::GFXManager::get()->registerTextureResource(
-                  texturePath.string().c_str());
-              texture.guid = guid;
+
+        ImGui::AlignTextToFramePadding();
+        bool treeopen = ImGui::TreeNodeEx(
+            (("Texture - " + std::to_string(id) + " - " + name).c_str()),
+            ImGuiTreeNodeFlags_AllowItemOverlap);
+
+        { // edit panel
+          float lineHeight = GImGui->Font->FontSize;
+          ImGui::SameLine();
+          if (ImGui::Button("+")) {
+            ImGui::OpenPopup("MatTexEdit");
+          }
+          if (ImGui::BeginPopup("MatTexEdit")) {
+            // set/create a texture to be differentiable resource
+            if (ImGui::BeginMenu("create")) {
+              std::function<void(uint32_t)> create_tex = [&](uint32_t size) -> void {
+                Image::Image<Image::COLOR_R32G32B32A32_FLOAT> image(size, size, 4);
+                Image::COLOR_R32G32B32A32_FLOAT fill_value(Math::vec4{0.5f, 0.5f, 0.5f, 1.0f});
+                image.fill(fill_value);
+                const Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
+                GFX::GFXManager::get()->registerTextureResource(guid, &image);
+                texture.guid = guid;
+                material->isDirty = true;
+              };
+              if (ImGui::MenuItem("128")) { create_tex(128); }
+              if (ImGui::MenuItem("256")) { create_tex(256); }
+              if (ImGui::MenuItem("512")) { create_tex(512); }
+              if (ImGui::MenuItem("1024")) { create_tex(1024); }
+              ImGui::EndMenu();
+            }
+            // remove the texture binded to the material slot
+            if (ImGui::MenuItem("remove")) {
+              texture.guid = Core::INVALID_GUID;
               material->serialize();
             }
-            ImGui::EndDragDropTarget();
+            ImGui::EndPopup();
           }
-
-          ImGui::SameLine();
-          if (ImGui::Button("Remove")) {
-            texture.guid = Core::INVALID_GUID;
+        }
+        // drag drop the resource
+        if (ImGui::BeginDragDropTarget()) {
+          if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET")) {
+            const wchar_t* path = (const wchar_t*)payload->Data;
+            std::filesystem::path texturePath = path;
+            Core::GUID guid = GFX::GFXManager::get()->registerTextureResource(
+                texturePath.string().c_str());
+            texture.guid = guid;
             material->serialize();
+            material->isDirty = true;
+          }
+          if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET-GUID")) {
+            Core::GUID const guid = *((Core::GUID*)payload->Data);
+            texture.guid = guid;
+            material->serialize();
+            material->isDirty = true;
           }
 
+          ImGui::EndDragDropTarget();
+        }
+
+        if (treeopen) {
           if (texture.guid != Core::INVALID_GUID && texture.guid != 0) {
-            TextureElucidator::onDrawGui_GUID(texture.guid);
+            TextureElucidator::onDrawGui_GUID(texture.guid, false);
           } else {
             ImGui::Text("No Resource Binded");
           }
@@ -566,6 +636,7 @@ auto MaterialElucidator::onDrawGui_PTR(GFX::Material* material) noexcept
       ImGui::TreePop();
         }
 
+      if (draw_tree)
         ImGui::TreePop();
   }
 }
@@ -1483,7 +1554,16 @@ auto ContentWidget::onDrawGui() noexcept -> void {
                                      runtimeResourceInfo.type, GUID))
                                     .c_str(),
                                 ImGuiTreeNodeFlags_Leaf);
-          if (ImGui::IsItemClicked()) {
+
+          // Drag GUID resource
+          const bool drag_resource = ImGui::BeginDragDropSource();
+          if (drag_resource) {
+            ImGui::Text(("ASSET-GUID::" + std::to_string(GUID)).c_str());
+            ImGui::SetDragDropPayload("ASSET-GUID", &GUID, sizeof(GUID));
+            ImGui::EndDragDropSource();
+          }
+          // click the resource
+          if (ImGui::IsItemHovered() && ImGui::IsMouseReleased(0)) {
             inspectorWidget->setCustomDraw(
                 std::bind(&(ResourceViewer::onDrawGui),
                           &(inspectorWidget->resourceViewer),
@@ -1615,7 +1695,13 @@ auto SceneWidget::onDrawGui() noexcept -> void {
                                ->rhiLayer->getRHILayerDescriptor()
                                .windowBinded->openFile("scene");
         if (path != "") scene->deserialize(path);
-         scene->isDirty = true;
+        scene->isDirty = true;
+
+        // when reload scene, we set the editor inspector to empty
+        // if it is now pointing to a gameobject inspector.
+        Editor::EditorLayer* layer = Editor::EditorLayer::get();
+        layer->getWidget<Editor::InspectorWidget>()->setEmpty();
+        layer->getWidget<Editor::ViewportWidget>()->selectedGO = std::nullopt;
       }
     }
     if (ImGui::BeginMenu("Import")) {
@@ -2248,7 +2334,7 @@ auto MeshRendererComponentFragment::elucidateComponent(
             } else {
               if (ImGui::TreeNode(
                       ("Material ID: " + std::to_string(idx)).c_str())) {
-                MaterialElucidator::onDrawGui_PTR(material);
+                MaterialElucidator::onDrawGui_PTR(material, false);
                 ImGui::TreePop();
               }
             }

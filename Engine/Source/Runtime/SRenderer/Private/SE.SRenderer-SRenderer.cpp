@@ -128,6 +128,7 @@ RHI::VertexBufferLayout SRenderer::vertexBufferLayout =
     GFX::getVertexBufferLayout(meshDataLayout);
 
 auto SRenderer::init(GFX::Scene& scene) noexcept -> void {
+  singleton = this;
   RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
 
   // create common descriptor data
@@ -553,6 +554,27 @@ auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
       matData.transmissionFactor = mat->eta;
       iter.first->isDirty = false;
       invalid_material_buffer = true;
+
+      Core::GUID baseTexGUID = mat->textures["base_color"].guid;
+      Core::GUID normTexGUID = mat->textures["normal_bump"].guid;
+      auto getTexID = [&](Core::GUID guid) -> uint32_t {
+          GFX::Texture* gfx_texture = Core::ResourceManager::get()->getResource<GFX::Texture>(guid);
+          RHI::TextureView* normTexView = gfx_texture->originalView.get();
+          auto findTex = sceneDataPack.texture_record.find(gfx_texture);
+          if (findTex == sceneDataPack.texture_record.end()) {
+          uint32_t texID = sceneDataPack.unbinded_textures.size();
+          sceneDataPack.unbinded_textures.push_back(normTexView);
+          sceneDataPack.texture_record[gfx_texture] = texID;
+          findTex = sceneDataPack.texture_record.find(gfx_texture);
+          }
+          return findTex->second;
+      };
+      if (baseTexGUID == 0 || !Core::ResourceManager::get()->getResource<GFX::Texture>(baseTexGUID)) {
+          baseTexGUID = GFX::GFXManager::get()->registerTextureResource("content/textures/white.png");
+      }
+      matData.baseOrDiffuseTextureIndex = getTexID(baseTexGUID);
+      matData.normalTextureIndex = (normTexGUID == Core::INVALID_GUID || normTexGUID == 0)
+              ? -1 : getTexID(normTexGUID);
     }
   }
   if (invalid_material_buffer) {
@@ -591,7 +613,14 @@ auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
   commonDescData.set0_flights_resources[fid][4] = {
       4, RHI::BindingResource{{sceneDataPack.material_buffer.get(), 0,
                                sceneDataPack.material_buffer->size()}}};
-
+  commonDescData.set0_flights_resources[fid][8] = {
+      8, RHI::BindingResource{
+             sceneDataPack.unbinded_textures,
+             Core::ResourceManager::get()
+                 ->getResource<GFX::Sampler>(
+                     GFX::GFXManager::get()->commonSampler.defaultSampler)
+                 ->sampler.get()}};
+  
   sceneDataPack.sceneInfoUniform.light_num =
       sceneDataPack.light_buffer_cpu.size();
   sceneDataBuffers.scene_info_buffer.setStructure(
@@ -627,15 +656,14 @@ auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
 }
 
 auto packTexture(SRenderer* srenderer, Core::GUID guid) -> uint32_t {
-  RHI::TextureView* texView = Core::ResourceManager::get()
-                                  ->getResource<GFX::Texture>(guid)
-                                  ->originalView.get();
-  auto findTex = srenderer->sceneDataPack.textureview_record.find(texView);
-  if (findTex == srenderer->sceneDataPack.textureview_record.end()) {
+  GFX::Texture* texture = Core::ResourceManager::get()->getResource<GFX::Texture>(guid);
+  RHI::TextureView* texView = texture->originalView.get();
+  auto findTex = srenderer->sceneDataPack.texture_record.find(texture);
+  if (findTex == srenderer->sceneDataPack.texture_record.end()) {
     uint32_t texID = srenderer->sceneDataPack.unbinded_textures.size();
     srenderer->sceneDataPack.unbinded_textures.push_back(texView);
-    srenderer->sceneDataPack.textureview_record[texView] = texID;
-    findTex = srenderer->sceneDataPack.textureview_record.find(texView);
+    srenderer->sceneDataPack.texture_record[texture] = texID;
+    findTex = srenderer->sceneDataPack.texture_record.find(texture);
   }
   return findTex->second;
 };
@@ -797,21 +825,19 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
             Core::GUID normTexGUID = mat->textures["normal_bump"].guid;
 
             auto getTexID = [&](Core::GUID guid) -> uint32_t {
-              RHI::TextureView* normTexView =
-                  Core::ResourceManager::get()
-                      ->getResource<GFX::Texture>(guid)
-                      ->originalView.get();
-              auto findTex = sceneDataPack.textureview_record.find(normTexView);
-              if (findTex == sceneDataPack.textureview_record.end()) {
+              GFX::Texture* gfx_texture = Core::ResourceManager::get()->getResource<GFX::Texture>(guid);
+              RHI::TextureView* normTexView = gfx_texture->originalView.get();
+              auto findTex = sceneDataPack.texture_record.find(gfx_texture);
+              if (findTex == sceneDataPack.texture_record.end()) {
                 uint32_t texID = sceneDataPack.unbinded_textures.size();
                 sceneDataPack.unbinded_textures.push_back(normTexView);
-                sceneDataPack.textureview_record[normTexView] = texID;
-                findTex = sceneDataPack.textureview_record.find(normTexView);
+                sceneDataPack.texture_record[gfx_texture] = texID;
+                findTex = sceneDataPack.texture_record.find(gfx_texture);
               }
               return findTex->second;
             };
             matData.bsdf_id = mat->BxDF;
-            if (baseTexGUID == 0) {
+            if (baseTexGUID == 0 || !Core::ResourceManager::get()->getResource<GFX::Texture>(baseTexGUID)) {
               baseTexGUID = GFX::GFXManager::get()->registerTextureResource("content/textures/white.png");
             }
             matData.baseOrDiffuseTextureIndex = getTexID(baseTexGUID);
@@ -1394,6 +1420,8 @@ SRenderer::TableDist1D::TableDist1D(std::vector<float> const& f) {
   }
   cdf.back() = 1;
 }
+
+SRenderer* SRenderer::singleton = nullptr;
 
 auto SRenderer::init() noexcept -> void {
   GFX::GFXManager::get()

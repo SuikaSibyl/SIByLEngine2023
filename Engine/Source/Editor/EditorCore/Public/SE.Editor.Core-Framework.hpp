@@ -45,7 +45,7 @@ SE_EXPORT struct Fragment {
 
 SE_EXPORT struct EditorLayer : public Core::Layer {
   /** initialize */
-  EditorLayer() { singleton = nullptr; }
+  EditorLayer() { singleton = this; }
   /** get singleton */
   static auto get() noexcept -> EditorLayer* { return singleton; }
   /** draw gui*/

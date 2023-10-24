@@ -296,4 +296,105 @@ void PdfRoughDielectric(inout_ref(BSDFSamplePDFQuery) cBSDFSamplePDFQuery) {
     }
 }
 
+/**
+ * Evaluate the RoughDielectric BSDF for the given query.
+ * @param cBSDFEvalDiffQuery The query to evaluate.
+ */
+[shader("callable")]
+void EvalDiffRoughDielectric(inout_ref(BSDFEvalDiffQuery) cBSDFEvalQuery) {
+    float bsdf_eta;
+    float3 Kt;
+    float3 Ks;
+    float roughness;
+    // First load the material info
+    // -------------------------------------------------------------
+    if (cBSDFEvalQuery.mat_id == 0xFFFFFFFF) {
+        // info is already packed in the query
+        Kt = UnpackRGBE(asuint(cBSDFEvalQuery.bsdf.x));
+        Ks = UnpackRGBE(asuint(cBSDFEvalQuery.uv.y));
+        bsdf_eta = cBSDFEvalQuery.bsdf.y;
+        roughness = cBSDFEvalQuery.uv.x;
+    } else { // load info from the material buffer
+        const MaterialInfo material = materials[cBSDFEvalQuery.mat_id];
+        const float3 texAlbedo = textures[material.baseOrDiffuseTextureIndex]
+                                     .Sample(cBSDFEvalQuery.uv, 0) .xyz;
+        Kt = material.baseOrDiffuseColor * texAlbedo;
+        Ks = material.specularColor;
+        bsdf_eta = material.transmissionFactor;
+        roughness = material.roughness;
+    }
+
+    // Load dir in/out for simplicity
+    const QueryBitfield bitfield = UnpackQueryBitfield(cBSDFEvalQuery.misc_flag);
+    const float3 dir_in = cBSDFEvalQuery.dir_in;
+    const float3 dir_out = cBSDFEvalQuery.dir_out;
+    const float3 geometry_normal = bitfield.face_forward
+                                       ? +cBSDFEvalQuery.geometric_normal
+                                       : -cBSDFEvalQuery.geometric_normal;
+    const bool reflected = dot(geometry_normal, dir_in) *
+                               dot(geometry_normal, dir_out) > 0;
+
+    // Flip the shading frame if it is inconsistent with the geometry normal
+    float3x3 frame = cBSDFEvalQuery.frame;
+    if (dot(frame[2], dir_in) * dot(geometry_normal, dir_in) < 0) {
+        frame = -frame;
+    }
+    // If we are going into the surface, then we use normal eta
+    // (internal/external), otherwise we use external/internal.
+    const float eta = dot(geometry_normal, dir_in) > 0 ? bsdf_eta : 1. / bsdf_eta;
+    // half vector
+    float3 half_vector;
+    if (reflected) {
+        half_vector = normalize(dir_in + dir_out);
+    } else {
+        // "Generalized half-vector" from Walter et al.
+        // See "Microfacet Models for Refraction through Rough Surfaces"
+        half_vector = normalize(dir_in + dir_out * eta);
+    }
+
+    // Flip half-vector if it's below surface
+    if (dot(half_vector, frame[2]) < 0) {
+        half_vector = -half_vector;
+    }
+
+    // Clamp roughness to avoid numerical issues.
+    roughness = clamp(roughness, 0.01, 1);
+
+    // Compute F / D / G
+    // Note that we use the incoming direction
+    // for evaluating the Fresnel reflection amount.
+    // We can also use outgoing direction -- then we would need to
+    // use 1/bsdf.eta and we will get the same result.
+    // However, using the incoming direction allows
+    // us to use F to decide whether to reflect or refract during sampling.
+    float h_dot_in = dot(half_vector, dir_in);
+    float F = FresnelDielectric(h_dot_in, eta);
+    float D = GTR2_NDF(dot(frame[2], half_vector), roughness);
+    float G = IsotropicGGX_Masking(to_local(frame, dir_in), roughness) *
+              IsotropicGGX_Masking(to_local(frame, dir_out), roughness);
+
+    if (reflected) {
+        cBSDFEvalQuery.bsdf = Ks * (F * D * G) / (4 * abs(dot(frame[2], dir_in)));
+    } else {
+        // Snell-Descartes law predicts that the light will contract/expand
+        // due to the different index of refraction. So the normal BSDF needs
+        // to scale with 1/eta^2. However, the "adjoint" of the BSDF does not have
+        // the eta term. This is due to the non-reciprocal nature of the index of refraction:
+        // f(wi -> wo) / eta_o^2 = f(wo -> wi) / eta_i^2
+        // thus f(wi -> wo) = f(wo -> wi) (eta_o / eta_i)^2
+        // The adjoint of a BSDF is defined as swapping the parameter, and
+        // this cancels out the eta term.
+        // See Chapter 5 of Eric Veach's thesis "Robust Monte Carlo Methods for Light Transport Simulation"
+        // for more details.
+        float eta_factor = (bitfield.transport_mode == enum_transport_radiance) ? (1 / (eta * eta)) : 1;
+        float h_dot_out = dot(half_vector, dir_out);
+        float sqrt_denom = h_dot_in + eta * h_dot_out;
+        // Very complicated BSDF. See Walter et al.'s paper for more details.
+        // "Microfacet Models for Refraction through Rough Surfaces"
+        cBSDFEvalQuery.bsdf = Kt * (eta_factor * (1 - F) * D * G * eta * eta * abs(h_dot_out * h_dot_in)) /
+                              (abs(dot(frame[2], dir_in)) * sqrt_denom * sqrt_denom);
+    }
+    return;
+}
+
 #endif // !_SRENDERER_SPT_MATERIAL_ROUGHDIELECTRIC_HEADER_

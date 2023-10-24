@@ -21,6 +21,8 @@ SE_EXPORT auto drawFloatControl(std::string const& label, float& value,
 SE_EXPORT auto drawVec3Control(const std::string& label, Math::vec3& values,
                                float resetValue = 0,
                                float columeWidth = 100) noexcept -> void;
+SE_EXPORT auto drawCustomColume(const std::string& label, float columeWidth,
+                      std::function<void()> const& func) noexcept -> void;
 SE_EXPORT auto to_string(RHI::VertexFormat vertexFormat) noexcept
     -> std::string;
 SE_EXPORT auto to_string(RHI::PrimitiveTopology topology) noexcept
@@ -69,16 +71,16 @@ SE_EXPORT struct MeshElucidator : public ResourceElucidator {
 SE_EXPORT struct TextureElucidator : public ResourceElucidator {
   /** override draw gui */
   virtual auto onDrawGui(Core::GUID guid) noexcept -> void override;
-  static auto onDrawGui_GUID(Core::GUID guid) noexcept -> void;
-  static auto onDrawGui_PTR(GFX::Texture* tex) noexcept -> void;
+  static auto onDrawGui_GUID(Core::GUID guid, bool draw_tree = true) noexcept -> void;
+  static auto onDrawGui_PTR(GFX::Texture* tex, bool draw_tree = true) noexcept -> void;
 };
 
 SE_EXPORT struct MaterialElucidator : public ResourceElucidator {
   /** override draw gui */
   virtual auto onDrawGui(Core::GUID guid) noexcept -> void override;
-  static auto onDrawGui_GUID(Core::GUID guid) noexcept -> void;
+  static auto onDrawGui_GUID(Core::GUID guid, bool draw_tree = true) noexcept -> void;
   /** override draw gui */
-  static auto onDrawGui_PTR(GFX::Material* material) noexcept -> void;
+  static auto onDrawGui_PTR(GFX::Material* material, bool draw_tree = true) noexcept -> void;
 };
 
 SE_EXPORT struct VideoClipElucidator : public ResourceElucidator {
@@ -447,13 +449,10 @@ auto drawComponent(GFX::GameObject* gameObject, std::string const& name,
   T* component = gameObject->getEntity().getComponent<T>();
   if (component) {
     ImVec2 contentRegionAvailable = ImGui::GetContentRegionAvail();
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{4, 4});
-    float lineHeight =
-        GImGui->Font->FontSize + GImGui->Style.FramePadding.y * 2.0f;
+    float lineHeight = GImGui->Font->FontSize + GImGui->Style.FramePadding.y * 2.0f;
     ImGui::Separator();
     bool open = ImGui::TreeNodeEx((void*)typeid(T).hash_code(), treeNodeFlags,
                                   name.c_str());
-    ImGui::PopStyleVar();
     bool removeComponent = false;
     if (couldRemove) {
       ImGui::SameLine(contentRegionAvailable.x - lineHeight * 0.5);

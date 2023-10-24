@@ -17,7 +17,6 @@ cbuffer PushConstants {
     } pConst;
 };
 
-[[vk::binding(0, 2)]]
 RWTexture2D<float4> u_Color;
 
 float3 unidirectional_path_tracing(in_ref(Ray) primaryRay, inout_ref(RandomSamplerState) RNG) {
@@ -113,14 +112,15 @@ void UDPTRgen() {
         return;
     }
     RandomSamplerState RNG = InitRandomSampler(pixel, pConst.sample_batch);
-    
+    const float2 jitter_pixel = pixel + GetNextRandomFloat2(RNG) - float2(0.5); // manually jitter
+
     Ray primaryRay = generateRay(
-        pixel,
+        jitter_pixel,
         resolution,
         false,
         globalUniform.cameraData
     );
-
+        
     float3 pixelColor = unidirectional_path_tracing(primaryRay, RNG);
     u_Color[pixel] = float4(pixelColor, 1);
 }

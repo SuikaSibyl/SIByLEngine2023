@@ -177,6 +177,8 @@ SE_EXPORT struct Texture : public Core::Resource {
   std::optional<std::string> resourcePath;
   /** path string */
   std::optional<std::vector<std::string>> resourcePathArray;
+  /** differentiable attributes */
+  uint32_t differentiable_channels = 0u;
   /** name */
   std::string name;
   /** get name */
@@ -196,7 +198,6 @@ SE_EXPORT struct Texture : public Core::Resource {
   auto getSRV(uint32_t mostDetailedMip, uint32_t mipCount,
               uint32_t firstArraySlice, uint32_t arraySize) noexcept
       -> RHI::TextureView*;
-
  private:
   std::unordered_map<ViewIndex, std::unique_ptr<RHI::TextureView>> viewPool;
 };
