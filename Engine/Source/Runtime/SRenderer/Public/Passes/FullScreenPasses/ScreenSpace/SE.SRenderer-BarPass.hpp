@@ -231,7 +231,11 @@ namespace SIByL
 
 			RHI::RenderPassEncoder* encoder = beginPass(context, out);
 
-			RHI::Sampler* defaultSampler = Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler.get();
+			RHI::Sampler* defaultSampler =
+                            GFX::GFXManager::get()->samplerTable.fetch(
+                                RHI::AddressMode::CLAMP_TO_EDGE,
+                                RHI::FilterMode::LINEAR,
+                                RHI::MipmapFilterMode::LINEAR);
 
 			getBindGroup(context, 0)->updateBinding(std::vector<RHI::BindGroupEntry>{
 				RHI::BindGroupEntry{ 0,RHI::BindingResource(base_color->getSRV(0,1,0,1), basecolor_sampler->sampler.get()) },

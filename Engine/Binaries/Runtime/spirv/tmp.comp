@@ -1,0 +1,132 @@
+#version 450
+layout(column_major) uniform;
+layout(column_major) buffer;
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_NV_cooperative_matrix : enable
+#include "matmul.glsli"
+
+#line 1 0
+layout(std430, binding = 0) buffer StructuredBuffer_float_t_0 {
+    float _data[];
+} u_outmat_0;
+
+
+
+shared float  shared_inputs_buffer_0[1024];
+
+
+#line 8
+shared float  shared_weights_buffer_0[1024];
+
+
+#line 9
+shared float  output_buffer_0[1024];
+
+
+#line 26
+void moveWeightsToSharedMem_0(int index_0)
+{
+
+#line 26
+    uint j_0;
+
+
+    int _S1 = index_0 * 32;
+
+#line 27
+    for(;;)
+    {
+
+#line 27
+        j_0 = 0U;
+
+#line 27
+        for(;;)
+        {
+            int _S2 = _S1 + int(j_0);
+
+#line 29
+            shared_inputs_buffer_0[_S2] = 2.0;
+            shared_weights_buffer_0[_S2] = 1.0;
+
+#line 28
+            uint j_1 = j_0 + 1U;
+
+#line 28
+            if(int(j_1) < 32)
+            {
+            }
+            else
+            {
+
+#line 28
+                break;
+            }
+
+#line 28
+            j_0 = j_1;
+
+#line 28
+        }
+
+#line 27
+        break;
+    }
+
+#line 33
+    wmma_inline_matmul((shared_inputs_buffer_0), (shared_weights_buffer_0), (output_buffer_0));
+
+#line 38
+    for(;;)
+    {
+
+#line 38
+        j_0 = 0U;
+
+#line 38
+        for(;;)
+        {
+            int _S3 = _S1 + int(j_0);
+
+#line 40
+            u_outmat_0._data[uint(_S3)] = output_buffer_0[_S3];
+
+#line 39
+            uint j_2 = j_0 + 1U;
+
+#line 39
+            if(int(j_2) < 32)
+            {
+            }
+            else
+            {
+
+#line 39
+                break;
+            }
+
+#line 39
+            j_0 = j_2;
+
+#line 39
+        }
+
+#line 38
+        break;
+    }
+
+
+
+    return;
+}
+
+
+layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+void main()
+{
+
+#line 48
+    moveWeightsToSharedMem_0(int(gl_GlobalInvocationID.x));
+    return;
+}
+

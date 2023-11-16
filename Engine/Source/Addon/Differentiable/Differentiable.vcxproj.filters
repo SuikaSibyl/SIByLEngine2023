@@ -18,9 +18,21 @@
     <ClInclude Include="Public\SE.Addon.Differentiable.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="Public\SE.Addon.Differentiable-common.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.Addon.Differentiable-was.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Private\SE.Addon.Differentiable.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Private\SE.Addon.Differentiable-common.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Private\SE.Addon.Differentiable-was.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

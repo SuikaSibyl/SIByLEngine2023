@@ -13,6 +13,7 @@
 #include <SE.Core.Utility.hpp>
 #include <SE.GFX-Main.hpp>
 #include <IO/SE.Core.IO.hpp>
+#include "../Private/spirv_reflect.h"
 
 namespace SIByL::GFX::SLANG {
 using Slang::ComPtr;
@@ -20,7 +21,8 @@ using Slang::ComPtr;
 struct SlangSession {
   SlangSession(
       std::string const& filepath,
-      std::vector<std::pair<char const*, char const*>> const& macros = {});
+      std::vector<std::pair<char const*, char const*>> const& macros = {},
+      bool use_glsl_intermediate = false);
   auto load(std::vector<std::pair<std::string, RHI::ShaderStages>> const&
                 entrypoints) noexcept -> std::vector<Core::GUID>;
   std::unordered_map<std::string, ShaderReflection::BindingInfo> bindingInfo;
@@ -29,6 +31,8 @@ struct SlangSession {
   slang::TargetDesc targetDesc = {};
   slang::IModule* slangModule = nullptr;
   ComPtr<slang::ISession> session;
+  bool use_glsl_intermediate;
+  std::string filepath;
 };
 
 struct SlangManager {
@@ -53,13 +57,21 @@ inline void diagnoseIfNeeded(slang::IBlob* diagnosticsBlob) {
 
 SlangSession::SlangSession(
     std::string const& filepath,
-    std::vector<std::pair<char const*, char const*>> const& macros) {
+    std::vector<std::pair<char const*, char const*>> const& macros,
+    bool use_glsl_intermediate)
+    : use_glsl_intermediate(use_glsl_intermediate), filepath(filepath) {
   std::filesystem::path path(filepath);
   SlangManager* manager = Singleton<SlangManager>::instance();
   slang::IGlobalSession* globalSession = manager->getGlobalSession();
-  // set target to spirv glsl460
-  targetDesc.format = SLANG_SPIRV;
-  targetDesc.profile = globalSession->findProfile("glsl460");
+  if (use_glsl_intermediate) {
+    // set target to spirv glsl460
+    targetDesc.format = SLANG_GLSL;
+    targetDesc.profile = globalSession->findProfile("glsl460");  
+  } else {
+    // set target to spirv glsl460
+    targetDesc.format = SLANG_SPIRV;
+    targetDesc.profile = globalSession->findProfile("glsl460");  
+  }
   sessionDesc.targets = &targetDesc;
   sessionDesc.targetCount = 1;
   // set search path
@@ -226,31 +238,52 @@ auto SlangSession::load(
         "GFX::SLANG::createCompositeComponentType() failed.");
     return sms;
   }
-  ComPtr<slang::IBlob> spirvCode;
+  ComPtr<slang::IBlob> compiledCode;
   for (size_t i = 0; i < entrypoints.size(); ++i) {
     ComPtr<slang::IBlob> diagnosticsBlob;
 
     SlangResult result = composedProgram->getEntryPointCode(
-        i, 0, spirvCode.writeRef(), diagnosticsBlob.writeRef());
+        i, 0, compiledCode.writeRef(), diagnosticsBlob.writeRef());
     diagnoseIfNeeded(diagnosticsBlob);
     if (result != 0) {
       Core::LogManager::Error("GFX::SLANG::getEntryPointCode() failed.");
       return sms;
     }
     Core::Buffer spirvcode;
-    spirvcode.isReference = true;
-    spirvcode.data = (void*)(spirvCode->getBufferPointer());
-    spirvcode.size = spirvCode->getBufferSize();
-    Core::syncWriteFile((std::to_string(i) + ".spirv").c_str(), spirvcode);
-    // create shader module
-    Core::GUID guid =
-        Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
-    RHI::ShaderModuleDescriptor desc;
-    desc.code = &spirvcode;
-    desc.name = "main";
-    desc.stage = entrypoints[i].second;
-    GFX::GFXManager::get()->registerShaderModuleResource(guid, desc);
-    sms[i] = guid;
+    if (use_glsl_intermediate) {
+      // compile SPIR-V from glsl
+      Core::Buffer glslcode;
+      glslcode.isReference = true;
+      glslcode.data = (void*)(compiledCode->getBufferPointer());
+      glslcode.size = compiledCode->getBufferSize();
+      std::string suffix = "glsl";
+      switch (entrypoints[i].second) {
+        case RHI::ShaderStages::VERTEX:       suffix = "vert"; break;
+        case RHI::ShaderStages::FRAGMENT:     suffix = "frag"; break;
+        case RHI::ShaderStages::COMPUTE:      suffix = "comp"; break;
+        case RHI::ShaderStages::GEOMETRY:     suffix = "geom"; break;
+        case RHI::ShaderStages::RAYGEN:       suffix = "rgen"; break;
+        case RHI::ShaderStages::MISS:         suffix = "rmiss"; break;
+        case RHI::ShaderStages::CLOSEST_HIT:  suffix = "rchit"; break;
+        case RHI::ShaderStages::INTERSECTION: suffix = "rint"; break;
+        case RHI::ShaderStages::ANY_HIT:      suffix = "rahit"; break;
+        case RHI::ShaderStages::CALLABLE:     suffix = "rcall"; break;
+        case RHI::ShaderStages::TASK:         suffix = "task"; break;
+        case RHI::ShaderStages::MESH:         suffix = "mesh"; break;
+        default: break;
+      }
+      std::string glsl_path = filepath.substr(0, filepath.find_last_of('.')+1) + suffix;
+      Core::syncWriteFile(glsl_path.c_str(), glslcode);
+      // create shader module
+      sms[i] = ShaderLoader_GLSL::load(glsl_path.c_str(), entrypoints[i].second);
+    } else {
+      // directly use the compiled SPIR-V
+      spirvcode.isReference = true;
+      spirvcode.data = (void*)(compiledCode->getBufferPointer());
+      spirvcode.size = compiledCode->getBufferSize();
+      // create shader module
+      sms[i] = ShaderLoader_SPIRV::load(&spirvcode, entrypoints[i].second);
+    }
   }
   for (size_t i = 0; i < entrypoints.size(); ++i) {
     GFX::ShaderModule* sm =
@@ -262,13 +295,50 @@ auto SlangSession::load(
 }  // namespace SIByL::GFX::SLANG
 
 namespace SIByL::GFX {
+auto ShaderLoader_SPIRV::load(
+    Core::Buffer* buffer, RHI::ShaderStages stage) noexcept -> Core::GUID {
+  // create shader module
+  Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::ShaderModule>();
+  RHI::ShaderModuleDescriptor desc;
+  desc.code = buffer;
+  desc.name = "main";
+  desc.stage = stage;
+  GFX::GFXManager::get()->registerShaderModuleResource(guid, desc);
+  return guid;
+}
+
+auto ShaderLoader_GLSL::load(std::string const& filepath, RHI::ShaderStages stage,
+                             std::vector<std::string> const& argv) noexcept
+    -> Core::GUID {
+  std::filesystem::path path(filepath);
+  std::filesystem::path filename = path.filename();
+  std::filesystem::path extension = path.extension();
+  filename = std::filesystem::path(filename.string().substr(
+      0, filename.string().size() - extension.string().size()));
+  std::string extension_str =
+      extension.string().substr(1, extension.string().length());
+  std::filesystem::path parent_path = path.parent_path();
+  std::string cmdLine("glslangValidator --target-env vulkan1.2");
+  std::string spirv_path = (parent_path / filename).string() + "_" + extension_str + ".spv";
+  cmdLine += " " + filepath;
+  cmdLine += " -o " + spirv_path + " ";
+  for (int i = 2; i < argv.size(); ++i) {
+    cmdLine += " " + std::string(argv[i]);
+  }
+  system(cmdLine.c_str());
+  // load the compiled spir-v
+  Core::Buffer spirv_code;
+  Core::syncReadFile(spirv_path.c_str(), spirv_code);
+  return ShaderLoader_SPIRV::load(&spirv_code, stage);
+}
+
 auto ShaderLoader_SLANG::load(
     std::string const& filepath,
-    std::vector<std::pair<std::string, RHI::ShaderStages>> const&
-        entrypoints,
-    std::vector<std::pair<char const*, char const*>> const& macros) noexcept
+    std::vector<std::pair<std::string, RHI::ShaderStages>> const& entrypoints,
+    std::vector<std::pair<char const*, char const*>> const& macros,
+    bool glsl_intermediate) noexcept
     -> std::vector<Core::GUID> {
-  SLANG::SlangSession session(filepath, macros);
+  SLANG::SlangSession session(filepath, macros, glsl_intermediate);
   return session.load(entrypoints);
 }
 }
@@ -325,11 +395,6 @@ inline auto rearrange_pushconstant(ShaderReflection& reflection) noexcept
 auto SPIRV_TO_Reflection(Core::Buffer* code, RHI::ShaderStages stage) noexcept
     -> ShaderReflection {
   ShaderReflection reflection = {};
-  std::vector<uint32_t> spirv_binary(code->size / sizeof(uint32_t));
-  memcpy(spirv_binary.data(), code->data, code->size);
-  spirv_cross::CompilerGLSL glsl(std::move(spirv_binary));
-  // The SPIR-V is now parsed, and we can perform reflection on it.
-  spirv_cross::ShaderResources resources = glsl.get_shader_resources();
   // add resource entry
   auto addResourceEntry = [&](ShaderReflection::ResourceEntry const& entry,
                               int set, int binding) {
@@ -338,124 +403,206 @@ auto SPIRV_TO_Reflection(Core::Buffer* code, RHI::ShaderStages stage) noexcept
       reflection.bindings[set].resize(binding + 1);
     reflection.bindings[set][binding] = entry;
   };
-  // Get all uniform buffers in the shader.
-  for (auto& resource : resources.uniform_buffers) {
-    unsigned set =
-        glsl.get_decoration(resource.id, spv::DecorationDescriptorSet);
-    unsigned binding = glsl.get_decoration(resource.id, spv::DecorationBinding);
-    ShaderReflection::ResourceFlags flag =
-        uint32_t(ShaderReflection::ResourceFlag::None);
-    if (glsl.get_decoration(resource.id, spv::DecorationNonReadable))
-      flag |= uint32_t(ShaderReflection::ResourceFlag::NotReadable);
-    if (glsl.get_decoration(resource.id, spv::DecorationNonWritable))
-      flag |= uint32_t(ShaderReflection::ResourceFlag::NotWritable);
-    addResourceEntry(
-        {ShaderReflection::ResourceType::UniformBuffer, flag, uint32_t(stage)},
-        set, binding);
+      
+  bool use_spirv_reflect = true;
+  if (use_spirv_reflect) {
+      // Generate reflection data for a shader
+      SpvReflectShaderModule module;
+      SpvReflectResult result =
+          spvReflectCreateShaderModule(code->size, code->data, &module);
+      assert(result == SPV_REFLECT_RESULT_SUCCESS);
+
+      // Enumerate and extract shader's input variables
+      uint32_t var_count = 0;
+      result = spvReflectEnumerateInputVariables(&module, &var_count, NULL);
+      assert(result == SPV_REFLECT_RESULT_SUCCESS);
+      SpvReflectInterfaceVariable** input_vars =
+          (SpvReflectInterfaceVariable**)malloc(
+              var_count * sizeof(SpvReflectInterfaceVariable*));
+      result = spvReflectEnumerateInputVariables(&module, &var_count, input_vars);
+      assert(result == SPV_REFLECT_RESULT_SUCCESS);
+
+      // Output variables, descriptor bindings, descriptor sets, and push
+      // constants can be enumerated and extracted using a similar mechanism.
+      for (int i = 0; i < module.descriptor_binding_count; ++i) {
+        auto const& desc_set = module.descriptor_sets[i];
+        for (int j = 0; j < desc_set.binding_count; ++j) {
+          auto const& binding = desc_set.bindings[j];
+          ShaderReflection::ResourceFlags flag =
+              uint32_t(ShaderReflection::ResourceFlag::None);
+          ShaderReflection::ResourceEntry entry;
+          switch (binding->descriptor_type) {
+            case SPV_REFLECT_DESCRIPTOR_TYPE_SAMPLER:
+              entry.type = ShaderReflection::ResourceType::Sampler; break;
+            case SPV_REFLECT_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+              entry.type = ShaderReflection::ResourceType::SampledImages; break;
+            case SPV_REFLECT_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+              entry.type = ShaderReflection::ResourceType::ReadonlyImage; break;
+            case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+              entry.type = ShaderReflection::ResourceType::StorageImages; break;
+            case SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+              entry.type = ShaderReflection::ResourceType::UniformBuffer; break;
+            case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+              entry.type = ShaderReflection::ResourceType::StorageBuffer; break;
+            case SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
+              entry.type = ShaderReflection::ResourceType::UniformBuffer; break;
+            case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
+              entry.type = ShaderReflection::ResourceType::StorageBuffer; break;
+            case SPV_REFLECT_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
+              entry.type = ShaderReflection::ResourceType::AccelerationStructure; break;
+            case SPV_REFLECT_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+            case SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
+            case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
+            default: 
+              Core::LogManager::Error("SPIRV-Reflect :: Unexpected resource type");  
+              break;
+          }
+          if (desc_set.bindings[j]->array.dims_count >= 1) {
+            entry.arraySize = 1000;
+          }
+          entry.flags = flag;
+          entry.stages = uint32_t(stage);
+          addResourceEntry(entry, binding->set, binding->binding);
+        }
+      }
+      // Push constants
+      for (uint32_t i = 0; i < module.push_constant_block_count; ++i) {
+        auto const& block = module.push_constant_blocks[i];
+        reflection.pushConstant.emplace_back(
+            ShaderReflection::PushConstantEntry{
+                i, uint32_t(block.offset), uint32_t(block.size), (uint32_t)stage});
+      }
+      // Destroy the reflection data when no longer required.
+      spvReflectDestroyShaderModule(&module);
   }
-  // Get all storage buffers in the shader.
-  for (auto& resource : resources.storage_buffers) {
-    unsigned set =
-        glsl.get_decoration(resource.id, spv::DecorationDescriptorSet);
-    unsigned binding = glsl.get_decoration(resource.id, spv::DecorationBinding);
-    ShaderReflection::ResourceFlags flag =
-        uint32_t(ShaderReflection::ResourceFlag::None);
-    if (glsl.get_decoration(resource.id, spv::DecorationNonReadable))
-      flag |= uint32_t(ShaderReflection::ResourceFlag::NotReadable);
-    if (glsl.get_decoration(resource.id, spv::DecorationNonWritable))
-      flag |= uint32_t(ShaderReflection::ResourceFlag::NotWritable);
-    addResourceEntry(
-        {ShaderReflection::ResourceType::StorageBuffer, flag, uint32_t(stage)},
-        set, binding);
-  }
-  // Get all storage images in the shader.
-  for (auto& resource : resources.storage_images) {
-    unsigned set =
-        glsl.get_decoration(resource.id, spv::DecorationDescriptorSet);
-    unsigned binding = glsl.get_decoration(resource.id, spv::DecorationBinding);
-    spirv_cross::SPIRType type = glsl.get_type(resource.type_id);
-    uint32_t array_dim = type.array.size();
-    uint32_t array_size = array_dim>=1 ? type.array[0]:1;
-    ShaderReflection::ResourceFlags flag =
-        uint32_t(ShaderReflection::ResourceFlag::None);
-    if (glsl.get_decoration(resource.id, spv::DecorationNonReadable))
-      flag |= uint32_t(ShaderReflection::ResourceFlag::NotReadable);
-    if (glsl.get_decoration(resource.id, spv::DecorationNonWritable))
-      flag |= uint32_t(ShaderReflection::ResourceFlag::NotWritable);
-    addResourceEntry({ShaderReflection::ResourceType::StorageImages, flag,
-                      uint32_t(stage), array_size},
-                     set, binding);
-  }
-  // Get all sampled images in the shader.
-  for (auto& resource : resources.sampled_images) {
-    unsigned set =
-        glsl.get_decoration(resource.id, spv::DecorationDescriptorSet);
-    unsigned binding = glsl.get_decoration(resource.id, spv::DecorationBinding);
-    ShaderReflection::ResourceFlags flag =
-        uint32_t(ShaderReflection::ResourceFlag::None);
-    if (glsl.get_decoration(resource.id, spv::DecorationNonReadable))
-      flag |= uint32_t(ShaderReflection::ResourceFlag::NotReadable);
-    if (glsl.get_decoration(resource.id, spv::DecorationNonWritable))
-      flag |= uint32_t(ShaderReflection::ResourceFlag::NotWritable);
-    addResourceEntry(
-        {ShaderReflection::ResourceType::SampledImages, flag, uint32_t(stage)},
-        set, binding);
-  }
-  // Get all separate images in the shader.
-  for (auto& resource : resources.separate_images) {
-    unsigned set =
-        glsl.get_decoration(resource.id, spv::DecorationDescriptorSet);
-    unsigned binding = glsl.get_decoration(resource.id, spv::DecorationBinding);
-    spirv_cross::SPIRType type = glsl.get_type(resource.type_id);
-    uint32_t array_dim = type.array.size();
-    uint32_t array_size = array_dim >= 1 ? type.array[0] : 1;
-    ShaderReflection::ResourceFlags flag =
-        uint32_t(ShaderReflection::ResourceFlag::None);
-    if (glsl.get_decoration(resource.id, spv::DecorationNonReadable))
-      flag |= uint32_t(ShaderReflection::ResourceFlag::NotReadable);
-    if (glsl.get_decoration(resource.id, spv::DecorationNonWritable))
-      flag |= uint32_t(ShaderReflection::ResourceFlag::NotWritable);
-    addResourceEntry({ShaderReflection::ResourceType::ReadonlyImage, flag,
-                      uint32_t(stage), array_size},
-                     set, binding);
-  }
-  // Get all separate images in the shader.
-  for (auto& resource : resources.separate_samplers) {
-    unsigned set =
-        glsl.get_decoration(resource.id, spv::DecorationDescriptorSet);
-    unsigned binding = glsl.get_decoration(resource.id, spv::DecorationBinding);
-    ShaderReflection::ResourceFlags flag =
-        uint32_t(ShaderReflection::ResourceFlag::None);
-    if (glsl.get_decoration(resource.id, spv::DecorationNonReadable))
-      flag |= uint32_t(ShaderReflection::ResourceFlag::NotReadable);
-    if (glsl.get_decoration(resource.id, spv::DecorationNonWritable))
-      flag |= uint32_t(ShaderReflection::ResourceFlag::NotWritable);
-    addResourceEntry(
-        {ShaderReflection::ResourceType::Sampler, flag, uint32_t(stage)},
-        set, binding);
-  }
-  // Get all accleration structures in the shader.
-  for (auto& resource : resources.acceleration_structures) {
-    unsigned set =
-        glsl.get_decoration(resource.id, spv::DecorationDescriptorSet);
-    unsigned binding = glsl.get_decoration(resource.id, spv::DecorationBinding);
-    ShaderReflection::ResourceFlags flag =
-        uint32_t(ShaderReflection::ResourceFlag::None);
-    if (glsl.get_decoration(resource.id, spv::DecorationNonReadable))
-      flag |= uint32_t(ShaderReflection::ResourceFlag::NotReadable);
-    if (glsl.get_decoration(resource.id, spv::DecorationNonWritable))
-      flag |= uint32_t(ShaderReflection::ResourceFlag::NotWritable);
-    addResourceEntry({ShaderReflection::ResourceType::AccelerationStructure,
-                      flag, uint32_t(stage)},
-                     set, binding);
-  }
-  // Get all push constants in the shader.
-  for (auto& resource : resources.push_constant_buffers) {
-    auto ranges = glsl.get_active_buffer_ranges(resource.id);
-    for (auto& range : ranges)
-      reflection.pushConstant.emplace_back(ShaderReflection::PushConstantEntry{
-          range.index, uint32_t(range.offset), uint32_t(range.range),
-          (uint32_t)stage});
+
+  bool use_spirv_cross = false;
+  if (use_spirv_cross) {
+    std::vector<uint32_t> spirv_binary(code->size / sizeof(uint32_t));
+    memcpy(spirv_binary.data(), code->data, code->size);
+    spirv_cross::CompilerGLSL glsl(std::move(spirv_binary));
+    // The SPIR-V is now parsed, and we can perform reflection on it.
+    spirv_cross::ShaderResources resources = glsl.get_shader_resources();
+
+    // Get all uniform buffers in the shader.
+    for (auto& resource : resources.uniform_buffers) {
+      unsigned set = glsl.get_decoration(resource.id, spv::DecorationDescriptorSet);
+      unsigned binding = glsl.get_decoration(resource.id, spv::DecorationBinding);
+      ShaderReflection::ResourceFlags flag = uint32_t(ShaderReflection::ResourceFlag::None);
+      if (glsl.get_decoration(resource.id, spv::DecorationNonReadable))
+        flag |= uint32_t(ShaderReflection::ResourceFlag::NotReadable);
+      if (glsl.get_decoration(resource.id, spv::DecorationNonWritable))
+        flag |= uint32_t(ShaderReflection::ResourceFlag::NotWritable);
+      addResourceEntry(
+          {ShaderReflection::ResourceType::UniformBuffer, flag, uint32_t(stage)},
+          set, binding);
+    }
+    
+    // Get all storage buffers in the shader.
+    for (auto& resource : resources.storage_buffers) {
+      unsigned set =
+          glsl.get_decoration(resource.id, spv::DecorationDescriptorSet);
+      unsigned binding = glsl.get_decoration(resource.id, spv::DecorationBinding);
+      ShaderReflection::ResourceFlags flag =
+          uint32_t(ShaderReflection::ResourceFlag::None);
+      if (glsl.get_decoration(resource.id, spv::DecorationNonReadable))
+        flag |= uint32_t(ShaderReflection::ResourceFlag::NotReadable);
+      if (glsl.get_decoration(resource.id, spv::DecorationNonWritable))
+        flag |= uint32_t(ShaderReflection::ResourceFlag::NotWritable);
+      addResourceEntry(
+          {ShaderReflection::ResourceType::StorageBuffer, flag, uint32_t(stage)},
+          set, binding);
+    }
+    
+    // Get all storage images in the shader.
+    for (auto& resource : resources.storage_images) {
+      unsigned set =
+          glsl.get_decoration(resource.id, spv::DecorationDescriptorSet);
+      unsigned binding = glsl.get_decoration(resource.id, spv::DecorationBinding);
+      spirv_cross::SPIRType type = glsl.get_type(resource.type_id);
+      uint32_t array_dim = type.array.size();
+      uint32_t array_size = array_dim>=1 ? 1000:1;
+      ShaderReflection::ResourceFlags flag =
+          uint32_t(ShaderReflection::ResourceFlag::None);
+      if (glsl.get_decoration(resource.id, spv::DecorationNonReadable))
+        flag |= uint32_t(ShaderReflection::ResourceFlag::NotReadable);
+      if (glsl.get_decoration(resource.id, spv::DecorationNonWritable))
+        flag |= uint32_t(ShaderReflection::ResourceFlag::NotWritable);
+      addResourceEntry({ShaderReflection::ResourceType::StorageImages, flag,
+                        uint32_t(stage), array_size},
+                       set, binding);
+    }
+    // Get all sampled images in the shader.
+    for (auto& resource : resources.sampled_images) {
+      unsigned set =
+          glsl.get_decoration(resource.id, spv::DecorationDescriptorSet);
+      unsigned binding = glsl.get_decoration(resource.id, spv::DecorationBinding);
+      ShaderReflection::ResourceFlags flag =
+          uint32_t(ShaderReflection::ResourceFlag::None);
+      if (glsl.get_decoration(resource.id, spv::DecorationNonReadable))
+        flag |= uint32_t(ShaderReflection::ResourceFlag::NotReadable);
+      if (glsl.get_decoration(resource.id, spv::DecorationNonWritable))
+        flag |= uint32_t(ShaderReflection::ResourceFlag::NotWritable);
+      addResourceEntry(
+          {ShaderReflection::ResourceType::SampledImages, flag, uint32_t(stage)},
+          set, binding);
+    }
+    // Get all separate images in the shader.
+    for (auto& resource : resources.separate_images) {
+      unsigned set =
+          glsl.get_decoration(resource.id, spv::DecorationDescriptorSet);
+      unsigned binding = glsl.get_decoration(resource.id, spv::DecorationBinding);
+      spirv_cross::SPIRType type = glsl.get_type(resource.type_id);
+      uint32_t array_dim = type.array.size();
+      uint32_t array_size = array_dim >= 1 ? type.array[0] : 1;
+      ShaderReflection::ResourceFlags flag =
+          uint32_t(ShaderReflection::ResourceFlag::None);
+      if (glsl.get_decoration(resource.id, spv::DecorationNonReadable))
+        flag |= uint32_t(ShaderReflection::ResourceFlag::NotReadable);
+      if (glsl.get_decoration(resource.id, spv::DecorationNonWritable))
+        flag |= uint32_t(ShaderReflection::ResourceFlag::NotWritable);
+      addResourceEntry({ShaderReflection::ResourceType::ReadonlyImage, flag,
+                        uint32_t(stage), array_size},
+                       set, binding);
+    }
+    // Get all separate images in the shader.
+    for (auto& resource : resources.separate_samplers) {
+      unsigned set =
+          glsl.get_decoration(resource.id, spv::DecorationDescriptorSet);
+      unsigned binding = glsl.get_decoration(resource.id, spv::DecorationBinding);
+      ShaderReflection::ResourceFlags flag =
+          uint32_t(ShaderReflection::ResourceFlag::None);
+      if (glsl.get_decoration(resource.id, spv::DecorationNonReadable))
+        flag |= uint32_t(ShaderReflection::ResourceFlag::NotReadable);
+      if (glsl.get_decoration(resource.id, spv::DecorationNonWritable))
+        flag |= uint32_t(ShaderReflection::ResourceFlag::NotWritable);
+      addResourceEntry(
+          {ShaderReflection::ResourceType::Sampler, flag, uint32_t(stage)},
+          set, binding);
+    }
+    // Get all accleration structures in the shader.
+    for (auto& resource : resources.acceleration_structures) {
+      unsigned set =
+          glsl.get_decoration(resource.id, spv::DecorationDescriptorSet);
+      unsigned binding = glsl.get_decoration(resource.id, spv::DecorationBinding);
+      ShaderReflection::ResourceFlags flag =
+          uint32_t(ShaderReflection::ResourceFlag::None);
+      if (glsl.get_decoration(resource.id, spv::DecorationNonReadable))
+        flag |= uint32_t(ShaderReflection::ResourceFlag::NotReadable);
+      if (glsl.get_decoration(resource.id, spv::DecorationNonWritable))
+        flag |= uint32_t(ShaderReflection::ResourceFlag::NotWritable);
+      addResourceEntry({ShaderReflection::ResourceType::AccelerationStructure,
+                        flag, uint32_t(stage)},
+                       set, binding);
+    }
+    // Get all push constants in the shader.
+    for (auto& resource : resources.push_constant_buffers) {
+      auto ranges = glsl.get_active_buffer_ranges(resource.id);
+      for (auto& range : ranges)
+        reflection.pushConstant.emplace_back(ShaderReflection::PushConstantEntry{
+            range.index, uint32_t(range.offset), uint32_t(range.range),
+            (uint32_t)stage});
+    }
   }
   // rearrange push constants
   rearrange_pushconstant(reflection);
@@ -478,8 +625,7 @@ auto ShaderReflection::toBindGroupLayoutDescriptor(
           i, bind.stages,
           RHI::BufferBindingLayout{RHI::BufferBindingType::STORAGE}});
     else if (bind.type == ResourceType::StorageImages) {
-      RHI::BindGroupLayoutEntry entry{i, bind.stages,
-                                      RHI::StorageTextureBindingLayout{}};
+      RHI::BindGroupLayoutEntry entry{i, bind.stages, RHI::StorageTextureBindingLayout{}};
       entry.array_size = bind.arraySize;
       descriptor.entries.emplace_back(entry);
     }

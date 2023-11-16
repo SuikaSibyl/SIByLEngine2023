@@ -164,6 +164,7 @@ SE_EXPORT enum struct ContextExtension {
   BINDLESS_INDEXING = 1 << 6,
   ATOMIC_FLOAT = 1 << 7,
   CONSERVATIVE_RASTERIZATION = 1 << 8,
+  COOPERATIVE_MATRIX = 1 << 9,
 };
 
 SE_EXPORT enum struct PowerPreference {
@@ -839,14 +840,14 @@ SE_EXPORT struct SamplerDescriptor {
   AddressMode addressModeU = AddressMode::CLAMP_TO_EDGE;
   AddressMode addressModeV = AddressMode::CLAMP_TO_EDGE;
   AddressMode addressModeW = AddressMode::CLAMP_TO_EDGE;
-  FilterMode magFilter = FilterMode::NEAREST;
-  FilterMode minFilter = FilterMode::NEAREST;
-  MipmapFilterMode mipmapFilter = MipmapFilterMode::NEAREST;
+  FilterMode magFilter = FilterMode::LINEAR;
+  FilterMode minFilter = FilterMode::LINEAR;
+  MipmapFilterMode mipmapFilter = MipmapFilterMode::LINEAR;
   float lodMinClamp = 0.f;
   float lodMapClamp = 32.f;
   CompareFunction compare = CompareFunction::ALWAYS;
   uint16_t maxAnisotropy = 1;
-  float maxLod = 0.f;
+  float maxLod = 32.f;
 };
 
 // Samplers Interface

@@ -112,10 +112,10 @@ void UDPTRgen() {
         return;
     }
     RandomSamplerState RNG = InitRandomSampler(pixel, pConst.sample_batch);
-    const float2 jitter_pixel = pixel + GetNextRandomFloat2(RNG) - float2(0.5); // manually jitter
+    // const float2 jitter_pixel = pixel + GetNextRandomFloat2(RNG) - float2(0.5); // manually jitter
 
     Ray primaryRay = generateRay(
-        jitter_pixel,
+        pixel,
         resolution,
         false,
         globalUniform.cameraData

@@ -15,27 +15,36 @@ RWTexture2D<DATA_TYPE> u_resource;
 void ComputeMain(int3 dtid: SV_DispatchThreadID) {
     const int2 pixel = dtid.xy;
     const DiffResourceDesc desc = DiffResourcesDescs[resource_id];
-    const uint index = FlattensPixelToIndex(pixel, desc.data_extend & 0xFFFF);
+    const uint width = desc.data_extend & 0xFFFF;
     const uint data_mask = get_data_mask(desc);
     const int valid_component = countbits(data_mask);
     const int component = sizeof(DATA_TYPE) / sizeof(float);
     DATA_TYPE gradient = DATA_TYPE(0.0f);
 
     // Fetch the gradient of each differentiable component
-    int offset = desc.data_offset + index * valid_component;
-    for (int i = 0; i < component; ++i) {
-        const bool valid_channel = (((data_mask >> i) & 0b1) != 0);
-        if (valid_channel) {
-            const float comp_gradient = GetGrad(offset);
-            #if DATA_COMPONENT == 1 // if it is a single-component data
-            gradient = comp_gradient;
-            #else // otherwise it is a multi-component data
-            gradient[i] = comp_gradient;
-            #endif
-            offset += 1;
+    const float2 uv = (pixel + 0.5f) / image_size;
+    const int mip_max = 1 + int(floor(log2(width)));
+    // texcoord *tex_dimension
+    for (int mip = 0; mip < mip_max; mip++) {
+        const int mip_size = width >> mip;
+        const float weight = 1.0f / (1 << (2 * mip));
+        const int2 mip_pixel = int2(floor(uv * mip_size));
+        int offset = desc.data_offset + (FlattensPixelToIndex(mip_pixel, mip_size)) * valid_component;
+        offset += mipmap_offset_power2(width, mip) * valid_component;
+        for (int i = 0; i < component; ++i) {
+            const bool valid_channel = (((data_mask >> i) & 0b1) != 0);
+            if (valid_channel) {
+                const float comp_gradient = GetGrad(offset) * weight;
+#if DATA_COMPONENT == 1 // if it is a single-component data
+                gradient += comp_gradient;
+#else // otherwise it is a multi-component data
+                gradient[i] += comp_gradient;
+#endif
+                offset += 1;
+            }
         }
     }
-
+    
     DATA_TYPE loaded = u_resource[pixel];
     for (int i = 0; i < DATA_COMPONENT; ++i) {
         if (loaded[i] < 0) {

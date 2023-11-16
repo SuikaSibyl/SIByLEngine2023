@@ -178,9 +178,13 @@
     <ClCompile Include="Private\SE.GFX-Loader.SceneNodeLoader.cpp" />
     <ClCompile Include="Private\SE.GFX-Loader.ShaderLoader.cpp" />
     <ClCompile Include="Private\SE.GFX-Main.cpp" />
+    <ClCompile Include="Private\SE.GFX-Script.cpp" />
     <ClCompile Include="Private\SE.GFX-Utils.cpp" />
+    <ClCompile Include="Private\spirv_reflect.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Private\include\spirv\unified1\spirv.h" />
+    <ClInclude Include="Private\spirv_reflect.h" />
     <ClInclude Include="Public\SE.GFX-Loader.MeshLoader.hpp" />
     <ClInclude Include="Public\SE.GFX-GFXConfig.hpp" />
     <ClInclude Include="Public\SE.GFX-Loader.SceneNodeLoader.hpp" />
@@ -189,6 +193,7 @@
     <ClInclude Include="Public\SE.GFX-SerializeUtils.hpp" />
     <ClInclude Include="Public\SE.GFX-Utils.h" />
     <ClInclude Include="Public\SE.GFX.hpp" />
+    <ClInclude Include="Public\SE.GFX-Script.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -51,6 +51,7 @@ struct vMFDistribution {
      * @param direction, the direction to evaluate.
      * @return the probability density at the given direction.
      */
+    [Differentiable]
     float Pdf(in_ref(float3) direction) {
         if (k == 0) return 1 / (4 * k_pi);
         const float dotted = dot(direction, u);
@@ -71,6 +72,11 @@ struct vMFDistribution {
         const float mean_cos2 = mean_cos * mean_cos;
         k = (3 * mean_cos - mean_cos2 * mean_cos) / (1 - mean_cos2);
         k = clamp(k, 0.f, 10000.f); // avoid numerical instability
+    }
+    /** Initialize the distribution with a u and k. */
+    __init(in_ref(float3) u, in_ref(float) v) {
+        this.u = u;
+        this.k = v;
     }
 };
 

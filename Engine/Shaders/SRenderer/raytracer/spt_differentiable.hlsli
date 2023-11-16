@@ -29,6 +29,7 @@ float3 EvalBsdfDiff(
     in_ref(float3) dir_out,
     in_ref(float3) adjoint_gradient,
     out_ref(float3) debug,
+    in const float lod_indicator = 0,
     in const uint transport_mode = 0
 ) {
     uint materialID = geometries[hit.geometryID].materialID;
@@ -41,6 +42,7 @@ float3 EvalBsdfDiff(
     cBSDFEvalDiffQuery.uv = hit.texcoord;
     cBSDFEvalDiffQuery.frame = createONB(hit.shadingNormal);
     cBSDFEvalDiffQuery.adjoint_gradient = adjoint_gradient;
+    cBSDFEvalDiffQuery.lod = lod_indicator;
     QueryBitfield flag;
     flag.transport_mode = transport_mode;
     flag.face_forward = IsFaceForward(hit);

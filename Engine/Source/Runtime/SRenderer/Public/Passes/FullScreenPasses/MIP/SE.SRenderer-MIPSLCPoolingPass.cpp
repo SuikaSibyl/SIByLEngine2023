@@ -107,11 +107,9 @@ auto MIPSLCSubPass::execute(RDG::RenderContext* context,
       RHI::RenderPassDepthStencilAttachment{},
   };
 
-  auto* defaul_sampler =
-      Core::ResourceManager::get()
-          ->getResource<GFX::Sampler>(
-              GFX::GFXManager::get()->commonSampler.defaultSampler)
-          ->sampler.get();
+  auto* defaul_sampler = GFX::GFXManager::get()->samplerTable.fetch(
+      RHI::AddressMode::CLAMP_TO_EDGE, RHI::FilterMode::LINEAR,
+      RHI::MipmapFilterMode::LINEAR);
   getBindGroup(context, 0)
       ->updateBinding(std::vector<RHI::BindGroupEntry>{
           {0, RHI::BindingResource(importance_mip->getSRV(mipOffset, 1, 0, 1), defaul_sampler)},
@@ -283,11 +281,9 @@ auto MIPTiledVisSubPass::execute(RDG::RenderContext* context,
       RHI::RenderPassDepthStencilAttachment{},
   };
 
-  auto* defaul_sampler =
-      Core::ResourceManager::get()
-          ->getResource<GFX::Sampler>(
-              GFX::GFXManager::get()->commonSampler.defaultSampler)
-          ->sampler.get();
+  auto* defaul_sampler = GFX::GFXManager::get()->samplerTable.fetch(
+      RHI::AddressMode::CLAMP_TO_EDGE, RHI::FilterMode::LINEAR,
+      RHI::MipmapFilterMode::LINEAR);
   getBindGroup(context, 0)
       ->updateBinding(std::vector<RHI::BindGroupEntry>{
           {0, RHI::BindingResource(visibility_buffer->getSRV(mipOffset, 1, 0, 1),

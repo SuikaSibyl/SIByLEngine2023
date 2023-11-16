@@ -1,0 +1,47 @@
+// MACRO DEFINITIONS
+// FUNC_NAME: The name of the function to be generated
+// W, C, O: The dimensions of the input, weight and output matrices
+// M, N, K: The dimensions of the tiles to be used for the matrix multiplication
+//
+// GLOBAL MACROS:
+// INPUT_BUFFER_RESOURCE: The name of the resource holding the input matrix
+// WEIGHTS_BUFFER_RESOURCE: The name of the resource holding the weight matrix
+// OUTPUT_BUFFER_RESOURCE: The name of the resource holding the output matrix
+
+void FUNC_NAME(
+   uint input_ptr, 
+   uint weights_ptr, 
+   uint output_ptr
+) {
+   // Leading dimensions. Packed with no transpositions.
+   int lda = C;
+   int ldb = C;
+   
+   // Declare the fragments
+   fcoopmatNV<16, gl_ScopeSubgroup, M, K> a_frag;
+   fcoopmatNV<16, gl_ScopeSubgroup, K, N> b_frag;
+   fcoopmatNV<32, gl_ScopeSubgroup, M, N> acc_frag;
+   
+   // We'll go over each tile of MxN for the output matrix. 
+   // (all these loops are unrollable since C is known at compile time)
+   [[unroll]]
+   for (int ti = 0; ti < W; ti += M) {
+      [[unroll]]
+      for (int tj = 0; tj < O; tj += N) {
+         // Reset the accumulator fragment
+         acc_frag = fcoopmatNV<32, gl_ScopeSubgroup, M, N>(0.0f);
+         // Go over each tile of MxK sub-tile for the input matrix and corresponding 
+         // KxN sub-tile for the weight matrix.
+         [[unroll]]
+         for (int tk = 0; tk < C; tk += K) {
+            // Load the inputs
+            coopMatLoadNV(a_frag, INPUT_BUFFER_RESOURCE, input_ptr + tk + ti * lda, lda, false);            
+            coopMatLoadNV(b_frag, WEIGHTS_BUFFER_RESOURCE, weights_ptr + tk + tj * ldb, ldb, true);            
+            // Perform the matrix multiplication
+            acc_frag = coopMatMulAddNV(a_frag, b_frag, acc_frag);
+         }
+         // Store the output tile.
+         coopMatStoreNV(acc_frag, OUTPUT_BUFFER_RESOURCE, output_ptr + tj + ti * O, O, false);
+      }
+   }
+}

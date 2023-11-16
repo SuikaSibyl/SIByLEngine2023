@@ -140,10 +140,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Public\SE.Addon.Differentiable-common.hpp" />
+    <ClInclude Include="Public\SE.Addon.Differentiable-was.hpp" />
     <ClInclude Include="Public\SE.Addon.Differentiable.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Private\SE.Addon.Differentiable-common.cpp" />
     <ClCompile Include="Private\SE.Addon.Differentiable.cpp" />
+    <ClCompile Include="Private\SE.Addon.Differentiable-was.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Editor\EditorCore\EditorCore.vcxproj">

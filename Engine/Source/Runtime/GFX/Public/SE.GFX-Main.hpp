@@ -246,6 +246,7 @@ SE_EXPORT struct Material : public Core::Resource {
   struct TextureEntry {
     Core::GUID guid;
     uint32_t flags = 0;
+    RHI::SamplerDescriptor sampler;
   };
   /** add a const data entry to the template */
   auto addConstantData(std::string const& name, RHI::DataFormat format) noexcept
@@ -381,6 +382,14 @@ SE_EXPORT struct Scene : public Core::Resource {
     return name.c_str();
   }
 };
+
+/**
+ * Predefined components in GFX Module, including:
+ * - CameraComponent
+ * - MeshReference
+ * - MeshRenderer
+ * - LightComponent
+ */
 
 SE_EXPORT struct CameraComponent {
   auto getViewMat() noexcept -> Math::mat4;
@@ -666,15 +675,22 @@ SE_EXPORT struct GFXManager : public Core::Manager {
   /** request offline material resource */
   auto registerMaterialResource(char const* filepath) noexcept -> Core::GUID;
   auto requestOfflineMaterialResource(Core::ORID orid) noexcept -> Core::GUID;
-  /** Register all samplers */
-  auto registerDefualtSamplers() noexcept -> void;
   /** RHI layer */
   RHI::RHILayer* rhiLayer = nullptr;
-  /** common samplers */
-  struct CommonSampler {
-    Core::GUID defaultSampler;
-    Core::GUID clamp_nearest;
-  } commonSampler;
+  /** 
+   * GlobalSamplerTable :: common samplers.
+   * We suggest to use a global table to store all samplers,
+   * to facilitate sampler resource to be reused over the system.
+   * We can actually fetch the samplers by descriptors
+   * as well as some simplified settings, by the function:
+   * 
+   * auto fetch() noexcept -> RHI::Sampler*
+   */
+  struct GlobalSamplerTable {
+    std::unordered_map<uint64_t, RHI::Sampler*> hash_samplers;
+    auto fetch(RHI::SamplerDescriptor const& desc) noexcept -> RHI::Sampler*;
+    auto fetch(RHI::AddressMode address, RHI::FilterMode filter, RHI::MipmapFilterMode mipmap) noexcept -> RHI::Sampler*;
+  } samplerTable;
   /** config singleton */
   GFXConfig config = {};
   /** start up the GFX manager */

@@ -32,6 +32,8 @@ struct GeometryHit {
     float2  barycentric;
     float2  texcoord;
     float4  tangent;
+    float3  padding;
+    float   lambda;
 };
 
 static const uint GeometryHitFlag_HitShift = 0x00;
@@ -48,6 +50,8 @@ bool HasHit(in_ref(GeometryHit) hit) {
     return ((hit.flags >> GeometryHitFlag_HitShift) & GeometryHitFlag_HitMask) != 0;
 }
 void SetHit(inout_ref(GeometryHit) hit, bool value) {
+    // if not hit, reset the geometryID and primitiveID
+    if (!value) { hit.geometryID = uint(-1); hit.primitiveID = uint(-1); }
     hit.flags = (hit.flags & ~(GeometryHitFlag_HitMask << GeometryHitFlag_HitShift)) 
             | (value ? 1 : 0) << GeometryHitFlag_HitShift;
 }
@@ -298,6 +302,7 @@ struct BSDFEvalDiffQuery {
     float3 dir_out; // ---------- 4 floats
     uint misc_flag;
     float3 geometric_normal; // - 4 floats
+    float lod;
     float3 adjoint_gradient;
     float2 uv;
     // output

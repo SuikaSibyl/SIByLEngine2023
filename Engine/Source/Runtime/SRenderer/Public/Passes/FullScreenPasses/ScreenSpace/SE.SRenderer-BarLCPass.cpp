@@ -288,11 +288,9 @@ auto BarLCPass::execute(RDG::RenderContext* context,
 
     RHI::RenderPassEncoder* encoder = beginPass(context, out);
 
-    RHI::Sampler* defaultSampler =
-        Core::ResourceManager::get()
-            ->getResource<GFX::Sampler>(
-                GFX::GFXManager::get()->commonSampler.defaultSampler)
-            ->sampler.get();
+    RHI::Sampler* defaultSampler = GFX::GFXManager::get()->samplerTable.fetch(
+        RHI::AddressMode::CLAMP_TO_EDGE, RHI::FilterMode::LINEAR,
+        RHI::MipmapFilterMode::LINEAR);
 
     {
       std::vector<RHI::BindGroupEntry>* set_0_entries =

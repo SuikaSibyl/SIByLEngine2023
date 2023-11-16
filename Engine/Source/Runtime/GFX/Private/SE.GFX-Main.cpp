@@ -1,6 +1,6 @@
 #include <SE.GFX-Main.hpp>
 #include <IO/SE.Core.IO.hpp>
-
+#include <SE.GFX-Script.hpp>
 #include <yaml-cpp/node/node.h>
 #include <yaml-cpp/yaml.h>
 
@@ -1134,6 +1134,7 @@ auto GFXManager::startUp() noexcept -> void {
   Core::ComponentManager::get()->registerComponent<GFX::MeshRenderer>();
   Core::ComponentManager::get()->registerComponent<GFX::CameraComponent>();
   Core::ComponentManager::get()->registerComponent<GFX::LightComponent>();
+  Core::ComponentManager::get()->registerComponent<NativeScriptComponent>();
   // register resource types
   Core::ResourceManager::get()->registerResource<GFX::Buffer>();
   Core::ResourceManager::get()->registerResource<GFX::Mesh>();
@@ -1596,7 +1597,11 @@ auto GFXManager::registerTextureResource(
     aspectMask |= (uint32_t)RHI::TextureAspect::COLOR_BIT;
     targetLayout = RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL;
     targetAccessFlags = (uint32_t)RHI::AccessFlagBits::SHADER_READ_BIT;
-  } else if (desc.usage & (uint32_t)RHI::TextureUsage::COPY_DST) {
+  } else if (desc.usage & (uint32_t)RHI::TextureUsage::STORAGE_BINDING) {
+    aspectMask |= (uint32_t)RHI::TextureAspect::COLOR_BIT;
+    targetLayout = RHI::TextureLayout::GENERAL;
+    targetAccessFlags = (uint32_t)RHI::AccessFlagBits::SHADER_WRITE_BIT;
+  }else if (desc.usage & (uint32_t)RHI::TextureUsage::COPY_DST) {
     aspectMask |= (uint32_t)RHI::TextureAspect::COLOR_BIT;
     targetLayout = RHI::TextureLayout::TRANSFER_DST_OPTIMAL;
     targetAccessFlags = (uint32_t)RHI::AccessFlagBits::TRANSFER_WRITE_BIT;
@@ -1608,9 +1613,7 @@ auto GFXManager::registerTextureResource(
       (uint32_t)RHI::PipelineStages::TOP_OF_PIPE_BIT,
       (uint32_t)RHI::PipelineStages::ALL_COMMANDS_BIT,
       (uint32_t)RHI::DependencyType::NONE,
-      {},
-      {},
-      {RHI::TextureMemoryBarrierDescriptor{
+      {}, {}, {RHI::TextureMemoryBarrierDescriptor{
           textureResource.texture.get(),
           RHI::ImageSubresourceRange{aspectMask, 0, desc.mipLevelCount, 0,
                                      uint32_t(desc.arrayLayerCount)},
@@ -1691,8 +1694,8 @@ auto GFXManager::registerTextureResource(char const* filepath) noexcept
     std::filesystem::path current_path = std::filesystem::current_path();
     std::filesystem::path relative_path =
         std::filesystem::relative(path, current_path);
-    std::unique_ptr<Image::Image<Image::COLOR_R32G32B32A32_FLOAT>> img =
-        ImageLoader::load_rgba32(path);
+    std::unique_ptr<Image::Image<Image::COLOR_R32G32B32A32_FLOAT>> img = ImageLoader::load_rgba32(path);
+    if (img.get() == nullptr) return Core::INVALID_GUID;
     Core::GUID img_guid =
         Core::ResourceManager::get()->requestRuntimeGUID<GFX::Texture>();
     Core::ORID img_orid = Core::requestORID();
@@ -1807,6 +1810,11 @@ auto GFXManager::requestOfflineTextureResource(Core::ORID orid) noexcept
         std::unique_ptr<Image::Texture_Host> dds_tex =
             Image::DDS::fromDDS(filepath);
         GFX::GFXManager::get()->registerTextureResource(guid, dds_tex.get());
+      } else if (filepath.extension() == ".exr") {
+        std::unique_ptr<Image::Image<Image::COLOR_R32G32B32A32_FLOAT>> img =
+            ImageLoader::load_rgba32(
+                std::filesystem::path(texture.resourcePath.value()));
+        GFX::GFXManager::get()->registerTextureResource(guid, img.get());      
       } else {
         std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> img =
             ImageLoader::load_rgba8(
@@ -1881,31 +1889,73 @@ auto GFXManager::requestOfflineMaterialResource(Core::ORID orid) noexcept
   return guid;
 }
 
-auto GFXManager::registerDefualtSamplers() noexcept -> void {
-  // create all default samplers
-  commonSampler.defaultSampler =
-      Core::ResourceManager::get()->requestRuntimeGUID<GFX::Sampler>();
-  registerSamplerResource(commonSampler.defaultSampler,
-                          RHI::SamplerDescriptor{
-                              RHI::AddressMode::REPEAT,
-                              RHI::AddressMode::REPEAT,
-                              RHI::AddressMode::REPEAT,
-                              RHI::FilterMode::LINEAR,
-                              RHI::FilterMode::LINEAR
-                          });
-  commonSampler.clamp_nearest =
-      Core::ResourceManager::get()->requestRuntimeGUID<GFX::Sampler>();
-  registerSamplerResource(GFX::GFXManager::get()->commonSampler.clamp_nearest,
-                          RHI::SamplerDescriptor{});
-  Core::ResourceManager::get()
-      ->getResource<GFX::Sampler>(
-          GFX::GFXManager::get()->commonSampler.defaultSampler)
-      ->sampler->setName("DefaultSampler");
-  Core::ResourceManager::get()
-      ->getResource<GFX::Sampler>(
-          GFX::GFXManager::get()->commonSampler.clamp_nearest)
-      ->sampler->setName("ClampNearestSampler");
+inline uint64_t hash(RHI::SamplerDescriptor const& desc) {
+  uint64_t hashed_value = 0;
+  hashed_value |= (uint64_t)(desc.addressModeU) << 62;
+  hashed_value |= (uint64_t)(desc.addressModeV) << 60;
+  hashed_value |= (uint64_t)(desc.addressModeW) << 58;
+  hashed_value |= (uint64_t)(desc.magFilter) << 57;
+  hashed_value |= (uint64_t)(desc.minFilter) << 56;
+  hashed_value |= (uint64_t)(desc.mipmapFilter) << 55;
+  hashed_value |= (uint64_t)(desc.compare) << 50;
+  return hashed_value;
 }
+
+auto GFXManager::GlobalSamplerTable::fetch(
+    RHI::SamplerDescriptor const& desc) noexcept -> RHI::Sampler* {
+  const uint64_t id = hash(desc);
+  auto find = hash_samplers.find(id);
+  if (find == hash_samplers.end()) {
+    Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Sampler>();
+    GFX::GFXManager::get()->registerSamplerResource(guid, desc);
+    GFX::Sampler* sampler = Core::ResourceManager::get()->getResource<GFX::Sampler>(guid);
+    hash_samplers[id] = sampler->sampler.get();
+    return sampler->sampler.get();
+  } else {
+    return find->second;
+  }
+}
+
+auto GFXManager::GlobalSamplerTable::fetch(
+    RHI::AddressMode address, RHI::FilterMode filter,
+    RHI::MipmapFilterMode mipmap) noexcept -> RHI::Sampler* {
+  RHI::SamplerDescriptor desc;
+  desc.addressModeU = address;
+  desc.addressModeV = address;
+  desc.addressModeW = address;
+  desc.magFilter = filter;
+  desc.minFilter = filter;
+  desc.mipmapFilter = mipmap;
+  return fetch(desc);
+}
+
+
+//
+//auto GFXManager::registerDefualtSamplers() noexcept -> void {
+//  // create all default samplers
+//  commonSampler.defaultSampler =
+//      Core::ResourceManager::get()->requestRuntimeGUID<GFX::Sampler>();
+//  registerSamplerResource(commonSampler.defaultSampler,
+//                          RHI::SamplerDescriptor{
+//                              RHI::AddressMode::REPEAT,
+//                              RHI::AddressMode::REPEAT,
+//                              RHI::AddressMode::REPEAT,
+//                              RHI::FilterMode::LINEAR,
+//                              RHI::FilterMode::LINEAR
+//                          });
+//  commonSampler.clamp_nearest =
+//      Core::ResourceManager::get()->requestRuntimeGUID<GFX::Sampler>();
+//  registerSamplerResource(GFX::GFXManager::get()->commonSampler.clamp_nearest,
+//                          RHI::SamplerDescriptor{});
+//  Core::ResourceManager::get()
+//      ->getResource<GFX::Sampler>(
+//          GFX::GFXManager::get()->commonSampler.defaultSampler)
+//      ->sampler->setName("DefaultSampler");
+//  Core::ResourceManager::get()
+//      ->getResource<GFX::Sampler>(
+//          GFX::GFXManager::get()->commonSampler.clamp_nearest)
+//      ->sampler->setName("ClampNearestSampler");
+//}
 
 #pragma endregion
 }

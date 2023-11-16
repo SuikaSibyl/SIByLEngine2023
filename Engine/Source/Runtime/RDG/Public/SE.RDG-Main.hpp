@@ -444,6 +444,8 @@ SE_EXPORT struct Pass {
   virtual auto execute(RenderContext* context,
                        RenderData const& renderData) noexcept -> void = 0;
 
+  virtual auto readback(RenderData const& renderData) noexcept -> void {}
+
   virtual auto renderUI() noexcept -> void {}
 
   virtual auto onInteraction(Platform::Input* input,
@@ -704,8 +706,12 @@ SE_EXPORT struct Graph {
   /** execute the graph */
   auto execute(RHI::CommandEncoder* encoder) noexcept -> void;
 
+  /** read back the information */
+  virtual auto readback() noexcept -> void;
+
   /** render graph ui */
   virtual auto renderUI() noexcept -> void {}
+
 
   /**
    * Add a RDPass to the RDGraph
@@ -811,18 +817,20 @@ SE_EXPORT struct Graph {
 };
 
 SE_EXPORT struct Pipeline {
+  /** default ctor and dctor. */
   Pipeline() = default;
   virtual ~Pipeline() = default;
-
+  /** build the render pipeline. */
   virtual auto build() noexcept -> void = 0;
-
-  /** render pipeline ui */
-  virtual auto renderUI() noexcept -> void {}
-
+  /** execute the pipeline on the command encoder. */
   virtual auto execute(RHI::CommandEncoder* encoder) noexcept -> void = 0;
-
+  /** readback after the execution of the pipeline */
+  virtual auto readback() noexcept -> void {}
+  /** render pipeline ui. */
+  virtual auto renderUI() noexcept -> void {}
+  /** get all active graphs now within the pipeline. */
   virtual auto getActiveGraphs() noexcept -> std::vector<Graph*> = 0;
-
+  /** get the output of the pipeline. */
   virtual auto getOutput() noexcept -> GFX::Texture* = 0;
 };
 
@@ -840,6 +848,10 @@ SE_EXPORT struct SingleGraphPipeline : public Pipeline {
 
   virtual auto getOutput() noexcept -> GFX::Texture* {
     return pGraph->getOutput();
+  }
+
+  virtual auto readback() noexcept -> void {
+    pGraph->readback();
   }
 
   virtual auto build() noexcept -> void override { pGraph->build(); }

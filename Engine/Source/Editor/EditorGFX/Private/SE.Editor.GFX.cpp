@@ -4,6 +4,7 @@
 #include <imgui_internal.h>
 #include <SE.Editor.Core.hpp>
 #include <SE.GFX.hpp>
+#include <SE.GFX-Script.hpp>
 #include <SE.Math.Geometric.hpp>
 #include <SE.RHI.hpp>
 #include <cstdint>
@@ -277,14 +278,12 @@ auto TextureUtils::getImGuiTexture(Core::GUID guid) noexcept -> ImGuiTexture* {
   if (iter == pool.end()) {
     GFX::Texture* texture =
         Core::ResourceManager::get()->getResource<GFX::Texture>(guid);
-    pool.insert(
-        {guid, ImGuiLayer::get()->createImGuiTexture(
-                   Core::ResourceManager::get()
-                       ->getResource<GFX::Sampler>(
-                           GFX::GFXManager::get()->commonSampler.defaultSampler)
-                       ->sampler.get(),
-                   texture->getSRV(0, 1, 0, 1),
-                   RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL)});
+    RHI::Sampler* sampler = GFX::GFXManager::get()->samplerTable.fetch(
+        RHI::AddressMode::CLAMP_TO_EDGE, RHI::FilterMode::NEAREST,
+        RHI::MipmapFilterMode::NEAREST);
+    pool.insert({guid, ImGuiLayer::get()->createImGuiTexture(
+                           sampler, texture->getSRV(0, 1, 0, 1),
+                           RHI::TextureLayout::SHADER_READ_ONLY_OPTIMAL)});
     return pool[guid].get();
   } else {
     return iter->second.get();
@@ -628,6 +627,44 @@ auto MaterialElucidator::onDrawGui_PTR(GFX::Material* material, bool draw_tree) 
           } else {
             ImGui::Text("No Resource Binded");
           }
+
+          // Sampler setting
+          RHI::SamplerDescriptor& sampler = texture.sampler;
+          drawCustomColume("Sampler", 100, [&]() {
+            std::function<void(RHI::AddressMode*, char const*)>
+              draw_address_mode = [&](RHI::AddressMode* mode, char const* name) {
+              ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{0.60f, 0.60f, 0.60f, 1.00f});      
+              ImGui::Text(name); ImGui::PopStyleColor(1);
+              ImGui::SameLine(); ImGui::PushItemWidth(-1);
+              const char* item_names[] = { "Clamp", "Repeat", "Mirror", };
+              if (ImGui::Combo(("##" + std::string(name)).c_str(), (int*)mode,
+                item_names, IM_ARRAYSIZE(item_names), IM_ARRAYSIZE(item_names))) {
+                material->isDirty = true;
+              }
+            };
+            
+            draw_address_mode(&sampler.addressModeU, "U Address Mode  ");
+            draw_address_mode(&sampler.addressModeV, "V Address Mode  ");
+            draw_address_mode(&sampler.addressModeW, "W Address Mode ");
+
+            std::function<void(int*, char const*)>
+              draw_filter_mode = [&](int* mode, char const* name) {
+              ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{0.60f, 0.60f, 0.60f, 1.00f});      
+              ImGui::Text(name); ImGui::PopStyleColor(1);
+              ImGui::SameLine(); ImGui::PushItemWidth(-1);
+              const char* item_names[] = { "NEAREST", "LINEAR", };
+              if (ImGui::Combo(("##" + std::string(name)).c_str(), (int*)mode,
+                item_names, IM_ARRAYSIZE(item_names), IM_ARRAYSIZE(item_names))) {
+                material->isDirty = true;
+              }
+            };
+            
+            draw_filter_mode((int*)&sampler.magFilter, "Mag Filter Mode  ");
+            draw_filter_mode((int*)&sampler.minFilter, "Min Filter Mode  ");
+            draw_filter_mode((int*)&sampler.mipmapFilter, "Mip Filter Mode  ");
+          });
+
+
           ImGui::TreePop();
         }
         ++id;
@@ -2453,6 +2490,25 @@ auto CameraComponentFragment::elucidateComponent(
               bool isPrimary = component->isPrimaryCamera;
               ImGui::Checkbox("##primary", &component->isPrimaryCamera);
             });
+        });
+   }
+}
+
+auto NativeScriptComponentFragment::elucidateComponent(
+    GameObjectInspector::GameObjectData* data) noexcept -> void {
+   GFX::GameObject* go = data->scene->getGameObject(data->handle);
+   NativeScriptComponent* native_script =
+       go->getEntity().getComponent<NativeScriptComponent>();
+   if (native_script) {
+    drawComponent<NativeScriptComponent>(
+        go, "Native Scripts", [](NativeScriptComponent* component) {
+            //drawCustomColume("Project", 100, [&]() {
+            //  int item_current = static_cast<int>(component->projectType);
+            //  ImGui::Combo("##proj", &item_current, "Perspective\0Orthogonal\0");
+            //  if (item_current != static_cast<int>(component->projectType))
+            //    component->projectType =
+            //        GFX::CameraComponent::ProjectType(item_current);
+            //});
         });
    }
 }

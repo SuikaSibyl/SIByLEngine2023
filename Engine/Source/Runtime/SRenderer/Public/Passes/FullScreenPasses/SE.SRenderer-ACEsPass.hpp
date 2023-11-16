@@ -67,7 +67,12 @@ namespace SIByL
 			getBindGroup(context, 0)->updateBinding(std::vector<RHI::BindGroupEntry>{
 				RHI::BindGroupEntry{ 0,RHI::BindingResource(
 					std::vector<RHI::TextureView*>{hdr->getSRV(0,1,0,1)},
-					Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler.get())
+                                        GFX::GFXManager::get()
+                                            ->samplerTable.fetch(
+                                                RHI::AddressMode::CLAMP_TO_EDGE,
+                                                RHI::FilterMode::LINEAR,
+                                                RHI::MipmapFilterMode::
+                                                    LINEAR))
 				}
 			});
 

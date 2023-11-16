@@ -105,9 +105,9 @@ auto GeometryInspectorPass::execute(
   //GFX::GFXManager::get()->
   GFX::Texture* matcap_tex =
       Core::ResourceManager::get()->getResource<GFX::Texture>(matcapGuid);
-  GFX::Sampler* default_sampler =
-      Core::ResourceManager::get()->getResource<GFX::Sampler>(
-          GFX::GFXManager::get()->commonSampler.defaultSampler);
+  RHI::Sampler* default_sampler = GFX::GFXManager::get()->samplerTable.fetch(
+      RHI::AddressMode::CLAMP_TO_EDGE, RHI::FilterMode::LINEAR,
+      RHI::MipmapFilterMode::LINEAR);
 
   geo_vis_buffer.setStructure(geo_vis, context->flightIdx);
   std::vector<RHI::BindGroupEntry> set_1_entries =
@@ -116,7 +116,7 @@ auto GeometryInspectorPass::execute(
               0, geo_vis_buffer.getBufferBinding(context->flightIdx)},
           RHI::BindGroupEntry{
               1, RHI::BindingResource{matcap_tex->getSRV(0, 1, 0, 1),
-                                      default_sampler->sampler.get()}}};
+                                      default_sampler}}};
 
   getBindGroup(context, 0)->updateBinding(*set_0_entries);
   getBindGroup(context, 1)->updateBinding(set_1_entries);

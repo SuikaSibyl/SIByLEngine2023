@@ -58,15 +58,16 @@ SE_EXPORT struct MIPMinPoolingSubPass : public RDG::FullScreenPass {
         RHI::RenderPassDepthStencilAttachment{},
     };
 
+    RHI::Sampler* sampler = GFX::GFXManager::get()->samplerTable.fetch(
+        RHI::AddressMode::CLAMP_TO_EDGE, RHI::FilterMode::NEAREST,
+        RHI::MipmapFilterMode::NEAREST);
+
     getBindGroup(context, 0)
         ->updateBinding(std::vector<RHI::BindGroupEntry>{
             {0, RHI::BindingResource(
                     std::vector<RHI::TextureView*>{
                         target->getSRV(mipOffset, 1, 0, 1)},
-                    Core::ResourceManager::get()
-                        ->getResource<GFX::Sampler>(
-                            GFX::GFXManager::get()->commonSampler.clamp_nearest)
-                        ->sampler.get())}});
+                                  sampler)}});
 
     int32_t src_width = target->getRTV(mipOffset, 0, 1)->getWidth();
     int32_t src_height = target->getRTV(mipOffset, 0, 1)->getHeight();

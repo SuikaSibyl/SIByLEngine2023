@@ -22,7 +22,7 @@ void TrimeshClosestHit(
     Ray worldRay;
     worldRay.origin = WorldRayOrigin();
     worldRay.direction = WorldRayDirection();
-
+    
     payload.hit = fetchTrimeshGeometryHit(
         int(geometryID),
         barycentrics,

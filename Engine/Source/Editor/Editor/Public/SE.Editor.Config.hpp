@@ -4,6 +4,7 @@
 #include <functional>
 #include <Resource/SE.Core.Resource.hpp>
 #include <SE.GFX.hpp>
+#include <SE.GFX-Script.hpp>
 #include <SE.Video.hpp>
 #include <SE.Editor.Core.hpp>
 #include <SE.Editor.GFX.hpp>
@@ -27,46 +28,33 @@ SE_EXPORT struct Config {
         layer->getWidget<Editor::InspectorWidget>();
     layer->getWidget<Editor::SceneWidget>()->viewportWidget =
         layer->getWidget<Editor::ViewportWidget>();
-    layer->getWidget<Editor::SceneWidget>()
-        ->gameobjectInspector.registerFragment<Editor::TagComponentFragment>();
-    layer->getWidget<Editor::SceneWidget>()
-        ->gameobjectInspector
-        .registerFragment<Editor::TransformComponentFragment>();
-    layer->getWidget<Editor::SceneWidget>()
-        ->gameobjectInspector
-        .registerFragment<Editor::MeshReferenceComponentFragment>();
-    layer->getWidget<Editor::SceneWidget>()
-        ->gameobjectInspector
-        .registerFragment<Editor::MeshRendererComponentFragment>();
-    layer->getWidget<Editor::SceneWidget>()
-        ->gameobjectInspector
-        .registerFragment<Editor::CameraComponentFragment>();
-    layer->getWidget<Editor::SceneWidget>()
-        ->gameobjectInspector
-        .registerFragment<Editor::LightComponentFragment>();
 
-    layer->getWidget<Editor::SceneWidget>()
-        ->gameobjectInspector.registerComponent<GFX::MeshReference>(
-            "Mesh Reference");
-    layer->getWidget<Editor::SceneWidget>()
-        ->gameobjectInspector.registerComponent<GFX::MeshRenderer>(
-            "Mesh Renderer");
-    layer->getWidget<Editor::SceneWidget>()
-        ->gameobjectInspector.registerComponent<GFX::LightComponent>(
-            "Light Component");
+    GameObjectInspector& gameobjectInspector =
+        layer->getWidget<Editor::SceneWidget>()->gameobjectInspector;
+    // Register component fragment to show component ui on the panel
+    gameobjectInspector.registerFragment<Editor::TagComponentFragment>();
+    gameobjectInspector.registerFragment<Editor::TransformComponentFragment>();
+    gameobjectInspector.registerFragment<Editor::MeshReferenceComponentFragment>();
+    gameobjectInspector.registerFragment<Editor::MeshRendererComponentFragment>();
+    gameobjectInspector.registerFragment<Editor::CameraComponentFragment>();
+    gameobjectInspector.registerFragment<Editor::LightComponentFragment>();
+    gameobjectInspector.registerFragment<Editor::NativeScriptComponentFragment>();
+    // Register component can be added through editor pannel
+    gameobjectInspector.registerComponent<GFX::MeshReference>("Mesh Reference");
+    gameobjectInspector.registerComponent<GFX::MeshRenderer>("Mesh Renderer");
+    gameobjectInspector.registerComponent<GFX::LightComponent>("Light Component");
+    gameobjectInspector.registerComponent<NativeScriptComponent>("Native Script");
 
-    layer->getWidget<Editor::InspectorWidget>()
-        ->resourceViewer.registerElucidator<Editor::TextureElucidator>(
-            "struct SIByL::GFX::Texture");
-    layer->getWidget<Editor::InspectorWidget>()
-        ->resourceViewer.registerElucidator<Editor::MaterialElucidator>(
-            "struct SIByL::GFX::Material");
-    layer->getWidget<Editor::InspectorWidget>()
-        ->resourceViewer.registerElucidator<Editor::MeshElucidator>(
-            "struct SIByL::GFX::Mesh");
-    layer->getWidget<Editor::InspectorWidget>()
-        ->resourceViewer.registerElucidator<Editor::VideoClipElucidator>(
-            "struct SIByL::GFX::VideoClip");
+    Editor::ResourceViewer& resource_viewer =
+        layer->getWidget<Editor::InspectorWidget>()->resourceViewer;
+    resource_viewer.registerElucidator<Editor::TextureElucidator>(
+        "struct SIByL::GFX::Texture");
+    resource_viewer.registerElucidator<Editor::MaterialElucidator>(
+        "struct SIByL::GFX::Material");
+    resource_viewer.registerElucidator<Editor::MeshElucidator>(
+        "struct SIByL::GFX::Mesh");
+    resource_viewer.registerElucidator<Editor::VideoClipElucidator>(
+        "struct SIByL::GFX::VideoClip");
 
     layer->getWidget<Editor::ContentWidget>()->inspectorWidget =
         layer->getWidget<Editor::InspectorWidget>();

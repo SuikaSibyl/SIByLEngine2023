@@ -345,7 +345,9 @@ SE_EXPORT struct SSRXGTPass : public RDG::RayTracingPass {
 		basecolor_sampler = Core::ResourceManager::get()->getResource<GFX::Sampler>(basecolor);
 	}
 
-    RHI::Sampler* defaultSampler = Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler.get();
+    RHI::Sampler* sampler = GFX::GFXManager::get()->samplerTable.fetch(
+        RHI::AddressMode::CLAMP_TO_EDGE, RHI::FilterMode::LINEAR,
+        RHI::MipmapFilterMode::LINEAR);
 
 	{
 		std::vector<RHI::BindGroupEntry>* set_0_entries = renderData.getBindGroupEntries("CommonScene");
@@ -364,7 +366,7 @@ SE_EXPORT struct SSRXGTPass : public RDG::RayTracingPass {
 	getBindGroup(context, 1)->updateBinding(std::vector<RHI::BindGroupEntry>{
 		RHI::BindGroupEntry{ 0,RHI::BindingResource(base_color->getSRV(0,1,0,1), basecolor_sampler->sampler.get()) },
 		RHI::BindGroupEntry{ 1,RHI::BindingResource(hi_z->getSRV(0,hi_z->texture->mipLevelCount(),0,1), hi_z_sampler->sampler.get()) },
-		RHI::BindGroupEntry{ 2,RHI::BindingResource(normalWS->getSRV(0,1,0,1), defaultSampler) },
+		RHI::BindGroupEntry{ 2,RHI::BindingResource(normalWS->getSRV(0,1,0,1), sampler) },
 		RHI::BindGroupEntry{ 3,RHI::BindingResource(importance_mip ->getSRV(0,importance_mip->texture->mipLevelCount(),0,1), hi_lumin_sampler->sampler.get()) },
 		RHI::BindGroupEntry{ 4,RHI::BindingResource(boundingbox_mip->getSRV(0,importance_mip->texture->mipLevelCount(),0,1), hi_lumin_sampler->sampler.get()) },
 		RHI::BindGroupEntry{ 5,RHI::BindingResource(bbncpack_mip ->getSRV(0,importance_mip->texture->mipLevelCount(),0,1), hi_lumin_sampler->sampler.get()) },

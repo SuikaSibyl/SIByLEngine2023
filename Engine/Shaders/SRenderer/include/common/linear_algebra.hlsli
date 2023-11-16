@@ -62,4 +62,36 @@ float QuadraticForm(in_ref(float2x2) matrix, in_ref(float2) vector) {
     return dot(vector, mul(matrix, vector));
 }
 
+// Function to calculate the inverse of a 3x3 matrix.
+[Differentiable]
+float3x3 Inverse3x3(in_ref(float3x3) m) {
+    const float oneOverDet = 1.f / determinant(m);
+    float3x3 result;
+    result[0][0] = +(m[1][1] * m[2][2] - m[1][2] * m[2][1]) * oneOverDet;
+    result[0][1] = -(m[0][1] * m[2][2] - m[0][2] * m[2][1]) * oneOverDet;
+    result[0][2] = +(m[0][1] * m[1][2] - m[0][2] * m[1][1]) * oneOverDet;
+    result[1][0] = -(m[1][0] * m[2][2] - m[1][2] * m[2][0]) * oneOverDet;
+    result[1][1] = +(m[0][0] * m[2][2] - m[0][2] * m[2][0]) * oneOverDet;
+    result[1][2] = -(m[0][0] * m[1][2] - m[0][2] * m[1][0]) * oneOverDet;
+    result[2][0] = +(m[1][0] * m[2][1] - m[1][1] * m[2][0]) * oneOverDet;
+    result[2][1] = -(m[0][0] * m[2][1] - m[0][1] * m[2][0]) * oneOverDet;
+    result[2][2] = +(m[0][0] * m[1][1] - m[0][1] * m[1][0]) * oneOverDet;
+    return result;
+}
+
+[Differentiable]
+float3x3 identity3x3() {
+    return float3x3(1, 0, 0,
+                    0, 1, 0,
+                    0, 0, 1);
+}
+
+[Differentiable]
+float3x3 outer_product(float3 v0, float3 v1) {
+    return float3x3(
+        v0 * v1.x,
+        v0 * v1.y,
+        v0 * v1.z);
+}
+
 #endif // !_SRENDERER_LINEAR_ALGEBRA_HEADER_

@@ -616,10 +616,9 @@ auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
   commonDescData.set0_flights_resources[fid][8] = {
       8, RHI::BindingResource{
              sceneDataPack.unbinded_textures,
-             Core::ResourceManager::get()
-                 ->getResource<GFX::Sampler>(
-                     GFX::GFXManager::get()->commonSampler.defaultSampler)
-                 ->sampler.get()}};
+             GFX::GFXManager::get()->samplerTable.fetch(
+                 RHI::AddressMode::CLAMP_TO_EDGE, RHI::FilterMode::LINEAR,
+                 RHI::MipmapFilterMode::LINEAR)}};
   
   sceneDataPack.sceneInfoUniform.light_num =
       sceneDataPack.light_buffer_cpu.size();
@@ -1196,10 +1195,11 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
         {8,
          RHI::BindingResource{
              sceneDataPack.unbinded_textures,
-             Core::ResourceManager::get()
-                 ->getResource<GFX::Sampler>(
-                     GFX::GFXManager::get()->commonSampler.defaultSampler)
-                 ->sampler.get()}},
+                GFX::GFXManager::get()->samplerTable.fetch(
+                    RHI::AddressMode::CLAMP_TO_EDGE, RHI::FilterMode::LINEAR,
+                    RHI::MipmapFilterMode::LINEAR)}
+}
+,
     };
 
     commonDescData.set1_flights_resources[i] = std::vector<RHI::BindGroupEntry>{

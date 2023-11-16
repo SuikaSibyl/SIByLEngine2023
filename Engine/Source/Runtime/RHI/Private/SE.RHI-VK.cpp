@@ -2,6 +2,8 @@
 #define USE_VMA
 #define VMA_IMPLEMENTATION
 #include <vk_mem_alloc.h>
+#include <GFSDK_Aftermath.h>
+#include <GFSDK_Aftermath_GpuCrashDump.h>
 
 namespace SIByL::RHI {
 
@@ -376,6 +378,10 @@ auto setupExtensions(Context_VK* context, ContextExtensionsFlags& ext) -> void {
     context->getDeviceExtensions().emplace_back(
         VK_EXT_CONSERVATIVE_RASTERIZATION_EXTENSION_NAME);
   }
+  if (ext & (ContextExtensionsFlags)ContextExtension::COOPERATIVE_MATRIX) {
+    context->getDeviceExtensions().emplace_back(
+        VK_NV_COOPERATIVE_MATRIX_EXTENSION_NAME);
+  }
   if (ext & (ContextExtensionsFlags)ContextExtension::ATOMIC_FLOAT) {
     context->getDeviceExtensions().emplace_back(
         VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME);
@@ -738,6 +744,18 @@ auto Adapter_VK::requestDevice() noexcept -> std::unique_ptr<Device> {
       *pNextChainTail = &sampler_filter_min_max_properties;
     pNextChainTail = &(sampler_filter_min_max_properties.pNext);
   }
+  VkPhysicalDeviceCooperativeMatrixFeaturesNV cooperativeMatrixFeatures{
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_NV};
+  if (context->getContextExtensionsFlags() &
+      (ContextExtensionsFlags)ContextExtension::COOPERATIVE_MATRIX) {
+    cooperativeMatrixFeatures.cooperativeMatrix = VK_TRUE;
+    //cooperativeMatrixFeatures.cooperativeMatrixRobustBufferAccess = VK_TRUE;
+    if (pNextChainTail == nullptr)
+      *pNextChainHead = &cooperativeMatrixFeatures;
+    else
+      *pNextChainTail = &cooperativeMatrixFeatures;
+    pNextChainTail = &(cooperativeMatrixFeatures.pNext);
+  }
   VkPhysicalDeviceFeatures2 features2{
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
   void** pFeature2Tail = &(features2.pNext);
@@ -859,8 +877,80 @@ auto Device_VK::destroy() noexcept -> void {
 
 auto Device_VK::waitIdle() noexcept -> void {
   VkResult result = vkDeviceWaitIdle(device);
-  if (result != VK_SUCCESS)
-    Core::LogManager::Error("VULKAN :: Device WaitIdle not Success!");
+  if (result != VK_SUCCESS) {
+    std::string error_str = "UNKOWN";
+    switch (result) {
+      case VK_SUCCESS: error_str="Success"; break;
+      case VK_NOT_READY: error_str="Not Ready"; break;
+      case VK_TIMEOUT: error_str="Timeout"; break;
+      case VK_EVENT_SET: error_str="Event Set"; break;
+      case VK_EVENT_RESET: error_str="Event Reset"; break;
+      case VK_INCOMPLETE: error_str="Incomplete"; break;
+      case VK_ERROR_OUT_OF_HOST_MEMORY: error_str="Out of host memory"; break;
+      case VK_ERROR_OUT_OF_DEVICE_MEMORY: error_str="Out of device memory"; break;
+      case VK_ERROR_INITIALIZATION_FAILED: error_str="Initialization failed"; break;
+      case VK_ERROR_DEVICE_LOST: error_str="Device lost"; break;
+      case VK_ERROR_MEMORY_MAP_FAILED: error_str="Memory map failed"; break;
+      case VK_ERROR_LAYER_NOT_PRESENT: error_str="Layer not present"; break;
+      case VK_ERROR_EXTENSION_NOT_PRESENT: error_str="Extension not present"; break;
+      case VK_ERROR_FEATURE_NOT_PRESENT: error_str="Feature not present"; break;
+      case VK_ERROR_INCOMPATIBLE_DRIVER: error_str="Incompatible driver"; break;
+      case VK_ERROR_TOO_MANY_OBJECTS: error_str="Too many objects"; break;
+      case VK_ERROR_FORMAT_NOT_SUPPORTED: error_str="Format not supported"; break;
+      case VK_ERROR_FRAGMENTED_POOL: error_str="Fragmented pool"; break;
+      case VK_ERROR_UNKNOWN: error_str="Unkown"; break;
+      case VK_ERROR_OUT_OF_POOL_MEMORY: error_str="Out of pool memory"; break;
+      case VK_ERROR_INVALID_EXTERNAL_HANDLE: error_str="Invalid external handle"; break;
+      case VK_ERROR_FRAGMENTATION: error_str="Fragmentation"; break;
+      case VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS: error_str="Invalid opaque capture address"; break;
+      case VK_PIPELINE_COMPILE_REQUIRED: error_str="Compile required"; break;
+      case VK_ERROR_SURFACE_LOST_KHR: error_str="Surface lost"; break;
+      case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR: error_str="Native window in use"; break;
+      case VK_SUBOPTIMAL_KHR: error_str="Suboptimal"; break;
+      case VK_ERROR_OUT_OF_DATE_KHR: error_str="Out of date"; break;
+      case VK_ERROR_INCOMPATIBLE_DISPLAY_KHR: error_str="Incompatible display"; break;
+      case VK_ERROR_VALIDATION_FAILED_EXT: error_str="Invalidation failed"; break;
+      case VK_ERROR_INVALID_SHADER_NV: error_str="Invalid shader"; break;
+      case VK_ERROR_IMAGE_USAGE_NOT_SUPPORTED_KHR:  error_str="Image usage not supported"; break;
+      case VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT:error_str="Invalid DRM format modifier plane layout"; break;
+      case VK_ERROR_NOT_PERMITTED_KHR: error_str="Not permitted"; break;
+      case VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT:error_str="Full screen exclusive model lost"; break;
+      case VK_THREAD_IDLE_KHR: error_str="Thread Idle"; break;
+      case VK_THREAD_DONE_KHR: error_str="Thread Done"; break;
+      case VK_OPERATION_DEFERRED_KHR: error_str="Operation deferred"; break;
+      case VK_OPERATION_NOT_DEFERRED_KHR: error_str="Operation not deferred"; break;
+      case VK_ERROR_COMPRESSION_EXHAUSTED_EXT: error_str="Error compression exhausted"; break;
+      default: break;
+    }
+    
+    if (result == VK_ERROR_DEVICE_LOST) {
+      GFSDK_Aftermath_CrashDump_Status status = GFSDK_Aftermath_CrashDump_Status_Unknown;
+      GFSDK_Aftermath_GetCrashDumpStatus(&status);
+      auto tStart = std::chrono::steady_clock::now();
+      auto tElapsed = std::chrono::milliseconds::zero();
+      // Loop while Aftermath crash dump data collection has not finished or
+      // the application is still processing the crash dump data.
+      while (status != GFSDK_Aftermath_CrashDump_Status_CollectingDataFailed &&
+             status != GFSDK_Aftermath_CrashDump_Status_Finished &&
+             tElapsed.count() < 1500000)
+      {
+        // Sleep a couple of milliseconds and poll the status again.
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        GFSDK_Aftermath_GetCrashDumpStatus(&status);
+        tElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tStart);
+      }
+
+      if (status == GFSDK_Aftermath_CrashDump_Status_Finished) {
+          Core::LogManager::Error("Aftermath finished processing the crash dump.\n");
+      } else {
+          Core::LogManager::Error("Unexpected crash dump status after timeout: " + std::to_string(status));
+      }
+
+      exit(-1);
+    }
+
+    Core::LogManager::Error("VULKAN :: Device WaitIdle not Success! Error code: "+ error_str);
+  }
 }
 
 inline auto getVkBufferUsageFlags(BufferUsagesFlags usage) noexcept
@@ -1114,8 +1204,9 @@ inline auto getVkMemoryPropertyFlags(
   return flags;
 }
 
-auto Device_VK::createBuffer(BufferDescriptor const& desc) noexcept
+auto Device_VK::createBuffer(BufferDescriptor const& _desc) noexcept
     -> std::unique_ptr<Buffer> {
+  BufferDescriptor desc = _desc;
   VkBufferCreateInfo bufferInfo{};
   bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
   bufferInfo.size = desc.size;
@@ -1125,6 +1216,13 @@ auto Device_VK::createBuffer(BufferDescriptor const& desc) noexcept
                                : VK_SHARING_MODE_CONCURRENT;
   std::unique_ptr<Buffer_VK> buffer = std::make_unique<Buffer_VK>(this);
   buffer->init(this, desc.size, desc);
+
+  if ((bufferInfo.usage & (uint32_t)RHI::BufferUsage::MAP_READ) ||
+      bufferInfo.usage & (uint32_t)RHI::BufferUsage::MAP_WRITE) {
+    desc.memoryProperties |= (uint32_t)MemoryProperty::HOST_VISIBLE_BIT;
+    desc.memoryProperties |= (uint32_t)MemoryProperty::HOST_COHERENT_BIT;
+  }
+
 #ifdef USE_VMA
   VmaAllocationCreateInfo allocInfo = {};
   allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
@@ -2084,7 +2182,7 @@ BindGroupLayout_VK::BindGroupLayout_VK(Device_VK* device,
     bindings[i].stageFlags = getVkShaderStageFlags(desc.entries[i].visibility);
     bindings[i].pImmutableSamplers = nullptr;
     bindingFlags[i] = 0;
-    if (desc.entries[i].bindlessTextures.has_value())
+    if (bindings[i].descriptorCount > 10)
       bindingFlags[i] |= VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
   }
   VkDescriptorSetLayoutCreateInfo layoutInfo{};
@@ -4808,6 +4906,10 @@ RayTracingPipeline_VK::RayTracingPipeline_VK(
         SBTBufferAddress + rayGenRegion.size + missRegion.size;
     callableRegion.deviceAddress = (callableCount == 0) ? 0 :
         SBTBufferAddress + rayGenRegion.size + missRegion.size + hitRegion.size;
+
+    if (missRegion.size == 0) missRegion.deviceAddress = 0;
+    if (hitRegion.size == 0) hitRegion.deviceAddress = 0;
+    if (callableRegion.size == 0) callableRegion.deviceAddress = 0;
   }
 }
 
@@ -5151,28 +5253,29 @@ auto BindGroup_VK::updateBinding(
     } else if (entry.resource.storageArray.size() > 0) {
       std::optional<VkDescriptorType> type = getType(entry.binding);
       if (!type.has_value()) continue;
-      VkDescriptorImageInfo* imageInfoStart=nullptr;
+      bindlessImageInfos.push_back(std::vector<VkDescriptorImageInfo>(
+          entry.resource.storageArray.size()));
+      std::vector<VkDescriptorImageInfo>& bindelessImageInfo =
+          bindlessImageInfos.back();
       for (int i = 0; i < entry.resource.storageArray.size(); ++i) {
-        VkDescriptorImageInfo& imageInfo = imageInfos[imageIndex++];
-        if (i == 0) imageInfoStart=&imageInfo;
+        auto bindlessTexture = entry.resource.storageArray[i];
+        VkDescriptorImageInfo& imageInfo = bindelessImageInfo[i];
         imageInfo.sampler = {};
-        imageInfo.imageView =
-            static_cast<TextureView_VK*>(entry.resource.storageArray[i])
-                ->imageView;
+        imageInfo.imageView = static_cast<TextureView_VK*>(bindlessTexture)->imageView;
         imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-      }
-      descriptorWrites.push_back(VkWriteDescriptorSet{});
-      VkWriteDescriptorSet& descriptorWrite = descriptorWrites.back();
-      descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-      descriptorWrite.dstSet = set;
-      descriptorWrite.dstBinding = entry.binding;
-      descriptorWrite.dstArrayElement = 0;
-      descriptorWrite.descriptorType = type.value();
-      descriptorWrite.descriptorCount = entry.resource.storageArray.size();
-      descriptorWrite.pBufferInfo = nullptr;
-      descriptorWrite.pImageInfo = imageInfoStart;
-      descriptorWrite.pTexelBufferView = nullptr;
 
+        descriptorWrites.push_back(VkWriteDescriptorSet{});
+        VkWriteDescriptorSet& descriptorWrite = descriptorWrites.back();
+        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrite.dstSet = set;
+        descriptorWrite.dstBinding = entry.binding;
+        descriptorWrite.dstArrayElement = i;
+        descriptorWrite.descriptorType = type.value();
+        descriptorWrite.descriptorCount = 1;
+        descriptorWrite.pBufferInfo = nullptr;
+        descriptorWrite.pImageInfo = &imageInfo;
+        descriptorWrite.pTexelBufferView = nullptr;
+      }
     } else if (entry.resource.tlas) {
       std::optional<VkDescriptorType> type = getType(entry.binding);
       if (!type.has_value()) continue;

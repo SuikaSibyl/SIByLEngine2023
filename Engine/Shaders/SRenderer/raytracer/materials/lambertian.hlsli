@@ -100,14 +100,13 @@ void EvalDiffLambertian(inout_ref(BSDFEvalDiffQuery) cBSDFEvalDiffQuery) {
 
     // Evaluate bsdf
     float3 albedo;
-    int albedo_diff_id = -1;
+    int albedo_tex_id = -1;
     if (cBSDFEvalDiffQuery.mat_id == 0xFFFFFFFF) {
         albedo = UnpackRGBE(asuint(cBSDFEvalDiffQuery.bsdf.x));
     }
     else {
         const MaterialInfo material = materials[cBSDFEvalDiffQuery.mat_id];
-        const int albedo_tex_id = material.baseOrDiffuseTextureIndex;
-        albedo_diff_id = DiffableTextureIndices[albedo_tex_id];
+        albedo_tex_id = material.baseOrDiffuseTextureIndex;
         const float3 texAlbedo = textures[albedo_tex_id].Sample(cBSDFEvalDiffQuery.uv, 0).xyz;
         albedo = material.baseOrDiffuseColor * texAlbedo;
     }
@@ -115,17 +114,20 @@ void EvalDiffLambertian(inout_ref(BSDFEvalDiffQuery) cBSDFEvalDiffQuery) {
     cBSDFEvalDiffQuery.bsdf = bitfield.split_query ? demodulate : albedo * demodulate;
     cBSDFEvalDiffQuery.dir_out = float3(0); // override specular
 
-    if (albedo_diff_id != -1) { // if the albedo texture if a differentiable resource
-        cBSDFEvalDiffQuery.dir_out = float3(1, 0, 1);
-        const DiffResourceDesc diff_desc = DiffResourcesDescs[albedo_diff_id];
+    // if the albedo texture if a differentiable resource
+    // then we need to evaluate the gradient for albedo
+    if (albedo_tex_id != -1) {
+        int diff_id_albedo = DiffableTextureIndices[albedo_tex_id];
+        const DiffResourceDesc diff_desc = DiffResourcesDescs[diff_id_albedo];
         float3 albedo_gradient = cBSDFEvalDiffQuery.adjoint_gradient * demodulate;
         const int width = (diff_desc.data_extend >> 0) & 0xFFFF;
         const int height = (diff_desc.data_extend >> 16) & 0xFFFF;
-        const int2 texcoord = int2(cBSDFEvalDiffQuery.uv * int2(width, height));
-        const uint flatten = FlattensPixelToIndex(texcoord, width);
         if (any(isnan(albedo_gradient) || isinf(albedo_gradient))) {
         } else {
-            InterlockedAddGradFloat3(flatten, albedo_gradient);
+            float lod = 0.5 * log2(width * height) + cBSDFEvalDiffQuery.lod;
+            lod = clamp(lod, 0.f, 15.f);
+            // trilinear_gradient_spatting(albedo_gradient, float3(cBSDFEvalDiffQuery.uv, lod), int2(width, height), 0);
+            InterlockedAddGradTex(albedo_gradient, albedo_tex_id, float3(cBSDFEvalDiffQuery.uv, lod));
         }
     }
 }

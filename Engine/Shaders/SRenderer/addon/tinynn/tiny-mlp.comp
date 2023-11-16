@@ -1,0 +1,4397 @@
+#version 450
+#extension GL_EXT_shader_atomic_float : require
+#extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_shader_explicit_arithmetic_types : require
+#extension GL_KHR_shader_subgroup_arithmetic : require
+#extension GL_KHR_shader_subgroup_basic : require
+layout(column_major) uniform;
+layout(column_major) buffer;
+#extension GL_GOOGLE_include_directive : enable
+#include "matmul.glsli"
+
+#line 81 0
+layout(std430, binding = 1) buffer StructuredBuffer_float_t_0 {
+    float _data[];
+} _gradient_buffer_0;
+
+#line 4 1
+layout(std430, binding = 0) buffer StructuredBuffer_float_t_1 {
+    float _data[];
+} _primal_buffer_0;
+
+#line 3 2
+layout(rgba32f)
+layout(binding = 2)
+uniform image2D output_texture_0;
+
+
+#line 4
+layout(r32f)
+layout(binding = 3)
+uniform image2D error_texture_0;
+
+
+#line 7 1
+struct ThreadInfo_0
+{
+    ivec2 thread_idx_0;
+    ivec2 block_dim_0;
+};
+
+
+ThreadInfo_0 ThreadInfo_x24init_0(ivec2 thread_idx_1, ivec2 block_dim_1)
+{
+
+#line 14
+    ThreadInfo_0 _S1;
+    _S1.thread_idx_0 = thread_idx_1;
+    _S1.block_dim_0 = block_dim_1;
+
+#line 14
+    return _S1;
+}
+
+
+
+struct TensorView_0
+{
+    uint offset_prim_0;
+    uint offset_grad_0;
+    uint stride_0;
+    uint pitch_0;
+};
+
+
+#line 50
+TensorView_0 TensorView_x24init_0(uint offset_prim_1, uint offset_grad_1, uint stride_1, uint pitch_1)
+{
+
+#line 50
+    TensorView_0 _S2;
+    _S2.offset_prim_0 = offset_prim_1;
+    _S2.offset_grad_0 = offset_grad_1;
+    _S2.stride_0 = stride_1;
+    _S2.pitch_0 = pitch_1;
+
+#line 50
+    return _S2;
+}
+
+
+#line 17 3
+struct Linear_0
+{
+    ThreadInfo_0 threadInfo_0;
+    TensorView_0 weights_view_0;
+    TensorView_0 bias_view_0;
+};
+
+
+#line 31
+Linear_0 Linear_x24init_0(TensorView_0 weights_view_1, TensorView_0 bias_view_1, ThreadInfo_0 threadInfo_1)
+{
+
+#line 31
+    Linear_0 _S3;
+    _S3.threadInfo_0 = threadInfo_1;
+    _S3.weights_view_0 = weights_view_1;
+    _S3.bias_view_0 = bias_view_1;
+
+#line 31
+    return _S3;
+}
+
+
+#line 9
+struct s_diff_Feature_0
+{
+    float  vals_0[16];
+};
+
+
+#line 998 4
+s_diff_Feature_0 Feature_x24_syn_dadd_0(s_diff_Feature_0 SLANG_anonymous_0_0, s_diff_Feature_0 SLANG_anonymous_1_0)
+{
+
+#line 998
+    s_diff_Feature_0 result_0;
+
+#line 509 5
+    float _S4 = SLANG_anonymous_0_0.vals_0[1] + SLANG_anonymous_1_0.vals_0[1];
+
+#line 509
+    float _S5 = SLANG_anonymous_0_0.vals_0[2] + SLANG_anonymous_1_0.vals_0[2];
+
+#line 509
+    float _S6 = SLANG_anonymous_0_0.vals_0[3] + SLANG_anonymous_1_0.vals_0[3];
+
+#line 509
+    float _S7 = SLANG_anonymous_0_0.vals_0[4] + SLANG_anonymous_1_0.vals_0[4];
+
+#line 509
+    float _S8 = SLANG_anonymous_0_0.vals_0[5] + SLANG_anonymous_1_0.vals_0[5];
+
+#line 509
+    float _S9 = SLANG_anonymous_0_0.vals_0[6] + SLANG_anonymous_1_0.vals_0[6];
+
+#line 509
+    float _S10 = SLANG_anonymous_0_0.vals_0[7] + SLANG_anonymous_1_0.vals_0[7];
+
+#line 509
+    float _S11 = SLANG_anonymous_0_0.vals_0[8] + SLANG_anonymous_1_0.vals_0[8];
+
+#line 509
+    float _S12 = SLANG_anonymous_0_0.vals_0[9] + SLANG_anonymous_1_0.vals_0[9];
+
+#line 509
+    float _S13 = SLANG_anonymous_0_0.vals_0[10] + SLANG_anonymous_1_0.vals_0[10];
+
+#line 509
+    float _S14 = SLANG_anonymous_0_0.vals_0[11] + SLANG_anonymous_1_0.vals_0[11];
+
+#line 509
+    float _S15 = SLANG_anonymous_0_0.vals_0[12] + SLANG_anonymous_1_0.vals_0[12];
+
+#line 509
+    float _S16 = SLANG_anonymous_0_0.vals_0[13] + SLANG_anonymous_1_0.vals_0[13];
+
+#line 509
+    float _S17 = SLANG_anonymous_0_0.vals_0[14] + SLANG_anonymous_1_0.vals_0[14];
+
+#line 509
+    float _S18 = SLANG_anonymous_0_0.vals_0[15] + SLANG_anonymous_1_0.vals_0[15];
+
+#line 509
+    result_0.vals_0[0] = SLANG_anonymous_0_0.vals_0[0] + SLANG_anonymous_1_0.vals_0[0];
+
+#line 509
+    result_0.vals_0[1] = _S4;
+
+#line 509
+    result_0.vals_0[2] = _S5;
+
+#line 509
+    result_0.vals_0[3] = _S6;
+
+#line 509
+    result_0.vals_0[4] = _S7;
+
+#line 509
+    result_0.vals_0[5] = _S8;
+
+#line 509
+    result_0.vals_0[6] = _S9;
+
+#line 509
+    result_0.vals_0[7] = _S10;
+
+#line 509
+    result_0.vals_0[8] = _S11;
+
+#line 509
+    result_0.vals_0[9] = _S12;
+
+#line 509
+    result_0.vals_0[10] = _S13;
+
+#line 509
+    result_0.vals_0[11] = _S14;
+
+#line 509
+    result_0.vals_0[12] = _S15;
+
+#line 509
+    result_0.vals_0[13] = _S16;
+
+#line 509
+    result_0.vals_0[14] = _S17;
+
+#line 509
+    result_0.vals_0[15] = _S18;
+
+#line 509
+    return result_0;
+}
+
+
+#line 509
+s_diff_Feature_0 Feature_x24_syn_dzero_0()
+{
+
+#line 509
+    s_diff_Feature_0 result_1;
+
+#line 509
+    result_1.vals_0[0] = 0.0;
+
+#line 509
+    result_1.vals_0[1] = 0.0;
+
+#line 509
+    result_1.vals_0[2] = 0.0;
+
+#line 509
+    result_1.vals_0[3] = 0.0;
+
+#line 509
+    result_1.vals_0[4] = 0.0;
+
+#line 509
+    result_1.vals_0[5] = 0.0;
+
+#line 509
+    result_1.vals_0[6] = 0.0;
+
+#line 509
+    result_1.vals_0[7] = 0.0;
+
+#line 509
+    result_1.vals_0[8] = 0.0;
+
+#line 509
+    result_1.vals_0[9] = 0.0;
+
+#line 509
+    result_1.vals_0[10] = 0.0;
+
+#line 509
+    result_1.vals_0[11] = 0.0;
+
+#line 509
+    result_1.vals_0[12] = 0.0;
+
+#line 509
+    result_1.vals_0[13] = 0.0;
+
+#line 509
+    result_1.vals_0[14] = 0.0;
+
+#line 509
+    result_1.vals_0[15] = 0.0;
+
+#line 509
+    return result_1;
+}
+
+
+#line 36 1
+void RWByteAddressBuffer_InterlockedAddF32_0(uint _S19, float _S20)
+{
+
+#line 618 6
+    float _S21 = (atomicAdd((_gradient_buffer_0._data[_S19 / 4U]), (_S20)));
+    return;
+}
+
+
+#line 32 1
+void TensorView_interlocked_add_grad_0(TensorView_0 this_0, int x_0, float val_0)
+{
+
+#line 32
+    RWByteAddressBuffer_InterlockedAddF32_0(uint((int(this_0.offset_grad_0) + x_0) * 4), val_0);
+
+#line 32
+    return;
+}
+
+
+#line 34
+void TensorView_interlocked_add_grad_1(TensorView_0 this_1, int x_1, int y_0, int z_0, float val_1)
+{
+
+#line 34
+    TensorView_interlocked_add_grad_0(this_1, x_1 + y_0 * int(this_1.stride_0) + z_0 * int(this_1.pitch_0), val_1);
+
+#line 34
+    return;
+}
+
+
+#line 70 2
+void InterpolatedFeature_bwd_0(TensorView_0 featureGrid_0, uvec2 frameDim_0, ivec2 pixelId_0, s_diff_Feature_0 output_grad_0)
+{
+
+
+    vec2 cellSize_0 = vec2(float(frameDim_0.x) / 31.0, float(frameDim_0.y) / 31.0);
+    vec2 _S22 = vec2(pixelId_0);
+
+#line 75
+    uvec2 cellId_0 = uvec2(floor(_S22 / cellSize_0));
+
+    vec2 _S23 = _S22 / cellSize_0 - vec2(cellId_0);
+
+
+
+    uint _S24 = cellId_0.x;
+
+#line 81
+    int _S25 = int(_S24);
+
+#line 81
+    uint _S26 = cellId_0.y;
+
+#line 81
+    int _S27 = int(_S26);
+
+#line 81
+    float _S28 = _S23.x;
+
+#line 81
+    float _S29 = 1.0 - _S28;
+
+#line 81
+    float _S30 = _S23.y;
+
+#line 81
+    float _S31 = 1.0 - _S30;
+    int _S32 = int(_S24 + 1U);
+    int _S33 = int(_S26 + 1U);
+
+#line 81
+    float _S34 = output_grad_0.vals_0[0] * _S29;
+    float _S35 = output_grad_0.vals_0[0] * _S28;
+
+#line 82
+    float _S36 = _S35 * _S31;
+    float _S37 = _S34 * _S30;
+    float _S38 = _S35 * _S30;
+
+#line 81
+    float _S39 = output_grad_0.vals_0[1] * _S29;
+
+#line 81
+    float _S40 = _S39 * _S31;
+    float _S41 = output_grad_0.vals_0[1] * _S28;
+
+#line 82
+    float _S42 = _S41 * _S31;
+    float _S43 = _S39 * _S30;
+    float _S44 = _S41 * _S30;
+
+#line 81
+    float _S45 = output_grad_0.vals_0[2] * _S29;
+
+#line 81
+    float _S46 = _S45 * _S31;
+    float _S47 = output_grad_0.vals_0[2] * _S28;
+
+#line 82
+    float _S48 = _S47 * _S31;
+    float _S49 = _S45 * _S30;
+    float _S50 = _S47 * _S30;
+
+#line 81
+    float _S51 = output_grad_0.vals_0[3] * _S29;
+
+#line 81
+    float _S52 = _S51 * _S31;
+    float _S53 = output_grad_0.vals_0[3] * _S28;
+
+#line 82
+    float _S54 = _S53 * _S31;
+    float _S55 = _S51 * _S30;
+    float _S56 = _S53 * _S30;
+
+#line 81
+    float _S57 = output_grad_0.vals_0[4] * _S29;
+
+#line 81
+    float _S58 = _S57 * _S31;
+    float _S59 = output_grad_0.vals_0[4] * _S28;
+
+#line 82
+    float _S60 = _S59 * _S31;
+    float _S61 = _S57 * _S30;
+    float _S62 = _S59 * _S30;
+
+#line 81
+    float _S63 = output_grad_0.vals_0[5] * _S29;
+
+#line 81
+    float _S64 = _S63 * _S31;
+    float _S65 = output_grad_0.vals_0[5] * _S28;
+
+#line 82
+    float _S66 = _S65 * _S31;
+    float _S67 = _S63 * _S30;
+    float _S68 = _S65 * _S30;
+
+#line 81
+    float _S69 = output_grad_0.vals_0[6] * _S29;
+
+#line 81
+    float _S70 = _S69 * _S31;
+    float _S71 = output_grad_0.vals_0[6] * _S28;
+
+#line 82
+    float _S72 = _S71 * _S31;
+    float _S73 = _S69 * _S30;
+    float _S74 = _S71 * _S30;
+
+#line 81
+    float _S75 = output_grad_0.vals_0[7] * _S29;
+
+#line 81
+    float _S76 = _S75 * _S31;
+    float _S77 = output_grad_0.vals_0[7] * _S28;
+
+#line 82
+    float _S78 = _S77 * _S31;
+    float _S79 = _S75 * _S30;
+    float _S80 = _S77 * _S30;
+
+#line 81
+    float _S81 = output_grad_0.vals_0[8] * _S29;
+
+#line 81
+    float _S82 = _S81 * _S31;
+    float _S83 = output_grad_0.vals_0[8] * _S28;
+
+#line 82
+    float _S84 = _S83 * _S31;
+    float _S85 = _S81 * _S30;
+    float _S86 = _S83 * _S30;
+
+#line 81
+    float _S87 = output_grad_0.vals_0[9] * _S29;
+
+#line 81
+    float _S88 = _S87 * _S31;
+    float _S89 = output_grad_0.vals_0[9] * _S28;
+
+#line 82
+    float _S90 = _S89 * _S31;
+    float _S91 = _S87 * _S30;
+    float _S92 = _S89 * _S30;
+
+#line 81
+    float _S93 = output_grad_0.vals_0[10] * _S29;
+
+#line 81
+    float _S94 = _S93 * _S31;
+    float _S95 = output_grad_0.vals_0[10] * _S28;
+
+#line 82
+    float _S96 = _S95 * _S31;
+    float _S97 = _S93 * _S30;
+    float _S98 = _S95 * _S30;
+
+#line 81
+    float _S99 = output_grad_0.vals_0[11] * _S29;
+
+#line 81
+    float _S100 = _S99 * _S31;
+    float _S101 = output_grad_0.vals_0[11] * _S28;
+
+#line 82
+    float _S102 = _S101 * _S31;
+    float _S103 = _S99 * _S30;
+    float _S104 = _S101 * _S30;
+
+#line 81
+    float _S105 = output_grad_0.vals_0[12] * _S29;
+
+#line 81
+    float _S106 = _S105 * _S31;
+    float _S107 = output_grad_0.vals_0[12] * _S28;
+
+#line 82
+    float _S108 = _S107 * _S31;
+    float _S109 = _S105 * _S30;
+    float _S110 = _S107 * _S30;
+
+#line 81
+    float _S111 = output_grad_0.vals_0[13] * _S29;
+
+#line 81
+    float _S112 = _S111 * _S31;
+    float _S113 = output_grad_0.vals_0[13] * _S28;
+
+#line 82
+    float _S114 = _S113 * _S31;
+    float _S115 = _S111 * _S30;
+    float _S116 = _S113 * _S30;
+
+#line 81
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S27, 0, _S34 * _S31);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S27, 0, _S36);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S33, 0, _S37);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S33, 0, _S38);
+
+#line 81
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S27, 1, _S40);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S27, 1, _S42);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S33, 1, _S43);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S33, 1, _S44);
+
+#line 81
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S27, 2, _S46);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S27, 2, _S48);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S33, 2, _S49);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S33, 2, _S50);
+
+#line 81
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S27, 3, _S52);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S27, 3, _S54);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S33, 3, _S55);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S33, 3, _S56);
+
+#line 81
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S27, 4, _S58);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S27, 4, _S60);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S33, 4, _S61);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S33, 4, _S62);
+
+#line 81
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S27, 5, _S64);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S27, 5, _S66);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S33, 5, _S67);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S33, 5, _S68);
+
+#line 81
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S27, 6, _S70);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S27, 6, _S72);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S33, 6, _S73);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S33, 6, _S74);
+
+#line 81
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S27, 7, _S76);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S27, 7, _S78);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S33, 7, _S79);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S33, 7, _S80);
+
+#line 81
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S27, 8, _S82);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S27, 8, _S84);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S33, 8, _S85);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S33, 8, _S86);
+
+#line 81
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S27, 9, _S88);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S27, 9, _S90);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S33, 9, _S91);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S33, 9, _S92);
+
+#line 81
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S27, 10, _S94);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S27, 10, _S96);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S33, 10, _S97);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S33, 10, _S98);
+
+#line 81
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S27, 11, _S100);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S27, 11, _S102);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S33, 11, _S103);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S33, 11, _S104);
+
+#line 81
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S27, 12, _S106);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S27, 12, _S108);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S33, 12, _S109);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S33, 12, _S110);
+
+#line 81
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S27, 13, _S112);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S27, 13, _S114);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S25, _S33, 13, _S115);
+    TensorView_interlocked_add_grad_1(featureGrid_0, _S32, _S33, 13, _S116);
+
+    return;
+}
+
+
+#line 26 1
+float TensorView_load_prim_0(TensorView_0 this_2, int x_2)
+{
+
+#line 26
+    return _primal_buffer_0._data[uint(int(this_2.offset_prim_0) + x_2)];
+}
+
+
+float TensorView_load_prim_1(TensorView_0 this_3, int x_3, int y_1, int z_1)
+{
+
+#line 30
+    return TensorView_load_prim_0(this_3, x_3 + y_1 * int(this_3.stride_0) + z_1 * int(this_3.pitch_0));
+}
+
+
+#line 9 3
+struct Feature_0
+{
+    float  vals_1[16];
+};
+
+
+#line 48 2
+Feature_0 computeInterpolatedFeature_0(TensorView_0 featureGrid_1, uvec2 frameDim_1, ivec2 pixelId_1)
+{
+
+
+    vec2 cellSize_1 = vec2(float(frameDim_1.x) / 31.0, float(frameDim_1.y) / 31.0);
+    vec2 _S117 = vec2(pixelId_1);
+
+#line 53
+    uvec2 cellId_1 = uvec2(floor(_S117 / cellSize_1));
+
+    vec2 weights_0 = _S117 / cellSize_1 - vec2(cellId_1);
+
+    Feature_0 feature_0;
+
+
+    uint _S118 = cellId_1.x;
+
+#line 60
+    int _S119 = int(_S118);
+
+#line 60
+    uint _S120 = cellId_1.y;
+
+#line 60
+    int _S121 = int(_S120);
+
+#line 60
+    float _S122 = weights_0.x;
+
+#line 60
+    float _S123 = 1.0 - _S122;
+
+#line 60
+    float _S124 = weights_0.y;
+
+#line 60
+    float _S125 = 1.0 - _S124;
+    int _S126 = int(_S118 + 1U);
+    int _S127 = int(_S120 + 1U);
+
+#line 60
+    feature_0.vals_1[0] = TensorView_load_prim_1(featureGrid_1, _S119, _S121, 0) * _S123 * _S125 + TensorView_load_prim_1(featureGrid_1, _S126, _S121, 0) * _S122 * _S125 + TensorView_load_prim_1(featureGrid_1, _S119, _S127, 0) * _S123 * _S124 + TensorView_load_prim_1(featureGrid_1, _S126, _S127, 0) * _S122 * _S124;
+
+#line 60
+    feature_0.vals_1[1] = TensorView_load_prim_1(featureGrid_1, _S119, _S121, 1) * _S123 * _S125 + TensorView_load_prim_1(featureGrid_1, _S126, _S121, 1) * _S122 * _S125 + TensorView_load_prim_1(featureGrid_1, _S119, _S127, 1) * _S123 * _S124 + TensorView_load_prim_1(featureGrid_1, _S126, _S127, 1) * _S122 * _S124;
+
+#line 60
+    feature_0.vals_1[2] = TensorView_load_prim_1(featureGrid_1, _S119, _S121, 2) * _S123 * _S125 + TensorView_load_prim_1(featureGrid_1, _S126, _S121, 2) * _S122 * _S125 + TensorView_load_prim_1(featureGrid_1, _S119, _S127, 2) * _S123 * _S124 + TensorView_load_prim_1(featureGrid_1, _S126, _S127, 2) * _S122 * _S124;
+
+#line 60
+    feature_0.vals_1[3] = TensorView_load_prim_1(featureGrid_1, _S119, _S121, 3) * _S123 * _S125 + TensorView_load_prim_1(featureGrid_1, _S126, _S121, 3) * _S122 * _S125 + TensorView_load_prim_1(featureGrid_1, _S119, _S127, 3) * _S123 * _S124 + TensorView_load_prim_1(featureGrid_1, _S126, _S127, 3) * _S122 * _S124;
+
+#line 60
+    feature_0.vals_1[4] = TensorView_load_prim_1(featureGrid_1, _S119, _S121, 4) * _S123 * _S125 + TensorView_load_prim_1(featureGrid_1, _S126, _S121, 4) * _S122 * _S125 + TensorView_load_prim_1(featureGrid_1, _S119, _S127, 4) * _S123 * _S124 + TensorView_load_prim_1(featureGrid_1, _S126, _S127, 4) * _S122 * _S124;
+
+#line 60
+    feature_0.vals_1[5] = TensorView_load_prim_1(featureGrid_1, _S119, _S121, 5) * _S123 * _S125 + TensorView_load_prim_1(featureGrid_1, _S126, _S121, 5) * _S122 * _S125 + TensorView_load_prim_1(featureGrid_1, _S119, _S127, 5) * _S123 * _S124 + TensorView_load_prim_1(featureGrid_1, _S126, _S127, 5) * _S122 * _S124;
+
+#line 60
+    feature_0.vals_1[6] = TensorView_load_prim_1(featureGrid_1, _S119, _S121, 6) * _S123 * _S125 + TensorView_load_prim_1(featureGrid_1, _S126, _S121, 6) * _S122 * _S125 + TensorView_load_prim_1(featureGrid_1, _S119, _S127, 6) * _S123 * _S124 + TensorView_load_prim_1(featureGrid_1, _S126, _S127, 6) * _S122 * _S124;
+
+#line 60
+    feature_0.vals_1[7] = TensorView_load_prim_1(featureGrid_1, _S119, _S121, 7) * _S123 * _S125 + TensorView_load_prim_1(featureGrid_1, _S126, _S121, 7) * _S122 * _S125 + TensorView_load_prim_1(featureGrid_1, _S119, _S127, 7) * _S123 * _S124 + TensorView_load_prim_1(featureGrid_1, _S126, _S127, 7) * _S122 * _S124;
+
+#line 60
+    feature_0.vals_1[8] = TensorView_load_prim_1(featureGrid_1, _S119, _S121, 8) * _S123 * _S125 + TensorView_load_prim_1(featureGrid_1, _S126, _S121, 8) * _S122 * _S125 + TensorView_load_prim_1(featureGrid_1, _S119, _S127, 8) * _S123 * _S124 + TensorView_load_prim_1(featureGrid_1, _S126, _S127, 8) * _S122 * _S124;
+
+#line 60
+    feature_0.vals_1[9] = TensorView_load_prim_1(featureGrid_1, _S119, _S121, 9) * _S123 * _S125 + TensorView_load_prim_1(featureGrid_1, _S126, _S121, 9) * _S122 * _S125 + TensorView_load_prim_1(featureGrid_1, _S119, _S127, 9) * _S123 * _S124 + TensorView_load_prim_1(featureGrid_1, _S126, _S127, 9) * _S122 * _S124;
+
+#line 60
+    feature_0.vals_1[10] = TensorView_load_prim_1(featureGrid_1, _S119, _S121, 10) * _S123 * _S125 + TensorView_load_prim_1(featureGrid_1, _S126, _S121, 10) * _S122 * _S125 + TensorView_load_prim_1(featureGrid_1, _S119, _S127, 10) * _S123 * _S124 + TensorView_load_prim_1(featureGrid_1, _S126, _S127, 10) * _S122 * _S124;
+
+#line 60
+    feature_0.vals_1[11] = TensorView_load_prim_1(featureGrid_1, _S119, _S121, 11) * _S123 * _S125 + TensorView_load_prim_1(featureGrid_1, _S126, _S121, 11) * _S122 * _S125 + TensorView_load_prim_1(featureGrid_1, _S119, _S127, 11) * _S123 * _S124 + TensorView_load_prim_1(featureGrid_1, _S126, _S127, 11) * _S122 * _S124;
+
+#line 60
+    feature_0.vals_1[12] = TensorView_load_prim_1(featureGrid_1, _S119, _S121, 12) * _S123 * _S125 + TensorView_load_prim_1(featureGrid_1, _S126, _S121, 12) * _S122 * _S125 + TensorView_load_prim_1(featureGrid_1, _S119, _S127, 12) * _S123 * _S124 + TensorView_load_prim_1(featureGrid_1, _S126, _S127, 12) * _S122 * _S124;
+
+#line 60
+    feature_0.vals_1[13] = TensorView_load_prim_1(featureGrid_1, _S119, _S121, 13) * _S123 * _S125 + TensorView_load_prim_1(featureGrid_1, _S126, _S121, 13) * _S122 * _S125 + TensorView_load_prim_1(featureGrid_1, _S119, _S127, 13) * _S123 * _S124 + TensorView_load_prim_1(featureGrid_1, _S126, _S127, 13) * _S122 * _S124;
+
+#line 65
+    feature_0.vals_1[14] = _S122;
+    feature_0.vals_1[15] = _S124;
+    return feature_0;
+}
+
+
+#line 99 3
+void Linear_loadArray_0(Linear_0 this_4, uint memptr_0, out float  input_0[16])
+{
+
+#line 106
+    int _S128 = int(memptr_0) + int(uint(this_4.threadInfo_0.thread_idx_0.x % 32)) * 16;
+
+#line 106
+    int _S129 = _S128 + 1;
+
+#line 106
+    int _S130 = _S128 + 2;
+
+#line 106
+    int _S131 = _S128 + 3;
+
+#line 106
+    int _S132 = _S128 + 4;
+
+#line 106
+    int _S133 = _S128 + 5;
+
+#line 106
+    int _S134 = _S128 + 6;
+
+#line 106
+    int _S135 = _S128 + 7;
+
+#line 106
+    int _S136 = _S128 + 8;
+
+#line 106
+    int _S137 = _S128 + 9;
+
+#line 106
+    int _S138 = _S128 + 10;
+
+#line 106
+    int _S139 = _S128 + 11;
+
+#line 106
+    int _S140 = _S128 + 12;
+
+#line 106
+    int _S141 = _S128 + 13;
+
+#line 106
+    int _S142 = _S128 + 14;
+
+#line 106
+    int _S143 = _S128 + 15;
+
+#line 106
+    float _S144 = (get_output_buffer_glsl((_S128)));
+
+#line 106
+    input_0[0] = _S144;
+
+#line 106
+    float _S145 = (get_output_buffer_glsl((_S129)));
+
+#line 106
+    input_0[1] = _S145;
+
+#line 106
+    float _S146 = (get_output_buffer_glsl((_S130)));
+
+#line 106
+    input_0[2] = _S146;
+
+#line 106
+    float _S147 = (get_output_buffer_glsl((_S131)));
+
+#line 106
+    input_0[3] = _S147;
+
+#line 106
+    float _S148 = (get_output_buffer_glsl((_S132)));
+
+#line 106
+    input_0[4] = _S148;
+
+#line 106
+    float _S149 = (get_output_buffer_glsl((_S133)));
+
+#line 106
+    input_0[5] = _S149;
+
+#line 106
+    float _S150 = (get_output_buffer_glsl((_S134)));
+
+#line 106
+    input_0[6] = _S150;
+
+#line 106
+    float _S151 = (get_output_buffer_glsl((_S135)));
+
+#line 106
+    input_0[7] = _S151;
+
+#line 106
+    float _S152 = (get_output_buffer_glsl((_S136)));
+
+#line 106
+    input_0[8] = _S152;
+
+#line 106
+    float _S153 = (get_output_buffer_glsl((_S137)));
+
+#line 106
+    input_0[9] = _S153;
+
+#line 106
+    float _S154 = (get_output_buffer_glsl((_S138)));
+
+#line 106
+    input_0[10] = _S154;
+
+#line 106
+    float _S155 = (get_output_buffer_glsl((_S139)));
+
+#line 106
+    input_0[11] = _S155;
+
+#line 106
+    float _S156 = (get_output_buffer_glsl((_S140)));
+
+#line 106
+    input_0[12] = _S156;
+
+#line 106
+    float _S157 = (get_output_buffer_glsl((_S141)));
+
+#line 106
+    input_0[13] = _S157;
+
+#line 106
+    float _S158 = (get_output_buffer_glsl((_S142)));
+
+#line 106
+    input_0[14] = _S158;
+
+#line 106
+    float _S159 = (get_output_buffer_glsl((_S143)));
+
+#line 106
+    input_0[15] = _S159;
+
+#line 112
+    return;
+}
+
+
+#line 37
+uint Linear_calcOffset_0(Linear_0 this_5)
+{
+
+#line 38
+    return uint((float(this_5.threadInfo_0.thread_idx_0.x / 32) + float(this_5.threadInfo_0.thread_idx_0.y) * (float(this_5.threadInfo_0.block_dim_0.x) / 32.0)) * 256.0);
+}
+
+
+#line 37
+uint Linear_calcOffset_1(Linear_0 this_6)
+{
+
+#line 38
+    return uint((float(this_6.threadInfo_0.thread_idx_0.x / 32) + float(this_6.threadInfo_0.thread_idx_0.y) * (float(this_6.threadInfo_0.block_dim_0.x) / 32.0)) * 512.0);
+}
+
+
+#line 47
+uint Linear_outBufferForCurrentWarp_0(Linear_0 this_7)
+{
+
+#line 47
+    return Linear_calcOffset_1(this_7);
+}
+
+
+#line 132
+void Linear_moveOutputsToLocalArray_0(Linear_0 this_8, out float  outputs_0[16])
+{
+    Linear_loadArray_0(this_8, Linear_outBufferForCurrentWarp_0(this_8), outputs_0);
+
+#line 134
+    int i_0 = 0;
+
+#line 134
+    for(;;)
+    {
+
+#line 135
+        if(i_0 < 16)
+        {
+        }
+        else
+        {
+
+#line 135
+            break;
+        }
+
+#line 136
+        outputs_0[i_0] = outputs_0[i_0] + TensorView_load_prim_0(this_8.bias_view_0, i_0);
+
+#line 135
+        i_0 = i_0 + 1;
+
+#line 135
+    }
+
+    return;
+}
+
+
+#line 43
+uint Linear_wtBufferForCurrentWarp_0(Linear_0 this_9)
+{
+
+#line 43
+    return Linear_calcOffset_0(this_9);
+}
+
+
+#line 33 1
+void TensorView_interlocked_add_grad_2(TensorView_0 this_10, int x_4, int y_2, float val_2)
+{
+
+#line 33
+    TensorView_interlocked_add_grad_0(this_10, x_4 + y_2 * int(this_10.stride_0), val_2);
+
+#line 33
+    return;
+}
+
+
+#line 28
+float TensorView_load_prim_2(TensorView_0 this_11, int x_5, int y_3)
+{
+
+#line 28
+    return TensorView_load_prim_0(this_11, x_5 + y_3 * int(this_11.stride_0));
+}
+
+
+#line 50 3
+uint Linear_moveWeightsToSharedMem_0(Linear_0 this_12)
+{
+
+#line 51
+    uint wtPtr_0 = Linear_wtBufferForCurrentWarp_0(this_12);
+
+#line 58
+    int threadIdInWarp_0 = this_12.threadInfo_0.thread_idx_0.x % 32;
+
+
+
+    int _S160 = int(wtPtr_0);
+
+#line 59
+    bool _S161 = threadIdInWarp_0 >= 16;
+
+
+    int _S162 = _S160 + threadIdInWarp_0;
+
+#line 62
+    int _S163 = _S160 + 16 + threadIdInWarp_0;
+
+#line 62
+    int _S164 = _S160 + 32 + threadIdInWarp_0;
+
+#line 62
+    int _S165 = _S160 + 48 + threadIdInWarp_0;
+
+#line 62
+    int _S166 = _S160 + 64 + threadIdInWarp_0;
+
+#line 62
+    int _S167 = _S160 + 80 + threadIdInWarp_0;
+
+#line 62
+    int _S168 = _S160 + 96 + threadIdInWarp_0;
+
+#line 62
+    int _S169 = _S160 + 112 + threadIdInWarp_0;
+
+#line 62
+    int _S170 = _S160 + 128 + threadIdInWarp_0;
+
+#line 62
+    int _S171 = _S160 + 144 + threadIdInWarp_0;
+
+#line 62
+    int _S172 = _S160 + 160 + threadIdInWarp_0;
+
+#line 62
+    int _S173 = _S160 + 176 + threadIdInWarp_0;
+
+#line 62
+    int _S174 = _S160 + 192 + threadIdInWarp_0;
+
+#line 62
+    int _S175 = _S160 + 208 + threadIdInWarp_0;
+
+#line 62
+    int _S176 = _S160 + 224 + threadIdInWarp_0;
+
+#line 62
+    int _S177 = _S160 + 240 + threadIdInWarp_0;
+
+#line 62
+    for(;;)
+    {
+
+#line 62
+        for(;;)
+        {
+
+#line 62
+            for(;;)
+            {
+
+#line 62
+                for(;;)
+                {
+
+#line 62
+                    for(;;)
+                    {
+
+#line 62
+                        for(;;)
+                        {
+
+#line 59
+                            if(_S161)
+                            {
+
+#line 59
+                                break;
+                            }
+
+                            set_weights_buffer_glsl((_S162), (float16_t(TensorView_load_prim_2(this_12.weights_view_0, threadIdInWarp_0, 0))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S161)
+                            {
+
+#line 59
+                                break;
+                            }
+
+                            set_weights_buffer_glsl((_S163), (float16_t(TensorView_load_prim_2(this_12.weights_view_0, threadIdInWarp_0, 1))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S161)
+                            {
+
+#line 59
+                                break;
+                            }
+
+                            set_weights_buffer_glsl((_S164), (float16_t(TensorView_load_prim_2(this_12.weights_view_0, threadIdInWarp_0, 2))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S161)
+                            {
+
+#line 59
+                                break;
+                            }
+
+                            set_weights_buffer_glsl((_S165), (float16_t(TensorView_load_prim_2(this_12.weights_view_0, threadIdInWarp_0, 3))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S161)
+                            {
+
+#line 59
+                                break;
+                            }
+
+                            set_weights_buffer_glsl((_S166), (float16_t(TensorView_load_prim_2(this_12.weights_view_0, threadIdInWarp_0, 4))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S161)
+                            {
+
+#line 59
+                                break;
+                            }
+
+                            set_weights_buffer_glsl((_S167), (float16_t(TensorView_load_prim_2(this_12.weights_view_0, threadIdInWarp_0, 5))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S161)
+                            {
+
+#line 59
+                                break;
+                            }
+
+                            set_weights_buffer_glsl((_S168), (float16_t(TensorView_load_prim_2(this_12.weights_view_0, threadIdInWarp_0, 6))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S161)
+                            {
+
+#line 59
+                                break;
+                            }
+
+                            set_weights_buffer_glsl((_S169), (float16_t(TensorView_load_prim_2(this_12.weights_view_0, threadIdInWarp_0, 7))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S161)
+                            {
+
+#line 59
+                                break;
+                            }
+
+                            set_weights_buffer_glsl((_S170), (float16_t(TensorView_load_prim_2(this_12.weights_view_0, threadIdInWarp_0, 8))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S161)
+                            {
+
+#line 59
+                                break;
+                            }
+
+                            set_weights_buffer_glsl((_S171), (float16_t(TensorView_load_prim_2(this_12.weights_view_0, threadIdInWarp_0, 9))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S161)
+                            {
+
+#line 59
+                                break;
+                            }
+
+                            set_weights_buffer_glsl((_S172), (float16_t(TensorView_load_prim_2(this_12.weights_view_0, threadIdInWarp_0, 10))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S161)
+                            {
+
+#line 59
+                                break;
+                            }
+
+                            set_weights_buffer_glsl((_S173), (float16_t(TensorView_load_prim_2(this_12.weights_view_0, threadIdInWarp_0, 11))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S161)
+                            {
+
+#line 59
+                                break;
+                            }
+
+                            set_weights_buffer_glsl((_S174), (float16_t(TensorView_load_prim_2(this_12.weights_view_0, threadIdInWarp_0, 12))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S161)
+                            {
+
+#line 59
+                                break;
+                            }
+
+                            set_weights_buffer_glsl((_S175), (float16_t(TensorView_load_prim_2(this_12.weights_view_0, threadIdInWarp_0, 13))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S161)
+                            {
+
+#line 59
+                                break;
+                            }
+
+                            set_weights_buffer_glsl((_S176), (float16_t(TensorView_load_prim_2(this_12.weights_view_0, threadIdInWarp_0, 14))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S161)
+                            {
+
+#line 59
+                                break;
+                            }
+
+                            set_weights_buffer_glsl((_S177), (float16_t(TensorView_load_prim_2(this_12.weights_view_0, threadIdInWarp_0, 15))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    break;
+                }
+
+#line 55
+                break;
+            }
+
+#line 55
+            break;
+        }
+
+#line 55
+        break;
+    }
+
+#line 66
+    return wtPtr_0;
+}
+
+
+#line 50
+uint Linear_moveWeightsToSharedMem_1(Linear_0 this_13)
+{
+
+#line 51
+    uint wtPtr_1 = Linear_wtBufferForCurrentWarp_0(this_13);
+
+#line 58
+    int threadIdInWarp_1 = this_13.threadInfo_0.thread_idx_0.x % 32;
+    bool _S178 = threadIdInWarp_1 >= 16;
+    int _S179 = int(wtPtr_1) + threadIdInWarp_1 * 16;
+
+#line 60
+    int _S180 = _S179 + 1;
+
+#line 60
+    int _S181 = _S179 + 2;
+
+#line 60
+    int _S182 = _S179 + 3;
+
+#line 60
+    int _S183 = _S179 + 4;
+
+#line 60
+    int _S184 = _S179 + 5;
+
+#line 60
+    int _S185 = _S179 + 6;
+
+#line 60
+    int _S186 = _S179 + 7;
+
+#line 60
+    int _S187 = _S179 + 8;
+
+#line 60
+    int _S188 = _S179 + 9;
+
+#line 60
+    int _S189 = _S179 + 10;
+
+#line 60
+    int _S190 = _S179 + 11;
+
+#line 60
+    int _S191 = _S179 + 12;
+
+#line 60
+    int _S192 = _S179 + 13;
+
+#line 60
+    int _S193 = _S179 + 14;
+
+#line 60
+    int _S194 = _S179 + 15;
+
+#line 60
+    for(;;)
+    {
+
+#line 60
+        for(;;)
+        {
+
+#line 60
+            for(;;)
+            {
+
+#line 60
+                for(;;)
+                {
+
+#line 60
+                    for(;;)
+                    {
+
+#line 60
+                        for(;;)
+                        {
+
+#line 59
+                            if(_S178)
+                            {
+
+#line 59
+                                break;
+                            }
+
+#line 60
+                            set_weights_buffer_glsl((_S179), (float16_t(TensorView_load_prim_2(this_13.weights_view_0, threadIdInWarp_1, 0))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S178)
+                            {
+
+#line 59
+                                break;
+                            }
+
+#line 60
+                            set_weights_buffer_glsl((_S180), (float16_t(TensorView_load_prim_2(this_13.weights_view_0, threadIdInWarp_1, 1))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S178)
+                            {
+
+#line 59
+                                break;
+                            }
+
+#line 60
+                            set_weights_buffer_glsl((_S181), (float16_t(TensorView_load_prim_2(this_13.weights_view_0, threadIdInWarp_1, 2))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S178)
+                            {
+
+#line 59
+                                break;
+                            }
+
+#line 60
+                            set_weights_buffer_glsl((_S182), (float16_t(TensorView_load_prim_2(this_13.weights_view_0, threadIdInWarp_1, 3))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S178)
+                            {
+
+#line 59
+                                break;
+                            }
+
+#line 60
+                            set_weights_buffer_glsl((_S183), (float16_t(TensorView_load_prim_2(this_13.weights_view_0, threadIdInWarp_1, 4))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S178)
+                            {
+
+#line 59
+                                break;
+                            }
+
+#line 60
+                            set_weights_buffer_glsl((_S184), (float16_t(TensorView_load_prim_2(this_13.weights_view_0, threadIdInWarp_1, 5))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S178)
+                            {
+
+#line 59
+                                break;
+                            }
+
+#line 60
+                            set_weights_buffer_glsl((_S185), (float16_t(TensorView_load_prim_2(this_13.weights_view_0, threadIdInWarp_1, 6))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S178)
+                            {
+
+#line 59
+                                break;
+                            }
+
+#line 60
+                            set_weights_buffer_glsl((_S186), (float16_t(TensorView_load_prim_2(this_13.weights_view_0, threadIdInWarp_1, 7))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S178)
+                            {
+
+#line 59
+                                break;
+                            }
+
+#line 60
+                            set_weights_buffer_glsl((_S187), (float16_t(TensorView_load_prim_2(this_13.weights_view_0, threadIdInWarp_1, 8))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S178)
+                            {
+
+#line 59
+                                break;
+                            }
+
+#line 60
+                            set_weights_buffer_glsl((_S188), (float16_t(TensorView_load_prim_2(this_13.weights_view_0, threadIdInWarp_1, 9))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S178)
+                            {
+
+#line 59
+                                break;
+                            }
+
+#line 60
+                            set_weights_buffer_glsl((_S189), (float16_t(TensorView_load_prim_2(this_13.weights_view_0, threadIdInWarp_1, 10))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S178)
+                            {
+
+#line 59
+                                break;
+                            }
+
+#line 60
+                            set_weights_buffer_glsl((_S190), (float16_t(TensorView_load_prim_2(this_13.weights_view_0, threadIdInWarp_1, 11))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S178)
+                            {
+
+#line 59
+                                break;
+                            }
+
+#line 60
+                            set_weights_buffer_glsl((_S191), (float16_t(TensorView_load_prim_2(this_13.weights_view_0, threadIdInWarp_1, 12))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S178)
+                            {
+
+#line 59
+                                break;
+                            }
+
+#line 60
+                            set_weights_buffer_glsl((_S192), (float16_t(TensorView_load_prim_2(this_13.weights_view_0, threadIdInWarp_1, 13))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S178)
+                            {
+
+#line 59
+                                break;
+                            }
+
+#line 60
+                            set_weights_buffer_glsl((_S193), (float16_t(TensorView_load_prim_2(this_13.weights_view_0, threadIdInWarp_1, 14))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    for(;;)
+                    {
+
+#line 57
+                        for(;;)
+                        {
+                            if(_S178)
+                            {
+
+#line 59
+                                break;
+                            }
+
+#line 60
+                            set_weights_buffer_glsl((_S194), (float16_t(TensorView_load_prim_2(this_13.weights_view_0, threadIdInWarp_1, 15))));
+
+#line 57
+                            break;
+                        }
+
+#line 57
+                        break;
+                    }
+
+#line 57
+                    break;
+                }
+
+#line 55
+                break;
+            }
+
+#line 55
+            break;
+        }
+
+#line 55
+        break;
+    }
+
+#line 66
+    return wtPtr_1;
+}
+
+uint Linear_storeArray_input_0(Linear_0 this_14, uint memptr_1, float  input_1[16])
+{
+
+#line 79
+    int _S195 = int(memptr_1);
+
+#line 79
+    int _S196 = int(uint(this_14.threadInfo_0.thread_idx_0.x % 32));
+
+#line 79
+    int _S197 = _S195 + (32 + _S196);
+
+#line 79
+    float16_t _S198 = float16_t(input_1[1]);
+
+#line 79
+    int _S199 = _S195 + (64 + _S196);
+
+#line 79
+    float16_t _S200 = float16_t(input_1[2]);
+
+#line 79
+    int _S201 = _S195 + (96 + _S196);
+
+#line 79
+    float16_t _S202 = float16_t(input_1[3]);
+
+#line 79
+    int _S203 = _S195 + (128 + _S196);
+
+#line 79
+    float16_t _S204 = float16_t(input_1[4]);
+
+#line 79
+    int _S205 = _S195 + (160 + _S196);
+
+#line 79
+    float16_t _S206 = float16_t(input_1[5]);
+
+#line 79
+    int _S207 = _S195 + (192 + _S196);
+
+#line 79
+    float16_t _S208 = float16_t(input_1[6]);
+
+#line 79
+    int _S209 = _S195 + (224 + _S196);
+
+#line 79
+    float16_t _S210 = float16_t(input_1[7]);
+
+#line 79
+    int _S211 = _S195 + (256 + _S196);
+
+#line 79
+    float16_t _S212 = float16_t(input_1[8]);
+
+#line 79
+    int _S213 = _S195 + (288 + _S196);
+
+#line 79
+    float16_t _S214 = float16_t(input_1[9]);
+
+#line 79
+    int _S215 = _S195 + (320 + _S196);
+
+#line 79
+    float16_t _S216 = float16_t(input_1[10]);
+
+#line 79
+    int _S217 = _S195 + (352 + _S196);
+
+#line 79
+    float16_t _S218 = float16_t(input_1[11]);
+
+#line 79
+    int _S219 = _S195 + (384 + _S196);
+
+#line 79
+    float16_t _S220 = float16_t(input_1[12]);
+
+#line 79
+    int _S221 = _S195 + (416 + _S196);
+
+#line 79
+    float16_t _S222 = float16_t(input_1[13]);
+
+#line 79
+    int _S223 = _S195 + (448 + _S196);
+
+#line 79
+    float16_t _S224 = float16_t(input_1[14]);
+
+#line 79
+    int _S225 = _S195 + (480 + _S196);
+
+#line 79
+    float16_t _S226 = float16_t(input_1[15]);
+
+#line 79
+    set_input_buffer_glsl((_S195 + _S196), (float16_t(input_1[0])));
+
+#line 79
+    set_input_buffer_glsl((_S197), (_S198));
+
+#line 79
+    set_input_buffer_glsl((_S199), (_S200));
+
+#line 79
+    set_input_buffer_glsl((_S201), (_S202));
+
+#line 79
+    set_input_buffer_glsl((_S203), (_S204));
+
+#line 79
+    set_input_buffer_glsl((_S205), (_S206));
+
+#line 79
+    set_input_buffer_glsl((_S207), (_S208));
+
+#line 79
+    set_input_buffer_glsl((_S209), (_S210));
+
+#line 79
+    set_input_buffer_glsl((_S211), (_S212));
+
+#line 79
+    set_input_buffer_glsl((_S213), (_S214));
+
+#line 79
+    set_input_buffer_glsl((_S215), (_S216));
+
+#line 79
+    set_input_buffer_glsl((_S217), (_S218));
+
+#line 79
+    set_input_buffer_glsl((_S219), (_S220));
+
+#line 79
+    set_input_buffer_glsl((_S221), (_S222));
+
+#line 79
+    set_input_buffer_glsl((_S223), (_S224));
+
+#line 79
+    set_input_buffer_glsl((_S225), (_S226));
+
+    return memptr_1;
+}
+
+
+#line 69
+uint Linear_storeArray_input_1(Linear_0 this_15, uint memptr_2, float  input_2[16])
+{
+
+#line 75
+    int _S227 = int(memptr_2);
+
+#line 75
+    int _S228 = int(uint(this_15.threadInfo_0.thread_idx_0.x % 32)) * 16;
+
+#line 75
+    int _S229 = _S227 + (_S228 + 1);
+
+#line 75
+    float16_t _S230 = float16_t(input_2[1]);
+
+#line 75
+    int _S231 = _S227 + (_S228 + 2);
+
+#line 75
+    float16_t _S232 = float16_t(input_2[2]);
+
+#line 75
+    int _S233 = _S227 + (_S228 + 3);
+
+#line 75
+    float16_t _S234 = float16_t(input_2[3]);
+
+#line 75
+    int _S235 = _S227 + (_S228 + 4);
+
+#line 75
+    float16_t _S236 = float16_t(input_2[4]);
+
+#line 75
+    int _S237 = _S227 + (_S228 + 5);
+
+#line 75
+    float16_t _S238 = float16_t(input_2[5]);
+
+#line 75
+    int _S239 = _S227 + (_S228 + 6);
+
+#line 75
+    float16_t _S240 = float16_t(input_2[6]);
+
+#line 75
+    int _S241 = _S227 + (_S228 + 7);
+
+#line 75
+    float16_t _S242 = float16_t(input_2[7]);
+
+#line 75
+    int _S243 = _S227 + (_S228 + 8);
+
+#line 75
+    float16_t _S244 = float16_t(input_2[8]);
+
+#line 75
+    int _S245 = _S227 + (_S228 + 9);
+
+#line 75
+    float16_t _S246 = float16_t(input_2[9]);
+
+#line 75
+    int _S247 = _S227 + (_S228 + 10);
+
+#line 75
+    float16_t _S248 = float16_t(input_2[10]);
+
+#line 75
+    int _S249 = _S227 + (_S228 + 11);
+
+#line 75
+    float16_t _S250 = float16_t(input_2[11]);
+
+#line 75
+    int _S251 = _S227 + (_S228 + 12);
+
+#line 75
+    float16_t _S252 = float16_t(input_2[12]);
+
+#line 75
+    int _S253 = _S227 + (_S228 + 13);
+
+#line 75
+    float16_t _S254 = float16_t(input_2[13]);
+
+#line 75
+    int _S255 = _S227 + (_S228 + 14);
+
+#line 75
+    float16_t _S256 = float16_t(input_2[14]);
+
+#line 75
+    int _S257 = _S227 + (_S228 + 15);
+
+#line 75
+    float16_t _S258 = float16_t(input_2[15]);
+
+#line 75
+    set_input_buffer_glsl((_S227 + _S228), (float16_t(input_2[0])));
+
+#line 75
+    set_input_buffer_glsl((_S229), (_S230));
+
+#line 75
+    set_input_buffer_glsl((_S231), (_S232));
+
+#line 75
+    set_input_buffer_glsl((_S233), (_S234));
+
+#line 75
+    set_input_buffer_glsl((_S235), (_S236));
+
+#line 75
+    set_input_buffer_glsl((_S237), (_S238));
+
+#line 75
+    set_input_buffer_glsl((_S239), (_S240));
+
+#line 75
+    set_input_buffer_glsl((_S241), (_S242));
+
+#line 75
+    set_input_buffer_glsl((_S243), (_S244));
+
+#line 75
+    set_input_buffer_glsl((_S245), (_S246));
+
+#line 75
+    set_input_buffer_glsl((_S247), (_S248));
+
+#line 75
+    set_input_buffer_glsl((_S249), (_S250));
+
+#line 75
+    set_input_buffer_glsl((_S251), (_S252));
+
+#line 75
+    set_input_buffer_glsl((_S253), (_S254));
+
+#line 75
+    set_input_buffer_glsl((_S255), (_S256));
+
+#line 75
+    set_input_buffer_glsl((_S257), (_S258));
+
+#line 81
+    return memptr_2;
+}
+
+
+#line 45
+uint Linear_inpBufferForCurrentWarp_0(Linear_0 this_16)
+{
+
+#line 45
+    return Linear_calcOffset_1(this_16);
+}
+
+
+#line 114
+uint Linear_moveInputsToSharedMem_0(Linear_0 this_17, float  input_3[16])
+{
+
+    uint _S259 = Linear_storeArray_input_1(this_17, Linear_inpBufferForCurrentWarp_0(this_17), input_3);
+
+#line 117
+    return _S259;
+}
+
+
+#line 126
+uint Linear_moveDOutputsToSharedMem_0(Linear_0 this_18, float  d_output_0[16])
+{
+
+    uint _S260 = Linear_storeArray_input_0(this_18, Linear_outBufferForCurrentWarp_0(this_18), d_output_0);
+
+#line 129
+    return _S260;
+}
+
+
+#line 84
+uint Linear_storeArray_weights_0(Linear_0 this_19, uint memptr_3, float  input_4[16])
+{
+
+#line 94
+    int _S261 = int(memptr_3);
+
+#line 94
+    int _S262 = int(uint(this_19.threadInfo_0.thread_idx_0.x % 32));
+
+#line 94
+    int _S263 = _S261 + (32 + _S262);
+
+#line 94
+    float16_t _S264 = float16_t(input_4[1]);
+
+#line 94
+    int _S265 = _S261 + (64 + _S262);
+
+#line 94
+    float16_t _S266 = float16_t(input_4[2]);
+
+#line 94
+    int _S267 = _S261 + (96 + _S262);
+
+#line 94
+    float16_t _S268 = float16_t(input_4[3]);
+
+#line 94
+    int _S269 = _S261 + (128 + _S262);
+
+#line 94
+    float16_t _S270 = float16_t(input_4[4]);
+
+#line 94
+    int _S271 = _S261 + (160 + _S262);
+
+#line 94
+    float16_t _S272 = float16_t(input_4[5]);
+
+#line 94
+    int _S273 = _S261 + (192 + _S262);
+
+#line 94
+    float16_t _S274 = float16_t(input_4[6]);
+
+#line 94
+    int _S275 = _S261 + (224 + _S262);
+
+#line 94
+    float16_t _S276 = float16_t(input_4[7]);
+
+#line 94
+    int _S277 = _S261 + (256 + _S262);
+
+#line 94
+    float16_t _S278 = float16_t(input_4[8]);
+
+#line 94
+    int _S279 = _S261 + (288 + _S262);
+
+#line 94
+    float16_t _S280 = float16_t(input_4[9]);
+
+#line 94
+    int _S281 = _S261 + (320 + _S262);
+
+#line 94
+    float16_t _S282 = float16_t(input_4[10]);
+
+#line 94
+    int _S283 = _S261 + (352 + _S262);
+
+#line 94
+    float16_t _S284 = float16_t(input_4[11]);
+
+#line 94
+    int _S285 = _S261 + (384 + _S262);
+
+#line 94
+    float16_t _S286 = float16_t(input_4[12]);
+
+#line 94
+    int _S287 = _S261 + (416 + _S262);
+
+#line 94
+    float16_t _S288 = float16_t(input_4[13]);
+
+#line 94
+    int _S289 = _S261 + (448 + _S262);
+
+#line 94
+    float16_t _S290 = float16_t(input_4[14]);
+
+#line 94
+    int _S291 = _S261 + (480 + _S262);
+
+#line 94
+    float16_t _S292 = float16_t(input_4[15]);
+
+#line 94
+    set_weights_buffer_glsl((_S261 + _S262), (float16_t(input_4[0])));
+
+#line 94
+    set_weights_buffer_glsl((_S263), (_S264));
+
+#line 94
+    set_weights_buffer_glsl((_S265), (_S266));
+
+#line 94
+    set_weights_buffer_glsl((_S267), (_S268));
+
+#line 94
+    set_weights_buffer_glsl((_S269), (_S270));
+
+#line 94
+    set_weights_buffer_glsl((_S271), (_S272));
+
+#line 94
+    set_weights_buffer_glsl((_S273), (_S274));
+
+#line 94
+    set_weights_buffer_glsl((_S275), (_S276));
+
+#line 94
+    set_weights_buffer_glsl((_S277), (_S278));
+
+#line 94
+    set_weights_buffer_glsl((_S279), (_S280));
+
+#line 94
+    set_weights_buffer_glsl((_S281), (_S282));
+
+#line 94
+    set_weights_buffer_glsl((_S283), (_S284));
+
+#line 94
+    set_weights_buffer_glsl((_S285), (_S286));
+
+#line 94
+    set_weights_buffer_glsl((_S287), (_S288));
+
+#line 94
+    set_weights_buffer_glsl((_S289), (_S290));
+
+#line 94
+    set_weights_buffer_glsl((_S291), (_S292));
+
+    return memptr_3;
+}
+
+
+#line 120
+uint Linear_moveDInputsToSharedMem_0(Linear_0 this_20, float  input_5[16])
+{
+
+    uint _S293 = Linear_storeArray_weights_0(this_20, Linear_inpBufferForCurrentWarp_0(this_20), input_5);
+
+#line 123
+    return _S293;
+}
+
+
+#line 6761 6
+struct DiffPair_Feature_0
+{
+    Feature_0 primal_0;
+    s_diff_Feature_0 differential_0;
+};
+
+
+#line 155 3
+void Linear_eval_bwd_0(Linear_0 this_21, inout DiffPair_Feature_0 in_feature_pair_0, s_diff_Feature_0 d_output_1)
+{
+
+
+    uint dOutPtr_0 = Linear_moveInputsToSharedMem_0(this_21, d_output_1.vals_0);
+    uint wtPtr_2 = Linear_moveWeightsToSharedMem_1(this_21);
+    uint dInPtr_0 = Linear_outBufferForCurrentWarp_0(this_21);
+    wmma_inline_matmul_glsl_32_16_16((dOutPtr_0), (wtPtr_2), (dInPtr_0));
+    s_diff_Feature_0 d_input_feature_0;
+    Linear_loadArray_0(this_21, dInPtr_0, d_input_feature_0.vals_0);
+    DiffPair_Feature_0 _S294 = in_feature_pair_0;
+
+#line 165
+    in_feature_pair_0.primal_0 = in_feature_pair_0.primal_0;
+
+#line 165
+    in_feature_pair_0.differential_0 = d_input_feature_0;
+
+
+    uint inPtr_0 = Linear_moveDInputsToSharedMem_0(this_21, _S294.primal_0.vals_1);
+    uint outPtr_0 = Linear_moveDOutputsToSharedMem_0(this_21, d_output_1.vals_0);
+
+
+    wmma_inline_matmul_glsl_16_32_16((outPtr_0), (inPtr_0), (Linear_wtBufferForCurrentWarp_0(this_21)));
+
+#line 178
+    int threadIdInWarp_2 = this_21.threadInfo_0.thread_idx_0.x % 32;
+    bool _S295 = threadIdInWarp_2 >= 16;
+
+
+
+    int _S296 = threadIdInWarp_2 * 16;
+
+#line 183
+    int _S297 = _S296 + 1;
+
+#line 183
+    int _S298 = _S296 + 2;
+
+#line 183
+    int _S299 = _S296 + 3;
+
+#line 183
+    int _S300 = _S296 + 4;
+
+#line 183
+    int _S301 = _S296 + 5;
+
+#line 183
+    int _S302 = _S296 + 6;
+
+#line 183
+    int _S303 = _S296 + 7;
+
+#line 183
+    int _S304 = _S296 + 8;
+
+#line 183
+    int _S305 = _S296 + 9;
+
+#line 183
+    int _S306 = _S296 + 10;
+
+#line 183
+    int _S307 = _S296 + 11;
+
+#line 183
+    int _S308 = _S296 + 12;
+
+#line 183
+    int _S309 = _S296 + 13;
+
+#line 183
+    int _S310 = _S296 + 14;
+
+#line 183
+    int _S311 = _S296 + 15;
+
+#line 183
+    for(;;)
+    {
+
+#line 183
+        for(;;)
+        {
+
+#line 183
+            for(;;)
+            {
+
+#line 183
+                for(;;)
+                {
+
+#line 183
+                    for(;;)
+                    {
+
+#line 183
+                        for(;;)
+                        {
+
+#line 179
+                            if(_S295)
+                            {
+
+#line 180
+                                break;
+                            }
+
+                            float _S312 = (get_output_buffer_glsl((_S296)));
+
+#line 182
+                            TensorView_interlocked_add_grad_2(this_21.weights_view_0, 0, threadIdInWarp_2, _S312);
+
+#line 177
+                            break;
+                        }
+
+#line 177
+                        break;
+                    }
+
+#line 177
+                    for(;;)
+                    {
+
+#line 177
+                        for(;;)
+                        {
+                            if(_S295)
+                            {
+
+#line 180
+                                break;
+                            }
+
+                            float _S313 = (get_output_buffer_glsl((_S297)));
+
+#line 182
+                            TensorView_interlocked_add_grad_2(this_21.weights_view_0, 1, threadIdInWarp_2, _S313);
+
+#line 177
+                            break;
+                        }
+
+#line 177
+                        break;
+                    }
+
+#line 177
+                    for(;;)
+                    {
+
+#line 177
+                        for(;;)
+                        {
+                            if(_S295)
+                            {
+
+#line 180
+                                break;
+                            }
+
+                            float _S314 = (get_output_buffer_glsl((_S298)));
+
+#line 182
+                            TensorView_interlocked_add_grad_2(this_21.weights_view_0, 2, threadIdInWarp_2, _S314);
+
+#line 177
+                            break;
+                        }
+
+#line 177
+                        break;
+                    }
+
+#line 177
+                    for(;;)
+                    {
+
+#line 177
+                        for(;;)
+                        {
+                            if(_S295)
+                            {
+
+#line 180
+                                break;
+                            }
+
+                            float _S315 = (get_output_buffer_glsl((_S299)));
+
+#line 182
+                            TensorView_interlocked_add_grad_2(this_21.weights_view_0, 3, threadIdInWarp_2, _S315);
+
+#line 177
+                            break;
+                        }
+
+#line 177
+                        break;
+                    }
+
+#line 177
+                    for(;;)
+                    {
+
+#line 177
+                        for(;;)
+                        {
+                            if(_S295)
+                            {
+
+#line 180
+                                break;
+                            }
+
+                            float _S316 = (get_output_buffer_glsl((_S300)));
+
+#line 182
+                            TensorView_interlocked_add_grad_2(this_21.weights_view_0, 4, threadIdInWarp_2, _S316);
+
+#line 177
+                            break;
+                        }
+
+#line 177
+                        break;
+                    }
+
+#line 177
+                    for(;;)
+                    {
+
+#line 177
+                        for(;;)
+                        {
+                            if(_S295)
+                            {
+
+#line 180
+                                break;
+                            }
+
+                            float _S317 = (get_output_buffer_glsl((_S301)));
+
+#line 182
+                            TensorView_interlocked_add_grad_2(this_21.weights_view_0, 5, threadIdInWarp_2, _S317);
+
+#line 177
+                            break;
+                        }
+
+#line 177
+                        break;
+                    }
+
+#line 177
+                    for(;;)
+                    {
+
+#line 177
+                        for(;;)
+                        {
+                            if(_S295)
+                            {
+
+#line 180
+                                break;
+                            }
+
+                            float _S318 = (get_output_buffer_glsl((_S302)));
+
+#line 182
+                            TensorView_interlocked_add_grad_2(this_21.weights_view_0, 6, threadIdInWarp_2, _S318);
+
+#line 177
+                            break;
+                        }
+
+#line 177
+                        break;
+                    }
+
+#line 177
+                    for(;;)
+                    {
+
+#line 177
+                        for(;;)
+                        {
+                            if(_S295)
+                            {
+
+#line 180
+                                break;
+                            }
+
+                            float _S319 = (get_output_buffer_glsl((_S303)));
+
+#line 182
+                            TensorView_interlocked_add_grad_2(this_21.weights_view_0, 7, threadIdInWarp_2, _S319);
+
+#line 177
+                            break;
+                        }
+
+#line 177
+                        break;
+                    }
+
+#line 177
+                    for(;;)
+                    {
+
+#line 177
+                        for(;;)
+                        {
+                            if(_S295)
+                            {
+
+#line 180
+                                break;
+                            }
+
+                            float _S320 = (get_output_buffer_glsl((_S304)));
+
+#line 182
+                            TensorView_interlocked_add_grad_2(this_21.weights_view_0, 8, threadIdInWarp_2, _S320);
+
+#line 177
+                            break;
+                        }
+
+#line 177
+                        break;
+                    }
+
+#line 177
+                    for(;;)
+                    {
+
+#line 177
+                        for(;;)
+                        {
+                            if(_S295)
+                            {
+
+#line 180
+                                break;
+                            }
+
+                            float _S321 = (get_output_buffer_glsl((_S305)));
+
+#line 182
+                            TensorView_interlocked_add_grad_2(this_21.weights_view_0, 9, threadIdInWarp_2, _S321);
+
+#line 177
+                            break;
+                        }
+
+#line 177
+                        break;
+                    }
+
+#line 177
+                    for(;;)
+                    {
+
+#line 177
+                        for(;;)
+                        {
+                            if(_S295)
+                            {
+
+#line 180
+                                break;
+                            }
+
+                            float _S322 = (get_output_buffer_glsl((_S306)));
+
+#line 182
+                            TensorView_interlocked_add_grad_2(this_21.weights_view_0, 10, threadIdInWarp_2, _S322);
+
+#line 177
+                            break;
+                        }
+
+#line 177
+                        break;
+                    }
+
+#line 177
+                    for(;;)
+                    {
+
+#line 177
+                        for(;;)
+                        {
+                            if(_S295)
+                            {
+
+#line 180
+                                break;
+                            }
+
+                            float _S323 = (get_output_buffer_glsl((_S307)));
+
+#line 182
+                            TensorView_interlocked_add_grad_2(this_21.weights_view_0, 11, threadIdInWarp_2, _S323);
+
+#line 177
+                            break;
+                        }
+
+#line 177
+                        break;
+                    }
+
+#line 177
+                    for(;;)
+                    {
+
+#line 177
+                        for(;;)
+                        {
+                            if(_S295)
+                            {
+
+#line 180
+                                break;
+                            }
+
+                            float _S324 = (get_output_buffer_glsl((_S308)));
+
+#line 182
+                            TensorView_interlocked_add_grad_2(this_21.weights_view_0, 12, threadIdInWarp_2, _S324);
+
+#line 177
+                            break;
+                        }
+
+#line 177
+                        break;
+                    }
+
+#line 177
+                    for(;;)
+                    {
+
+#line 177
+                        for(;;)
+                        {
+                            if(_S295)
+                            {
+
+#line 180
+                                break;
+                            }
+
+                            float _S325 = (get_output_buffer_glsl((_S309)));
+
+#line 182
+                            TensorView_interlocked_add_grad_2(this_21.weights_view_0, 13, threadIdInWarp_2, _S325);
+
+#line 177
+                            break;
+                        }
+
+#line 177
+                        break;
+                    }
+
+#line 177
+                    for(;;)
+                    {
+
+#line 177
+                        for(;;)
+                        {
+                            if(_S295)
+                            {
+
+#line 180
+                                break;
+                            }
+
+                            float _S326 = (get_output_buffer_glsl((_S310)));
+
+#line 182
+                            TensorView_interlocked_add_grad_2(this_21.weights_view_0, 14, threadIdInWarp_2, _S326);
+
+#line 177
+                            break;
+                        }
+
+#line 177
+                        break;
+                    }
+
+#line 177
+                    for(;;)
+                    {
+
+#line 177
+                        for(;;)
+                        {
+                            if(_S295)
+                            {
+
+#line 180
+                                break;
+                            }
+
+                            float _S327 = (get_output_buffer_glsl((_S311)));
+
+#line 182
+                            TensorView_interlocked_add_grad_2(this_21.weights_view_0, 15, threadIdInWarp_2, _S327);
+
+#line 177
+                            break;
+                        }
+
+#line 177
+                        break;
+                    }
+
+#line 177
+                    break;
+                }
+
+#line 175
+                break;
+            }
+
+#line 175
+            break;
+        }
+
+#line 175
+        break;
+    }
+
+#line 191
+    float total_d_bias_0 = (subgroupAdd((d_output_1.vals_0[0])));
+    bool _S328 = (subgroupElect());
+
+#line 192
+    if(_S328)
+    {
+
+#line 193
+        TensorView_interlocked_add_grad_0(this_21.bias_view_0, 0, total_d_bias_0);
+
+#line 192
+    }
+
+#line 191
+    float total_d_bias_1 = (subgroupAdd((d_output_1.vals_0[1])));
+    bool _S329 = (subgroupElect());
+
+#line 192
+    if(_S329)
+    {
+
+#line 193
+        TensorView_interlocked_add_grad_0(this_21.bias_view_0, 1, total_d_bias_1);
+
+#line 192
+    }
+
+#line 191
+    float total_d_bias_2 = (subgroupAdd((d_output_1.vals_0[2])));
+    bool _S330 = (subgroupElect());
+
+#line 192
+    if(_S330)
+    {
+
+#line 193
+        TensorView_interlocked_add_grad_0(this_21.bias_view_0, 2, total_d_bias_2);
+
+#line 192
+    }
+
+#line 191
+    float total_d_bias_3 = (subgroupAdd((d_output_1.vals_0[3])));
+    bool _S331 = (subgroupElect());
+
+#line 192
+    if(_S331)
+    {
+
+#line 193
+        TensorView_interlocked_add_grad_0(this_21.bias_view_0, 3, total_d_bias_3);
+
+#line 192
+    }
+
+#line 191
+    float total_d_bias_4 = (subgroupAdd((d_output_1.vals_0[4])));
+    bool _S332 = (subgroupElect());
+
+#line 192
+    if(_S332)
+    {
+
+#line 193
+        TensorView_interlocked_add_grad_0(this_21.bias_view_0, 4, total_d_bias_4);
+
+#line 192
+    }
+
+#line 191
+    float total_d_bias_5 = (subgroupAdd((d_output_1.vals_0[5])));
+    bool _S333 = (subgroupElect());
+
+#line 192
+    if(_S333)
+    {
+
+#line 193
+        TensorView_interlocked_add_grad_0(this_21.bias_view_0, 5, total_d_bias_5);
+
+#line 192
+    }
+
+#line 191
+    float total_d_bias_6 = (subgroupAdd((d_output_1.vals_0[6])));
+    bool _S334 = (subgroupElect());
+
+#line 192
+    if(_S334)
+    {
+
+#line 193
+        TensorView_interlocked_add_grad_0(this_21.bias_view_0, 6, total_d_bias_6);
+
+#line 192
+    }
+
+#line 191
+    float total_d_bias_7 = (subgroupAdd((d_output_1.vals_0[7])));
+    bool _S335 = (subgroupElect());
+
+#line 192
+    if(_S335)
+    {
+
+#line 193
+        TensorView_interlocked_add_grad_0(this_21.bias_view_0, 7, total_d_bias_7);
+
+#line 192
+    }
+
+#line 191
+    float total_d_bias_8 = (subgroupAdd((d_output_1.vals_0[8])));
+    bool _S336 = (subgroupElect());
+
+#line 192
+    if(_S336)
+    {
+
+#line 193
+        TensorView_interlocked_add_grad_0(this_21.bias_view_0, 8, total_d_bias_8);
+
+#line 192
+    }
+
+#line 191
+    float total_d_bias_9 = (subgroupAdd((d_output_1.vals_0[9])));
+    bool _S337 = (subgroupElect());
+
+#line 192
+    if(_S337)
+    {
+
+#line 193
+        TensorView_interlocked_add_grad_0(this_21.bias_view_0, 9, total_d_bias_9);
+
+#line 192
+    }
+
+#line 191
+    float total_d_bias_10 = (subgroupAdd((d_output_1.vals_0[10])));
+    bool _S338 = (subgroupElect());
+
+#line 192
+    if(_S338)
+    {
+
+#line 193
+        TensorView_interlocked_add_grad_0(this_21.bias_view_0, 10, total_d_bias_10);
+
+#line 192
+    }
+
+#line 191
+    float total_d_bias_11 = (subgroupAdd((d_output_1.vals_0[11])));
+    bool _S339 = (subgroupElect());
+
+#line 192
+    if(_S339)
+    {
+
+#line 193
+        TensorView_interlocked_add_grad_0(this_21.bias_view_0, 11, total_d_bias_11);
+
+#line 192
+    }
+
+#line 191
+    float total_d_bias_12 = (subgroupAdd((d_output_1.vals_0[12])));
+    bool _S340 = (subgroupElect());
+
+#line 192
+    if(_S340)
+    {
+
+#line 193
+        TensorView_interlocked_add_grad_0(this_21.bias_view_0, 12, total_d_bias_12);
+
+#line 192
+    }
+
+#line 191
+    float total_d_bias_13 = (subgroupAdd((d_output_1.vals_0[13])));
+    bool _S341 = (subgroupElect());
+
+#line 192
+    if(_S341)
+    {
+
+#line 193
+        TensorView_interlocked_add_grad_0(this_21.bias_view_0, 13, total_d_bias_13);
+
+#line 192
+    }
+
+#line 191
+    float total_d_bias_14 = (subgroupAdd((d_output_1.vals_0[14])));
+    bool _S342 = (subgroupElect());
+
+#line 192
+    if(_S342)
+    {
+
+#line 193
+        TensorView_interlocked_add_grad_0(this_21.bias_view_0, 14, total_d_bias_14);
+
+#line 192
+    }
+
+#line 191
+    float total_d_bias_15 = (subgroupAdd((d_output_1.vals_0[15])));
+    bool _S343 = (subgroupElect());
+
+#line 192
+    if(_S343)
+    {
+
+#line 193
+        TensorView_interlocked_add_grad_0(this_21.bias_view_0, 15, total_d_bias_15);
+
+#line 192
+    }
+
+#line 197
+    return;
+}
+
+
+#line 140
+Feature_0 Linear_eval_0(Linear_0 this_22, Feature_0 in_feature_0)
+{
+    uint inPtr_1 = Linear_moveInputsToSharedMem_0(this_22, in_feature_0.vals_1);
+    uint wtPtr_3 = Linear_moveWeightsToSharedMem_0(this_22);
+
+
+
+    wmma_inline_matmul_glsl_32_16_16((inPtr_1), (wtPtr_3), (Linear_outBufferForCurrentWarp_0(this_22)));
+
+    Feature_0 out_feature_0;
+    Linear_moveOutputsToLocalArray_0(this_22, out_feature_0.vals_1);
+
+    return out_feature_0;
+}
+
+
+#line 202
+Feature_0 eval_0(Linear_0 layer_0, Feature_0 in_feature_1)
+{
+
+#line 203
+    Feature_0 _S344 = Linear_eval_0(layer_0, in_feature_1);
+
+#line 203
+    return _S344;
+}
+
+
+#line 203
+struct DiffPair_float_0
+{
+    float primal_0;
+    float differential_0;
+};
+
+
+#line 1484 4
+void _d_max_0(inout DiffPair_float_0 dpx_0, inout DiffPair_float_0 dpy_0, float dOut_0)
+{
+    DiffPair_float_0 _S345 = dpx_0;
+
+#line 1486
+    float _S346;
+
+#line 1486
+    if(dpx_0.primal_0 > dpy_0.primal_0)
+    {
+
+#line 1486
+        _S346 = dOut_0;
+
+#line 1486
+    }
+    else
+    {
+
+#line 1486
+        _S346 = 0.0;
+
+#line 1486
+    }
+
+#line 1486
+    dpx_0.primal_0 = _S345.primal_0;
+
+#line 1486
+    dpx_0.differential_0 = _S346;
+    DiffPair_float_0 _S347 = dpy_0;
+
+#line 1487
+    if(dpy_0.primal_0 > _S345.primal_0)
+    {
+
+#line 1487
+        _S346 = dOut_0;
+
+#line 1487
+    }
+    else
+    {
+
+#line 1487
+        _S346 = 0.0;
+
+#line 1487
+    }
+
+#line 1487
+    dpy_0.primal_0 = _S347.primal_0;
+
+#line 1487
+    dpy_0.differential_0 = _S346;
+    return;
+}
+
+
+#line 1488
+float s_primal_ctx_max_0(float _S348, float _S349)
+{
+
+#line 1488
+    return max(_S348, _S349);
+}
+
+
+#line 1488
+void s_bwd_prop_max_0(inout DiffPair_float_0 _S350, inout DiffPair_float_0 _S351, float _S352)
+{
+
+#line 1488
+    _d_max_0(_S350, _S351, _S352);
+
+#line 1488
+    return;
+}
+
+
+#line 23 2
+float relu_0(float x_6)
+{
+
+#line 24
+    return max(0.0, x_6);
+}
+
+
+#line 33
+Feature_0 mlp_0(Linear_0  linear_0[3], Feature_0 feature_1)
+{
+
+
+    Feature_0 out_feature_1 = feature_1;
+
+#line 37
+    int i_1 = 0;
+
+#line 37
+    for(;;)
+    {
+        Feature_0 _S353 = eval_0(linear_0[i_1], out_feature_1);
+
+#line 39
+        out_feature_1 = _S353;
+
+#line 38
+        int i_2 = i_1 + 1;
+
+#line 38
+        bool _S354 = i_2 < 3;
+
+#line 38
+        int j_0 = 0;
+
+#line 38
+        for(;;)
+        {
+
+            out_feature_1.vals_1[j_0] = relu_0(out_feature_1.vals_1[j_0]);
+
+#line 40
+            int j_1 = j_0 + 1;
+
+#line 40
+            if(j_1 < 16)
+            {
+            }
+            else
+            {
+
+#line 40
+                break;
+            }
+
+#line 40
+            j_0 = j_1;
+
+#line 40
+        }
+
+#line 38
+        if(_S354)
+        {
+        }
+        else
+        {
+
+#line 38
+            break;
+        }
+
+#line 38
+        i_1 = i_2;
+
+#line 38
+    }
+
+#line 44
+    return out_feature_1;
+}
+
+
+#line 974 4
+struct DiffPair_float3_0
+{
+    vec3 primal_0;
+    vec3 differential_0;
+};
+
+
+#line 992
+void _d_dot_0(inout DiffPair_float3_0 dpx_1, inout DiffPair_float3_0 dpy_1, float dOut_1)
+{
+    vec3 x_d_result_0;
+
+#line 994
+    vec3 y_d_result_0;
+
+
+
+    x_d_result_0[0] = dpy_1.primal_0[0] * dOut_1;
+    y_d_result_0[0] = dpx_1.primal_0[0] * dOut_1;
+
+#line 998
+    x_d_result_0[1] = dpy_1.primal_0[1] * dOut_1;
+    y_d_result_0[1] = dpx_1.primal_0[1] * dOut_1;
+
+#line 998
+    x_d_result_0[2] = dpy_1.primal_0[2] * dOut_1;
+    y_d_result_0[2] = dpx_1.primal_0[2] * dOut_1;
+
+#line 999
+    dpx_1.primal_0 = dpx_1.primal_0;
+
+#line 999
+    dpx_1.differential_0 = x_d_result_0;
+
+#line 999
+    dpy_1.primal_0 = dpy_1.primal_0;
+
+#line 999
+    dpy_1.differential_0 = y_d_result_0;
+
+
+
+    return;
+}
+
+
+#line 18 2
+float L2Loss_0(vec3 x_7, vec3 y_4)
+{
+
+#line 19
+    vec3 _S355 = x_7 - y_4;
+
+#line 19
+    return dot(_S355, _S355);
+}
+
+
+#line 140
+void s_bwd_prop_dot_0(inout DiffPair_float3_0 _S356, inout DiffPair_float3_0 _S357, float _S358)
+{
+
+#line 140
+    _d_dot_0(_S356, _S357, _S358);
+
+#line 140
+    return;
+}
+
+
+#line 140
+void s_bwd_prop_L2Loss_0(inout DiffPair_float3_0 dpx_2, vec3 y_5, float _s_dOut_0)
+{
+
+#line 18
+    vec3 _S359 = dpx_2.primal_0 - y_5;
+
+#line 1226 5
+    vec3 _S360 = vec3(0.0);
+
+#line 1226
+    DiffPair_float3_0 _S361;
+
+#line 1226
+    _S361.primal_0 = _S359;
+
+#line 1226
+    _S361.differential_0 = _S360;
+
+#line 1226
+    DiffPair_float3_0 _S362;
+
+#line 1226
+    _S362.primal_0 = _S359;
+
+#line 1226
+    _S362.differential_0 = _S360;
+
+#line 1226
+    s_bwd_prop_dot_0(_S361, _S362, _s_dOut_0);
+
+#line 1233
+    vec3 _S363 = _S362.differential_0 + _S361.differential_0;
+
+#line 1233
+    dpx_2.primal_0 = dpx_2.primal_0;
+
+#line 1233
+    dpx_2.differential_0 = _S363;
+
+#line 1233
+    return;
+}
+
+
+#line 1233
+void s_bwd_L2Loss_0(inout DiffPair_float3_0 _S364, vec3 _S365, float _S366)
+{
+
+#line 1233
+    s_bwd_prop_L2Loss_0(_S364, _S365, _S366);
+
+#line 1233
+    return;
+}
+
+
+#line 150 2
+struct s_bwd_prop_mlp_Intermediates_0
+{
+    Feature_0  _S367[5];
+    int _S368;
+    Feature_0   _S369[5][18];
+    int  _S370[5];
+};
+
+
+#line 150
+Feature_0 s_primal_ctx_Linear_eval_0(Linear_0 _S371, Feature_0 _S372)
+{
+
+#line 150
+    Feature_0 _S373 = Linear_eval_0(_S371, _S372);
+
+#line 150
+    return _S373;
+}
+
+
+#line 150
+Feature_0 s_bwd_primal_eval_0(Linear_0 layer_1, Feature_0 dpin_feature_0)
+{
+
+#line 202 3
+    Feature_0 _S374 = s_primal_ctx_Linear_eval_0(layer_1, dpin_feature_0);
+
+#line 202
+    return _S374;
+}
+
+
+#line 202
+float s_bwd_primal_relu_0(float dpx_3)
+{
+
+#line 202
+    return s_primal_ctx_max_0(0.0, dpx_3);
+}
+
+
+#line 202
+Feature_0 s_bwd_primal_mlp_0(Linear_0  linear_1[3], Feature_0 dpfeature_0, out s_bwd_prop_mlp_Intermediates_0 _s_diff_ctx_0)
+{
+
+#line 33 2
+    float  _S375[16] = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+
+#line 33
+    Feature_0 _S376 = { _S375 };
+
+#line 33
+    Feature_0  _S377[5] = { _S376, _S376, _S376, _S376, _S376 };
+
+#line 33
+    Feature_0  _S378[18] = { _S376, _S376, _S376, _S376, _S376, _S376, _S376, _S376, _S376, _S376, _S376, _S376, _S376, _S376, _S376, _S376, _S376, _S376 };
+
+#line 33
+    Feature_0   _S379[5][18] = { _S378, _S378, _S378, _S378, _S378 };
+
+#line 33
+    int  _S380[5] = { 0, 0, 0, 0, 0 };
+
+#line 33
+    _s_diff_ctx_0._S367 = _S377;
+
+#line 33
+    _s_diff_ctx_0._S368 = 0;
+
+#line 33
+    _s_diff_ctx_0._S369 = _S379;
+
+#line 33
+    _s_diff_ctx_0._S370 = _S380;
+
+#line 33
+    _s_diff_ctx_0._S367[0] = _S376;
+
+#line 33
+    _s_diff_ctx_0._S367[1] = _S376;
+
+#line 33
+    _s_diff_ctx_0._S367[2] = _S376;
+
+#line 33
+    _s_diff_ctx_0._S367[3] = _S376;
+
+#line 33
+    _s_diff_ctx_0._S367[4] = _S376;
+
+#line 33
+    _s_diff_ctx_0._S368 = 0;
+
+#line 33
+    _s_diff_ctx_0._S369[0] = _S378;
+
+#line 33
+    _s_diff_ctx_0._S369[1] = _S378;
+
+#line 33
+    _s_diff_ctx_0._S369[2] = _S378;
+
+#line 33
+    _s_diff_ctx_0._S369[3] = _S378;
+
+#line 33
+    _s_diff_ctx_0._S369[4] = _S378;
+
+#line 33
+    _s_diff_ctx_0._S370[0] = 0;
+
+#line 33
+    _s_diff_ctx_0._S370[1] = 0;
+
+#line 33
+    _s_diff_ctx_0._S370[2] = 0;
+
+#line 33
+    _s_diff_ctx_0._S370[3] = 0;
+
+#line 33
+    _s_diff_ctx_0._S370[4] = 0;
+
+#line 33
+    bool _bflag_0 = true;
+
+#line 33
+    int i_3 = 0;
+
+#line 33
+    Feature_0 out_feature_2 = dpfeature_0;
+
+#line 33
+    int _pc_0 = 0;
+
+#line 33
+    for(;;)
+    {
+
+#line 33
+        _s_diff_ctx_0._S367[_pc_0] = out_feature_2;
+
+#line 33
+        _s_diff_ctx_0._S368 = _pc_0;
+
+#line 33
+        if(_bflag_0)
+        {
+        }
+        else
+        {
+
+#line 33
+            break;
+        }
+
+#line 33
+        Feature_0 _S381 = s_bwd_primal_eval_0(linear_1[i_3], out_feature_2);
+
+#line 33
+        int i_4 = i_3 + 1;
+
+#line 33
+        bool _S382 = i_4 < 3;
+
+#line 33
+        int _S383 = _pc_0 + 1;
+
+#line 33
+        bool _bflag_1 = true;
+
+#line 33
+        int j_2 = 0;
+
+#line 33
+        out_feature_2 = _S381;
+
+#line 33
+        int _pc_1 = 0;
+
+#line 33
+        for(;;)
+        {
+
+#line 33
+            _s_diff_ctx_0._S369[_pc_1][_pc_0] = out_feature_2;
+
+#line 33
+            _s_diff_ctx_0._S370[_pc_0] = _pc_1;
+
+#line 33
+            if(_bflag_1)
+            {
+            }
+            else
+            {
+
+#line 33
+                break;
+            }
+
+#line 33
+            float _S384 = s_bwd_primal_relu_0(out_feature_2.vals_1[j_2]);
+
+#line 33
+            Feature_0 _S385 = out_feature_2;
+
+#line 33
+            _S385.vals_1[j_2] = _S384;
+
+#line 33
+            int j_3 = j_2 + 1;
+
+#line 33
+            if(j_3 < 16)
+            {
+            }
+            else
+            {
+
+#line 33
+                _bflag_1 = false;
+
+#line 33
+            }
+
+#line 33
+            if(_bflag_1)
+            {
+
+#line 33
+                j_2 = j_3;
+
+#line 33
+            }
+
+#line 33
+            int _S386 = _pc_1 + 1;
+
+#line 33
+            out_feature_2 = _S385;
+
+#line 33
+            _pc_1 = _S386;
+
+#line 33
+        }
+
+#line 33
+        if(_S382)
+        {
+        }
+        else
+        {
+
+#line 33
+            _bflag_0 = false;
+
+#line 33
+        }
+
+#line 33
+        if(_bflag_0)
+        {
+
+#line 33
+            i_3 = i_4;
+
+#line 33
+        }
+
+#line 33
+        _pc_0 = _S383;
+
+#line 33
+    }
+
+#line 33
+    return out_feature_2;
+}
+
+
+#line 33
+void s_bwd_prop_Linear_eval_0(Linear_0 _S387, inout DiffPair_Feature_0 _S388, s_diff_Feature_0 _S389)
+{
+
+#line 33
+    Linear_eval_bwd_0(_S387, _S388, _S389);
+
+#line 33
+    return;
+}
+
+
+#line 33
+void s_bwd_prop_eval_0(Linear_0 layer_2, inout DiffPair_Feature_0 dpin_feature_1, s_diff_Feature_0 _s_dOut_1)
+{
+
+#line 202 3
+    Feature_0 _S390 = s_primal_ctx_Linear_eval_0(layer_2, dpin_feature_1.primal_0);
+
+#line 202
+    s_diff_Feature_0 _S391 = Feature_x24_syn_dzero_0();
+
+#line 202
+    DiffPair_Feature_0 _S392;
+
+#line 202
+    _S392.primal_0 = dpin_feature_1.primal_0;
+
+#line 202
+    _S392.differential_0 = _S391;
+
+#line 202
+    s_bwd_prop_Linear_eval_0(layer_2, _S392, _s_dOut_1);
+
+#line 202
+    dpin_feature_1.primal_0 = dpin_feature_1.primal_0;
+
+#line 202
+    dpin_feature_1.differential_0 = _S392.differential_0;
+
+#line 202
+    return;
+}
+
+
+#line 202
+void s_bwd_prop_relu_0(inout DiffPair_float_0 dpx_4, float _s_dOut_2)
+{
+
+#line 202
+    DiffPair_float_0 _S393;
+
+#line 202
+    _S393.primal_0 = 0.0;
+
+#line 202
+    _S393.differential_0 = 0.0;
+
+#line 202
+    DiffPair_float_0 _S394;
+
+#line 202
+    _S394.primal_0 = dpx_4.primal_0;
+
+#line 202
+    _S394.differential_0 = 0.0;
+
+#line 202
+    s_bwd_prop_max_0(_S393, _S394, _s_dOut_2);
+
+#line 202
+    dpx_4.primal_0 = dpx_4.primal_0;
+
+#line 202
+    dpx_4.differential_0 = _S394.differential_0;
+
+#line 202
+    return;
+}
+
+
+#line 202
+void s_bwd_prop_mlp_0(Linear_0  linear_2[3], inout DiffPair_Feature_0 dpfeature_1, s_diff_Feature_0 _s_dOut_3, s_bwd_prop_mlp_Intermediates_0 _s_diff_ctx_1)
+{
+
+#line 33 2
+    int _pc_2;
+
+#line 33
+    int j_4;
+
+#line 33
+    s_diff_Feature_0 _S395 = Feature_x24_syn_dzero_0();
+
+#line 33
+    int _S396 = _s_diff_ctx_1._S368 - 1;
+
+#line 33
+    s_diff_Feature_0 _S397 = Feature_x24_syn_dadd_0(_s_dOut_3, _S395);
+
+#line 33
+    bool _bflag_2 = true;
+
+#line 33
+    int i_5 = 0;
+
+#line 33
+    Feature_0 out_feature_3 = dpfeature_1.primal_0;
+
+#line 33
+    int _pc_3 = 0;
+
+#line 33
+    for(;;)
+    {
+
+#line 33
+        if(_bflag_2)
+        {
+        }
+        else
+        {
+
+#line 33
+            break;
+        }
+
+#line 33
+        Feature_0 _S398 = s_bwd_primal_eval_0(linear_2[i_5], out_feature_3);
+
+#line 33
+        int i_6 = i_5 + 1;
+
+#line 33
+        bool _S399 = i_6 < 3;
+
+#line 33
+        int _S400 = _pc_3 + 1;
+
+#line 33
+        bool _bflag_3 = true;
+
+#line 33
+        j_4 = 0;
+
+#line 33
+        out_feature_3 = _S398;
+
+#line 33
+        _pc_2 = 0;
+
+#line 33
+        for(;;)
+        {
+
+#line 33
+            if(_bflag_3)
+            {
+            }
+            else
+            {
+
+#line 33
+                break;
+            }
+
+#line 33
+            float _S401 = s_bwd_primal_relu_0(out_feature_3.vals_1[j_4]);
+
+#line 33
+            Feature_0 _S402 = out_feature_3;
+
+#line 33
+            _S402.vals_1[j_4] = _S401;
+
+#line 33
+            int j_5 = j_4 + 1;
+
+#line 33
+            if(j_5 < 16)
+            {
+            }
+            else
+            {
+
+#line 33
+                _bflag_3 = false;
+
+#line 33
+            }
+
+#line 33
+            if(_bflag_3)
+            {
+
+#line 33
+                j_4 = j_5;
+
+#line 33
+            }
+
+#line 33
+            int _S403 = _pc_2 + 1;
+
+#line 33
+            out_feature_3 = _S402;
+
+#line 33
+            _pc_2 = _S403;
+
+#line 33
+        }
+
+#line 33
+        if(_S399)
+        {
+        }
+        else
+        {
+
+#line 33
+            _bflag_2 = false;
+
+#line 33
+        }
+
+#line 33
+        if(_bflag_2)
+        {
+
+#line 33
+            i_5 = i_6;
+
+#line 33
+        }
+
+#line 33
+        _pc_3 = _S400;
+
+#line 33
+    }
+
+#line 33
+    j_4 = _S396;
+
+#line 33
+    s_diff_Feature_0 _S404 = _S397;
+
+#line 33
+    s_diff_Feature_0 _S405 = _S395;
+
+#line 33
+    for(;;)
+    {
+
+#line 33
+        if(j_4 >= 0)
+        {
+        }
+        else
+        {
+
+#line 33
+            break;
+        }
+
+#line 33
+        int _S406 = j_4;
+
+#line 33
+        s_diff_Feature_0 _S407 = Feature_x24_syn_dadd_0(_S404, _S395);
+
+#line 33
+        int _S408 = j_4 - 1;
+
+#line 33
+        int _S409 = j_4;
+
+#line 33
+        _pc_2 = _s_diff_ctx_1._S370[j_4] - 1;
+
+#line 33
+        s_diff_Feature_0 _S410 = _S407;
+
+#line 33
+        for(;;)
+        {
+
+#line 33
+            if(_pc_2 >= 0)
+            {
+            }
+            else
+            {
+
+#line 33
+                break;
+            }
+
+#line 33
+            s_diff_Feature_0 _S411 = Feature_x24_syn_dadd_0(_S410, _S405);
+
+#line 33
+            s_diff_Feature_0 _S412 = _S411;
+
+#line 33
+            _S412.vals_0[_pc_2] = 0.0;
+
+#line 33
+            DiffPair_float_0 _S413;
+
+#line 33
+            _S413.primal_0 = _s_diff_ctx_1._S369[_pc_2][j_4].vals_1[_pc_2];
+
+#line 33
+            _S413.differential_0 = 0.0;
+
+#line 33
+            s_bwd_prop_relu_0(_S413, _S411.vals_0[_pc_2]);
+
+#line 33
+            float  _S414[16];
+
+#line 33
+            _S414[0] = 0.0;
+
+#line 33
+            _S414[1] = 0.0;
+
+#line 33
+            _S414[2] = 0.0;
+
+#line 33
+            _S414[3] = 0.0;
+
+#line 33
+            _S414[4] = 0.0;
+
+#line 33
+            _S414[5] = 0.0;
+
+#line 33
+            _S414[6] = 0.0;
+
+#line 33
+            _S414[7] = 0.0;
+
+#line 33
+            _S414[8] = 0.0;
+
+#line 33
+            _S414[9] = 0.0;
+
+#line 33
+            _S414[10] = 0.0;
+
+#line 33
+            _S414[11] = 0.0;
+
+#line 33
+            _S414[12] = 0.0;
+
+#line 33
+            _S414[13] = 0.0;
+
+#line 33
+            _S414[14] = 0.0;
+
+#line 33
+            _S414[15] = 0.0;
+
+#line 33
+            _S414[_pc_2] = _S413.differential_0;
+
+#line 33
+            s_diff_Feature_0 _S415 = Feature_x24_syn_dadd_0(_S412, _S395);
+
+#line 33
+            s_diff_Feature_0 _S416 = _S395;
+
+#line 33
+            _S416.vals_0 = _S414;
+
+#line 33
+            s_diff_Feature_0 _S417 = Feature_x24_syn_dadd_0(_S415, _S416);
+
+#line 33
+            _pc_2 = _pc_2 - 1;
+
+#line 33
+            _S410 = _S417;
+
+#line 33
+            _S405 = _S395;
+
+#line 33
+        }
+
+#line 33
+        DiffPair_Feature_0 _S418;
+
+#line 33
+        _S418.primal_0 = _s_diff_ctx_1._S367[_S409];
+
+#line 33
+        _S418.differential_0 = _S395;
+
+#line 33
+        s_bwd_prop_eval_0(linear_2[_S406], _S418, _S410);
+
+#line 33
+        s_diff_Feature_0 _S419 = Feature_x24_syn_dadd_0(_S418.differential_0, _S395);
+
+#line 33
+        j_4 = _S408;
+
+#line 33
+        _S404 = _S419;
+
+#line 33
+    }
+
+#line 33
+    dpfeature_1.primal_0 = dpfeature_1.primal_0;
+
+#line 33
+    dpfeature_1.differential_0 = _S404;
+
+#line 33
+    return;
+}
+
+
+#line 33
+void s_bwd_mlp_0(Linear_0  _S420[3], inout DiffPair_Feature_0 _S421, s_diff_Feature_0 _S422)
+{
+
+#line 33
+    s_bwd_prop_mlp_Intermediates_0 _S423;
+
+#line 33
+    Feature_0 _S424 = s_bwd_primal_mlp_0(_S420, _S421.primal_0, _S423);
+
+#line 33
+    s_bwd_prop_mlp_0(_S420, _S421, _S422, _S423);
+
+#line 33
+    return;
+}
+
+
+#line 90
+layout(local_size_x = 32, local_size_y = 4, local_size_z = 1) in;
+void main()
+{
+
+
+    ivec2 _S425 = ivec3(gl_GlobalInvocationID).xy;
+
+#line 95
+    vec2 uv_0 = (vec2(_S425) + 0.5) / vec2(ivec2(128, 128));
+
+
+    ThreadInfo_0 thread_info_0 = ThreadInfo_x24init_0(ivec3(gl_LocalInvocationID).xy, ivec2(32, 4));
+
+#line 116
+    s_diff_Feature_0 output_grad_1;
+
+#line 121
+    TensorView_0 featureGrid_2 = TensorView_x24init_0(816U, 816U, 32U, 1024U);
+
+    Linear_0  linear_3[3] = { Linear_x24init_0(TensorView_x24init_0(0U, 0U, 16U, 16U), TensorView_x24init_0(256U, 256U, 16U, 16U), thread_info_0), Linear_x24init_0(TensorView_x24init_0(272U, 272U, 16U, 16U), TensorView_x24init_0(528U, 528U, 16U, 16U), thread_info_0), Linear_x24init_0(TensorView_x24init_0(544U, 544U, 16U, 16U), TensorView_x24init_0(800U, 800U, 16U, 16U), thread_info_0) };
+
+#line 129
+    uvec2 _S426 = uvec2(ivec2(128, 128));
+    float _S427 = uv_0.x;
+    float _S428 = uv_0.y;
+
+#line 136
+    vec3 target_color_0 = vec3(uv_0, 1.0);
+
+#line 147
+    uvec2 _S429 = uvec2(_S425);
+
+#line 140
+    vec3 _S430 = vec3(0.0);
+
+#line 150
+    s_diff_Feature_0 _S431 = Feature_x24_syn_dzero_0();
+
+#line 150
+    int i_7 = 0;
+
+#line 150
+    for(;;)
+    {
+
+#line 118
+        output_grad_1.vals_0[i_7] = 0.0;
+
+#line 117
+        int i_8 = i_7 + 1;
+
+#line 117
+        if(i_8 < 16)
+        {
+        }
+        else
+        {
+
+#line 117
+            break;
+        }
+
+#line 117
+        i_7 = i_8;
+
+#line 117
+    }
+
+#line 129
+    Feature_0 feature_2 = computeInterpolatedFeature_0(featureGrid_2, _S426, _S425);
+    feature_2.vals_1[14] = _S427;
+    feature_2.vals_1[15] = _S428;
+    Feature_0 out_feature_4 = mlp_0(linear_3, feature_2);
+
+#line 138
+    vec3 color_0 = vec3(out_feature_4.vals_1[0], out_feature_4.vals_1[1], out_feature_4.vals_1[2]);
+
+    DiffPair_float3_0 color_pair_0;
+
+#line 140
+    color_pair_0.primal_0 = color_0;
+
+#line 140
+    color_pair_0.differential_0 = _S430;
+    float loss_0 = L2Loss_0(color_0, target_color_0);
+    s_bwd_L2Loss_0(color_pair_0, target_color_0, 1.0);
+    output_grad_1.vals_0[0] = color_pair_0.differential_0.x;
+    output_grad_1.vals_0[1] = color_pair_0.differential_0.y;
+    output_grad_1.vals_0[2] = color_pair_0.differential_0.z;
+
+    imageStore((output_texture_0), ivec2((_S429)), vec4(color_0, 1.0));
+    imageStore((error_texture_0), ivec2((_S429)), vec4(loss_0, float(0), float(0), float(0)));
+
+    DiffPair_Feature_0 feature_pair_0;
+
+#line 150
+    feature_pair_0.primal_0 = feature_2;
+
+#line 150
+    feature_pair_0.differential_0 = _S431;
+    s_bwd_mlp_0(linear_3, feature_pair_0, output_grad_1);
+    InterpolatedFeature_bwd_0(featureGrid_2, _S426, _S425, feature_pair_0.differential_0);
+    return;
+}
+

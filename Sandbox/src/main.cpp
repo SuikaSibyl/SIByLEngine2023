@@ -22,6 +22,7 @@
 #include <SE.Application.hpp>
 #include <SE.SRenderer.hpp>
 #include "CustomPipeline.hpp"
+#include <IO/SE.Core.IO.hpp>
 
 #include <SE.Addon.VPL.hpp>
 #include <SE.Addon.SLC.hpp>
@@ -33,6 +34,9 @@
 #include <Pipeline/SE.SRendere-UDPTPipeline.hpp>
 #include <Pipeline/SE.SRendere-GeoInspectPipeline.hpp>
 #include <Passes/FullScreenPasses/ScreenSpace/SE.SRenderer-BarGTPass.hpp>
+
+#include <GFSDK_Aftermath.h>
+#include <GFSDK_Aftermath_GpuCrashDump.h>
 
 using namespace SIByL::Math;
 namespace Test{
@@ -92,9 +96,51 @@ Math::vec2 ToConcentricMap(Math::vec2 onSquare) {
     return Math::vec2(x, y);
   }
 
+} 
+
+  // Static wrapper for the GPU crash dump handler. See the 'Handling GPU crash
+  // dump Callbacks' section for details.
+  void GpuCrashDumpCallback(const void* pGpuCrashDump,
+							const uint32_t gpuCrashDumpSize, void* pUserData) {
+    //// Make sure only one thread at a time...
+    //std::lock_guard<std::mutex> lock(m_mutex);
+    // Write to file for later in-depth analysis.
+    Core::Buffer buffer;
+    buffer.isReference = true;
+    buffer.data = (void*)pGpuCrashDump;
+    buffer.size = gpuCrashDumpSize;
+    Core::syncWriteFile("./1.dump", buffer);
+    //WriteGpuCrashDumpToFile(pGpuCrashDump, gpuCrashDumpSize);
 }
 
-struct SandBoxApplication :public Application::ApplicationBase {
+  // Static wrapper for the shader debug information handler. See the 'Handling
+  // Shader Debug Information callbacks' section for details.
+  void ShaderDebugInfoCallback(const void* pShaderDebugInfo,
+                                      const uint32_t shaderDebugInfoSize,
+                               void* pUserData) {
+    Core::LogManager::Error("ShaderDebugInfoCallback");
+  }
+
+  // Static wrapper for the GPU crash dump description handler. See the
+  // 'Handling GPU Crash Dump Description Callbacks' section for details.
+  void CrashDumpDescriptionCallback(
+      PFN_GFSDK_Aftermath_AddGpuCrashDumpDescription addDescription, void* pUserData) {
+    //GpuCrashTracker* pGpuCrashTracker =
+    //    reinterpret_cast<GpuCrashTracker*>(pUserData);
+    //pGpuCrashTracker->OnDescription(addDescription);
+
+    Core::LogManager::Error("CrashDumpDescriptionCallback");
+  }
+  
+  // Static wrapper for the resolve marker handler. See the 'Handling Marker Resolve Callbacks' section for details.
+  void ResolveMarkerCallback(const void* pMarkerData, const uint32_t markerDataSize, 
+	  void* pUserData, void** ppResolvedMarkerData, uint32_t* pResolvedMarkerDataSize) {
+    Core::LogManager::Error("ResolveMarkerCallback");
+      //GpuCrashTracker* pGpuCrashTracker = reinterpret_cast<GpuCrashTracker*>(pUserData);
+      //pGpuCrashTracker->OnResolveMarker(pMarkerData, markerDataSize, ppResolvedMarkerData, pResolvedMarkerDataSize);
+  }
+
+  struct SandBoxApplication :public Application::ApplicationBase {
 	
 	Video::VideoDecoder decoder;
 
@@ -103,6 +149,24 @@ struct SandBoxApplication :public Application::ApplicationBase {
       Math::vec2 test = {0.25, 0.75};
       Math::vec2 res = Test::FromConcentricMap(Test::ToConcentricMap(test));
 
+	  {
+        // Enable GPU crash dumps and register callbacks.
+		GFSDK_Aftermath_EnableGpuCrashDumps(
+            GFSDK_Aftermath_Version_API,
+            GFSDK_Aftermath_GpuCrashDumpWatchedApiFlags_Vulkan,
+            GFSDK_Aftermath_GpuCrashDumpFeatureFlags_Default,  // Default
+                                                               // behavior.
+            GpuCrashDumpCallback,     // Register callback for GPU crash dumps.
+            ShaderDebugInfoCallback,  // Register callback for shader debug
+                                      // information.
+            CrashDumpDescriptionCallback,  // Register callback for GPU crash
+                                           // dump description.
+            ResolveMarkerCallback,  // Register callback for marker resolution
+                                    // (R495 or later NVIDIA graphics driver).
+            nullptr);  // Set the GpuCrashTracker object as user
+                                       // data passed back by the above
+                                       // callbacks.
+	  }
 		// create optional layers: rhi, imgui, editor
 		rhiLayer = std::make_unique<RHI::RHILayer>(RHI::RHILayerDescriptor{
 				RHI::RHIBackend::Vulkan,
@@ -111,6 +175,7 @@ struct SandBoxApplication :public Application::ApplicationBase {
 					| RHI::ContextExtension::BINDLESS_INDEXING
 					| RHI::ContextExtension::FRAGMENT_BARYCENTRIC
 					| RHI::ContextExtension::CONSERVATIVE_RASTERIZATION
+					| RHI::ContextExtension::COOPERATIVE_MATRIX
 					| RHI::ContextExtension::ATOMIC_FLOAT),
 				mainWindow.get(),
 				true
@@ -136,17 +201,6 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/test_scene.scene");
 		//scene.deserialize("C:/Users/suika/Desktop/testscene/bedroom_mask.scene");
 
-		GFX::GFXManager::get()->commonSampler.defaultSampler = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Sampler>();
-		GFX::GFXManager::get()->registerSamplerResource(GFX::GFXManager::get()->commonSampler.defaultSampler, RHI::SamplerDescriptor{
-				RHI::AddressMode::REPEAT,
-				RHI::AddressMode::REPEAT,
-				RHI::AddressMode::REPEAT,
-			});
-		GFX::GFXManager::get()->commonSampler.clamp_nearest = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Sampler>();
-		GFX::GFXManager::get()->registerSamplerResource(GFX::GFXManager::get()->commonSampler.clamp_nearest, RHI::SamplerDescriptor{});
-		Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.defaultSampler)->sampler->setName("DefaultSampler");
-		Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.clamp_nearest)->sampler->setName("ClampNearestSampler");
-        
 		InvalidScene();
 		device->waitIdle();
 
@@ -375,8 +429,10 @@ struct SandBoxApplication :public Application::ApplicationBase {
 		editorLayer->onDrawGui();
 		imguiLayer->render(multiFrameFlights->getRenderFinishedSeamaphore());
 
+
 		multiFrameFlights->frameEnd();
 
+		pipeline->readback();
 		//if (frames2capture > 0) {
 		//	static int i = 0;
 		//	if (i < 102) {

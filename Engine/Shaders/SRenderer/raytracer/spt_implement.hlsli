@@ -65,9 +65,18 @@ GeometryHit fetchTrimeshGeometryHit(
     float3 tangentOS = interpolate(tangents, bary);
     float4 tangentWS = float4(normalize(mul(float4(tangentOS, 0), o2w).xyz), geometry.oddNegativeScaling);
     hit.tangent = tangentWS;
-        
+    
+    // compute lambda for ray cone based lod sampling
+    const float2 uv_10 = vertexUVs[1] - vertexUVs[0];
+    const float2 uv_20 = vertexUVs[2] - vertexUVs[0];
+    const float t_a = abs(uv_10.x * uv_20.y - uv_20.x * uv_10.y);
+    const float3 edge_10 = mul(float4(vertexPositions[1] - vertexPositions[0], 0.0), o2w).xyz;
+    const float3 edge_20 = mul(float4(vertexPositions[2] - vertexPositions[0], 0.0), o2w).xyz;
+    const float p_a = length(cross(edge_10, edge_20));
+    hit.lambda = 0.5f * log2(t_a / p_a);
+
     SetHit(hit, true);
-        
+    
     return hit;
 }
 

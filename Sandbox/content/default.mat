@@ -3,7 +3,7 @@ Name: New Material
 BxDF: 0
 Textures:
   - Name: base_color
-    ORID: 1701277326461110571
+    ORID: 1701602862952785445
     flags: 0
   - Name: normal_bump
     ORID: 0

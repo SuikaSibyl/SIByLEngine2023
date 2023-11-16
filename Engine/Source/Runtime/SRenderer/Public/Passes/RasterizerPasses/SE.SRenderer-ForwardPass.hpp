@@ -104,10 +104,18 @@ namespace SIByL
 			pConst.lightIndex = RACommon::get()->mainDirectionalLight.value().lightID;
 			encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::FRAGMENT, sizeof(uint32_t), sizeof(PushConstants));
 
+			RHI::Sampler* sampler = GFX::GFXManager::get()->samplerTable.fetch(
+                                RHI::AddressMode::CLAMP_TO_EDGE,
+                                RHI::FilterMode::LINEAR,
+                                RHI::MipmapFilterMode::LINEAR);
+
 			std::vector<RHI::BindGroupEntry>* set_0_entries = renderData.getBindGroupEntries("CommonScene");
 			getBindGroup(context, 0)->updateBinding(*set_0_entries);
 			getBindGroup(context, 1)->updateBinding(std::vector<RHI::BindGroupEntry>{
-				RHI::BindGroupEntry{ 0, RHI::BindingResource(shadowmap->getSRV(0,1,0,4), Core::ResourceManager::get()->getResource<GFX::Sampler>(GFX::GFXManager::get()->commonSampler.clamp_nearest)->sampler.get()) },
+                                RHI::BindGroupEntry{
+                                    0, RHI::BindingResource(
+                                           shadowmap->getSRV(0, 1, 0, 4),
+                                           sampler)},
 				RHI::BindGroupEntry{ 1, shadowmap_data_device.getBufferBinding(context->flightIdx) },
 				RHI::BindGroupEntry{ 2, RHI::BindingResource{RACommon::get()->csm_info_device.getBufferBinding(context->flightIdx)} }
 			});

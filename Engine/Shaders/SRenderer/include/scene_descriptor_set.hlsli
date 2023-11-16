@@ -68,23 +68,17 @@ struct SceneInfoUniforms {
     uint env_map;
 };
 
-[[vk::binding(0, 0)]]
-cbuffer _GlobalUniforms {
-    GlobalUniforms globalUniform;
-};
+[[vk::binding(0, 0)]] cbuffer _GlobalUniforms { GlobalUniforms globalUniform; };
 [[vk::binding(1, 0)]] ByteAddressBuffer vertices;
 [[vk::binding(2, 0)]] StructuredBuffer<uint32_t> indices;
 [[vk::binding(3, 0)]] StructuredBuffer<GeometryInfo> geometries;
 [[vk::binding(4, 0)]] StructuredBuffer<MaterialInfo> materials;
 [[vk::binding(5, 0)]] StructuredBuffer<PolymorphicLightInfo> lights;
 [[vk::binding(6, 0)]] StructuredBuffer<float> sampleDistDatas;
-
-[[vk::binding(7, 0)]]
-cbuffer _SceneInfoBuffer {
-    SceneInfoUniforms sceneInfoUniform;
-};
+[[vk::binding(7, 0)]] cbuffer _SceneInfoBuffer { SceneInfoUniforms sceneInfoUniform; };
 
 [[vk::binding(8, 0)]] Sampler2D textures[];
+// [[vk::binding(9, 0)]] SamplerState samplers[];
 
 // previous frame binding
 cbuffer PrevGlobalUniforms {
@@ -191,10 +185,10 @@ ShadingSurface fetchShadingSurfaceTrimesh(
         normalMap = textures[material.normalTextureIndex].Sample(uv).rgb;
         shadingNormal = normalize(mul((normalMap * 2 - 1), TBN));
     }
-
+    
     // Grab material infomation
     float3 diffuseColor = textures[material.baseOrDiffuseTextureIndex].Sample(uv).rgb;
-
+    
     ShadingSurface surface;
     surface.worldPos = positionWS;
     surface.roughness;

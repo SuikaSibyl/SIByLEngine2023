@@ -130,17 +130,14 @@ SE_EXPORT struct RSSGeoReconstrPass : public RDG::ComputePass {
     GFX::Buffer* vb = renderData.getBuffer("VertexBuffer");
     GFX::Buffer* ib = renderData.getBuffer("IndicesBuffer");
 
-    GFX::Sampler* sampler =
-        Core::ResourceManager::get()->getResource<GFX::Sampler>(
-            GFX::GFXManager::get()->commonSampler.defaultSampler);
+    RHI::Sampler* sampler = GFX::GFXManager::get()->samplerTable.fetch(
+        RHI::AddressMode::CLAMP_TO_EDGE, RHI::FilterMode::LINEAR,
+        RHI::MipmapFilterMode::LINEAR);
 
     getBindGroup(context, 0)
         ->updateBinding(std::vector<RHI::BindGroupEntry>{
             RHI::BindGroupEntry{
-                0,
-                RHI::BindingResource{
-                    depth->getSRV(0, 1, 0, 1),
-                    sampler->sampler.get()}},
+                0, RHI::BindingResource{depth->getSRV(0, 1, 0, 1), sampler}},
             RHI::BindGroupEntry{1, RHI::BindingResource{RHI::BufferBinding{vb->buffer.get(), 0, vb->buffer->size()}}},
             RHI::BindGroupEntry{2, RHI::BindingResource{RHI::BufferBinding{ib->buffer.get(), 0, ib->buffer->size()}}} });
 

@@ -292,11 +292,9 @@ SE_EXPORT struct RSMGIPass : public RDG::RayTracingPass {
     };
     uniform_buffer.setStructure(uniform, context->flightIdx);
 
-    auto* defaul_sampler =
-        Core::ResourceManager::get()
-            ->getResource<GFX::Sampler>(
-                GFX::GFXManager::get()->commonSampler.defaultSampler)
-            ->sampler.get();
+    auto* defaul_sampler = GFX::GFXManager::get()->samplerTable.fetch(
+        RHI::AddressMode::CLAMP_TO_EDGE, RHI::FilterMode::LINEAR,
+        RHI::MipmapFilterMode::LINEAR);
 
     std::vector<RHI::BindGroupEntry>* set_0_entries =
         renderData.getBindGroupEntries("CommonScene");

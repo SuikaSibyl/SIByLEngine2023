@@ -411,6 +411,15 @@ auto Graph::execute(RHI::CommandEncoder* encoder) noexcept -> void {
   }
 }
 
+auto Graph::readback() noexcept -> void {
+  renderData.graph = this;
+  for (size_t pass_id : flattenedPasses) {
+    auto* pass = passes[pass_id].get();
+    renderData.pass = pass;
+    pass->readback(renderData);
+  }
+}
+
 auto tryMerge(RHI::ImageSubresourceRange const& x,
               RHI::ImageSubresourceRange const& y) noexcept
     -> std::optional<RHI::ImageSubresourceRange> {
