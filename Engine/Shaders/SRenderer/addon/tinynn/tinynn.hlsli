@@ -28,8 +28,10 @@ struct TensorView {
     float load_prim(int x, int y) { return load_prim(x + y * stride); }
     [BackwardDerivative(load_prim_idx3_bwd)]
     float load_prim(int x, int y, int z) { return load_prim(x + y * stride + z * pitch); }
-    
-    void interlocked_add_grad(int x, float val) { _gradient_buffer.InterlockedAddF32((offset_grad + x) * sizeof(float), val); }
+
+    void interlocked_add_grad(int x, float val) {
+        // if (x >= 15152) return;
+        _gradient_buffer.InterlockedAddF32((offset_grad + x) * sizeof(float), val); }
     void interlocked_add_grad(int x, int y, float val) { interlocked_add_grad(x + y * stride, val); }
     void interlocked_add_grad(int x, int y, int z, float val) { interlocked_add_grad(x + y * stride + z * pitch, val); }
 

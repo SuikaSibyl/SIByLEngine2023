@@ -62,18 +62,18 @@ struct TensorView_0
 };
 
 
-#line 50
+#line 52
 TensorView_0 TensorView_x24init_0(uint offset_prim_1, uint offset_grad_1, uint stride_1, uint pitch_1)
 {
 
-#line 50
+#line 52
     TensorView_0 _S2;
     _S2.offset_prim_0 = offset_prim_1;
     _S2.offset_grad_0 = offset_grad_1;
     _S2.stride_0 = stride_1;
     _S2.pitch_0 = pitch_1;
 
-#line 50
+#line 52
     return _S2;
 }
 
@@ -274,7 +274,7 @@ s_diff_Feature_0 Feature_x24_syn_dzero_0()
 }
 
 
-#line 36 1
+#line 38 1
 void RWByteAddressBuffer_InterlockedAddF32_0(uint _S19, float _S20)
 {
 
@@ -291,19 +291,18 @@ void TensorView_interlocked_add_grad_0(TensorView_0 this_0, int x_0, float val_0
 #line 32
     RWByteAddressBuffer_InterlockedAddF32_0(uint((int(this_0.offset_grad_0) + x_0) * 4), val_0);
 
-#line 32
     return;
 }
 
 
-#line 34
+#line 36
 void TensorView_interlocked_add_grad_1(TensorView_0 this_1, int x_1, int y_0, int z_0, float val_1)
 {
 
-#line 34
+#line 36
     TensorView_interlocked_add_grad_0(this_1, x_1 + y_0 * int(this_1.stride_0) + z_0 * int(this_1.pitch_0), val_1);
 
-#line 34
+#line 36
     return;
 }
 
@@ -940,14 +939,14 @@ uint Linear_wtBufferForCurrentWarp_0(Linear_0 this_9)
 }
 
 
-#line 33 1
+#line 35 1
 void TensorView_interlocked_add_grad_2(TensorView_0 this_10, int x_4, int y_2, float val_2)
 {
 
-#line 33
+#line 35
     TensorView_interlocked_add_grad_0(this_10, x_4 + y_2 * int(this_10.stride_0), val_2);
 
-#line 33
+#line 35
     return;
 }
 

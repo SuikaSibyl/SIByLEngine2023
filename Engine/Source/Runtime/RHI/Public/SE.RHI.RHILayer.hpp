@@ -20,6 +20,7 @@ SE_EXPORT struct RHILayerDescriptor {
   ContextExtensionsFlags extensions = {};
   Platform::Window* windowBinded = nullptr;
   bool useImGui = false;
+  bool useAftermath = false;
 };
 
 SE_EXPORT struct RHILayer : public Core::Layer {
