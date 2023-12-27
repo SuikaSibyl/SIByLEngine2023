@@ -87,6 +87,8 @@ void RgenMain() {
     VoxelTexInfo info = CreateVoxelTexInfo(gVD);
     float3 radiance = float3(0, 0, 0);
 
+    const float3 v = normalize(globalUniform.cameraData.posW - hit.position);
+
     const int sample_stragegy = pConst.sampleStragegy & 0xF;
     const int vxg_type = (pConst.sampleStragegy >> 4) & 0x3;
     const bool power_mis = ((pConst.sampleStragegy >> 6) & 0x1) != 0;
@@ -98,31 +100,31 @@ void RgenMain() {
             return;
         }
     }
-    if (pixel.x > pConst.split_line) {
-        // BSDF
-        for (int i = 0; i < 2; ++i) {
-            payload.hit = hit;
-            // compute first bounce
-            float bsdf_pdf;
-            Ray bsdfRay = SpawnBsdfRay(payload.hit, -primaryRay.direction, RNG, bsdf_pdf);
-            float3 first_bsdf = EvalBsdf(payload.hit, -primaryRay.direction, bsdfRay.direction);
-            float3 throughput = first_bsdf / bsdf_pdf;
-            if (bsdf_pdf == 0) throughput = float3(0, 0, 0);
-            Intersection(bsdfRay, SceneBVH, payload, RNG);
-            if (HasHit(payload.hit)) {
-                const PolymorphicLightInfo light = lights[0];
-                radiance += EvaluateDirectLight(bsdfRay, payload.hit, light, RNG) * throughput;
-                // further bounces
-                radiance += EvaluateMultibounceIndirect(bsdfRay, 1, throughput, payload, RNG);
-            }
-        }
-        radiance /= 2;
-        // const PolymorphicLightInfo light = lights[0];
-        // radiance += EvaluateDirectLight(primaryRay, hit, light, RNG);
+    // if (pixel.x > pConst.split_line) {
+    //     // BSDF
+    //     for (int i = 0; i < 2; ++i) {
+    //         payload.hit = hit;
+    //         // compute first bounce
+    //         float bsdf_pdf;
+    //         Ray bsdfRay = SpawnBsdfRay(payload.hit, -primaryRay.direction, RNG, bsdf_pdf);
+    //         float3 first_bsdf = EvalBsdf(payload.hit, -primaryRay.direction, bsdfRay.direction);
+    //         float3 throughput = first_bsdf / bsdf_pdf;
+    //         if (bsdf_pdf == 0) throughput = float3(0, 0, 0);
+    //         Intersection(bsdfRay, SceneBVH, payload, RNG);
+    //         if (HasHit(payload.hit)) {
+    //             const PolymorphicLightInfo light = lights[0];
+    //             radiance += EvaluateDirectLight(bsdfRay, payload.hit, light, RNG) * throughput;
+    //             // further bounces
+    //             radiance += EvaluateMultibounceIndirect(bsdfRay, 1, throughput, payload, RNG);
+    //         }
+    //     }
+    //     radiance /= 2;
+    //     // const PolymorphicLightInfo light = lights[0];
+    //     // radiance += EvaluateDirectLight(primaryRay, hit, light, RNG);
 
-        u_Color[pixel] = float4(radiance, 1);
-        return;
-    }
+    //     u_Color[pixel] = float4(radiance, 1);
+    //     return;
+    // }
 
     // 1 spp : spawn a new BSDF ray.
     float2 uv = float2(GetNextRandom(RNG), GetNextRandom(RNG));
@@ -311,7 +313,19 @@ void RgenMain() {
         // sample top level tree
         double top_pdf = 1.f;
         const int topIndex = SampleTopLevelTree(u_topLevelTree, spixelID, GetNextRandom(RNG), top_pdf);
-
+        
+        TreeEvaluateConfig fb_config;
+        fb_config.intensity_only = true;
+        // fb_config.distanceType = 0;
+        // fb_config.useApproximateCosineBound = true;
+        // fb_config.bsdf_enabled = true;
+        // const float3 texAlbedo = textures[material.baseOrDiffuseTextureIndex].Sample(hit.texcoord, 0) .xyz;
+        // fb_config.Kd = max(0.1, luminance(material.baseOrDiffuseColor * texAlbedo));
+        // fb_config.Ks = material.bsdfID == 0 ? 0 : luminance(material.specularColor);
+        // fb_config.eta = material.transmissionFactor;
+        // fb_config.roughness = material.roughness;
+        // fb_config.frame = createONB(hit.geometryNormal);
+        
         float max_irradiance = 0.f;
         float4 vpl_pos = float4(0);
         {
@@ -394,7 +408,15 @@ void RgenMain() {
                         const int clusterRoot = u_clusterRoots[clusterID];
                         // pdf of sample the voxel
                         const int leafID = u_compact2leaf[compactID];
-                        double pdf = PdfTraverseLightTree_Intensity(clusterRoot, leafID, u_TreeNodes);
+                        // double pdf = PdfTraverseLightTree_Intensity(clusterRoot, leafID, u_TreeNodes);
+                        double pdf;
+                        if (fb_config.intensity_only)
+                            pdf = PdfTraverseLightTree_Intensity(clusterRoot, leafID, u_TreeNodes);
+                        else
+                            pdf = PdfTraverseLightTree(clusterRoot, leafID, hit.position,
+                                                       hit.geometryNormal, v,
+                                                       fb_config, u_TreeNodes);
+                        
                         float a = u_TreeNodes[leafID].intensity;
                         if (top_pdf <= 0) {
                         }
@@ -482,10 +504,9 @@ void RgenMain() {
         }
         if (topIndex != -1) {
             const int clusterRoot = u_clusterRoots[topIndex];
-            TreeEvaluateConfig config;
             int VXCount = u_vxCounter.Load(0);
             double pdf;
-            int selectedID = TraverseLightTree(clusterRoot, VXCount - 1, hit.position, hit.geometryNormal, float3(0), GetNextRandom(RNG), pdf, config, u_TreeNodes);
+            int selectedID = TraverseLightTree(clusterRoot, VXCount - 1, hit.position, hit.geometryNormal, v, GetNextRandom(RNG), pdf, fb_config, u_TreeNodes);
             
             if (selectedID == -1) {
                 radiance = float3(0);

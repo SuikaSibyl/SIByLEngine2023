@@ -165,4 +165,79 @@ auto ToneMapperPass::execute(RDG::RenderContext* context,
 auto ToneMapperPass::renderUI() noexcept -> void {
   ImGui::DragFloat("Manual Exposure", &exposure, 0.01f);
 }
+
+BlendPass::BlendPass() {
+  auto [frag] = GFX::ShaderLoader_SLANG::load(
+      "../Engine/Shaders/SRenderer/addon/postprocess/"
+      "blend-pass.slang",
+      std::array<std::pair<std::string, RHI::ShaderStages>, 1>{
+          std::make_pair("fragmentMain", RHI::ShaderStages::FRAGMENT),
+      });
+
+  RDG::FullScreenPass::init(
+      Core::ResourceManager::get()->getResource<GFX::ShaderModule>(frag));
+}
+
+auto BlendPass::reflect() noexcept -> RDG::PassReflection {
+  RDG::PassReflection reflector;
+  reflector.addInput("Base").isTexture()
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{RDG::TextureInfo::ConsumeType::StorageBinding}
+        .addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT)
+        .setSubresource(0, 1, 0, 1));
+  reflector.addInput("Blend").isTexture()
+      .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+      .consume(RDG::TextureInfo::ConsumeEntry{RDG::TextureInfo::ConsumeType::StorageBinding}
+        .addStage((uint32_t)RHI::PipelineStages::FRAGMENT_SHADER_BIT)
+        .setSubresource(0, 1, 0, 1));
+  reflector.addOutput("Output").isTexture()
+      .withSize(Math::vec3(1, 1, 1)).withFormat(RHI::TextureFormat::RGBA8_UNORM)
+      .withUsages((uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT)
+      .consume(RDG::TextureInfo::ConsumeEntry{RDG::TextureInfo::ConsumeType::ColorAttachment}
+        .setAttachmentLoc(0));
+  return reflector;
+}
+
+auto BlendPass::execute(RDG::RenderContext* context,
+    RDG::RenderData const& renderData) noexcept
+    -> void {
+  GFX::Texture* input = renderData.getTexture("Input");
+  GFX::Texture* blend = renderData.getTexture("Blend");
+  GFX::Texture* output = renderData.getTexture("Output");
+
+  renderPassDescriptor = {
+      {RHI::RenderPassColorAttachment{output->getRTV(0, 0, 1),
+        nullptr, {0, 0, 0, 1}, RHI::LoadOp::CLEAR, RHI::StoreOp::STORE}},
+      RHI::RenderPassDepthStencilAttachment{},
+  };
+
+  updateBindings(context, {
+      {"u_input", RHI::BindingResource{input->getUAV(0, 0, 1)}},
+      {"u_blend", RHI::BindingResource{blend->getUAV(0, 0, 1)}},
+  });
+
+  struct PushConstant {
+    Math::ivec2 resolution;
+    uint32_t mode;
+    uint32_t rand_seed;
+    float alpha;
+  } pConst;
+  pConst.resolution = {int(output->texture->width()),
+                       int(output->texture->height())};
+  pConst.mode = mode; pConst.alpha = alpha;
+  pConst.rand_seed = renderData.getUInt("FrameIdx");
+  RHI::RenderPassEncoder* encoder = beginPass(context, output);
+  encoder->pushConstants(&pConst, (uint32_t)RHI::ShaderStages::FRAGMENT, 0, sizeof(PushConstant));
+  dispatchFullScreen(context);
+  encoder->end();
+}
+
+auto BlendPass::renderUI() noexcept -> void {
+  int combo_mode = int(mode);
+  const char* kind_names[] = {"Normal", "Dissolve", "Darken", "Multiply"};
+  ImGui::Combo("Type", &combo_mode, kind_names, 
+      IM_ARRAYSIZE(kind_names), IM_ARRAYSIZE(kind_names));
+  mode = uint32_t(combo_mode);
+  ImGui::DragFloat("Alpha", &alpha, 0.01f, 0.f, 1.f);
+}
 }

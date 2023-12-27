@@ -617,7 +617,7 @@ auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
       8, RHI::BindingResource{
              sceneDataPack.unbinded_textures,
              GFX::GFXManager::get()->samplerTable.fetch(
-                 RHI::AddressMode::CLAMP_TO_EDGE, RHI::FilterMode::LINEAR,
+                 RHI::AddressMode::REPEAT, RHI::FilterMode::LINEAR,
                  RHI::MipmapFilterMode::LINEAR)}};
   
   sceneDataPack.sceneInfoUniform.light_num =
@@ -765,6 +765,13 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
           memcpy(&(sceneDataPack.position_buffer_cpu[position_offset]),
                  mesh->positionBuffer_host.data,
                  mesh->positionBuffer_host.size);
+        }
+        if (config.enableUV2 && mesh->uv2Buffer_host.size > 0) {
+          size_t uv2_offset = sceneDataPack.uv2_buffer_cpu.size();
+          sceneDataPack.uv2_buffer_cpu.resize(
+              uv2_offset + mesh->uv2Buffer_host.size / sizeof(float));
+          memcpy(&(sceneDataPack.uv2_buffer_cpu[uv2_offset]),
+                 mesh->uv2Buffer_host.data, mesh->uv2Buffer_host.size);
         }
         uint32_t index_offset = sceneDataPack.index_buffer_cpu.size();
         sceneDataPack.index_buffer_cpu.resize(
@@ -1104,6 +1111,13 @@ auto SRenderer::packScene(GFX::Scene& scene) noexcept -> void {
                   ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY |
               (uint32_t)RHI::BufferUsage::STORAGE);
     }
+    if (config.enableUV2 && sceneDataPack.uv2_buffer_cpu.size() > 0) {
+      sceneDataPack.uv2_buffer = device->createDeviceLocalBuffer(
+          sceneDataPack.uv2_buffer_cpu.data(),
+          sceneDataPack.uv2_buffer_cpu.size() * sizeof(float),
+          (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
+          (uint32_t)RHI::BufferUsage::STORAGE);
+    }
     sceneDataBuffers.geometry_buffer =
         GFX::GFXManager::get()
             ->createStructuredArrayMultiStorageBuffer<GeometryDrawData>(
@@ -1286,6 +1300,11 @@ auto SRenderer::updateRDGData(RDG::Graph* graph) noexcept -> void {
   graph->renderData.setBindingResource(
       "PrevGeometryBuffer",
       sceneDataBuffers.geometry_buffer.getBufferBinding(prevFlightIdx));
+  if (sceneDataPack.uv2_buffer.get() != nullptr) {
+    graph->renderData.setBindingResource(
+        "UV2Buffer", RHI::BindingResource{{sceneDataPack.uv2_buffer.get(), 0,
+                                           sceneDataPack.uv2_buffer->size()}});  
+  }
   graph->renderData.setBindingResource("PrevSceneBVH",
                                        {sceneDataPack.back_tlas.get()});
 
@@ -1295,6 +1314,7 @@ auto SRenderer::updateRDGData(RDG::Graph* graph) noexcept -> void {
       "CommonRT", &(commonDescData.set1_flights_resources[flightIdx]));
   graph->renderData.setUInt("AccumIdx", state.batchIdx++);
   graph->renderData.setUInt("FrameIdx", state.allBatch);
+  graph->renderData.setPtr("Timer", timer);
   graph->renderData.setUVec2("TargetSize", {state.width, state.height});
   graph->renderData.setPtr("CameraData", &(globalUniRecord.cameraData));
   graph->renderData.setMat4("ViewProj", globalUniRecord.cameraData.viewProjMat);

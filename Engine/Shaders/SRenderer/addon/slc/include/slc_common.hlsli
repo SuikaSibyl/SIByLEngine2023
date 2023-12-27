@@ -115,8 +115,14 @@ void Swap(inout int first, inout int second)
     second = temp;
 }
 
-inline float MaxDistAlong(float3 p, float3 dir, float3 boundMin, float3 boundMax)
-{
+/**
+ * Compute the maximum distance along the direction dir to the bounding box bound.
+ * @param p The origin of the ray.
+ * @param dir The direction of the ray.
+ * @param boundMin The min corner of the bounding box.
+ * @param boundMax The max corner of the bounding box
+ */
+inline float MaxDistAlong(float3 p, float3 dir, float3 boundMin, float3 boundMax) {
     float3 dir_p = dir * p;
     float3 mx0 = dir * boundMin - dir_p;
     float3 mx1 = dir * boundMax - dir_p;

@@ -5,6 +5,7 @@
         "*.rchit": "glsl",
         "*.rmiss": "glsl",
         "*.h": "glsl",
+        "*.hlsli": "slang",
         "chrono": "cpp",
         "utility": "cpp",
         "*.ixx": "cpp",
@@ -93,6 +94,7 @@
         "xutility": "cpp",
         "codecvt": "cpp",
         "unordered_set": "cpp",
-        "valarray": "cpp"
+        "valarray": "cpp",
+        "string_view": "cpp"
     }
 }

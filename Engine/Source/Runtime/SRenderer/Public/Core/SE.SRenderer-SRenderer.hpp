@@ -11,6 +11,7 @@
 #include "SE.SRenderer-RACommon.hpp"
 #include <Resource/SE.Core.Resource.hpp>
 #include <ECS/SE.Core.ECS.hpp>
+#include <Misc/SE.Core.Misc.hpp>
 #include <SE.Math.Geometric.hpp>
 #include <SE.Math.Misc.hpp>
 #include <SE.RHI.hpp>
@@ -24,6 +25,7 @@ SE_EXPORT struct SRenderer {
    */
   struct Configuration {
     bool enableRayTracing = true;  // whether use ray tracing
+    bool enableUV2 = true;
   } config;
   /**
    * Standard Data Structure Definition
@@ -199,6 +201,7 @@ SE_EXPORT struct SRenderer {
     // integrated geometry data
     std::unique_ptr<RHI::Buffer> vertex_buffer = nullptr;
     std::unique_ptr<RHI::Buffer> position_buffer = nullptr;
+    std::unique_ptr<RHI::Buffer> uv2_buffer = nullptr;
     std::unique_ptr<RHI::Buffer> index_buffer = nullptr;
     std::unique_ptr<RHI::Buffer> material_buffer = nullptr;
     std::unique_ptr<RHI::Buffer> back_material_buffer = nullptr;
@@ -211,6 +214,7 @@ SE_EXPORT struct SRenderer {
     // cpu data
     std::vector<float> position_buffer_cpu = {};     // position buffer cpu
     std::vector<float> vertex_buffer_cpu = {};       // vertex buffer cpu
+    std::vector<float> uv2_buffer_cpu = {};     // uv2 buffer cpu
     std::vector<float> sample_dist_buffer_cpu = {};  // sample dist buffer cpu
     std::vector<uint32_t> index_buffer_cpu = {};     // index buffer cpu
     std::vector<GeometryDrawData> geometry_buffer_cpu = {};  // geometries data
@@ -319,6 +323,7 @@ SE_EXPORT struct SRenderer {
 
   RTCommon rtCommon;
   RACommon raCommon;
+  Core::Timer* timer;
 
   struct SceneDataBuffers {
     GFX::StructuredUniformBufferView<GlobalUniforms> global_uniform_buffer;

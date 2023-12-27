@@ -8,6 +8,7 @@ SE_EXPORT struct TrainingProcedure {
   bool start_training = false;
   bool on_training = false;
   int iteration = 0;
+  float grad_multiplier = 512.f;
 };
 
 SE_EXPORT enum struct DiffResourceType {
@@ -195,7 +196,7 @@ SE_EXPORT struct MatrixSanityCheck : public RDG::ComputePass, public INetworkMod
   virtual auto get_primal_buffer_size() noexcept -> uint32_t override;
   virtual auto initialize_primal(std::span<float> primal,
     ParamInitializer* initializer) noexcept -> void override;
-  MLPLayer mlp = MLPLayer(3, 16);
+  MLPLayer mlp = MLPLayer(3, 32);
   FeatureGrid2D feature_grid = FeatureGrid2D({32, 32}, 14);
   DifferentiableDevice* diffd = nullptr;
 };

@@ -15,33 +15,12 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Public\SE.MeSh.StdMesh.hpp">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="Public\SE.MeSh.MeshCluster.hpp">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="Public\SE.MeSh.GeoPrims.hpp">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="Public\SE.MeSh.Metric.hpp">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="Public\SE.MeSh.Utility.hpp">
+    <ClInclude Include="Public\SE.MeSh.Lightmap.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Private\SE.MeSh.MeshCluster.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Private\SE.MeSh.StdMesh.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Private\SE.MeSh.Metric.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Private\SE.MeSh.Utility.cpp">
+    <ClCompile Include="Private\SE.MeSh.Lightmap.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

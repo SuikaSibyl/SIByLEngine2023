@@ -19,7 +19,7 @@ void ComputeMain(int3 dtid: SV_DispatchThreadID) {
     if (tid >= param_size) return;
 
     const float theta = u_parameter_buffer[tid];
-    const float df_dtheta = u_gradient_buffer[grad_offset + tid] / (512 * 512);
+    const float df_dtheta = u_gradient_buffer[grad_offset + tid];
 
     if (optimizer.type == OptimizerType::SGD) {
         float b_t = u_auxiliary_buffer[grad_offset + tid];

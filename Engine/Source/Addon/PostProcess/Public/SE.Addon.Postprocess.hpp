@@ -24,9 +24,18 @@ SE_EXPORT struct ToneMapperPass : public RDG::FullScreenPass {
   ToneMapperPass();
   virtual auto reflect() noexcept -> RDG::PassReflection override;
   virtual auto execute(RDG::RenderContext* context,
-                       RDG::RenderData const& renderData) noexcept
-      -> void override;
+    RDG::RenderData const& renderData) noexcept -> void override;
   virtual auto renderUI() noexcept -> void override;
   float exposure = 1.f;
+};
+
+SE_EXPORT struct BlendPass : public RDG::FullScreenPass {
+  BlendPass();
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+    RDG::RenderData const& renderData) noexcept -> void override;
+  virtual auto renderUI() noexcept -> void override;
+  uint32_t mode = 0;
+  float alpha = 1.f;
 };
 }  // namespace SIByL::Addon::Postprocess

@@ -1,5 +1,6 @@
 #pragma once
 #include <SE.SRenderer.hpp>
+#include <SE.Addon.RadixForest.hpp>
 #include "SE.Addon.Differentiable-common.hpp"
 #include "SE.Addon.Differentiable-was.hpp"
 
@@ -89,5 +90,10 @@ SE_EXPORT struct AutoDiffPipeline : public FusedADPipeline {
   AutoDiffPipeline();
   virtual auto renderUI() noexcept -> void override;
   AutoDiffGraph graph;
+};
+
+SE_EXPORT struct NeuralRadiosityPipeline : public RDG::SingleGraphPipeline {
+  NeuralRadiosityPipeline();
+  std::unique_ptr<RadixForest::RadixForestBuildGraph> graph;
 };
 }

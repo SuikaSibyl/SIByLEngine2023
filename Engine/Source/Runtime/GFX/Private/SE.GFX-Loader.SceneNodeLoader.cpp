@@ -348,7 +348,106 @@ struct glTFLoaderEnv {
   std::string directory;
   std::unordered_map<tinygltf::Texture const*, Core::GUID> textures;
   std::unordered_map<tinygltf::Material const*, Core::GUID> materials;
+  std::vector<std::vector<Math::mat4>> skinning_matrices;
+  std::vector<GFX::AnimationComponent::AnimationSampler> anim_samplers;
+  std::unordered_map<uint32_t, std::vector<GFX::AnimationComponent::AnimationChannel>> anim_channels;
+
 };
+
+auto loadGLTFAnimation(tinygltf::Model const* model, glTFLoaderEnv& env) {
+  for (size_t i = 0; i < model->animations.size(); i++) {
+    const tinygltf::Animation& animation = model->animations[i];
+    // load samplers
+    env.anim_samplers.resize(animation.samplers.size());
+    for (size_t j = 0; j < animation.samplers.size(); j++) {
+      GFX::AnimationComponent::AnimationSampler& sampler_comp = env.anim_samplers[i];
+      const tinygltf::AnimationSampler& sampler = animation.samplers[j];
+      { // copy input buffer to sampler
+        const tinygltf::Accessor& accessor = model->accessors[sampler.input];
+        assert(accessor.type == TINYGLTF_TYPE_SCALAR);
+        const tinygltf::BufferView& bufferView = model->bufferViews[accessor.bufferView];
+        const tinygltf::Buffer& buffer = model->buffers[bufferView.buffer];
+        const float* ptr = reinterpret_cast<const float*>(
+            buffer.data.data() + accessor.byteOffset + bufferView.byteOffset);
+        sampler_comp.inputs.resize(accessor.count);
+        memcpy(sampler_comp.inputs.data(), ptr, accessor.count * sizeof(float));
+      }
+      {  // copy output buffer to sampler
+        const tinygltf::Accessor& accessor = model->accessors[sampler.output];
+        const tinygltf::BufferView& bufferView = model->bufferViews[accessor.bufferView];
+        const tinygltf::Buffer& buffer = model->buffers[bufferView.buffer];
+        const float* ptr = reinterpret_cast<const float*>(
+            buffer.data.data() + accessor.byteOffset + bufferView.byteOffset);
+        if (accessor.type == TINYGLTF_TYPE_VEC4) {
+          sampler_comp.outputsVec4.resize(accessor.count);
+          memcpy(sampler_comp.outputsVec4.data(), ptr, accessor.count * sizeof(Math::vec4));
+        } else if (accessor.type == TINYGLTF_TYPE_VEC3) {
+          sampler_comp.outputsVec3.resize(accessor.count);
+          memcpy(sampler_comp.outputsVec3.data(), ptr, accessor.count * sizeof(Math::vec3));
+        }
+      }
+      if (sampler.interpolation == "LINEAR") {
+        sampler_comp.interpolation = GFX::AnimationComponent::AnimationSampler::
+            InterpolationType::LINEAR;
+      } else if (sampler.interpolation == "STEP") {
+        sampler_comp.interpolation = GFX::AnimationComponent::AnimationSampler::
+            InterpolationType::STEP;
+      } else if (sampler.interpolation == "CUBICSPLINE") {
+        sampler_comp.interpolation = GFX::AnimationComponent::AnimationSampler::
+            InterpolationType::CUBICSPLINE;
+      }
+    }
+    // load channels
+    for (size_t j = 0; j < animation.channels.size(); j++) {
+      uint32_t const target_node = animation.channels[j].target_node;
+      std::vector<GFX::AnimationComponent::AnimationChannel>& channels = env.anim_channels[target_node];
+      std::string const target = animation.channels[j].target_path;
+      GFX::AnimationComponent::AnimationChannel channel;
+      channel.samplerIndex = animation.channels[j].sampler;
+      if (target.compare("translation") == 0) {
+        channel.path = GFX::AnimationComponent::AnimationChannel::PathType::TRANSLATION;
+      } else if (target.compare("rotation") == 0) {
+        channel.path = GFX::AnimationComponent::AnimationChannel::PathType::ROTATION;
+      } else if (target.compare("scale") == 0) {
+        channel.path = GFX::AnimationComponent::AnimationChannel::PathType::SCALE;
+      }
+      channels.emplace_back(channel);
+    }
+  }
+}
+
+auto loadGLTFSkinningMatrices(tinygltf::Model const* model, glTFLoaderEnv& env) {
+  env.skinning_matrices.resize(model->skins.size());
+  for (size_t s = 0; s < model->skins.size(); s++) {
+    const tinygltf::Skin& skin = model->skins[s];
+    if (skin.inverseBindMatrices > -1) {
+      if (skin.joints.size() > 0) {
+        const tinygltf::Accessor& accessor =
+            model->accessors[skin.inverseBindMatrices];
+        assert(accessor.type == TINYGLTF_TYPE_MAT4);
+
+        const tinygltf::BufferView& bufferView =
+            model->bufferViews[accessor.bufferView];
+
+        const tinygltf::Buffer& buffer = model->buffers[bufferView.buffer];
+
+        const float* ptr = reinterpret_cast<const float*>(
+            buffer.data.data() + accessor.byteOffset + bufferView.byteOffset);
+        std::cout << "count = " << accessor.count << std::endl;
+
+        std::vector<Math::mat4> inverse_bind_matrices(accessor.count);
+
+        for (size_t j = 0; j < skin.joints.size(); j++) {
+          Math::mat4 m;
+          memcpy(&m, ptr + j * 16, 16 * sizeof(float));
+          inverse_bind_matrices[j] = m;
+        }
+
+        env.skinning_matrices[s] = inverse_bind_matrices;
+      }
+    }
+  }
+}
 
 auto loadGLTFMaterialTextures(tinygltf::Texture const* gltexture, tinygltf::Model const* model,
                               glTFLoaderEnv& env, GFX::Scene& gfxscene,
@@ -900,7 +999,40 @@ auto loadGLTFMaterial(tinygltf::Material const* glmaterial, tinygltf::Model cons
   return guid;
  }
 
-static inline auto processGLTFMesh(GameObjectHandle const& gfxNode, int node_id,
+ static inline auto processGLTFTransform(GameObjectHandle const& gfxNode,
+    int node_id, tinygltf::Model const* model, glTFLoaderEnv& env, GFX::Scene& gfxscene,
+    MeshLoaderConfig meshConfig = {}) noexcept -> void {
+  tinygltf::Node const& node = model->nodes[node_id];
+  gfxscene.getGameObject(gfxNode)->getEntity().getComponent<TagComponent>()
+    ->name = std::string(node.name);
+  TransformComponent* transform = gfxscene.getGameObject(gfxNode)
+    ->getEntity().getComponent<TransformComponent>();
+  if (node.scale.size() == 3)
+    transform->scale = {static_cast<float>(node.scale[0]),
+                        static_cast<float>(node.scale[1]),
+                        static_cast<float>(node.scale[2])};
+  if (node.translation.size() == 3)
+    transform->translation = {static_cast<float>(node.translation[0]),
+                              static_cast<float>(node.translation[1]),
+                              static_cast<float>(node.translation[2])};
+  if (node.rotation.size() == 4) {
+    double qx = node.rotation[0];
+    double qy = node.rotation[1];
+    double qz = node.rotation[2];
+    double qw = node.rotation[3];
+    double roll = atan2(2 * (qw * qx + qy * qz), 1 - 2 * (qx * qx + qy * qy));
+    double pitch = std::asin(2 * (qw * qy - qz * qx));
+    double yaw = atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz));
+    roll *= 180. / Math::double_Pi;
+    pitch *= 180. / Math::double_Pi;
+    yaw *= 180. / Math::double_Pi;
+    transform->eulerAngles = {static_cast<float>(roll),
+                              static_cast<float>(pitch),
+                              static_cast<float>(yaw)};
+  }
+ }
+
+ static inline auto processGLTFMesh(GameObjectHandle const& gfxNode, int node_id,
                                    tinygltf::Model const* model,
                                    glTFLoaderEnv& env, GFX::Scene& gfxscene,
                                    MeshLoaderConfig meshConfig = {}) noexcept
@@ -933,6 +1065,22 @@ static inline auto processGLTFMesh(GameObjectHandle const& gfxNode, int node_id,
         Core::ResourceManager::get()->getResource<GFX::Material>(matGUID));
   }
 }
+ 
+ static inline auto processGLTFAnimation(GameObjectHandle const& gfxNode, int node_id,
+    tinygltf::Model const* model, glTFLoaderEnv& env, GFX::Scene& gfxscene,
+    MeshLoaderConfig meshConfig = {}) noexcept -> void {
+  auto iter = env.anim_channels.find(node_id);
+  if (iter != env.anim_channels.end()) {
+    AnimationComponent* meshResourceRef = gfxscene.getGameObject(gfxNode)
+      ->getEntity().addComponent<AnimationComponent>();
+    std::vector<AnimationComponent::AnimationChannel>& channels = iter->second;
+    for (auto channel : channels) {
+      meshResourceRef->ani.samplers.push_back(env.anim_samplers[channel.samplerIndex]);
+      channel.samplerIndex = meshResourceRef->ani.samplers.size() - 1;
+      meshResourceRef->ani.channels.push_back(channel);
+    }
+  }
+}
 
 void QuatToAngleAxis(const std::vector<double> quaternion,
                      double& outAngleDegrees, double* axis) {
@@ -958,51 +1106,17 @@ void QuatToAngleAxis(const std::vector<double> quaternion,
 }
 
 static inline auto processGLTFNode(GameObjectHandle const& gfxNode, int node_id,
-                                   tinygltf::Model const* model,
-                                   glTFLoaderEnv& env, GFX::Scene& gfxscene,
-                                   MeshLoaderConfig meshConfig = {}) noexcept
-    -> void {
-    
-  // process all meshes
+    tinygltf::Model const* model, glTFLoaderEnv& env, GFX::Scene& gfxscene,
+    MeshLoaderConfig meshConfig = {}) noexcept -> void {
+  // load tag, transform, mesh
+  processGLTFTransform(gfxNode, node_id, model, env, gfxscene, meshConfig);
   processGLTFMesh(gfxNode, node_id, model, env, gfxscene, meshConfig);
+  processGLTFAnimation(gfxNode, node_id, model, env, gfxscene, meshConfig);
+
   // process the meshes for all the following nodes
   tinygltf::Node const& node = model->nodes[node_id];
-  TransformComponent* transform = gfxscene.getGameObject(gfxNode)
-                                      ->getEntity()
-                                      .getComponent<TransformComponent>();
-  if (node.scale.size() == 3)
-    transform->scale = {static_cast<float>(node.scale[0]),
-                        static_cast<float>(node.scale[1]),
-                        static_cast<float>(node.scale[2])};
-  if (node.translation.size() == 3)
-    transform->translation = {static_cast<float>(node.translation[0]),
-                              static_cast<float>(node.translation[1]),
-                              static_cast<float>(node.translation[2])};
-  if (node.rotation.size() == 4) {
-    double angleDegrees;
-    double axis[3];
-    //QuatToAngleAxis(node.rotation, angleDegrees, axis);
-    double qx = node.rotation[0];
-    double qy = node.rotation[1];
-    double qz = node.rotation[2];
-    double qw = node.rotation[3];
-    double roll = atan2(2 * (qw * qx + qy * qz), 1 - 2 * (qx * qx + qy * qy));
-    double pitch = std::asin(2 * (qw * qy - qz * qx));
-    double yaw = atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz));
-    roll *= 180. / Math::double_Pi;
-    pitch *= 180. / Math::double_Pi;
-    yaw *= 180. / Math::double_Pi;
-    transform->eulerAngles = {static_cast<float>(roll),
-                              static_cast<float>(pitch),
-                              static_cast<float>(yaw)};
-  }
-
   for (uint32_t i : node.children) {
     GameObjectHandle subNode = gfxscene.createGameObject(gfxNode);
-    gfxscene.getGameObject(subNode)
-        ->getEntity()
-        .getComponent<TagComponent>()
-        ->name = std::string(node.name);
     processGLTFNode(subNode, i, model, env, gfxscene, meshConfig);
   }
 }
@@ -1017,7 +1131,15 @@ auto SceneNodeLoader_glTF::loadSceneNode(
   tinygltf::TinyGLTF loader;
   std::string err;
   std::string warn;
-  bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, path.string());
+  std::string ext = path.extension().string();
+  // load the .glb/.gltf file
+  bool ret = false;
+  if (ext.compare(".glb") == 0) { // assume binary glTF.
+    ret = loader.LoadBinaryFromFile(&model, &err, &warn, path.string());  
+  } else { // assume ascii glTF.
+    ret = loader.LoadASCIIFromFile(&model, &err, &warn, path.string());  
+  }
+  // check the loading results
   if (!warn.empty())
     Core::LogManager::Warning(
         std::format("GFX :: tinygltf :: {0}", warn.c_str()));
@@ -1027,28 +1149,38 @@ auto SceneNodeLoader_glTF::loadSceneNode(
     Core::LogManager::Error("GFX :: tinygltf :: Failed to parse glTF");
     return;
   }
+  // Find the default or first scene.
+  if (model.scenes.empty()) {
+    std::cerr << "GFX :: tinygltf :: Scene is empty" << std::endl;
+    return; }
+  std::cout << "defaultScene = " << model.defaultScene << std::endl;
+  if (model.defaultScene >= int(model.scenes.size())) {
+    std::cerr << "GFX :: tinygltf :: Invalid defualtScene value : " 
+        << model.defaultScene << std::endl;
+    return; }
+  int scene_idx = model.defaultScene;
+  if (scene_idx == -1) {
+    // Use the first scene.
+    scene_idx = 0;
+  }
+  auto& scene = model.scenes[scene_idx];
 
   std::string directory = path.parent_path().string();
-
-  GameObjectHandle rootNode = gfxscene.createGameObject(GFX::NULL_GO);
-  gfxscene.getGameObject(rootNode)
-      ->getEntity()
-      .getComponent<TagComponent>()
-      ->name = path.filename().string();
-
   glTFLoaderEnv env;
-  env.directory = directory;
-  uint32_t i = 0;
-  for (auto& scene : model.scenes) {
-    GameObjectHandle sceneNode = gfxscene.createGameObject(rootNode);
-    std::string name = scene.name;
-    if (name == "") name = "scene_" + std::to_string(i++);
-    gfxscene.getGameObject(sceneNode)
-        ->getEntity()
-        .getComponent<TagComponent>()
-        ->name = name;
-    for (auto node : scene.nodes)
-      processGLTFNode(rootNode, node, &model, env, gfxscene, meshConfig);
+  env.directory = directory;  
+  // try load animation data
+  loadGLTFAnimation(&model, env);
+  // try load skinning data
+  loadGLTFSkinningMatrices(&model, env);
+
+  // create root node for the whole gltf file
+  GameObjectHandle rootNode = gfxscene.createGameObject(GFX::NULL_GO);
+  gfxscene.getGameObject(rootNode)->getEntity()
+    .getComponent<TagComponent>()->name = path.filename().string();
+  // load all root nodes for the default scene
+  for (auto node : scene.nodes) {
+    GameObjectHandle subNode = gfxscene.createGameObject(rootNode);
+    processGLTFNode(subNode, node, &model, env, gfxscene, meshConfig);
   }
 }
 

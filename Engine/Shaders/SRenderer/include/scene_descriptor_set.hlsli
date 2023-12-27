@@ -145,7 +145,7 @@ ShadingSurface fetchShadingSurfaceTrimesh(
     vertexPositions[0] = fetchVertexPosition(index[0] + int(geometry.vertexOffset));
     vertexPositions[1] = fetchVertexPosition(index[1] + int(geometry.vertexOffset));
     vertexPositions[2] = fetchVertexPosition(index[2] + int(geometry.vertexOffset));
-
+    
     const float4x4 o2w = ObjectToWorld(geometry);
     const float3 positionOS = interpolate(vertexPositions, bary);
     const float3 positionWS = mul(float4(positionOS, 1.0), o2w).xyz;

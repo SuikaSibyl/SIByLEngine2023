@@ -34,7 +34,7 @@ void ComputeMain(
         param_diff_buffer[index] = 0.f;
         return;
     }
-
+    
     RandomSamplerState RNG = InitRandomSampler(dtid.x, random_seed);
 
     if(index % param_stride < 16 * 16) { // is a weight

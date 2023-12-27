@@ -75,6 +75,69 @@ SE_EXPORT struct SSPGvMF_VisPass : public RDG::RayTracingPass {
   Math::ivec2 debugPixel = {0, 0};
 };
 
+namespace RealGMM {
+SE_EXPORT struct SSPGGMM_ClearPass : public RDG::ComputePass {
+  SSPGGMM_ClearPass();
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept
+      -> void override;
+  virtual auto renderUI() noexcept -> void override;
+  bool clear = true;
+};
+
+SE_EXPORT struct SSPGGMM_SamplePass : public RDG::RayTracingPass {
+  SSPGGMM_SamplePass();
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto renderUI() noexcept -> void override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept
+      -> void override;
+  int strategy = 0;
+  bool learn = true;
+  bool multi_bounce = false;
+  bool extra_half_spp = false;
+  bool learn_one_frame = false;
+  float expon_factor = 0.7f;
+  int spp = 1;
+  bool learn_first = false;
+};
+
+SE_EXPORT struct SSPGGMM_LearnPass : public RDG::ComputePass {
+  SSPGGMM_LearnPass();
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept
+      -> void override;
+  virtual auto renderUI() noexcept -> void override;
+  bool learn = true;
+  bool learn_one_frame = false;
+  int extra_sample = 10;
+};
+
+SE_EXPORT struct SSPGGMM_CopyPass : public RDG::ComputePass {
+  SSPGGMM_CopyPass();
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+    RDG::RenderData const& renderData) noexcept -> void override;
+};
+
+SE_EXPORT struct SSPGGMM_VisPass : public RDG::RayTracingPass {
+  SSPGGMM_VisPass();
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto renderUI() noexcept -> void override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept
+      -> void override;
+  virtual auto onInteraction(Platform::Input* input,
+                             Editor::Widget::WidgetInfo* info) noexcept
+      -> void override;
+  int debugMode = 0;
+  float scalar = 1.f;
+  Math::ivec2 debugPixel = {0, 0};
+};
+}
+
 SE_EXPORT struct SSPGGMM_ClearPass : public RDG::ComputePass {
   SSPGGMM_ClearPass();
   virtual auto reflect() noexcept -> RDG::PassReflection override;
@@ -188,7 +251,6 @@ SE_EXPORT struct PdfNormalize_ViewerPass : public RDG::ComputePass {
   virtual auto renderUI() noexcept -> void override;
   float scalar = 1.f;
 };
-
 
 SE_EXPORT struct PdfNormalize_TestPass : public RDG::RayTracingPass {
   PdfNormalize_TestPass();

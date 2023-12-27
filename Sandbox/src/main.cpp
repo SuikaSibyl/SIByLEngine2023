@@ -16,12 +16,14 @@
 #include <SE.Addon.SLC.hpp>
 #include <SE.Addon.SST.hpp>
 #include <SE.Addon.VPL.hpp>
+#include <SE.Addon.PSFiltering.hpp>
 #include <SE.Application.hpp>
 #include <SE.Editor.Config.hpp>
 #include <SE.Editor.Core.hpp>
 #include <SE.Editor.DebugDraw.hpp>
 #include <SE.RHI.Profiler.hpp>
 #include <SE.SRenderer.hpp>
+#include <SE.Addon.Lightmap.hpp>
 #include <array>
 #include <chrono>
 #include <filesystem>
@@ -56,6 +58,7 @@ struct SandBoxApplication : public Application::ApplicationBase {
         true,  // use aftermath
     });
     GFX::GFXManager::get()->rhiLayer = rhiLayer.get();
+    GFX::GFXManager::get()->mTimeline.timer = &timer;
     imguiLayer = std::make_unique<Editor::ImGuiLayer>(rhiLayer.get());
     editorLayer = std::make_unique<Editor::EditorLayer>();
     Editor::Config::buildEditorLayer(editorLayer.get());
@@ -80,19 +83,21 @@ struct SandBoxApplication : public Application::ApplicationBase {
     device->waitIdle();
 
     pipeline1 = std::make_unique<Addon::Differentiable::AutoDiffPipeline>();
-    // pipeline1 = std::make_unique<CustomPipeline>();
-    // pipeline2 = std::make_unique<VXPGReSTIRPipeline>();
-    // pipeline1 = std::make_unique<Addon::SLC::SLCTestPipeline>();
-    // pipeline2 = std::make_unique<SSPGReSTIRPipeline>();
-    pipeline2 = std::make_unique<GTPipeline>();
-    //      rtgi_pipeline = std::make_unique<RestirGIPipeline>();
-    rtgi_pipeline = std::make_unique<RestirGIPipeline>();
+    pipeline2 = std::make_unique<Addon::Lightmap::LightmapVisualizePipeline>();
+    rtgi_pipeline = std::make_unique<Addon::Differentiable::NeuralRadiosityPipeline>();
+    //// pipeline1 = std::make_unique<CustomPipeline>();
+    //// pipeline2 = std::make_unique<VXPGReSTIRPipeline>();
+    //// pipeline1 = std::make_unique<Addon::SLC::SLCTestPipeline>();
+    //// pipeline2 = std::make_unique<SSPGReSTIRPipeline>();
+    //pipeline2 = std::make_unique<GTPipeline>();
+    ////      rtgi_pipeline = std::make_unique<RestirGIPipeline>();
+    //rtgi_pipeline = std::make_unique<RestirGIPipeline>();
 
-    // geoinsp_pipeline = std::make_unique<SSPGP_GMM_Pipeline>();
-    geoinsp_pipeline = std::make_unique<GTPipeline>();
-    // geoinsp_pipeline = std::make_unique<SRP::GeoInspectPipeline>();
-    // vxgi_pipeline = std::make_unique<SSPGP_GMM_Pipeline>();
-    vxgi_pipeline = std::make_unique<SSPGPipeline>();
+    //// geoinsp_pipeline = std::make_unique<SSPGP_GMM_Pipeline>();
+    //geoinsp_pipeline = std::make_unique<GTPipeline>();
+    geoinsp_pipeline = std::make_unique<SRP::GeoInspectPipeline>();
+    vxgi_pipeline = std::make_unique<Addon::PSFiltering::Pipeline::HashViewPipeline>();
+    //vxgi_pipeline = std::make_unique<SSPGPipeline>();
     vxdi_pipeline = std::make_unique<VXPGPipeline>();
     pipeline1->build();
     pipeline2->build();
@@ -120,6 +125,7 @@ struct SandBoxApplication : public Application::ApplicationBase {
   void InvalidScene() {
     srenderer = std::make_unique<SRenderer>();
     srenderer->init(scene);
+    srenderer->timer = &timer;
     GeometryTabulator::tabulate(512,
                                 srenderer->sceneDataPack.position_buffer_cpu,
                                 srenderer->sceneDataPack.index_buffer_cpu,
@@ -156,6 +162,7 @@ struct SandBoxApplication : public Application::ApplicationBase {
       InvalidScene();
       device->waitIdle();
       scene.isDirty = false;
+      cameraController.forceReset = true;
     }
     device->waitIdle();
 
@@ -253,7 +260,7 @@ struct SandBoxApplication : public Application::ApplicationBase {
         pipeline = geoinsp_pipeline.get();
         editorLayer->getWidget<Editor::RDGViewerWidget>()->pipeline = pipeline;
       } else if (pipeline_id == 4) {
-        frames2capture = 50;
+        frames2capture = 150;
         pipeline = vxgi_pipeline.get();
         editorLayer->getWidget<Editor::RDGViewerWidget>()->pipeline = pipeline;
       } else if (pipeline_id == 5) {
@@ -307,16 +314,19 @@ struct SandBoxApplication : public Application::ApplicationBase {
     multiFrameFlights->frameEnd();
 
     pipeline->readback();
-    // if (frames2capture > 0) {
-    //	static int i = 0;
-    //	if (i < 102) {
-    //
-    //	}
-    //	device->waitIdle();
-    //          GFX::CaptureImage(pipeline->getOutput(),
-    //              "D:/data/adaptation/sspg_gmm/" + std::to_string(i++));
-    //	frames2capture--;
-    //}
+     if (frames2capture > 0) {
+    	static int i = 0;
+     //   if (i < 102) {
+     //       
+    	//}
+     //   if (i == 100) {
+     //       device->waitIdle();
+     //       GFX::CaptureImage(pipeline->getOutput(),
+     //                     "D:/data/adaptation/sspg_gmm/test");            
+     //   }
+        i++;
+    	frames2capture--;
+    }
   };
 
   /** Update the application every fixed update timestep */

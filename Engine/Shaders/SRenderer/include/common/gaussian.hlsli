@@ -37,36 +37,6 @@ float2 BoxMuller(in_ref(float2) uv, in_ref(float2) mean, in_ref(float2) std) {
     return BoxMuller(uv) * std + mean;
 }
 
-struct NormalDistribution {
-    float2 mean;         // mean of the distribution
-    double det;          // determinant of the covariance matrix
-    double2x2 covariance;  // covariance matrix
-    double2x2 inverse;     // inverse of the covariance matrix
-    double2x2 cholesky;   // Cholesky decomposition of the covariance matrix
-    // functions
-    // ---------------------------------------------------------------------------------
-    // constructors
-    __init(float2 _mean, float2x2 _covariance) {
-        mean = _mean;
-        covariance = double2x2(_covariance);
-        det = double(covariance._11 * covariance._22) - double(covariance._12 * covariance._21);
-        inverse = Inverse2x2(covariance, det);
-        cholesky = CholeskyDecomposition2x2(covariance);
-    }
-    // Draw a sample from the distribution
-    float2 DrawSample(in_ref(float2) uv) {
-        // Generate two independent random variables from a standard normal distribution
-        const double2 n = double2(BoxMuller(uv));
-        // Transform the independent variables to match the desired mean and covariance
-        return mean + float2(mul(n, cholesky));
-    }
-    // evaluate the probability density function at the given sample
-    double Pdf(in_ref(float2) sample) {
-        const double2 x = double2(sample - mean);
-        return (1.0 / (double(k_2pi) * sqrt(det))) * double(exp(float(-0.5 * dot(x, mul(inverse, x)))));
-    }
-};
-
 struct MultivariateGaussian2D {
     float2x2 precision;  // precision matrix (inverse of the covariance matrix)
     float2 mean;         // mean of the distribution
@@ -108,7 +78,10 @@ struct MultivariateGaussian2D {
         const float2 x = sample - mean;        
         return normalization * exp(-0.5 * QuadraticForm(precision, x));
     }
+};
 
+struct Gaussian2DSufficientStats {
+    
 };
 
 #endif // !_SRENDERER_GAUSSIAN_HEADER_

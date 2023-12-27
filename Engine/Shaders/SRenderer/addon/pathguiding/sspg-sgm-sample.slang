@@ -66,7 +66,7 @@ void RgenMain() {
         u_gmmStatisticsPack1[pixel] = float4(0);
         return;
     }
-
+    
     // Otherwise, let's do some shading!
     float3 radiance = float3(0);
     PrimaryPayload payload;
@@ -93,7 +93,7 @@ void RgenMain() {
     }
     uint epoch_count = uint(pack1.z);
     GMMStatictics GMMstat = UnpackStatistics(pack0, pack1);
-    MultivariateGaussian2D GMM = MultivariateGaussian2D(float2(GMMstat.ex, GMMstat.ey), float2x2(0.01, 0, 0, 0.01));
+    MultivariateGaussian2D GMM = MultivariateGaussian2D(float2(GMMstat.ex, GMMstat.ey), Covariance2x2(GMMstat));
    
     // BSDF importance sampling
     // --------------------------------------------------------------------
@@ -211,9 +211,16 @@ void RgenMain() {
     u_gmmStatisticsPack0[pixel] = pack0;
     u_gmmStatisticsPack1[pixel] = pack1;
 
+    if (all(surface.specularF0 == float3(1,0,1))) {
+        radiance += float3(50.f);
+    }
     // radiance += material.emissiveColor;
     const PolymorphicLightInfo light = lights[0];
     radiance += EvaluateDirectLight(primaryRay, surface, light, RNG);
+    
+    if(any(isnan(radiance))) {
+        radiance = float3(0);
+    }
     
     u_color[pixel] = float4(radiance, 1);
 }

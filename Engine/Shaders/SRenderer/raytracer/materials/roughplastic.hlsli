@@ -59,7 +59,7 @@ void EvalRoughPlastic(inout_ref(BSDFEvalQuery) cBSDFEvalQuery) {
         cBSDFEvalQuery.dir_out = float3(0);
         return;
     }
-
+    
     // dielectric layer:
     // F_o is the reflection percentage.
     const float F_o = FresnelDielectric(dot(half_vector, cBSDFEvalQuery.dir_out), eta);

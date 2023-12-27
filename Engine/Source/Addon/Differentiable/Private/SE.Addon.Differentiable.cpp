@@ -505,6 +505,7 @@ auto AutoDiffPipeline::renderUI() noexcept -> void {
       diffdevice.training.start_training = true;
       diffdevice.training.iteration = 0;
     }
+    ImGui::DragFloat("Gradient Scalar", &diffdevice.training.grad_multiplier, 1, 0);
   }
   ImGui::Separator();
 
@@ -629,5 +630,46 @@ auto AutoDiffPipeline::renderUI() noexcept -> void {
       build();  // rebuild the pipeline
     }
   });
+}
+
+NeuralRadiosityPipeline::NeuralRadiosityPipeline() {
+  SRenderer* sr = SRenderer::singleton;
+  std::vector<float> triangle_sizes;
+  auto& position_buffer = sr->sceneDataPack.position_buffer_cpu;
+  auto& index_buffer = sr->sceneDataPack.index_buffer_cpu;
+  for (auto& geom : sr->sceneDataPack.geometry_buffer_cpu) {
+    const uint32_t index_offset = geom.indexOffset;
+    const Math::mat4 transform = geom.geometryTransform;
+    for (int i = 0; i < geom.indexSize; i += 3) {
+      const uint32_t idx[3] = {
+        index_buffer[index_offset + i + 0],
+        index_buffer[index_offset + i + 1],
+        index_buffer[index_offset + i + 2],
+      };
+      Math::vec3 pos[3];
+      for (int i = 0; i < 3; ++i) {
+        Math::vec4 position_os = Math::vec4{
+            position_buffer[(geom.vertexOffset + idx[i]) * 3 + 0],
+            position_buffer[(geom.vertexOffset + idx[i]) * 3 + 1],
+            position_buffer[(geom.vertexOffset + idx[i]) * 3 + 2], 1};
+        Math::vec4 position_ws = transform * position_os;
+        pos[i] = {position_ws.x, position_ws.y, position_ws.z};
+      }
+      const float area = Math::length(Math::cross(pos[2] - pos[0], pos[1] - pos[0]))/2;
+      triangle_sizes.emplace_back(area);
+    }
+  }
+
+  Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Buffer>();
+  GFX::GFXManager::get()->registerBufferResource(guid, 
+      triangle_sizes.data(), triangle_sizes.size() * sizeof(float),
+      (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
+      (uint32_t)RHI::BufferUsage::STORAGE);
+  GFX::Buffer* triangle_size_buffer =
+      Core::ResourceManager::get()->getResource<GFX::Buffer>(guid);
+
+  graph = std::make_unique<RadixForest::RadixForestBuildGraph>(triangle_sizes.size(), 10);
+  graph->setExternal("FloatInput Pass", "InputData", triangle_size_buffer);
+  pGraph = graph.get();
 }
 }

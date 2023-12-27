@@ -673,9 +673,28 @@ int3 SampleByEstimationTwoPass(
 }
 
 struct TreeEvaluateConfig {
-    bool intensity_only = false;
+    bool intensity_only;
     bool useApproximateCosineBound;
-    int  distanceType;
+    int distanceType;
+    // BSDF parameters
+    bool bsdf_enabled;
+    float Kd;
+    float Ks;
+    float eta;
+    float roughness;
+    float3x3 frame;
+
+    __init() {
+        intensity_only = false;
+        useApproximateCosineBound = false;
+        distanceType = 0;
+        bsdf_enabled = false;
+        Kd = 0;
+        Ks = 0;
+        eta = 0;
+        roughness = 0;
+        frame = float3x3(0);
+    }
 };
 
 /**
@@ -754,6 +773,13 @@ bool EvaluateFirstChildWeight(
     //     geom0 *= max(0.f, cos(max(0.f, acos(cos0) - c0.cone.w)));
     //     geom1 *= max(0.f, cos(max(0.f, acos(cos1) - c1.cone.w)));
     // }
+
+    if (config.bsdf_enabled) {
+        AABB c0_bound; c0_bound.min = c0_boundMin; c0_bound.max = c0_boundMax;
+        AABB c1_bound; c1_bound.min = c1_boundMin; c1_bound.max = c1_boundMax;
+        geom0 *= ApproxBSDFWeight(p, config.frame, v, c0_bound, config.Kd, config.Ks, config.eta, config.roughness);
+        geom1 *= ApproxBSDFWeight(p, config.frame, v, c1_bound, config.Kd, config.Ks, config.eta, config.roughness);
+    }
 
     if (geom0 + geom1 == 0)
         return false;
@@ -879,11 +905,14 @@ inline double PdfTraverseLightTree(
     in_ref(float3) n,
     in_ref(float3) v,
     in_ref(TreeEvaluateConfig) config,
-    StructuredBuffer<TreeNode> nodeBuffer
+    StructuredBuffer<TreeNode> nodeBuffer,
 ) {
     double nprob = 1.;
     int node_index = leafSelected;
     TreeNode node = nodeBuffer[node_index];
+    // Immediately return if it is the root node already
+    if (node_index == 0 || node_index == nid) return nprob;
+
     while (node.parent_idx != 0xFFFFFFFF) {
         TreeNode parent = nodeBuffer[node.parent_idx];
         uint16_t c0_id = parent.left_idx;  // left child
@@ -900,7 +929,7 @@ inline double PdfTraverseLightTree(
         }
         node_index = node.parent_idx;
         node = parent;
-        if (node_index == 0) return nprob;
+        if (node_index == 0 || node_index == nid) return nprob;
     }
     return nprob;
 }
@@ -941,7 +970,7 @@ int SampleTopLevelTree(
         if (leftImportance == 0) prob0 = 0.f;
         else if (rightImportance == 0) prob0 = 1.f;
         else prob0 = leftImportance / (leftImportance + rightImportance);
-
+        
         if (rnd < prob0) {
             topIndex = leftIndex;
             rnd /= prob0;
@@ -1499,6 +1528,114 @@ double PdfVoxelGuiding(
         p_max,
         info);
     return voxel_pdf * double(sph_pdf);
+}
+
+/** Returns true if ray intersects plane, else false. */
+bool intersectRayPlane(float3 planeP, float3 planeN, float3 rayP, float3 rayD, out float3 I) {
+    // Assuming vectors are all normalized
+    float denom = dot(planeN, rayD);
+    if (abs(denom) > 0.001f) {
+        float3 p0l0 = planeP - rayP;
+        float t = dot(p0l0, planeN) / denom;
+        I = rayP + t * rayD;
+        return (t >= 0);
+    }
+    I = float3(0);
+    return false;
+}
+
+/** Returns true if point P is within the AABB, else false. */
+bool isPointWithinAABB(in const float3 P, in const float3 aabbMin, in const float3 aabbMax) {
+    return aabbMin.x < P.x && P.x < aabbMax.x &&
+           aabbMin.y < P.y && P.y < aabbMax.y &&
+           aabbMin.z < P.z && P.z < aabbMax.z;
+}
+
+/** Returns the closet point on an AABB to a ray. */
+float3 closestPointOnAABBRay(
+    in_ref(float3) rayOrigin, 
+    in_ref(float3) rayDir, 
+    in_ref(float3) aabbMin, 
+    in_ref(float3) aabbMax
+) {
+    const float3 dirs[3] = { float3(1, 0, 0), float3(0, 1, 0), float3(0, 0, 1) };
+    float dMin = k_numeric_limits_float_max;
+    float dMax = -k_numeric_limits_float_max;
+    float d;
+    float3 minIs; // Will be written, since ray is guaranteed to intersect one of the planes!
+    float3 Is;
+
+    for (int i = 0; i < 6; i++) {
+        const float3 planeN = (i < 3) ? dirs[i % 3] : -dirs[i % 3];
+        const float3 planeO = (i < 3) ? aabbMax : aabbMin;
+        if (intersectRayPlane(planeO, planeN, rayOrigin, rayDir, Is)) {
+            Is = clamp(Is, aabbMin, aabbMax);
+            float3 dirIs = normalize(Is - rayOrigin);
+            d = dot(rayDir, dirIs);
+            if (d > dMax) {
+                dMin = d;
+                dMax = d;
+                minIs = Is;
+            }
+        }
+    }
+    return minIs;
+}
+
+float3 FindSpecularDirectionInAABB(
+    in_ref(float3) position,
+    in_ref(float3) normal,
+    in_ref(float3) view, // direction to eye at shading point
+    in_ref(AABB) aabb,
+) {
+    // Heuristic for estimating the glossy brdf term:
+    // Find the closest point on AABB with regard to the perfect reflection.
+    float3 Lp = reflect(-view, normal);
+    float3 L; // The direction to estimate the BSDF term
+    const float3 epsilon = 0.001f;
+    if (isPointWithinAABB(position, aabb.min - epsilon, aabb.max + epsilon))
+        L = Lp; // inside the AABB, use perfect reflection direction
+    else {
+        // outside the AABB, find the closest point on AABB to the perfect reflection
+        const float3 Is = closestPointOnAABBRay(position, Lp, aabb.min, aabb.max);
+        L = normalize(Is - position);
+    }
+    return L;
+}
+
+float ApproxBSDFWeight(
+    in_ref(float3) position,
+    in_ref(float3x3) frame,
+    in_ref(float3) w_in,
+    in_ref(AABB) aabb,
+    float Kd,
+    float Ks,
+    float eta,
+    float roughness,
+) {
+    const float3 w_out = FindSpecularDirectionInAABB(position, frame[2], w_in, aabb);
+
+    const float3 half_vector = normalize(w_in + w_out);
+    const float n_dot_h = dot(frame[2], half_vector);
+    const float n_dot_in = dot(frame[2], w_in);
+    const float n_dot_out = dot(frame[2], w_out);
+
+    // dielectric layer:
+    // F_o is the reflection percentage.
+    const float F_o = FresnelDielectric(dot(half_vector, w_out), eta);
+    const float D = GTR2_NDF(n_dot_h, roughness);
+    const float G = IsotropicGGX_Masking(to_local(frame, w_in), roughness) *
+                    IsotropicGGX_Masking(to_local(frame, w_out), roughness);
+    const float spec_contrib = Ks * (G * F_o * D) / (4 * n_dot_in * n_dot_out);
+    // diffuse layer:
+    // In order to reflect from the diffuse layer,
+    // the photon needs to bounce through the dielectric layers twice.
+    // The transmittance is computed by 1 - fresnel.
+    const float F_i = FresnelDielectric(dot(half_vector, w_in), eta);
+    // Multiplying with Fresnels leads to an overly dark appearance at the
+    // object boundaries. Disney BRDF proposes a fix to this -- we will implement this in problem set 1.
+    const float diffuse_contrib = (1.f - F_o) * (1.f - F_i) / k_pi * Kd;
+    return diffuse_contrib + spec_contrib;
 }
 
 #endif // !_SRENDERER_ADDON_VXGUIDING_ITNERFACE_HEADER_

@@ -108,6 +108,102 @@ auto to_string(LightComponent::LightType type) noexcept
   }
 }
 
+auto AnimationComponent::serialize(void* pemitter,
+    Core::EntityHandle const& handle) -> void {
+  YAML::Emitter& emitter = *reinterpret_cast<YAML::Emitter*>(pemitter);
+  Core::Entity entity(handle);
+  AnimationComponent* animComp = entity.getComponent<AnimationComponent>();
+  if (animComp != nullptr) {
+    emitter << YAML::Key << "AnimationComponent";
+    emitter << YAML::Value << YAML::BeginMap;
+    emitter << YAML::Key << "Name" << YAML::Value << animComp->ani.name;
+    emitter << YAML::Key << "SamplerCount" << YAML::Value << animComp->ani.samplers.size();
+    emitter << YAML::Key << "ChannelCount" << YAML::Value << animComp->ani.channels.size();
+    emitter << YAML::Key << "Start" << YAML::Value << animComp->ani.start;
+    emitter << YAML::Key << "End" << YAML::Value << animComp->ani.end;
+    // serialize samplers
+    emitter << YAML::Key << "Samplers" << YAML::Value << YAML::BeginSeq;
+    for (auto& sampler : animComp->ani.samplers) {
+      emitter << YAML::BeginMap;
+      emitter << YAML::Key << "InterpolationType" << YAML::Value << uint32_t(sampler.interpolation);
+      emitter << YAML::Key << "Inputs" << YAML::Value << YAML::BeginSeq;
+      for (int i = 0; i < sampler.inputs.size(); i++)
+        emitter << sampler.inputs[i];
+      emitter << YAML::EndSeq;
+      if (sampler.outputsVec3.size() != 0) {
+        emitter << YAML::Key << "ValType" << YAML::Value << "Float3";
+        emitter << YAML::Key << "Vals" << YAML::Value << YAML::BeginSeq;
+        for (int i = 0; i < sampler.outputsVec3.size(); i++)
+          emitter << sampler.outputsVec3[i];
+        emitter << YAML::EndSeq;
+      } else if (sampler.outputsVec4.size() != 0) {
+        emitter << YAML::Key << "ValType" << YAML::Value << "Float4";
+        emitter << YAML::Key << "Vals" << YAML::Value << YAML::BeginSeq;
+        for (int i = 0; i < sampler.outputsVec4.size(); i++)
+          emitter << sampler.outputsVec4[i];
+        emitter << YAML::EndSeq;
+      }
+      emitter << YAML::EndMap;
+    }
+    emitter << YAML::EndSeq;
+    // serialize channels
+    emitter << YAML::Key << "Channels" << YAML::Value << YAML::BeginSeq;
+    for (auto& channel : animComp->ani.channels) {
+      emitter << YAML::BeginMap;
+      emitter << YAML::Key << "PathType" << YAML::Value << uint32_t(channel.path);
+      emitter << YAML::Key << "SamplerIndex" << YAML::Value << channel.samplerIndex;
+      emitter << YAML::EndMap;
+    }
+    emitter << YAML::EndSeq;
+    // endup serialization
+    emitter << YAML::EndMap;
+  }
+}
+
+auto AnimationComponent::deserialize(void* compAoS,
+    Core::EntityHandle const& handle) -> void {
+  YAML::NodeAoS& components = *reinterpret_cast<YAML::NodeAoS*>(compAoS);
+  Core::Entity entity(handle);
+  auto animationComponentAoS = components["AnimationComponent"];
+  if (animationComponentAoS) {
+    AnimationComponent* animComp = entity.addComponent<AnimationComponent>();
+    animComp->ani.name = animationComponentAoS["Name"].as<std::string>();
+    animComp->ani.start = animationComponentAoS["Start"].as<float>();
+    animComp->ani.end = animationComponentAoS["End"].as<float>();
+    animComp->ani.samplers.resize(animationComponentAoS["SamplerCount"].as<size_t>());
+    animComp->ani.channels.resize(animationComponentAoS["ChannelCount"].as<size_t>());
+    // load samplers
+    auto samplers = animationComponentAoS["Samplers"];
+    uint32_t sampler_idx = 0;
+    for (auto sampler_node : samplers) {
+      AnimationSampler sampler;
+      sampler.interpolation = AnimationSampler::InterpolationType(
+          sampler_node["InterpolationType"].as<uint32_t>());
+      for (auto input : sampler_node["Inputs"]) {
+        sampler.inputs.emplace_back(input.as<float>());
+      }
+      std::string val_type = sampler_node["ValType"].as<std::string>();
+      if (val_type.compare("Float3") == 0)
+        for (auto val : sampler_node["Vals"])
+          sampler.outputsVec3.emplace_back(val.as<Math::vec3>());
+      else if (val_type.compare("Float4") == 0)
+        for (auto val : sampler_node["Vals"])
+          sampler.outputsVec4.emplace_back(val.as<Math::vec4>());
+      animComp->ani.samplers[sampler_idx++] = sampler;
+    }
+    // load channels
+    auto channels = animationComponentAoS["Channels"];
+    uint32_t channel_idx = 0;
+    for (auto channel_node : channels) {
+      AnimationChannel channel;
+      channel.samplerIndex = channel_node["SamplerIndex"].as<uint32_t>();
+      channel.path = AnimationChannel::PathType(
+          channel_node["PathType"].as<uint32_t>());
+      animComp->ani.channels[channel_idx++] = channel;
+    }
+  }
+}
+
 /******************************************************************
  * Extension to GFX::Buffer
  *******************************************************************/
@@ -367,6 +463,8 @@ auto Mesh::serialize() noexcept -> void {
         << indexBufferInfo.size;
     out << YAML::Key << "PosOnlyBufferSize" << YAML::Value
         << positionBufferInfo.size;
+    out << YAML::Key << "UV2BufferSize" << YAML::Value
+        << uv2Buffer_host.size;
     // output submeshes
     out << YAML::Key << "Submeshes" << YAML::Value << YAML::BeginSeq;
     for (int i = 0; i < submeshes.size(); i++) {
@@ -392,7 +490,8 @@ auto Mesh::serialize() noexcept -> void {
   int vbsize = vertexBufferInfo.size;
   int ibsize = indexBufferInfo.size;
   int pbsize = positionBufferInfo.size;
-  Core::Buffer mergedBuffer(vbsize + ibsize + pbsize);
+  int uv2size = uv2Buffer_host.size;
+  Core::Buffer mergedBuffer(vbsize + ibsize + pbsize + uv2size);
   if (vertexBufferInfo.onHost) {
     memcpy(mergedBuffer.data, vertexBuffer_host.data, vbsize);
   } else if (vertexBufferInfo.onDevice) {
@@ -418,7 +517,10 @@ auto Mesh::serialize() noexcept -> void {
         positionBuffer_device.get(),
         &(((char*)(mergedBuffer.data))[vbsize + ibsize]), pbsize);
   }
-
+  if (uv2Buffer_host.size != 0) {
+    memcpy(&(((char*)(mergedBuffer.data))[vbsize + ibsize + pbsize]),
+           uv2Buffer_host.data, uv2size);
+  }
   Core::syncWriteFile(bindata_path.string().c_str(), mergedBuffer);
 }
 
@@ -463,10 +565,14 @@ auto Mesh::deserialize(RHI::Device* device, Core::ORID orid) noexcept
   primitiveState.cullMode = (RHI::CullMode)ps_node["CullMode"].as<uint32_t>();
   primitiveState.unclippedDepth = ps_node["UnclippedDepth"].as<bool>();
   // load buffers
-  size_t vb_size, ib_size, pb_size;
+  size_t vb_size, ib_size, pb_size, uv2_size;
   vb_size = data["VertexBufferSize"].as<size_t>();
   ib_size = data["IndexBufferSize"].as<size_t>();
   pb_size = data["PosOnlyBufferSize"].as<size_t>();
+  if (data["UV2BufferSize"]) {
+    uv2_size = data["UV2BufferSize"].as<size_t>();
+  } else { uv2_size = 0; }
+
   vertexBufferInfo.size = vb_size;
   indexBufferInfo.size = ib_size;
   positionBufferInfo.size = pb_size;
@@ -526,6 +632,12 @@ auto Mesh::deserialize(RHI::Device* device, Core::ORID orid) noexcept
            (void*)&(
                ((uint16_t*)(&(((char*)(bindata.data))[vb_size + ib_size])))[0]),
            pb_size);
+    if (uv2_size > 0) {
+      uv2Buffer_host = Core::Buffer(uv2_size);
+      memcpy(uv2Buffer_host.data, (void*)&(((uint16_t*)(&(
+             ((char*)(bindata.data))[vb_size + ib_size + pb_size])))[0]),
+             uv2_size);
+    }
   }
 
   auto const& find_aabb = data["AABB"];
@@ -1134,6 +1246,7 @@ auto GFXManager::startUp() noexcept -> void {
   Core::ComponentManager::get()->registerComponent<GFX::MeshRenderer>();
   Core::ComponentManager::get()->registerComponent<GFX::CameraComponent>();
   Core::ComponentManager::get()->registerComponent<GFX::LightComponent>();
+  Core::ComponentManager::get()->registerComponent<GFX::AnimationComponent>();
   Core::ComponentManager::get()->registerComponent<NativeScriptComponent>();
   // register resource types
   Core::ResourceManager::get()->registerResource<GFX::Buffer>();
@@ -1154,6 +1267,11 @@ auto GFXManager::shutDown() noexcept -> void {
 }
 
 auto GFXManager::onUpdate() noexcept -> void {
+  // update timeline
+  if (mTimeline.play) {
+    mTimeline.currentSec += mTimeline.timer->deltaTime();
+  }
+  // update extension
   for (auto& ext : extensions) ext.second->onUpdate();
 }
 

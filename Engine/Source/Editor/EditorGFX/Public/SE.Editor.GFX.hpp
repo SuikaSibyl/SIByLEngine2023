@@ -28,9 +28,7 @@ SE_EXPORT auto to_string(RHI::VertexFormat vertexFormat) noexcept
 SE_EXPORT auto to_string(RHI::PrimitiveTopology topology) noexcept
     -> std::string;
 SE_EXPORT auto to_string(RHI::VertexStepMode stepMode) noexcept -> std::string;
-}  // namespace SIByL::Editor
 
-namespace SIByL::Editor {
 SE_EXPORT struct TextureUtils {
   static auto getImGuiTexture(Core::GUID guid) noexcept -> ImGuiTexture*;
 };
@@ -38,9 +36,7 @@ SE_EXPORT struct TextureFragment : public Fragment {
   /** virtual draw gui*/
   virtual auto onDrawGui(uint32_t flags, void* data) noexcept -> void {}
 };
-}  // namespace SIByL::Editor
 
-namespace SIByL::Editor {
 SE_EXPORT struct ResourceElucidator {
   /** override draw gui */
   virtual auto onDrawGui(Core::GUID guid) noexcept -> void = 0;
@@ -90,9 +86,7 @@ SE_EXPORT struct VideoClipElucidator : public ResourceElucidator {
   /** override draw gui */
   static auto onDrawGui_PTR(GFX::VideoClip* vc) noexcept -> void;
 };
-}  // namespace SIByL::Editor
 
-namespace SIByL::Editor {
 SE_EXPORT struct InspectorWidget : public Widget {
   /** draw gui*/
   virtual auto onDrawGui() noexcept -> void override;
@@ -104,6 +98,17 @@ SE_EXPORT struct InspectorWidget : public Widget {
   std::function<void()> customDraw;
   /** resource viewer */
   ResourceViewer resourceViewer;
+};
+
+SE_EXPORT struct SequencerWidget : public Widget {
+  /** draw gui*/
+  virtual auto onDrawGui() noexcept -> void override;
+  /** set custom draw */
+  auto setCustomDraw(GFX::AnimationComponent* comp) noexcept -> void;
+  /** set empty */
+  auto setEmpty() noexcept -> void;
+  /** animation component to show */
+  GFX::AnimationComponent* component = nullptr;
 };
 
 SE_EXPORT struct CustomInspector {
@@ -133,17 +138,13 @@ SE_EXPORT struct CustomInspector {
   /** all the widgets registered */
   std::unordered_map<char const*, std::unique_ptr<Fragment>> fragments = {};
 };
-}  // namespace SIByL::Editor
 
-namespace SIByL::Editor {
 SE_EXPORT struct StatusWidget : public Widget {
   Core::Timer* timer;
   /** draw gui*/
   virtual auto onDrawGui() noexcept -> void override;
 };
-}  // namespace SIByL::Editor
 
-namespace SIByL::Editor {
 SE_EXPORT struct LogWidget : public Widget {
   /** constructor */
   LogWidget();
@@ -166,9 +167,7 @@ SE_EXPORT struct LogWidget : public Widget {
                               // AddLog() calls.
   bool autoScroll;            // Keep scrolling if already at the bottom.
 };
-}  // namespace SIByL::Editor
 
-namespace SIByL::Editor {
 auto captureImage(Core::GUID src) noexcept -> void;
 
 SE_EXPORT struct ImGuizmoState {
@@ -196,9 +195,7 @@ SE_EXPORT struct ViewportWidget : public Widget {
   /** draw gui*/
   virtual auto onDrawGui() noexcept -> void override;
 };
-}  // namespace SIByL::Editor
 
-namespace SIByL::Editor {
 SE_EXPORT struct GameObjectInspector : public CustomInspector {
   /** custom data to be parsed to each fragment */
   struct GameObjectData {
@@ -259,9 +256,7 @@ SE_EXPORT struct SceneWidget : public Widget {
   /** game object inspector */
   GameObjectInspector gameobjectInspector = {};
 };
-}  // namespace SIByL::Editor
 
-namespace SIByL::Editor {
 SE_EXPORT struct ContentWidget : public Widget {
   /** draw gui*/
   virtual auto onDrawGui() noexcept -> void override;
@@ -295,17 +290,8 @@ SE_EXPORT struct ContentWidget : public Widget {
       ResourceRegistry::ResourceLoadFn resourceLoader = nullptr) noexcept
       -> void;
   /** icon resources */
-  struct IconResource {
-    Core::GUID back;
-    Core::GUID folder;
-    Core::GUID file;
-    Core::GUID mesh;
-    Core::GUID scene;
-    Core::GUID material;
-    Core::GUID shader;
-    Core::GUID image;
-    Core::GUID video;
-  } icons;
+  auto getIcon(std::string const& name) noexcept -> Core::GUID;
+  std::unordered_map<std::string, Core::GUID> icons;
   /* register icon resources*/
   auto reigsterIconResources() noexcept -> void;
   /** current directory */

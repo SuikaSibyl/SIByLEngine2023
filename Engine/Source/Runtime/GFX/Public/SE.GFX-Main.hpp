@@ -24,6 +24,7 @@
 #include <SE.GFX-GFXConfig.hpp>
 #include <SE.GFX-Loader.ShaderLoader.hpp>
 #include <SE.GFX-SerializeUtils.hpp>
+#include <Misc/SE.Core.Misc.hpp>
 #include <Resource/SE.Core.Resource.hpp>
 #include <SE.Image.hpp>
 #include "../../Application/Public/SE.Application.Config.h"
@@ -116,6 +117,7 @@ SE_EXPORT struct Mesh : public Core::Resource {
   Core::Buffer vertexBuffer_host = {};
   Core::Buffer positionBuffer_host = {};
   Core::Buffer indexBuffer_host = {};
+  Core::Buffer uv2Buffer_host = {};
   /** host-device copy */
   struct DeviceHostBufferInfo {
     uint32_t size = 0;
@@ -342,6 +344,37 @@ SE_EXPORT struct TransformComponent {
   /** deserialize */
   static auto deserialize(void* compAoS, Core::EntityHandle const& handle)
       -> void;
+};
+
+SE_EXPORT struct AnimationComponent {
+  /** constructor */
+  AnimationComponent() = default;
+
+  struct AnimationChannel {
+    enum struct PathType { TRANSLATION, ROTATION, SCALE } path;
+    uint32_t samplerIndex;
+  };
+
+  struct AnimationSampler {
+    enum struct InterpolationType { LINEAR, STEP, CUBICSPLINE };
+    InterpolationType interpolation;
+    std::vector<float> inputs;
+    std::vector<Math::vec3> outputsVec3;
+    std::vector<Math::vec4> outputsVec4;
+  };
+
+  struct Animation {
+    std::string name;
+    std::vector<AnimationSampler> samplers;
+    std::vector<AnimationChannel> channels;
+    float start = std::numeric_limits<float>::max();
+    float end = std::numeric_limits<float>::min();
+  } ani;
+
+  /** serialize */
+  static auto serialize(void* emitter, Core::EntityHandle const& handle) -> void;
+  /** deserialize */
+  static auto deserialize(void* compAoS, Core::EntityHandle const& handle) -> void;
 };
 
 /** Game object handle is also the entity handle contained */
@@ -717,6 +750,16 @@ SE_EXPORT struct GFXManager : public Core::Manager {
       -> MaterialTemplate&;
   /** register material template */
   auto getMaterialTemplate(uint32_t bsdf_id) noexcept -> MaterialTemplate*;
+
+  struct Timeline {
+    float currentSec = 0.f;
+    enum struct ReplayType {
+      REPLAY, STOP,
+    } replay = ReplayType::REPLAY;
+    bool play = false;
+    int step_per_sec = 25;
+    Core::Timer* timer;
+  } mTimeline;
 
  private:
   /** singleton */

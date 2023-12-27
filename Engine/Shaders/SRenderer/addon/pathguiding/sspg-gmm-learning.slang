@@ -1,14 +1,17 @@
+#include "../../include/common/concentric_map.hlsli"
+#include "../../include/common/random.hlsli"
 #include "../gbuffer/gbuffer_common.hlsli"
 #include "../gbuffer/gbuffer_interface.hlsli"
 #include "../gbuffer/gbuffer_prev_interface.hlsli"
-#include "../../include/common/concentric_map.hlsli"
-#include "../../include/common/random.hlsli"
+#include "include/gaussian_mm.hlsli"
 #include "include/pathguiding.hlsli"
 
-RWTexture2D<float4> u_gmmStatisticsPack0;
-RWTexture2D<float4> u_gmmStatisticsPack1;
+
+RWStructuredBuffer<float4> u_gmmStatisticsPack0;
+RWStructuredBuffer<float4> u_gmmStatisticsPack1;
 
 const Texture2D<float4> u_vpls;
+RWTexture2D<float4> u_debug;
 
 groupshared float4 gs_vpls[20][20];
 groupshared float4 gs_geometry[20][20];
@@ -20,29 +23,11 @@ cbuffer PushConstants {
     float exponential_factor;
     bool adaptation;
     int random_seed;
+    int lobeCount;
 };
 
 bool Valid(int2 index) {
     return all(index >= 0 && index < resolution);
-}
-
-void UpdateGMM(
-    in_ref(float) sumWeight, in_ref(float2) square_coord,
-    inout_ref(float4) pack0, inout_ref(float4) pack1,
-) {
-    uint epoch_count = uint(pack1.z);
-    if (sumWeight > 0) {
-        epoch_count = clamp(epoch_count, 0, 10);
-        // exponential smoothing vMF
-        const float alpha = pow(exponential_factor, epoch_count);
-        const float4 new_pack0 = sumWeight * float4(square_coord.x, square_coord.y, square_coord.x * square_coord.x, square_coord.y * square_coord.y);
-        const float2 new_pack1 = sumWeight * float2(square_coord.x * square_coord.y, 1);
-        const float4 update_pack0 = ExponentialSmooth(pack0, new_pack0, alpha);
-        const float2 update_pack1 = ExponentialSmooth(pack1.xy, new_pack1, alpha);
-        epoch_count += 1;
-        pack0 = update_pack0;
-        pack1 = float4(update_pack1, epoch_count, 0);
-    }
 }
 
 int2 GetNeighborIndex(int2 center_xy, inout_ref(RandomSamplerState) RNG) {
@@ -97,7 +82,7 @@ void ComputeMain(
             }
         }
     }
-
+    
     GroupMemoryBarrierWithGroupSync();
 
     const int2 center_xy = group.xy + 2;
@@ -106,31 +91,56 @@ void ComputeMain(
         return;
     }
 
-    float4 pack0 = u_gmmStatisticsPack0[pixel];
-    float4 pack1 = u_gmmStatisticsPack1[pixel];
+    const int index = (pixel.y * resolution.x + pixel.x) * lobeCount;
+
+    GMM2D GMMs;
+    GMMs.epoch_cap = 20;
+    for (int i = 0; i < lobeCount; ++i) {
+        GMMs.sufficientStats0[i] = u_gmmStatisticsPack0[index + i];
+        GMMs.sufficientStats1[i] = u_gmmStatisticsPack1[index + i];
+    }
+    GMMs.build();
+
     const float3x3 frame = createFrame(center_surface.shadingNormal);
 
     // First, load the center vpls.
     const float4 center_vpl = gs_vpls[center_xy.x][center_xy.y];
     const float3 direction = normalize(center_vpl.xyz - center_surface.worldPos);
     const float2 square_coord = FromConcentricMap(UniformHemisphereToConcentricDisk(to_local(frame, direction)));
-    UpdateGMM(center_vpl.w, square_coord, pack0, pack1);
 
-    for (int i = 0; i < reuse_number; ++i) {
-        const int2 neighbor_id = GetNeighborIndex(center_xy, RNG);
-        // Then, load the neighbor vpls.
-        const float4 geometry = gs_geometry[neighbor_id.x][neighbor_id.y];
-        const float4 neighbor_vpl = gs_vpls[neighbor_id.x][neighbor_id.y];
-        if (IsValidNeighbor(
-                center_surface.geometryNormal, geometry.xyz,
-                center_surface.viewDepth, geometry.w,
-                normalThreshold, depthThreshold)) {
-            const float3 direction = normalize(neighbor_vpl.xyz - center_surface.worldPos);
-            const float2 square_coord = FromConcentricMap(UniformHemisphereToConcentricDisk(to_local(frame, direction)));
-            UpdateGMM(neighbor_vpl.w, square_coord, pack0, pack1);
-        }
+    vector<float, 4> pdf;
+    float denom = 0.f;
+    float2 x = float2(0, 0);
+    for (int h = 0; h < 4; ++h) {
+        pdf[h] = GMMs.responsibility(h, x);
+        denom += pdf[h];
     }
+    if (center_vpl.w <= 0) {
+        u_debug[pixel] = float4(1);
+    } else
+        u_debug[pixel] = float4(GMMs.sufficientStats1[0].w, pdf[0], pdf[0] / denom, 1);
+    
 
-    u_gmmStatisticsPack0[pixel] = pack0;
-    u_gmmStatisticsPack1[pixel] = pack1;
+    GMMs.stepwiseEM(center_vpl.w, square_coord, exponential_factor);
+
+    // for (int i = 0; i < reuse_number; ++i) {
+    //     const int2 neighbor_id = GetNeighborIndex(center_xy, RNG);
+    //     // Then, load the neighbor vpls.
+    //     const float4 geometry = gs_geometry[neighbor_id.x][neighbor_id.y];
+    //     const float4 neighbor_vpl = gs_vpls[neighbor_id.x][neighbor_id.y];
+    //     if (IsValidNeighbor(
+    //             center_surface.geometryNormal, geometry.xyz,
+    //             center_surface.viewDepth, geometry.w,
+    //             normalThreshold, depthThreshold)) {
+    //         const float3 direction = normalize(neighbor_vpl.xyz - center_surface.worldPos);
+    //         const float2 square_coord = FromConcentricMap(UniformHemisphereToConcentricDisk(to_local(frame, direction)));
+    //         GMMs.build();
+    //         GMMs.stepwiseEM(center_vpl.w, square_coord, exponential_factor);
+    //     }
+    // }
+
+    for (int i = 0; i < lobeCount; ++i) {
+        u_gmmStatisticsPack0[index + i] = GMMs.sufficientStats0[i];
+        u_gmmStatisticsPack1[index + i] = GMMs.sufficientStats1[i];
+    }
 }

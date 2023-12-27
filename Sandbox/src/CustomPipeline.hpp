@@ -569,6 +569,77 @@ SE_EXPORT struct SSPGPipeline : public RDG::SingleGraphPipeline {
   SSPGGraph graph;
 };
 
+SE_EXPORT struct SSPGGMMGraph : public RDG::Graph {
+  SSPGGMMGraph() {
+      // Get the gbuffer
+    addPass(std::make_unique<Addon::VBuffer::RayTraceVBuffer>(), "VBuffer Pass");
+    addPass(std::make_unique<Addon::VBuffer::VBuffer2GBufferPass>(), "VBuffer2GBuffer Pass");
+    addEdge("VBuffer Pass", "VBuffer", "VBuffer2GBuffer Pass", "VBuffer");
+    addPass(std::make_unique<Addon::GBufferHolderSource>(), "GBufferPrev Pass");
+    // Screen space pth guiding
+    addPass(std::make_unique<Addon::SSGuiding::RealGMM::SSPGGMM_ClearPass>(), "GuiderClear Pass");
+    addPass(std::make_unique<Addon::SSGuiding::RealGMM::SSPGGMM_SamplePass>(), "Sample Pass");
+    Addon::GBufferUtils::addGBufferEdges(this, "VBuffer2GBuffer Pass", "Sample Pass");
+    Addon::GBufferUtils::addPrevGBufferEdges(this, "GBufferPrev Pass", "Sample Pass");
+    addEdge("GuiderClear Pass", "GMMStatisticsPack0", "Sample Pass", "GMMStatisticsPack0");
+    addEdge("GuiderClear Pass", "GMMStatisticsPack1", "Sample Pass", "GMMStatisticsPack1");
+    addEdge("GuiderClear Pass", "GMMStatisticsPack0Prev", "Sample Pass", "GMMStatisticsPack0Prev");
+    addEdge("GuiderClear Pass", "GMMStatisticsPack1Prev", "Sample Pass", "GMMStatisticsPack1Prev");
+    addPass(std::make_unique<Addon::SSGuiding::RealGMM::SSPGGMM_LearnPass>(), "Learn Pass");
+    Addon::GBufferUtils::addGBufferEdges(this, "VBuffer2GBuffer Pass", "Learn Pass");
+    addEdge("Sample Pass", "GMMStatisticsPack0", "Learn Pass", "GMMStatisticsPack0");
+    addEdge("Sample Pass", "GMMStatisticsPack1", "Learn Pass", "GMMStatisticsPack1");
+    addEdge("Sample Pass", "VPLs", "Learn Pass", "VPLs");
+    // Gbuffer temporal copy
+    addSubgraph(std::make_unique<Addon::GBufferHolderGraph>(), "GBuffer Blit Pass");
+    Addon::GBufferUtils::addBlitPrevGBufferEdges(this, "VBuffer2GBuffer Pass", "Sample Pass", "GBuffer Blit Pass");
+    // Post processing
+    addPass(std::make_unique<AccumulatePass>(), "Accum Pass");
+    addEdge("Sample Pass", "Color", "Accum Pass", "Input");
+    addPass(std::make_unique<Addon::Postprocess::ToneMapperPass>(), "ToneMapper Pass");
+    addEdge("Accum Pass", "Output", "ToneMapper Pass", "Input");
+
+    addPass(std::make_unique<Addon::SSGuiding::RealGMM::SSPGGMM_CopyPass>(), "GuiderCopy Pass");
+    addEdge("Learn Pass", "GMMStatisticsPack0", "GuiderCopy Pass", "GMMStatisticsPack0");
+    addEdge("Learn Pass", "GMMStatisticsPack1", "GuiderCopy Pass", "GMMStatisticsPack1");
+    addEdge("Sample Pass", "GMMStatisticsPack0Prev", "GuiderCopy Pass", "GMMStatisticsPack0Prev");
+    addEdge("Sample Pass", "GMMStatisticsPack1Prev", "GuiderCopy Pass", "GMMStatisticsPack1Prev");
+
+    // output the accum result
+    markOutput("Accum Pass", "Output");
+    // Visualize screen space path guding
+    bool vis_gmm = false;
+    if (vis_gmm) {
+      addPass(std::make_unique<Addon::SSGuiding::PdfNormalize_ClearPass>(), "PdfClear Pass");
+      addPass(std::make_unique<Addon::SSGuiding::RealGMM::SSPGGMM_VisPass>(), "Vis Pass");
+      addEdge("VBuffer Pass", "VBuffer", "Vis Pass", "VBuffer");
+      addEdge("Sample Pass", "GMMStatisticsPack0", "Vis Pass", "GMMStatisticsPack0");
+      addEdge("Sample Pass", "GMMStatisticsPack1", "Vis Pass", "GMMStatisticsPack1");
+      addEdge("PdfClear Pass", "PdfNormalizing", "Vis Pass", "PdfNormalizing");
+      addPass(std::make_unique<Addon::SSGuiding::PdfNormalize_SumPass>(), "PdfNormalize Pass");
+      addEdge("PdfClear Pass", "PdfNormalizingInfo", "PdfNormalize Pass", "PdfNormalizingInfo");
+      addEdge("Vis Pass", "PdfNormalizing", "PdfNormalize Pass", "PdfNormalizing");
+      addPass(std::make_unique<Addon::SSGuiding::PdfNormalize_ViewerPass>(), "PdfViewer Pass");
+      addEdge("PdfNormalize Pass", "PdfNormalizingInfo", "PdfViewer Pass", "PdfNormalizingInfo");
+      addEdge("PdfNormalize Pass", "PdfNormalizing", "PdfViewer Pass", "PdfNormalizing");
+      //addPass(std::make_unique<Addon::SSGuiding::PdfAccum_ClearPass>(), "PdfAccumClear Pass");
+      //addPass(std::make_unique<Addon::SSGuiding::SSPGGMM_TestPass>(), "SSPGGMTest Pass");
+      //addEdge("PdfAccumClear Pass", "PdfAccumulator", "SSPGGMTest Pass", "PdfAccumulator");
+      //addEdge("PdfAccumClear Pass", "PdfAccumulatorInfo", "SSPGGMTest Pass", "PdfAccumulatorInfo");
+      //addEdge("Sample Pass", "GMMStatisticsPack0", "SSPGGMTest Pass", "GMMStatisticsPack0");
+      //addEdge("Sample Pass", "GMMStatisticsPack1", "SSPGGMTest Pass", "GMMStatisticsPack1");
+      //addPass(std::make_unique<Addon::SSGuiding::PdfAccum_ViewerPass>(), "PdfAccumViewer Pass");
+      //addEdge("SSPGGMTest Pass", "PdfAccumulator", "PdfAccumViewer Pass", "PdfAccumulator");
+      //addEdge("SSPGGMTest Pass", "PdfAccumulatorInfo", "PdfAccumViewer Pass", "PdfAccumulatorInfo");
+    }
+  }
+};
+
+SE_EXPORT struct SSPGGMMPipeline : public RDG::SingleGraphPipeline {
+  SSPGGMMPipeline() { pGraph = &graph; }
+  SSPGGMMGraph graph;
+};
+
 SE_EXPORT struct SSPGReSTIRGraph : public RDG::Graph {
   SSPGReSTIRGraph() {
     restirgi_param = Addon::RestirGI::InitializeParameters(1280, 720);

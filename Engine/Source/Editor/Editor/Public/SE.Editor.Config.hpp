@@ -22,6 +22,7 @@ SE_EXPORT struct Config {
     layer->registerWidget<Editor::ViewportWidget>();
     layer->registerWidget<Editor::StatusWidget>();
     layer->registerWidget<Editor::RDGViewerWidget>();
+    layer->registerWidget<Editor::SequencerWidget>();
 
     layer->getWidget<Editor::SceneWidget>()->bindScene(nullptr);
     layer->getWidget<Editor::SceneWidget>()->inspectorWidget =
@@ -62,12 +63,12 @@ SE_EXPORT struct Config {
 
     Editor::ContentWidget* contentWidget =
         layer->getWidget<Editor::ContentWidget>();
-    contentWidget->registerResource<GFX::Scene>(contentWidget->icons.scene,
+    contentWidget->registerResource<GFX::Scene>(contentWidget->getIcon("scene"),
                                                 {".scene"}, nullptr);
     contentWidget->registerResource<GFX::Mesh>(
-        contentWidget->icons.mesh, {".obj", ".fbx", ".gltf"}, nullptr);
+        contentWidget->getIcon("mesh"), {".obj", ".fbx", ".gltf"}, nullptr);
     contentWidget->registerResource<GFX::Texture>(
-        contentWidget->icons.image,
+        contentWidget->getIcon("image"),
         {".jpg", ".jpeg", ".png", ".PNG", ".tga", ".TGA"},
         std::bind(&GFX::GFXManager::requestOfflineTextureResource,
                   GFX::GFXManager::get(), std::placeholders::_1),
@@ -75,16 +76,16 @@ SE_EXPORT struct Config {
           return GFX::GFXManager::get()->registerTextureResource(path);
         });
     contentWidget->registerResource<GFX::ShaderModule>(
-        contentWidget->icons.shader, {".glsl", "spv"}, nullptr);
+        contentWidget->getIcon("shader"), {".glsl", "spv"}, nullptr);
     contentWidget->registerResource<GFX::Material>(
-        contentWidget->icons.material, {".mat"},
+        contentWidget->getIcon("material"), {".mat"},
         std::bind(&GFX::GFXManager::requestOfflineMaterialResource,
                   GFX::GFXManager::get(), std::placeholders::_1),
         [](char const* path) {
           return GFX::GFXManager::get()->registerMaterialResource(path);
         });
     contentWidget->registerResource<GFX::VideoClip>(
-        contentWidget->icons.video, {".mkv"},
+        contentWidget->getIcon("video"), {".mkv"},
         std::bind(&GFX::VideExtension::requestOfflineVideoClipResource,
                   GFX::GFXManager::get()->getExt<GFX::VideExtension>(
                       GFX::Ext::VideoClip),

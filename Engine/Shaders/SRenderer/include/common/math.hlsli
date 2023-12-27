@@ -11,6 +11,7 @@ static const float k_inv_2_pi   = 1. / (2 * k_pi);
 static const float k_inf        = 1.0f / 0.0f;
 
 static const float k_numeric_limits_float_min = 1.0f / exp2(126);
+static const float k_numeric_limits_float_max = 3.402823466e+38;
 
 /** Returns the smallest component of the vector. */
 float minComponent(in const float3 v) {

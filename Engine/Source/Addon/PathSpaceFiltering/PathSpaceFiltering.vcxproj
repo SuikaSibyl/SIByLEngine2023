@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>16.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{6f2a2727-5ccb-4ce1-b054-3ed57d489fd9}</ProjectGuid>
+    <RootNamespace>PathSpaceFiltering</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\imguizmo\include;$(SolutionDir)Engine\Source\ThirdParty\glad\include;$(SolutionDir)Engine\Shaders\SRenderer;$(SolutionDir)Engine\Source\Addon\RestirGI\Public;$(SolutionDir)Engine\Source\Addon\GBuffer\Public;$(SolutionDir)Engine\Source\Addon\VXGI\Public;$(SolutionDir)Engine\Source\Runtime\Application\Public;$(SolutionDir)Engine\Source\Runtime\Core\Public;$(SolutionDir)Engine\Source\ThirdParty\tinygltf\include;$(SolutionDir)Engine\Source\ThirdParty\imgui\includes;$(IncludePath);$(SolutionDir)Engine\Source\ThirdParty\vulkan\Include;$(SolutionDir)Engine\Source\ThirdParty\tinyobjloader;$(SolutionDir)Engine\Source\Editor\Editor\Public;$(SolutionDir)Engine\Source\Editor\EditorRDG\Public;$(SolutionDir)Engine\Source\Editor\EditorGFX\Public;$(SolutionDir)Engine\Source\Editor\EditorCore\Public;$(SolutionDir)Engine\Source\Runtime\Prelude\Public;$(SolutionDir)Engine\Source\Runtime\Image\Public;$(SolutionDir)Engine\Source\Runtime\RDG\Public;$(SolutionDir)Engine\Source\Runtime\Video\Public;$(SolutionDir)Engine\Source\Runtime\Math\Public;$(SolutionDir)Engine\Source\Runtime\RHI\Public;$(SolutionDir)Engine\Source\Runtime\SRenderer\Public;$(SolutionDir)Engine\Source\Runtime\GFX\Public;$(SolutionDir)Engine\Source\Runtime\Platform\Public;$(SolutionDir)Engine\Source\ThirdParty\glfw\include;$(SolutionDir)Engine\Source\ThirdParty\vma\include;$(SolutionDir)Engine\Source\ThirdParty\yaml\include;$(SolutionDir)Engine\Source\ThirdParty\spirvcross\include;$(SolutionDir)Engine\Source\ThirdParty\openfbx;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutDir>$(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)Engine\Binaries-Int\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+    <IncludePath>$(SolutionDir)Engine\Source\ThirdParty\imguizmo\include;$(SolutionDir)Engine\Source\ThirdParty\glad\include;$(SolutionDir)Engine\Shaders\SRenderer;$(SolutionDir)Engine\Source\Addon\RestirGI\Public;$(SolutionDir)Engine\Source\Addon\GBuffer\Public;$(SolutionDir)Engine\Source\Addon\VXGI\Public;$(SolutionDir)Engine\Source\Runtime\Application\Public;$(SolutionDir)Engine\Source\Runtime\Core\Public;$(SolutionDir)Engine\Source\ThirdParty\tinygltf\include;$(SolutionDir)Engine\Source\ThirdParty\imgui\includes;$(IncludePath);$(SolutionDir)Engine\Source\ThirdParty\vulkan\Include;$(SolutionDir)Engine\Source\ThirdParty\tinyobjloader;$(SolutionDir)Engine\Source\Editor\Editor\Public;$(SolutionDir)Engine\Source\Editor\EditorRDG\Public;$(SolutionDir)Engine\Source\Editor\EditorGFX\Public;$(SolutionDir)Engine\Source\Editor\EditorCore\Public;$(SolutionDir)Engine\Source\Runtime\Prelude\Public;$(SolutionDir)Engine\Source\Runtime\Image\Public;$(SolutionDir)Engine\Source\Runtime\RDG\Public;$(SolutionDir)Engine\Source\Runtime\Video\Public;$(SolutionDir)Engine\Source\Runtime\Math\Public;$(SolutionDir)Engine\Source\Runtime\RHI\Public;$(SolutionDir)Engine\Source\Runtime\SRenderer\Public;$(SolutionDir)Engine\Source\Runtime\GFX\Public;$(SolutionDir)Engine\Source\Runtime\Platform\Public;$(SolutionDir)Engine\Source\ThirdParty\glfw\include;$(SolutionDir)Engine\Source\ThirdParty\vma\include;$(SolutionDir)Engine\Source\ThirdParty\yaml\include;$(SolutionDir)Engine\Source\ThirdParty\spirvcross\include;$(SolutionDir)Engine\Source\ThirdParty\openfbx;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="Public\SE.Addon.PSFiltering.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Private\SE.Addon.PSFiltering.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Runtime\Core\Core.vcxproj">
+      <Project>{cadb2da2-56fd-47f9-817b-aafa42378dd9}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Runtime\GFX\GFX.vcxproj">
+      <Project>{587f5443-b048-4a7a-b773-fe5b6ba0728a}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Runtime\Platform\Platform.vcxproj">
+      <Project>{05b6310e-59bc-496a-ad4f-ccdd23c7f04d}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Runtime\Prelude\Prelude.vcxproj">
+      <Project>{fd3f74df-efdf-4ecc-bceb-0e423df4ba2f}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Runtime\RHI\RHI.vcxproj">
+      <Project>{795eb3a2-9f78-4ab8-833f-2b02fbc175f9}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Runtime\SRenderer\SRenderer.vcxproj">
+      <Project>{d136e01f-5c94-40fd-b7fd-0583ff49334e}</Project>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
