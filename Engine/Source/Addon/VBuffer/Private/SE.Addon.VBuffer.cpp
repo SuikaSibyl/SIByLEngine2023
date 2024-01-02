@@ -187,6 +187,7 @@ auto VBuffer2GBufferPass::execute(RDG::RenderContext* context,
       std::vector<std::pair<std::string, RHI::BindingResource>>{
           {"PrevGlobalUniforms", renderData.getBindingResource("PrevGlobalUniforms").value()},
           {"prevGeometries", renderData.getBindingResource("PrevGeometryBuffer").value()},
+          {"prevVertices", renderData.getBindingResource("PrevVertexBuffer").value()},
       });
 
   RHI::ComputePassEncoder* encoder = beginPass(context);

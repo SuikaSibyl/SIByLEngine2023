@@ -635,9 +635,9 @@ auto AutoDiffPipeline::renderUI() noexcept -> void {
 NeuralRadiosityPipeline::NeuralRadiosityPipeline() {
   SRenderer* sr = SRenderer::singleton;
   std::vector<float> triangle_sizes;
-  auto& position_buffer = sr->sceneDataPack.position_buffer_cpu;
-  auto& index_buffer = sr->sceneDataPack.index_buffer_cpu;
-  for (auto& geom : sr->sceneDataPack.geometry_buffer_cpu) {
+  auto& position_buffer = sr->sceneDataPack.position_buffer.buffer_host;
+  auto& index_buffer = sr->sceneDataPack.index_buffer.buffer_host;
+  for (auto& geom : sr->sceneDataPack.geometry_buffer.buffer_host) {
     const uint32_t index_offset = geom.indexOffset;
     const Math::mat4 transform = geom.geometryTransform;
     for (int i = 0; i < geom.indexSize; i += 3) {

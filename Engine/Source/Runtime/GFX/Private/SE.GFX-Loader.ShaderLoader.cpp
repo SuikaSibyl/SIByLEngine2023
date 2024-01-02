@@ -71,6 +71,7 @@ SlangSession::SlangSession(
     // set target to spirv glsl460
     targetDesc.format = SLANG_SPIRV;
     targetDesc.profile = globalSession->findProfile("glsl460");  
+    //targetDesc.flags = SLANG_TARGET_FLAG_GENERATE_SPIRV_DIRECTLY;
   }
   sessionDesc.targets = &targetDesc;
   sessionDesc.targetCount = 1;

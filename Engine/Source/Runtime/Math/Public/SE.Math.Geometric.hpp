@@ -72,6 +72,7 @@ SE_EXPORT using vec2 = Vector2<float>;
 SE_EXPORT using ivec2 = Vector2<int32_t>;
 SE_EXPORT using uvec2 = Vector2<uint32_t>;
 SE_EXPORT using dvec2 = Vector2<double>;
+SE_EXPORT using svec2 = Vector2<size_t>;
 
 template <class T>
 template <class U>
@@ -2353,6 +2354,7 @@ SE_EXPORT struct Quaternion {
     auto operator/(float s) const -> Quaternion;
     auto operator+(Quaternion const& q2) const -> Quaternion;
     auto operator*(Quaternion const& q2) const -> Quaternion;
+    auto operator*(Math::vec3 const& v) const -> Math::vec3;
     auto operator+=(Quaternion const& q) -> Quaternion&;
     auto operator-() const -> Quaternion;
 
@@ -2392,15 +2394,26 @@ SE_EXPORT inline auto operator-(Quaternion const& q1, Quaternion const& q2)
 
 SE_EXPORT inline auto slerp(float t, Quaternion const& q1,
                             Quaternion const& q2) noexcept -> Quaternion {
-    float cosTheta = dot(q1, q2);
-    if (cosTheta > .9995f)
-    return normalize((1 - t) * q1 + t * q2);
-    else {
-    float theta = std::acos(clamp(cosTheta, -1.f, 1.f));
-    float thetap = theta * t;
-    Quaternion qperp = normalize(q2 - q1 * cosTheta);
-    return q1 * std::cos(thetap) + qperp * std::sin(thetap);
-    }
+  Quaternion previousQuat=q1, nextQuat = q2;
+  float dotProduct = Math::dot(previousQuat, nextQuat);
+  // make sure we take the shortest path in case dot Product is negative
+  if (dotProduct < 0.0) {
+    nextQuat = -nextQuat;
+    dotProduct = -dotProduct;
+  }
+  // if the two quaternions are too close to each other, just linear
+  // interpolate between the 4D vector
+  if (dotProduct > 0.9995) {
+    return Math::normalize(previousQuat + t * (nextQuat - previousQuat));
+  }
+  // perform the spherical linear interpolation
+  float theta_0 = std::acos(dotProduct);
+  float theta = t * theta_0;
+  float sin_theta = std::sin(theta);
+  float sin_theta_0 = std::sin(theta_0);
+  float scalePreviousQuat = std::cos(theta) - dotProduct * sin_theta / sin_theta_0;
+  float scaleNextQuat = sin_theta / sin_theta_0;
+  return scalePreviousQuat * previousQuat + scaleNextQuat * nextQuat;
 }
 
 SE_EXPORT inline auto offsetRayOrigin(Math::point3 const& p,

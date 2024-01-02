@@ -33,6 +33,7 @@
 #include <memory>
 #include <stack>
 #include <typeinfo>
+#include <SE.GFX-SceneUpdate.h>
 
 #include "CustomPipeline.hpp"
 
@@ -83,22 +84,24 @@ struct SandBoxApplication : public Application::ApplicationBase {
     device->waitIdle();
 
     pipeline1 = std::make_unique<Addon::Differentiable::AutoDiffPipeline>();
-    pipeline2 = std::make_unique<Addon::Lightmap::LightmapVisualizePipeline>();
+    //pipeline2 = std::make_unique<Addon::Lightmap::LightmapVisualizePipeline>();
     rtgi_pipeline = std::make_unique<Addon::Differentiable::NeuralRadiosityPipeline>();
     //// pipeline1 = std::make_unique<CustomPipeline>();
     //// pipeline2 = std::make_unique<VXPGReSTIRPipeline>();
     //// pipeline1 = std::make_unique<Addon::SLC::SLCTestPipeline>();
     //// pipeline2 = std::make_unique<SSPGReSTIRPipeline>();
-    //pipeline2 = std::make_unique<GTPipeline>();
+    pipeline2 = std::make_unique<GTPipeline>();
     ////      rtgi_pipeline = std::make_unique<RestirGIPipeline>();
     //rtgi_pipeline = std::make_unique<RestirGIPipeline>();
 
     //// geoinsp_pipeline = std::make_unique<SSPGP_GMM_Pipeline>();
     //geoinsp_pipeline = std::make_unique<GTPipeline>();
     geoinsp_pipeline = std::make_unique<SRP::GeoInspectPipeline>();
-    vxgi_pipeline = std::make_unique<Addon::PSFiltering::Pipeline::HashViewPipeline>();
     //vxgi_pipeline = std::make_unique<SSPGPipeline>();
-    vxdi_pipeline = std::make_unique<VXPGPipeline>();
+    //vxdi_pipeline = std::make_unique<VXPGPipeline>();
+    vxgi_pipeline = std::make_unique<VXPGPipeline>();
+    vxdi_pipeline = std::make_unique<CustomPipeline>();
+    //vxdi_pipeline = std::make_unique<Addon::GBufferInspectorPass>();
     pipeline1->build();
     pipeline2->build();
     rtgi_pipeline->build();
@@ -126,51 +129,14 @@ struct SandBoxApplication : public Application::ApplicationBase {
     srenderer = std::make_unique<SRenderer>();
     srenderer->init(scene);
     srenderer->timer = &timer;
-    GeometryTabulator::tabulate(512,
-                                srenderer->sceneDataPack.position_buffer_cpu,
-                                srenderer->sceneDataPack.index_buffer_cpu,
-                                srenderer->sceneDataPack.geometry_buffer_cpu);
-  }
-
-  void AnimateScene() {
-    ImGui::Begin("Animate");
-    static float speed = 1.f;
-    ImGui::DragFloat("speed", &speed, 0.01);
-    ImGui::End();
-
-    auto view = Core::ComponentManager::get()
-                    ->view<GFX::TagComponent, GFX::TransformComponent>();
-    for (auto& [entity, tag, transform] : view) {
-      if (tag.name == "mask.fbx") {
-        transform.eulerAngles.y = timer.totalTime() * speed;
-      }
-      if (tag.name == "sphere.fbx") {
-        transform.translation.y = 2 + 1.5 * std::cos(timer.totalTime() * speed);
-      }
-      // if (tag.name == "DirectionalLight") {
-      //	transform.eulerAngles.z = 25 * std::cos(timer.totalTime() *
-      //speed * 0.6);
-      // }
-    }
   }
 
   /** Update the application every loop */
   virtual auto Update(double deltaTime) noexcept -> void override {
-    RHI::Device* device = rhiLayer->getDevice();
-    if (scene.isDirty == true) {
-      device->waitIdle();
-      InvalidScene();
-      device->waitIdle();
-      scene.isDirty = false;
-      cameraController.forceReset = true;
-    }
-    device->waitIdle();
-
-    int width, height;
-    mainWindow->getFramebufferSize(&width, &height);
-    width = 1280;
-    height = 720;
+    GFX::GFXManager::get()->onUpdate();
+    // update camera
     {
+      int width = 1280; int height = 720;
       auto view = Core::ComponentManager::get()->view<GFX::CameraComponent>();
       for (auto& [entity, camera] : view) {
         if (camera.isPrimaryCamera) {
@@ -191,21 +157,30 @@ struct SandBoxApplication : public Application::ApplicationBase {
       cameraController.onUpdate();
       // Core::LogManager::Log(std::to_string(timer.deltaTime()));
     }
+    GFX::update_animation(scene);
+    GFX::update_transforms(scene);
+    
     // start new frame
     imguiLayer->startNewFrame();
     Editor::DebugDraw::Clear();
-
-    // frame start
     RHI::SwapChain* swapChain = rhiLayer->getSwapChain();
-    RHI::MultiFrameFlights* multiFrameFlights =
-        rhiLayer->getMultiFrameFlights();
+    RHI::MultiFrameFlights* multiFrameFlights = rhiLayer->getMultiFrameFlights();
     multiFrameFlights->frameStart();
 
+    RHI::Device* device = rhiLayer->getDevice();
     std::unique_ptr<RHI::CommandEncoder> commandEncoder =
         device->createCommandEncoder({multiFrameFlights->getCommandBuffer()});
-    GFX::GFXManager::get()->onUpdate();
-    // decoder.readFrame();
 
+    if (scene.isDirty == true) {
+      device->waitIdle();
+      InvalidScene();
+      device->waitIdle();
+      scene.isDirty = false;
+      cameraController.forceReset = true;
+    } else {
+      srenderer->invalidScene(scene);
+    }
+    
     // GUI Recording
 
     static int frames2capture = 0;
@@ -271,9 +246,6 @@ struct SandBoxApplication : public Application::ApplicationBase {
     }
     ImGui::End();
 
-    AnimateScene();
-
-    srenderer->invalidScene(scene);
     std::vector<RDG::Graph*> graphs = pipeline->getActiveGraphs();
 
     for (auto* graph : graphs) srenderer->updateRDGData(graph);

@@ -39,6 +39,7 @@ SE_EXPORT struct Config {
     gameobjectInspector.registerFragment<Editor::MeshRendererComponentFragment>();
     gameobjectInspector.registerFragment<Editor::CameraComponentFragment>();
     gameobjectInspector.registerFragment<Editor::LightComponentFragment>();
+    gameobjectInspector.registerFragment<Editor::AnimationComponentFragment>();
     gameobjectInspector.registerFragment<Editor::NativeScriptComponentFragment>();
     // Register component can be added through editor pannel
     gameobjectInspector.registerComponent<GFX::MeshReference>("Mesh Reference");

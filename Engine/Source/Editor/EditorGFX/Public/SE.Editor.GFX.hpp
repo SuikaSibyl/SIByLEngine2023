@@ -486,6 +486,11 @@ SE_EXPORT struct LightComponentFragment : public ComponentElucidator {
       GameObjectInspector::GameObjectData* data) noexcept -> void;
 };
 
+SE_EXPORT struct AnimationComponentFragment : public ComponentElucidator {
+  virtual auto elucidateComponent(
+      GameObjectInspector::GameObjectData* data) noexcept -> void;
+};
+
 SE_EXPORT struct CameraComponentFragment : public ComponentElucidator {
   virtual auto elucidateComponent(
       GameObjectInspector::GameObjectData* data) noexcept -> void;

@@ -1,5 +1,6 @@
 #include "../Public/SE.Addon.GBufferPass.hpp"
 #include <Passes/FullScreenPasses/SE.SRenderer-Blit.hpp>
+#include <SE.Addon.VBuffer.hpp>
 
 namespace SIByL::Addon {
 RasterizedGBufferPass::RasterizedGBufferPass() {
@@ -921,5 +922,22 @@ auto GBufferShading::execute(RDG::RenderContext* context,
   encoder->traceRays(diffuse->texture->width(), diffuse->texture->height(), 1);
 
   encoder->end();
+}
+
+GBufferInspecGraph::GBufferInspecGraph() {
+  // Create VBuffer + GBuffer, as well as history GBuffer, A-SVGF buffers
+  addPass(std::make_unique<Addon::VBuffer::RayTraceVBuffer>(), "VBuffer Pass");
+  addPass(std::make_unique<Addon::VBuffer::VBuffer2GBufferPass>(), "VBuffer2GBuffer Pass");
+  addEdge("VBuffer Pass", "VBuffer", "VBuffer2GBuffer Pass", "VBuffer");
+  addPass(std::make_unique<Addon::GBufferHolderSource>(), "GBufferPrev Pass");
+
+  // Sanity check: Consume current & previous GBuffer
+  addPass(std::make_unique<Addon::GBufferTemporalInspectorPass>(), "GBuffer Inspect Pass"); 
+  Addon::GBufferUtils::addGBufferEdges(this, "VBuffer2GBuffer Pass", "GBuffer Inspect Pass");
+  Addon::GBufferUtils::addPrevGBufferEdges(this, "GBufferPrev Pass", "GBuffer Inspect Pass");
+
+  addSubgraph(std::make_unique<Addon::GBufferHolderGraph>(), "GBuffer Blit Pass");
+  Addon::GBufferUtils::addBlitPrevGBufferEdges(this, "GBuffer Inspect Pass", "GBuffer Inspect Pass", "GBuffer Blit Pass");
+  markOutput("GBuffer Inspect Pass", "Output");
 }
 }

@@ -5305,13 +5305,20 @@ auto BindGroup_VK::updateBinding(
           entry.resource.bindlessTextures.size()));
       std::vector<VkDescriptorImageInfo>& bindelessImageInfo =
           bindlessImageInfos.back();
+
+      auto get_sampler = [&](int index) {
+        if (entry.resource.samplers.size() > 0) {
+          return static_cast<Sampler_VK*>(entry.resource.samplers[index])->textureSampler;
+        } else {
+          return static_cast<Sampler_VK*>(entry.resource.sampler)->textureSampler;
+        }
+      };
+
       for (int i = 0; i < entry.resource.bindlessTextures.size(); ++i) {
         auto bindlessTexture = entry.resource.bindlessTextures[i];
         VkDescriptorImageInfo& imageInfo = bindelessImageInfo[i];
-        imageInfo.sampler =
-            static_cast<Sampler_VK*>(entry.resource.sampler)->textureSampler;
-        imageInfo.imageView =
-            static_cast<TextureView_VK*>(bindlessTexture)->imageView;
+        imageInfo.sampler = get_sampler(i);
+        imageInfo.imageView = static_cast<TextureView_VK*>(bindlessTexture)->imageView;
         imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
         descriptorWrites.push_back(VkWriteDescriptorSet{});

@@ -164,7 +164,7 @@ float4 fragmentMain(
 
     float3 color = float3(0);
     if (uni.showEnum == ShowEnum::BaseColor) {
-        color = textures[material.baseOrDiffuseTextureIndex].Sample(uv).rgb;
+        color = textures[material.baseOrDiffuseTextureIndex].Sample(uv).rgb * material.baseOrDiffuseColor;
     }
     else if (uni.showEnum == ShowEnum::FlatNormal) {
         color = (flatNormal.rgb + 1.0) * 0.5;

@@ -837,8 +837,8 @@ SE_EXPORT enum struct CompareFunction {
 };
 
 SE_EXPORT struct SamplerDescriptor {
-  AddressMode addressModeU = AddressMode::CLAMP_TO_EDGE;
-  AddressMode addressModeV = AddressMode::CLAMP_TO_EDGE;
+  AddressMode addressModeU = AddressMode::MIRROR_REPEAT;
+  AddressMode addressModeV = AddressMode::MIRROR_REPEAT;
   AddressMode addressModeW = AddressMode::CLAMP_TO_EDGE;
   FilterMode magFilter = FilterMode::LINEAR;
   FilterMode minFilter = FilterMode::LINEAR;
@@ -1049,18 +1049,29 @@ SE_EXPORT struct BindingResource {
       : type(BindingResourceType::TEXTURE_VIEW), textureView(view) {}
   BindingResource(BufferBinding const& buffer)
       : type(BindingResourceType::BUFFER_BINDING), bufferBinding(buffer) {}
-  BindingResource(std::vector<TextureView*> const& bindlessTextures,
-                  Sampler* sampler)
+  // Binding bindless texture-sampler-pair array,
+  // where every texture share the same sampler
+  BindingResource(std::vector<TextureView*> const& bindlessTextures, Sampler* sampler)
       : type(BindingResourceType::BINDLESS_TEXTURE),
         bindlessTextures(bindlessTextures),
         sampler(sampler) {}
+  // Binding bindless texture-sampler-pair array,
+  // where every texture bind its own sampler
+  BindingResource(std::vector<TextureView*> const& bindlessTextures,
+                  std::vector<Sampler*> const& samplers)
+      : type(BindingResourceType::BINDLESS_TEXTURE),
+        bindlessTextures(bindlessTextures),
+        samplers(samplers) {}
+  // Binding bindless storage texture array
   BindingResource(std::vector<TextureView*> const& storageTextures)
       : type(BindingResourceType::TEXTURE_VIEW),
         storageArray(storageTextures) {}
+  // Binding a tlas resource
   BindingResource(TLAS* tlas) : tlas(tlas) {}
   BindingResourceType type;
   Sampler* sampler = nullptr;
   TextureView* textureView = nullptr;
+  std::vector<Sampler*> samplers = {};
   std::vector<TextureView*> bindlessTextures = {};
   std::vector<TextureView*> storageArray = {};
   ExternalTexture* externalTexture = nullptr;

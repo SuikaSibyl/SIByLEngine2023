@@ -4,47 +4,39 @@
 namespace SIByL {
 GeometryInspectorPass::GeometryInspectorPass() {
   auto [vert, frag] = GFX::ShaderLoader_SLANG::load(
-      "../Engine/Shaders/SRenderer/rasterizer/"
-      "mesh_inspector.slang",
-      std::array<std::pair<std::string, RHI::ShaderStages>, 2>{
-          std::make_pair("vertexMain", RHI::ShaderStages::VERTEX),
-          std::make_pair("fragmentMain", RHI::ShaderStages::FRAGMENT),
-      });
+    "../Engine/Shaders/SRenderer/rasterizer/mesh_inspector.slang",
+    std::array<std::pair<std::string, RHI::ShaderStages>, 2>{
+      std::make_pair("vertexMain", RHI::ShaderStages::VERTEX),
+      std::make_pair("fragmentMain", RHI::ShaderStages::FRAGMENT),
+    });
   RDG::RenderPass::init(
       Core::ResourceManager::get()->getResource<GFX::ShaderModule>(vert),
       Core::ResourceManager::get()->getResource<GFX::ShaderModule>(frag));
-  geo_vis_buffer =
-      GFX::GFXManager::get()->createStructuredUniformBuffer<GeoVisUniform>();
 
-  std::string const& engine_path =
-      Core::RuntimeConfig::get()->string_property("engine_path");
+  geo_vis_buffer = GFX::GFXManager::get()->createStructuredUniformBuffer<GeoVisUniform>();
+  std::string const& engine_path = Core::RuntimeConfig::get()->string_property("engine_path");
   matcapGuid = GFX::GFXManager::get()->registerTextureResource(
       (engine_path + "/Binaries/Runtime/textures/matcap.png").c_str());
 }
 
 auto GeometryInspectorPass::reflect() noexcept -> RDG::PassReflection {
   RDG::PassReflection reflector;
-
   reflector.addOutput("Color")
-      .isTexture()
-      .withSize(Math::vec3(1, 1, 1))
+      .isTexture().withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::RGBA32_FLOAT)
       .withUsages((uint32_t)RHI::TextureUsage::COLOR_ATTACHMENT)
       .consume(RDG::TextureInfo::ConsumeEntry{
           RDG::TextureInfo::ConsumeType::ColorAttachment}
-                   .setAttachmentLoc(0));
-
+            .setAttachmentLoc(0));
   reflector.addInputOutput("Depth")
-      .isTexture()
-      .withSize(Math::vec3(1, 1, 1))
+      .isTexture().withSize(Math::vec3(1, 1, 1))
       .withFormat(RHI::TextureFormat::DEPTH32_FLOAT)
       .withUsages((uint32_t)RHI::TextureUsage::DEPTH_ATTACHMENT)
       .consume(RDG::TextureInfo::ConsumeEntry{
           RDG::TextureInfo::ConsumeType::DepthStencilAttachment}
-                   .enableDepthWrite(false)
-                   .setAttachmentLoc(0)
-                   .setDepthCompareFn(RHI::CompareFunction::EQUAL));
-
+            .enableDepthWrite(false)
+            .setAttachmentLoc(0)
+            .setDepthCompareFn(RHI::CompareFunction::EQUAL));
   return reflector;
 }
 
@@ -120,8 +112,6 @@ auto GeometryInspectorPass::execute(
 
   getBindGroup(context, 0)->updateBinding(*set_0_entries);
   getBindGroup(context, 1)->updateBinding(set_1_entries);
-
-
 
   RHI::RenderPassEncoder* encoder = beginPass(context, color);
 

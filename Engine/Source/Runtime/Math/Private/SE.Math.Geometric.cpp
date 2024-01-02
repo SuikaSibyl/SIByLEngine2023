@@ -100,18 +100,28 @@ auto Quaternion::lengthSquared() const -> float {
 
 auto Quaternion::length() const -> float { return std::sqrt(lengthSquared()); }
 
+
 auto Quaternion::toMat3() const noexcept -> mat3 {
-  return mat3(1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * (x * z - y * w),
-              2 * (x * y - z * w), 1 - 2 * (x * x + z * z), 2 * (y * z + x * w),
-              2 * (x * z + y * w), 2 * (y * z - x * w),
-              1 - 2 * (x * x + y * y));
+  // Math::mat4 quat_transform = quat.toMat4();
+  Math::vec3 x = (*this) * Math::vec3(1, 0, 0);
+  Math::vec3 y = (*this) * Math::vec3(0, 1, 0);
+  Math::vec3 z = (*this) * Math::vec3(0, 0, 1);
+  // Extract the position of the transform
+  return Math::mat3(x.x, y.x, z.x,  // X basis (& Scale)
+                    x.y, y.y, z.y,  // Y basis (& scale)
+                    x.z, y.z, z.z); // Z basis (& scale)
 }
 
 auto Quaternion::toMat4() const noexcept -> mat4 {
-  return mat4(1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * (x * z - y * w),
-              0, 2 * (x * y - z * w), 1 - 2 * (x * x + z * z),
-              2 * (y * z + x * w), 0, 2 * (x * z + y * w), 2 * (y * z - x * w),
-              1 - 2 * (x * x + y * y), 0, 0, 0, 0, 1);
+  // Math::mat4 quat_transform = quat.toMat4();
+  Math::vec3 x = (*this) * Math::vec3(1, 0, 0);
+  Math::vec3 y = (*this) * Math::vec3(0, 1, 0);
+  Math::vec3 z = (*this) * Math::vec3(0, 0, 1);
+  // Extract the position of the transform
+  return Math::mat4(x.x, y.x, z.x, 0,  // X basis (& Scale)
+                    x.y, y.y, z.y, 0,  // Y basis (& scale)
+                    x.z, y.z, z.z, 0,  // Z basis (& scale)
+                    0, 0, 0, 1);
 }
 
 auto Quaternion::conjugate() noexcept -> Quaternion {
@@ -124,8 +134,8 @@ auto Quaternion::reciprocal() noexcept -> Quaternion {
 
 auto Quaternion::operator/(float s) const -> Quaternion {
   Quaternion ret;
-  ret.v = v / s;
-  ret.s = s / s;
+  ret.v = this->v / s;
+  ret.s = this->s / s;
   return ret;
 }
 
@@ -141,6 +151,12 @@ auto Quaternion::operator*(Quaternion const& q2) const -> Quaternion {
   ret.v = cross(v, q2.v) + q2.v * s + v * q2.s;
   ret.s = s * q2.s - dot(v, q2.v);
   return ret;
+}
+
+auto Quaternion::operator*(Math::vec3 const& v) const -> Math::vec3 {
+  return this->v * 2.0f * Math::dot(this->v, v) +
+         v * (this->s * this->s - Math::dot(this->v, this->v)) +
+         Math::cross(this->v, v) * 2.0f * this->s;
 }
 
 auto Quaternion::operator+=(Quaternion const& q) -> Quaternion& {

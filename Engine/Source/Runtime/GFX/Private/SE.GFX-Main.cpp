@@ -15,8 +15,8 @@ auto Buffer::release() noexcept -> void {
   buffer = nullptr;
 }
 
-auto TagComponent::serialize(void* pemitter, Core::EntityHandle const& handle)
-    -> void {
+auto TagComponent::serialize(void* pemitter, Core::EntityHandle const& handle,
+                             Core::ComponentSerializeEnv& env) -> void {
   YAML::Emitter& emitter = *reinterpret_cast<YAML::Emitter*>(pemitter);
   Core::Entity entity(handle);
   TagComponent* tag = entity.getComponent<TagComponent>();
@@ -27,8 +27,8 @@ auto TagComponent::serialize(void* pemitter, Core::EntityHandle const& handle)
   }
 }
 
-auto TagComponent::deserialize(void* compAoS, Core::EntityHandle const& handle)
-    -> void {
+auto TagComponent::deserialize(void* compAoS, Core::EntityHandle const& handle,
+                               Core::ComponentSerializeEnv const& env) -> void {
   YAML::NodeAoS& components = *reinterpret_cast<YAML::NodeAoS*>(compAoS);
   Core::Entity entity(handle);
   auto tagComponentAoS = components["TagComponent"];
@@ -45,8 +45,8 @@ auto TransformComponent::getTransform() noexcept -> Math::mat4 {
          Math::mat4::rotateX(eulerAngles.x) * Math::mat4::scale(scale);
 }
 
-auto TransformComponent::serialize(void* pemitter,
-                                   Core::EntityHandle const& handle) -> void {
+auto TransformComponent::serialize(void* pemitter, Core::EntityHandle const& handle,
+    Core::ComponentSerializeEnv& env) -> void {
   YAML::Emitter& emitter = *reinterpret_cast<YAML::Emitter*>(pemitter);
   Core::Entity entity(handle);
   TransformComponent* transform = entity.getComponent<TransformComponent>();
@@ -58,13 +58,14 @@ auto TransformComponent::serialize(void* pemitter,
     emitter << YAML::Key << "eulerAngles" << YAML::Value
             << transform->eulerAngles;
     emitter << YAML::Key << "scale" << YAML::Value << transform->scale;
-    emitter << YAML::Key << "staticParam" << YAML::Value << transform->static_param;
+    emitter << YAML::Key << "flag" << YAML::Value << transform->flag;
+    emitter << YAML::Key << "invjoint" << YAML::Value << transform->inverseJointTransform;
     emitter << YAML::EndMap;
   }
 }
 
-auto TransformComponent::deserialize(void* compAoS,
-                                     Core::EntityHandle const& handle) -> void {
+auto TransformComponent::deserialize(void* compAoS, Core::EntityHandle const& handle,
+    Core::ComponentSerializeEnv const& env) -> void {
   YAML::NodeAoS& components = *reinterpret_cast<YAML::NodeAoS*>(compAoS);
   Core::Entity entity(handle);
   auto transformComponentAoS = components["Transform"];
@@ -79,7 +80,14 @@ auto TransformComponent::deserialize(void* compAoS,
     transform->eulerAngles = eulerAngles;
     transform->scale = scale;
     if (transformComponentAoS["staticParam"]) {
-      transform->static_param = transformComponentAoS["staticParam"].as<uint32_t>();
+      bool const is_static=transformComponentAoS["staticParam"].as<uint32_t>() > 0;
+      if (is_static) transform->flag |= (uint32_t)FlagBit::IS_STATIC;
+    }
+    if (transformComponentAoS["flag"]) {
+      transform->flag = transformComponentAoS["flag"].as<uint32_t>();
+    }
+    if (transformComponentAoS["invjoint"]) {
+      transform->inverseJointTransform = transformComponentAoS["invjoint"].as<Math::mat4>();
     }
   }
 }
@@ -108,8 +116,8 @@ auto to_string(LightComponent::LightType type) noexcept
   }
 }
 
-auto AnimationComponent::serialize(void* pemitter,
-    Core::EntityHandle const& handle) -> void {
+auto AnimationComponent::serialize(void* pemitter, Core::EntityHandle const& handle,
+    Core::ComponentSerializeEnv& env) -> void {
   YAML::Emitter& emitter = *reinterpret_cast<YAML::Emitter*>(pemitter);
   Core::Entity entity(handle);
   AnimationComponent* animComp = entity.getComponent<AnimationComponent>();
@@ -126,22 +134,16 @@ auto AnimationComponent::serialize(void* pemitter,
     for (auto& sampler : animComp->ani.samplers) {
       emitter << YAML::BeginMap;
       emitter << YAML::Key << "InterpolationType" << YAML::Value << uint32_t(sampler.interpolation);
-      emitter << YAML::Key << "Inputs" << YAML::Value << YAML::BeginSeq;
-      for (int i = 0; i < sampler.inputs.size(); i++)
-        emitter << sampler.inputs[i];
-      emitter << YAML::EndSeq;
+      size_t const input_offset = env.push_to_buffer(sampler.inputs.data(), sampler.inputs.size() * sizeof(float));
+      emitter << YAML::Key << "Inputs" << YAML::Value << Math::svec2(input_offset, sampler.inputs.size());
       if (sampler.outputsVec3.size() != 0) {
         emitter << YAML::Key << "ValType" << YAML::Value << "Float3";
-        emitter << YAML::Key << "Vals" << YAML::Value << YAML::BeginSeq;
-        for (int i = 0; i < sampler.outputsVec3.size(); i++)
-          emitter << sampler.outputsVec3[i];
-        emitter << YAML::EndSeq;
+        size_t const val_offset = env.push_to_buffer(sampler.outputsVec3.data(), sampler.outputsVec3.size() * sizeof(Math::vec3));
+        emitter << YAML::Key << "Vals" << YAML::Value << Math::svec2{val_offset, sampler.outputsVec3.size()};
       } else if (sampler.outputsVec4.size() != 0) {
         emitter << YAML::Key << "ValType" << YAML::Value << "Float4";
-        emitter << YAML::Key << "Vals" << YAML::Value << YAML::BeginSeq;
-        for (int i = 0; i < sampler.outputsVec4.size(); i++)
-          emitter << sampler.outputsVec4[i];
-        emitter << YAML::EndSeq;
+        size_t const val_offset = env.push_to_buffer(sampler.outputsVec4.data(), sampler.outputsVec4.size() * sizeof(Math::vec4));
+        emitter << YAML::Key << "Vals" << YAML::Value << Math::svec2{val_offset, sampler.outputsVec4.size()};
       }
       emitter << YAML::EndMap;
     }
@@ -160,8 +162,8 @@ auto AnimationComponent::serialize(void* pemitter,
   }
 }
 
-auto AnimationComponent::deserialize(void* compAoS,
-    Core::EntityHandle const& handle) -> void {
+auto AnimationComponent::deserialize(void* compAoS, Core::EntityHandle const& handle,
+    Core::ComponentSerializeEnv const& env) -> void {
   YAML::NodeAoS& components = *reinterpret_cast<YAML::NodeAoS*>(compAoS);
   Core::Entity entity(handle);
   auto animationComponentAoS = components["AnimationComponent"];
@@ -179,16 +181,19 @@ auto AnimationComponent::deserialize(void* compAoS,
       AnimationSampler sampler;
       sampler.interpolation = AnimationSampler::InterpolationType(
           sampler_node["InterpolationType"].as<uint32_t>());
-      for (auto input : sampler_node["Inputs"]) {
-        sampler.inputs.emplace_back(input.as<float>());
-      }
+      Math::svec2 const input_node = sampler_node["Inputs"].as<Math::svec2>();
+      sampler.inputs.resize(input_node.y);
+      env.load_from_buffer(input_node.x, sampler.inputs.data(), input_node.y * sizeof(float));
       std::string val_type = sampler_node["ValType"].as<std::string>();
-      if (val_type.compare("Float3") == 0)
-        for (auto val : sampler_node["Vals"])
-          sampler.outputsVec3.emplace_back(val.as<Math::vec3>());
-      else if (val_type.compare("Float4") == 0)
-        for (auto val : sampler_node["Vals"])
-          sampler.outputsVec4.emplace_back(val.as<Math::vec4>());
+      if (val_type.compare("Float3") == 0) {
+        Math::svec2 const vals_node = sampler_node["Vals"].as<Math::svec2>();
+        sampler.outputsVec3.resize(vals_node.y);
+        env.load_from_buffer(vals_node.x, sampler.outputsVec3.data(), vals_node.y * sizeof(Math::vec3));
+      } else if (val_type.compare("Float4") == 0) {
+        Math::svec2 const vals_node = sampler_node["Vals"].as<Math::svec2>();
+        sampler.outputsVec4.resize(vals_node.y);
+        env.load_from_buffer(vals_node.x, sampler.outputsVec4.data(), vals_node.y * sizeof(Math::vec4));
+      }
       animComp->ani.samplers[sampler_idx++] = sampler;
     }
     // load channels
@@ -275,8 +280,14 @@ auto Scene::getGameObject(GameObjectHandle handle) noexcept -> GameObject* {
     return &gameObjects[handle];
 }
 
+std::string get_bin_filepath(std::string const& path_str) {
+  std::string path = path_str.substr(0, path_str.find_last_of("."));
+  return path + ".sbin";
+}
+
 auto Scene::serialize(std::filesystem::path path) noexcept -> void {
   std::unordered_map<GameObjectHandle, uint64_t> mapper;
+  Core::ComponentSerializeEnv env{mapper};
   uint64_t index = 0;
   mapper[Core::NULL_ENTITY] = Core::NULL_ENTITY;
   for (auto iter = gameObjects.begin(); iter != gameObjects.end(); iter++) {
@@ -304,7 +315,7 @@ auto Scene::serialize(std::filesystem::path path) noexcept -> void {
     // components
     out << YAML::Key << "components" << YAML::Value;
     out << YAML::BeginMap;
-    Core::ComponentManager::get()->trySerialize(&out, iter->second.entity);
+    Core::ComponentManager::get()->trySerialize(&out, iter->second.entity, env);
     out << YAML::EndMap;
     // end
     out << YAML::EndMap;
@@ -318,14 +329,32 @@ auto Scene::serialize(std::filesystem::path path) noexcept -> void {
   scene_proxy.size = out.size();
   Core::syncWriteFile(path.string().c_str(), scene_proxy);
   scene_proxy.data = nullptr;
+  // ourpur bin
+  std::string path_str = get_bin_filepath(path.string());
+  Core::Buffer bin_proxy;
+  bin_proxy.data = env.binary_buffer.data();
+  bin_proxy.size = env.binary_buffer.size();
+  if (bin_proxy.size > 0) Core::syncWriteFile(path_str.c_str(), bin_proxy);
+  bin_proxy.data = nullptr;
 }
 
 auto Scene::deserialize(std::filesystem::path path) noexcept -> void {
   release();
-  // gameObjects.clear();
+  std::unordered_map<uint64_t, GameObjectHandle> mapper;
+  Core::ComponentSerializeEnv env{mapper};
+  // load scene
   Core::Buffer scene_proxy;
   Core::syncReadFile(path.string().c_str(), scene_proxy);
   YAML::NodeAoS data = YAML::Load(reinterpret_cast<char*>(scene_proxy.data));
+  // load bin
+  std::string const path_str = get_bin_filepath(path.string());
+  if (std::filesystem::exists(path_str)) {
+    Core::Buffer bin_buffer;
+    Core::syncReadFile(path_str.c_str(), bin_buffer);
+    env.binary_buffer.resize(bin_buffer.size);
+    memcpy(env.binary_buffer.data(), bin_buffer.data, bin_buffer.size);
+  }
+
   // check scene name
   if (!data["SceneName"] || !data["SceneNodes"]) {
     Core::LogManager::Error(std::format(
@@ -333,14 +362,18 @@ auto Scene::deserialize(std::filesystem::path path) noexcept -> void {
     return;
   }
   name = data["SceneName"].as<std::string>();
-  std::unordered_map<uint64_t, GameObjectHandle> mapper;
   mapper[Core::NULL_ENTITY] = Core::NULL_ENTITY;
   uint32_t index = 0;
   auto scene_nodes = data["SceneNodes"];
   for (auto node : scene_nodes) {
     uint64_t uid = node["uid"].as<uint64_t>();
-    uint64_t parent = node["parent"].as<uint64_t>();
     GameObjectHandle gohandle = createGameObject(Core::NULL_ENTITY);
+    mapper[uid] = gohandle;
+  }
+  for (auto node : scene_nodes) {
+    uint64_t uid = node["uid"].as<uint64_t>();
+    uint64_t parent = node["parent"].as<uint64_t>();
+    GameObjectHandle gohandle = mapper[uid];
     GameObject* go = getGameObject(gohandle);
     go->parent = parent;
     auto children = node["children"];
@@ -348,10 +381,9 @@ auto Scene::deserialize(std::filesystem::path path) noexcept -> void {
     uint32_t idx = 0;
     if (children)
       for (auto child : children) go->children[idx++] = child.as<uint64_t>();
-    mapper[uid] = gohandle;
 
     auto components = node["components"];
-    Core::ComponentManager::get()->tryDeserialize(&components, gohandle);
+    Core::ComponentManager::get()->tryDeserialize(&components, gohandle, env);
   }
   for (auto iter = gameObjects.begin(); iter != gameObjects.end(); iter++) {
     iter->second.parent = mapper[iter->second.parent];
@@ -465,6 +497,10 @@ auto Mesh::serialize() noexcept -> void {
         << positionBufferInfo.size;
     out << YAML::Key << "UV2BufferSize" << YAML::Value
         << uv2Buffer_host.size;
+    out << YAML::Key << "JointIndexBufferSize" << YAML::Value
+        << jointIndexBuffer_host.size;
+    out << YAML::Key << "JointWeightBufferSize" << YAML::Value
+        << jointWeightBuffer_host.size;
     // output submeshes
     out << YAML::Key << "Submeshes" << YAML::Value << YAML::BeginSeq;
     for (int i = 0; i < submeshes.size(); i++) {
@@ -491,7 +527,9 @@ auto Mesh::serialize() noexcept -> void {
   int ibsize = indexBufferInfo.size;
   int pbsize = positionBufferInfo.size;
   int uv2size = uv2Buffer_host.size;
-  Core::Buffer mergedBuffer(vbsize + ibsize + pbsize + uv2size);
+  int jointidxsize = jointIndexBuffer_host.size;
+  int jointweightsize = jointWeightBuffer_host.size;
+  Core::Buffer mergedBuffer(vbsize + ibsize + pbsize + uv2size + jointidxsize + jointweightsize);
   if (vertexBufferInfo.onHost) {
     memcpy(mergedBuffer.data, vertexBuffer_host.data, vbsize);
   } else if (vertexBufferInfo.onDevice) {
@@ -520,6 +558,14 @@ auto Mesh::serialize() noexcept -> void {
   if (uv2Buffer_host.size != 0) {
     memcpy(&(((char*)(mergedBuffer.data))[vbsize + ibsize + pbsize]),
            uv2Buffer_host.data, uv2size);
+  }
+  if (jointIndexBuffer_host.size != 0) {
+    memcpy(&(((char*)(mergedBuffer.data))[vbsize + ibsize + pbsize + uv2size]),
+           jointIndexBuffer_host.data, jointidxsize);
+  }
+  if (jointWeightBuffer_host.size != 0) {
+    memcpy(&(((char*)(mergedBuffer.data))[vbsize + ibsize + pbsize + uv2size + jointidxsize]),
+           jointWeightBuffer_host.data, jointweightsize);
   }
   Core::syncWriteFile(bindata_path.string().c_str(), mergedBuffer);
 }
@@ -566,12 +612,19 @@ auto Mesh::deserialize(RHI::Device* device, Core::ORID orid) noexcept
   primitiveState.unclippedDepth = ps_node["UnclippedDepth"].as<bool>();
   // load buffers
   size_t vb_size, ib_size, pb_size, uv2_size;
+  size_t jointidxsize, jointweightsize;
   vb_size = data["VertexBufferSize"].as<size_t>();
   ib_size = data["IndexBufferSize"].as<size_t>();
   pb_size = data["PosOnlyBufferSize"].as<size_t>();
   if (data["UV2BufferSize"]) {
     uv2_size = data["UV2BufferSize"].as<size_t>();
   } else { uv2_size = 0; }
+  if (data["JointIndexBufferSize"]) {
+    jointidxsize = data["JointIndexBufferSize"].as<size_t>();
+  } else { jointidxsize = 0; }
+  if (data["JointWeightBufferSize"]) {
+    jointweightsize = data["JointWeightBufferSize"].as<size_t>();
+  } else { jointweightsize = 0; }
 
   vertexBufferInfo.size = vb_size;
   indexBufferInfo.size = ib_size;
@@ -637,6 +690,20 @@ auto Mesh::deserialize(RHI::Device* device, Core::ORID orid) noexcept
       memcpy(uv2Buffer_host.data, (void*)&(((uint16_t*)(&(
              ((char*)(bindata.data))[vb_size + ib_size + pb_size])))[0]),
              uv2_size);
+    }
+    if (jointidxsize > 0) {
+      jointIndexBuffer_host = Core::Buffer(jointidxsize);
+      memcpy(jointIndexBuffer_host.data,
+             (void*)&(((uint64_t*)(&(((char*)(bindata.data))[vb_size + ib_size +
+                pb_size + uv2_size])))[0]),
+             jointidxsize);
+    }
+    if (jointweightsize > 0) {
+      jointWeightBuffer_host = Core::Buffer(jointweightsize);
+      memcpy(jointWeightBuffer_host.data,
+             (void*)&(((float*)(&(((char*)(bindata.data))[vb_size + ib_size +
+                pb_size + uv2_size + jointidxsize])))[0]),
+          jointweightsize);
     }
   }
 
@@ -912,13 +979,22 @@ auto Material::serialize() noexcept -> void {
   out << YAML::BeginSeq;
   {
     for (auto& [name, entry] : textures) {
-      GFX::Texture* texture =
-          Core::ResourceManager::get()->getResource<GFX::Texture>(entry.guid);
+      GFX::Texture* texture = Core::ResourceManager::get()->getResource<GFX::Texture>(entry.guid);
       out << YAML::BeginMap;
       out << YAML::Key << "Name" << YAML::Value << name;
-      out << YAML::Key << "ORID" << YAML::Value
-          << ((texture != nullptr) ? texture->orid : 0);
+      out << YAML::Key << "ORID" << YAML::Value << ((texture != nullptr) ? texture->orid : 0);
       out << YAML::Key << "flags" << YAML::Value << entry.flags;
+      out << YAML::Key << "SamplerAddressU" << YAML::Value << uint32_t(entry.sampler.addressModeU);
+      out << YAML::Key << "SamplerAddressV" << YAML::Value << uint32_t(entry.sampler.addressModeV);
+      out << YAML::Key << "SamplerAddressW" << YAML::Value << uint32_t(entry.sampler.addressModeW);
+      out << YAML::Key << "SamplerMagFilter" << YAML::Value << uint32_t(entry.sampler.magFilter);
+      out << YAML::Key << "SamplerMinFilter" << YAML::Value << uint32_t(entry.sampler.minFilter);
+      out << YAML::Key << "SamplerMipmapFilter" << YAML::Value << uint32_t(entry.sampler.mipmapFilter);
+      out << YAML::Key << "SamplerLodMinClamp" << YAML::Value << entry.sampler.lodMinClamp;
+      out << YAML::Key << "SamplerLodMapClamp" << YAML::Value << entry.sampler.lodMapClamp;
+      out << YAML::Key << "SamplerCompare" << YAML::Value << uint32_t(entry.sampler.compare);
+      out << YAML::Key << "SamplerMaxAnisotropy" << YAML::Value << uint32_t(entry.sampler.maxAnisotropy);
+      out << YAML::Key << "SamplerMaxLoD" << YAML::Value << entry.sampler.maxLod;
       out << YAML::EndMap;
     }
   }
@@ -988,14 +1064,28 @@ auto Material::loadPath() noexcept -> void {
     if (orid == 0) continue;
     uint32_t flags = node["flags"].as<uint32_t>();
     if (flags & uint32_t(TexFlag::VideoClip)) {
-      textures[tex_name] = {
-          *reinterpret_cast<Core::GUID*>(GFXManager::get()
-                                             ->getExt<Extension>(Ext::VideoClip)
-                                             ->foo(0, &orid)),
-          flags};
+      RHI::TextureDescriptor desc = {};
+      textures[tex_name] = {*reinterpret_cast<Core::GUID*>(GFXManager::get()
+        ->getExt<Extension>(Ext::VideoClip)->foo(0, &orid)), flags};
     } else {
       textures[tex_name] = {
           GFXManager::get()->requestOfflineTextureResource(orid), flags};
+    }
+    // deserialize sampler
+    if (node["SamplerAddressU"]) {
+      RHI::SamplerDescriptor desc;
+      desc.addressModeU = (RHI::AddressMode)node["SamplerAddressU"].as<uint32_t>();
+      desc.addressModeV = (RHI::AddressMode)node["SamplerAddressV"].as<uint32_t>();
+      desc.addressModeW = (RHI::AddressMode)node["SamplerAddressW"].as<uint32_t>();
+      desc.magFilter = (RHI::FilterMode)node["SamplerMagFilter"].as<uint32_t>();
+      desc.minFilter = (RHI::FilterMode)node["SamplerMinFilter"].as<uint32_t>();
+      desc.mipmapFilter = (RHI::MipmapFilterMode)node["SamplerMipmapFilter"].as<uint32_t>();
+      desc.lodMinClamp = node["SamplerLodMinClamp"].as<float>();
+      desc.lodMapClamp = node["SamplerLodMapClamp"].as<float>();
+      desc.compare = (RHI::CompareFunction)node["SamplerCompare"].as<uint32_t>();
+      desc.maxAnisotropy = uint16_t(node["SamplerMaxAnisotropy"].as<uint32_t>());
+      desc.maxLod = node["SamplerMaxLoD"].as<float>();
+      textures[tex_name].sampler = desc;
     }
   }
   isEmissive = data["Emissive"].as<bool>();
@@ -1048,8 +1138,8 @@ auto CameraComponent::getProjectionMat() const noexcept->Math::mat4 {
   return projection;
 }
 
-auto CameraComponent::serialize(void* pemitter,
-                                Core::EntityHandle const& handle) -> void {
+auto CameraComponent::serialize(void* pemitter, Core::EntityHandle const& handle,
+    Core::ComponentSerializeEnv& env) -> void {
   YAML::Emitter& emitter = *reinterpret_cast<YAML::Emitter*>(pemitter);
   Core::Entity entity(handle);
   CameraComponent* camera = entity.getComponent<CameraComponent>();
@@ -1068,8 +1158,8 @@ auto CameraComponent::serialize(void* pemitter,
   }
 }
 
-auto CameraComponent::deserialize(void* compAoS,
-                                  Core::EntityHandle const& handle) -> void {
+auto CameraComponent::deserialize(void* compAoS, Core::EntityHandle const& handle,
+    Core::ComponentSerializeEnv const& env) -> void {
   YAML::NodeAoS& components = *reinterpret_cast<YAML::NodeAoS*>(compAoS);
   Core::Entity entity(handle);
   auto cameraComponentAoS = components["CameraComponent"];
@@ -1089,12 +1179,28 @@ auto CameraComponent::deserialize(void* compAoS,
 
 #pragma region MESH_REFERENCE_COMPONENT_IMPL
 
-auto MeshReference::serialize(void* pemitter, Core::EntityHandle const& handle)
-    -> void {
+auto MeshReference::serialize(void* pemitter, Core::EntityHandle const& handle,
+    Core::ComponentSerializeEnv& env) -> void {
   YAML::Emitter& emitter = *reinterpret_cast<YAML::Emitter*>(pemitter);
   Core::Entity entity(handle);
   MeshReference* meshRef = entity.getComponent<MeshReference>();
   if (meshRef != nullptr) {
+    // if has joint index buffer, interpret
+    if (meshRef->mesh->jointIndexBuffer_host.size != 0) {
+      Core::Buffer joint_idx = std::move(meshRef->mesh->jointIndexBuffer_host);
+      std::vector<uint64_t> interpret_idx(joint_idx.size / sizeof(uint64_t));
+      memcpy(interpret_idx.data(), joint_idx.data, joint_idx.size);
+      for (size_t i = 0; i < interpret_idx.size(); ++i) {
+        interpret_idx[i] = env.mapper.find(Core::ORID(interpret_idx[i]))->second;
+      }
+      Core::Buffer idx_proxy;
+      idx_proxy.data = interpret_idx.data();
+      idx_proxy.size = joint_idx.size;
+      idx_proxy.isReference = true;
+      meshRef->mesh->jointIndexBuffer_host = idx_proxy;
+      meshRef->mesh->serialize();
+      meshRef->mesh->jointIndexBuffer_host = std::move(joint_idx);
+    }
     emitter << YAML::Key << "MeshReference";
     emitter << YAML::Value << YAML::BeginMap;
     emitter << YAML::Key << "ORID" << YAML::Value
@@ -1106,8 +1212,8 @@ auto MeshReference::serialize(void* pemitter, Core::EntityHandle const& handle)
   }
 }
 
-auto MeshReference::deserialize(void* compAoS, Core::EntityHandle const& handle)
-    -> void {
+auto MeshReference::deserialize(void* compAoS, Core::EntityHandle const& handle,
+    Core::ComponentSerializeEnv const& env) -> void {
   YAML::NodeAoS& components = *reinterpret_cast<YAML::NodeAoS*>(compAoS);
   Core::Entity entity(handle);
   auto meshRefComponentAoS = components["MeshReference"];
@@ -1125,6 +1231,17 @@ auto MeshReference::deserialize(void* compAoS, Core::EntityHandle const& handle)
           RHI::RHILayer::get()->getDevice(), orid);
       meshRef->mesh =
           Core::ResourceManager::get()->getResource<GFX::Mesh>(guid);
+      if (meshRef->mesh->jointIndexBuffer_host.size != 0) {
+        Core::Buffer joint_idx = std::move(meshRef->mesh->jointIndexBuffer_host);
+        std::vector<uint64_t> interpret_idx(joint_idx.size / sizeof(uint64_t));
+        memcpy(interpret_idx.data(), joint_idx.data, joint_idx.size);
+        for (size_t i = 0; i < interpret_idx.size(); ++i) {
+          interpret_idx[i] = env.mapper.find(Core::ORID(interpret_idx[i]))->second;
+        }
+        Core::Buffer idx_intepreted(joint_idx.size);
+        memcpy(idx_intepreted.data, interpret_idx.data(), idx_intepreted.size);
+        meshRef->mesh->jointIndexBuffer_host = std::move(idx_intepreted);
+      }
     }
     meshRef->customPrimitiveFlag = meshRefComponentAoS["CPF"].as<size_t>();
   }
@@ -1134,8 +1251,8 @@ auto MeshReference::deserialize(void* compAoS, Core::EntityHandle const& handle)
 
 #pragma region MESH_FILTER_COMPONENT_IMPL
 
-auto MeshRenderer::serialize(void* pemitter, Core::EntityHandle const& handle)
-    -> void {
+auto MeshRenderer::serialize(void* pemitter, Core::EntityHandle const& handle,
+    Core::ComponentSerializeEnv& env) -> void {
   YAML::Emitter& emitter = *reinterpret_cast<YAML::Emitter*>(pemitter);
   Core::Entity entity(handle);
   MeshRenderer* renderer = entity.getComponent<MeshRenderer>();
@@ -1152,8 +1269,8 @@ auto MeshRenderer::serialize(void* pemitter, Core::EntityHandle const& handle)
   }
 }
 
-auto MeshRenderer::deserialize(void* compAoS, Core::EntityHandle const& handle)
-    -> void {
+auto MeshRenderer::deserialize(void* compAoS, Core::EntityHandle const& handle,
+    Core::ComponentSerializeEnv const& env) -> void {
   YAML::NodeAoS& components = *reinterpret_cast<YAML::NodeAoS*>(compAoS);
   Core::Entity entity(handle);
   auto meshRendererComponentAoS = components["MeshRendererComponent"];
@@ -1173,8 +1290,8 @@ auto MeshRenderer::deserialize(void* compAoS, Core::EntityHandle const& handle)
 
 #pragma region LIGHT_COMPONENT_IMPL
 
-auto LightComponent::serialize(void* pemitter, Core::EntityHandle const& handle)
-    -> void {
+auto LightComponent::serialize(void* pemitter, Core::EntityHandle const& handle,
+                               Core::ComponentSerializeEnv& env) -> void {
   YAML::Emitter& emitter = *reinterpret_cast<YAML::Emitter*>(pemitter);
   Core::Entity entity(handle);
   LightComponent* lightComponent = entity.getComponent<LightComponent>();
@@ -1201,8 +1318,8 @@ auto LightComponent::serialize(void* pemitter, Core::EntityHandle const& handle)
   }
 }
 
-auto LightComponent::deserialize(void* compAoS,
-                                 Core::EntityHandle const& handle) -> void {
+auto LightComponent::deserialize(void* compAoS, Core::EntityHandle const& handle,
+    Core::ComponentSerializeEnv const& env) -> void {
   YAML::NodeAoS& components = *reinterpret_cast<YAML::NodeAoS*>(compAoS);
   Core::Entity entity(handle);
   auto lightComponentAoS = components["LightComponent"];

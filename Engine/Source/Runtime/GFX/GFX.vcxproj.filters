@@ -39,6 +39,9 @@
     <ClCompile Include="Private\spirv_reflect.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Private\SE.GFX-SceneUpdate.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Public\SE.GFX-SerializeUtils.hpp">
@@ -72,6 +75,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="Private\include\spirv\unified1\spirv.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\SE.GFX-SceneUpdate.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

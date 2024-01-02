@@ -178,6 +178,7 @@
     <ClCompile Include="Private\SE.GFX-Loader.SceneNodeLoader.cpp" />
     <ClCompile Include="Private\SE.GFX-Loader.ShaderLoader.cpp" />
     <ClCompile Include="Private\SE.GFX-Main.cpp" />
+    <ClCompile Include="Private\SE.GFX-SceneUpdate.cpp" />
     <ClCompile Include="Private\SE.GFX-Script.cpp" />
     <ClCompile Include="Private\SE.GFX-Utils.cpp" />
     <ClCompile Include="Private\spirv_reflect.cpp" />
@@ -190,6 +191,7 @@
     <ClInclude Include="Public\SE.GFX-Loader.SceneNodeLoader.hpp" />
     <ClInclude Include="Public\SE.GFX-Loader.ShaderLoader.hpp" />
     <ClInclude Include="Public\SE.GFX-Main.hpp" />
+    <ClInclude Include="Public\SE.GFX-SceneUpdate.h" />
     <ClInclude Include="Public\SE.GFX-SerializeUtils.hpp" />
     <ClInclude Include="Public\SE.GFX-Utils.h" />
     <ClInclude Include="Public\SE.GFX.hpp" />

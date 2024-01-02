@@ -2499,11 +2499,17 @@ auto TransformComponentFragment::elucidateComponent(
           bool scale_modified = (component->scale != scaling);
           if (scale_modified) component->scale = scaling;
 
-          drawCustomColume("Static", 100, [&]() {
-            uint32_t param = component->static_param;
-            bool is_static = (param != 0);
-            ImGui::Checkbox("##Static", &is_static);
-            component->static_param = is_static ? 1 : 0;
+          uint32_t flag = component->flag;
+          drawCustomColume("Flags", 100, [&]() {
+            bool is_static = (flag & (uint32_t)GFX::TransformComponent::FlagBit::IS_STATIC);
+            if (ImGui::Checkbox("Static  ", &is_static)) {
+              component->flag ^= (uint32_t)GFX::TransformComponent::FlagBit::IS_STATIC;
+            }
+            ImGui::SameLine();
+            bool is_joint = (flag & (uint32_t)GFX::TransformComponent::FlagBit::IS_SKELETON_JOINT);
+            if (ImGui::Checkbox("Is Joint  ", &is_joint)) {
+              component->flag ^= (uint32_t)GFX::TransformComponent::FlagBit::IS_SKELETON_JOINT;
+            }
           });
         },
         false);
@@ -2576,6 +2582,16 @@ auto MeshReferenceComponentFragment::elucidateComponent(
                    to_string(component->mesh->primitiveState.topology))
                       .c_str());
 
+              ImGui::TreePop();
+            }
+            if (ImGui::TreeNode("2nd UV Status")) {
+              ImGui::BulletText((std::string("Has uv2: ") + 
+                  (component->mesh->uv2Buffer_host.size > 0 ? "true" : "false")).c_str());
+              ImGui::TreePop();
+            }
+            if (ImGui::TreeNode("Skinning Status")) {
+              ImGui::BulletText((std::string("Has skinning: ") + 
+                  (component->mesh->indexBuffer_host.size > 0 ? "true" : "false")).c_str());
               ImGui::TreePop();
             }
           }
@@ -2694,6 +2710,20 @@ auto LightComponentFragment::elucidateComponent(
             default:
               break;
           }
+        });
+   }
+}
+
+auto AnimationComponentFragment::elucidateComponent(
+    GameObjectInspector::GameObjectData* data) noexcept -> void {
+   GFX::GameObject* go = data->scene->getGameObject(data->handle);
+   GFX::AnimationComponent* animComp =
+       go->getEntity().getComponent<GFX::AnimationComponent>();
+   if (animComp) {
+    drawComponent<GFX::AnimationComponent>(
+        go, "AnimationComponent", [](GFX::AnimationComponent* component) {
+          ImGui::DragFloat("Start", &component->ani.start);
+          ImGui::DragFloat("End", &component->ani.end);
         });
    }
 }

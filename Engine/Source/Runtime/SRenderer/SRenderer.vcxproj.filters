@@ -111,6 +111,9 @@
     <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-GeometryInspectorPass.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Public\Passes\ComputePasses\SE.SRenderer-Skinning.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Public\Core\SE.SRenderer-SRenderer.hpp">
@@ -177,6 +180,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="Public\Pipeline\SE.SRendere-GeoInspectPipeline.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\Passes\ComputePasses\SE.SRenderer-Skinning.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

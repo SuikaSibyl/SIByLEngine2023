@@ -174,10 +174,26 @@ struct View {
   auto end() { return internal_tuple.end(); }
 };
 
+
+SE_EXPORT struct ComponentSerializeEnv {
+  std::unordered_map<uint64_t, uint64_t> const& mapper;
+  std::vector<uint8_t> binary_buffer;
+  /** Copy a buffer to the binary buffer and return the offset */
+  auto push_to_buffer(void* data, size_t size) noexcept -> size_t {
+    size_t const offset = binary_buffer.size();
+    binary_buffer.resize(offset + size);
+    memcpy(&binary_buffer[offset], data, size);
+    return offset;
+  }
+  /** Copy a buffer from the binary buffer and return the offset */
+  auto load_from_buffer(size_t offset, void* data, size_t size) const noexcept -> void {
+    memcpy(data, &binary_buffer[offset], size); }
+};
+
 SE_EXPORT struct ComponentManager : public Manager {
   /** callback to each component serialize / deserialzie */
-  using SerializeFn = std::function<void(void*, EntityHandle const&)>;
-  using DeserializeFn = std::function<void(void*, EntityHandle const&)>;
+  using SerializeFn = std::function<void(void*, EntityHandle const&, ComponentSerializeEnv& env)>;
+  using DeserializeFn = std::function<void(void*, EntityHandle const&, ComponentSerializeEnv const& env)>;
   /** start up component manager singleton */
   virtual auto startUp() noexcept -> void override;
   /** shut down the GFX manager */
@@ -196,26 +212,27 @@ SE_EXPORT struct ComponentManager : public Manager {
     componentTypes[typeName] = nextComponentType;
     componentPools[typeName] = std::make_unique<ComponentPool<T>>();
     ++nextComponentType;
-    SerializeFn serializeFunc = [](void* emitter,
-                                   EntityHandle const& handle) -> void {
-      std::invoke(&(T::serialize), emitter, handle);
+    SerializeFn serializeFunc = [](void* emitter, EntityHandle const& handle,
+                                   ComponentSerializeEnv& env) -> void {
+      std::invoke(&(T::serialize), emitter, handle, env);
     };
     serializeFuncs.push_back(serializeFunc);
-    DeserializeFn deserializeFunc = [](void* emitter,
-                                       EntityHandle const& handle) -> void {
-      std::invoke(&(T::deserialize), emitter, handle);
+    DeserializeFn deserializeFunc = [](void* emitter, EntityHandle const& handle,
+           ComponentSerializeEnv const& env) -> void {
+      std::invoke(&(T::deserialize), emitter, handle, env);
     };
     deserializeFuncs.push_back(deserializeFunc);
   }
+
   /** try serialize all registered components */
-  inline auto trySerialize(void* emitter, EntityHandle const& handle) noexcept
-      -> void {
-    for (auto& func : serializeFuncs) func(emitter, handle);
+  inline auto trySerialize(void* emitter, EntityHandle const& handle,
+    ComponentSerializeEnv& env) noexcept -> void {
+    for (auto& func : serializeFuncs) func(emitter, handle, env);
   }
   /** try serialize all registered components */
-  inline auto tryDeserialize(void* aos, EntityHandle const& handle) noexcept
-      -> void {
-    for (auto& func : deserializeFuncs) func(aos, handle);
+  inline auto tryDeserialize(void* aos, EntityHandle const& handle,
+                             ComponentSerializeEnv const& env) noexcept -> void {
+    for (auto& func : deserializeFuncs) func(aos, handle, env);
   }
   /** get component type */
   template <class T>

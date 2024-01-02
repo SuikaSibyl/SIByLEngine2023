@@ -72,4 +72,13 @@ SE_EXPORT struct GBufferShading : public RDG::RayTracingPass {
                        RDG::RenderData const& renderData) noexcept
       -> void override;
 };
+
+SE_EXPORT struct GBufferInspecGraph : public RDG::Graph {
+  GBufferInspecGraph();
+};
+
+SE_EXPORT struct GBufferInspecPipeline : public RDG::SingleGraphPipeline {
+  GBufferInspecPipeline() { pGraph = &graph; }
+  GBufferInspecGraph graph;
+};
 }

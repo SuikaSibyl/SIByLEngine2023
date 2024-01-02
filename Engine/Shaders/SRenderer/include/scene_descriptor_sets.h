@@ -111,10 +111,9 @@ layout(binding = 3, set = 0, scalar) buffer _GeometryBuffer   { GeometryInfo geo
 layout(binding = 4, set = 0, scalar) buffer _MaterialBuffer   { MaterialData materials[]; };
 layout(binding = 5, set = 0, scalar) buffer _LightBuffer      { LightData lights[]; };
 layout(binding = 5, set = 0, scalar) buffer _AnalyticLightBuffer { AnalyticLightData analytic_lights[]; };
-layout(binding = 6, set = 0, scalar) buffer _SampleDistBuffer { float sampleDistDatas[]; };
-layout(binding = 7, set = 0, scalar) uniform _SceneInfoBuffer { SceneInfoUniforms sceneInfoUniform; };
-layout(binding = 8, set = 0) uniform sampler2D textures[];
-layout(binding = 8, set = 0) uniform samplerCube textures_cube[];
+layout(binding = 6, set = 0, scalar) uniform _SceneInfoBuffer { SceneInfoUniforms sceneInfoUniform; };
+layout(binding = 7, set = 0) uniform sampler2D textures[];
+layout(binding = 7, set = 0) uniform samplerCube textures_cube[];
 
 // Utilities
 
@@ -131,12 +130,13 @@ mat4 ObjectToWorldNormal(in GeometryInfo geometry) {
 }
 
 int upper_bound(int offset, int size, float param) {
-  int i=offset;
-  for(; i<offset+size; ++i) {
-    if(sampleDistDatas[i] > param)
-      break;
-  }
-  return i;
+  // int i=offset;
+  // for(; i<offset+size; ++i) {
+  //   if(sampleDistDatas[i] > param)
+  //     break;
+  // }
+  // return i;
+  return 0;
 }
 
 int sampleTableDist1D(in int cdf_offset, in int pmf_size, in float rnd_param) {

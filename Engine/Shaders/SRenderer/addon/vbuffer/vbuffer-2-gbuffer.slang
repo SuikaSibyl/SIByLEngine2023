@@ -3,14 +3,21 @@
 
 const Texture2D<uint4> u_vBuffer;
 
-RWTexture2D<float4>  u_GBufferPosition;
-RWTexture2D<uint>   u_GBufferNormals;
-RWTexture2D<uint>   u_GBufferGeoNormals;
-RWTexture2D<uint>   u_GBufferDiffuseAlbedo;
-RWTexture2D<uint>   u_GBufferSpecularRough;
-RWTexture2D<float4> u_Emissive;
-RWTexture2D<float4> u_MotionVectors;
+RWTexture2D<float4>     u_GBufferPosition;
+RWTexture2D<uint>       u_GBufferNormals;
+RWTexture2D<uint>       u_GBufferGeoNormals;
+RWTexture2D<uint>       u_GBufferDiffuseAlbedo;
+RWTexture2D<uint>       u_GBufferSpecularRough;
+RWTexture2D<float4>     u_Emissive;
+RWTexture2D<float4>     u_MotionVectors;
 RWTexture2D<float16_t4> u_Material;
+
+ByteAddressBuffer prevVertices;
+float3 fetchVertexPositionPrev(int vertexIndex) {
+    return prevVertices.Load<float3>(
+        vertexIndex * kVertexSize
+        + kVertexPositionOffset);
+}
 
 [shader("compute")]
 [numthreads(16, 16, 1)]
@@ -60,9 +67,15 @@ void ComputeMain(int3 DTid: SV_DispatchThreadID) {
         vertexPositions[1] = fetchVertexPosition(index[1] + int(geometry.vertexOffset));
         vertexPositions[2] = fetchVertexPosition(index[2] + int(geometry.vertexOffset));
 
+        float3 prevVertexPositions[3];
+        prevVertexPositions[0] = fetchVertexPositionPrev(index[0] + int(prevGeometry.vertexOffset));
+        prevVertexPositions[1] = fetchVertexPositionPrev(index[1] + int(prevGeometry.vertexOffset));
+        prevVertexPositions[2] = fetchVertexPositionPrev(index[2] + int(prevGeometry.vertexOffset));
+
         const float4x4 o2w = ObjectToWorld(geometry);
         const float3 positionOS = interpolate(vertexPositions, bary);
         positionWS = mul(float4(positionOS, 1.0), o2w).xyz;
+        const float3 positionOSPrev = interpolate(prevVertexPositions, bary);
 
         float3 viewDirection = positionWS - globalUniform.cameraData.posW;
         viewDistance = length(viewDirection);
@@ -114,7 +127,7 @@ void ComputeMain(int3 DTid: SV_DispatchThreadID) {
                                  geometry,
                                  prevGeometry,
                                  positionOS,
-                                 positionOS, // no vertex change
+                                 positionOSPrev, // no vertex change
                                  viewDepth);
 
         specularF0 = material.specularColor;

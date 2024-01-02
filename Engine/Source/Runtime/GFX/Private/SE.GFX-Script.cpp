@@ -22,9 +22,8 @@ auto NativeScriptComponent::NativeScriptEntry::bind(
   entry = ScriptRegistry::FindEntry(name);
 }
 
-auto NativeScriptComponent::serialize(void* pemitter,
-    Core::EntityHandle const& handle)
-    -> void {
+auto NativeScriptComponent::serialize(void* pemitter, Core::EntityHandle const& handle,
+    Core::ComponentSerializeEnv const& env) -> void {
   YAML::Emitter& emitter = *reinterpret_cast<YAML::Emitter*>(pemitter);
   Core::Entity entity(handle);
   NativeScriptComponent* native_script =
@@ -38,9 +37,8 @@ auto NativeScriptComponent::serialize(void* pemitter,
   }
 }
 
-auto NativeScriptComponent::deserialize(void* compAoS,
-    Core::EntityHandle const& handle)
-    -> void {
+auto NativeScriptComponent::deserialize(void* compAoS, Core::EntityHandle const& handle,
+    Core::ComponentSerializeEnv const& env) -> void {
   YAML::NodeAoS& components = *reinterpret_cast<YAML::NodeAoS*>(compAoS);
   Core::Entity entity(handle);
   auto nsComponentAoS = components["NativeScriptComponent"];

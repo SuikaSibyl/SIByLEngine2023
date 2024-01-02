@@ -142,6 +142,7 @@
     <ClCompile Include="Private\SE.SRenderer-RACommon.cpp" />
     <ClCompile Include="Private\SE.SRenderer-RTCommon.cpp" />
     <ClCompile Include="Private\SE.SRenderer-SRenderer.cpp" />
+    <ClCompile Include="Public\Passes\ComputePasses\SE.SRenderer-Skinning.cpp" />
     <ClCompile Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPSLCPoolingPass.cpp" />
     <ClCompile Include="Public\Passes\RasterizerPasses\SE.SRenderer-GeometryInspectorPass.cpp" />
     <ClCompile Include="Public\Passes\RayTracingPasses\SE.SRenderer-RTRSMPass.cpp" />
@@ -149,6 +150,7 @@
     <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarGTPass.cpp" />
     <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarLCPass.cpp" />
     <ClCompile Include="Public\Plugins\SE.SRendererExt.GeomTab.cpp" />
+    <ClInclude Include="Public\Passes\ComputePasses\SE.SRenderer-Skinning.hpp" />
     <ClInclude Include="Public\Passes\FullScreenPasses\MIP\SE.SRenderer-MIPSLCPoolingPass.hpp" />
     <ClInclude Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarLCPass.hpp" />
     <ClCompile Include="Public\Passes\FullScreenPasses\ScreenSpace\SE.SRenderer-BarPass.hpp" />

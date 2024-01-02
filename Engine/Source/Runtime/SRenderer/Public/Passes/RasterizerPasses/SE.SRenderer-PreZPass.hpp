@@ -17,8 +17,12 @@
 namespace SIByL
 {
 	SE_EXPORT struct PreZOpaquePass :public RDG::RenderPass {
-
 		PreZOpaquePass() {
+            //auto [vert, frag] = GFX::ShaderLoader_SLANG::load(
+            // "../Engine/Shaders/SRenderer/rasterizer/prez-pass.slang",
+            // std::array<std::pair<std::string, RHI::ShaderStages>, 2>{
+            //     std::make_pair("vertexMain_Indirect", RHI::ShaderStages::VERTEX),
+            //     std::make_pair("fragmentMain", RHI::ShaderStages::FRAGMENT),});
 			vert = GFX::GFXManager::get()->registerShaderModuleResource("../Engine/Binaries/Runtime/spirv/SRenderer/rasterizer/prez_pass/prez_pass_indirect_vert.spv", { nullptr, RHI::ShaderStages::VERTEX });
 			frag = GFX::GFXManager::get()->registerShaderModuleResource("../Engine/Binaries/Runtime/spirv/SRenderer/rasterizer/prez_pass/prez_pass_frag.spv", { nullptr, RHI::ShaderStages::FRAGMENT });
 			RDG::RenderPass::init(
@@ -28,24 +32,18 @@ namespace SIByL
 
 		virtual auto reflect() noexcept -> RDG::PassReflection {
 			RDG::PassReflection reflector;
-
 			reflector.addOutput("Depth")
-				.isTexture()
-				.withSize(Math::vec3(1, 1, 1))
-				.withFormat(RHI::TextureFormat::DEPTH32_FLOAT)
-				.withUsages((uint32_t)RHI::TextureUsage::DEPTH_ATTACHMENT)
-				.consume(RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::DepthStencilAttachment }
-					.enableDepthWrite(true)
-					.setAttachmentLoc(0)
-					.setDepthCompareFn(RHI::CompareFunction::LESS));
-
+			  .isTexture().withSize(Math::vec3(1, 1, 1))
+			  .withFormat(RHI::TextureFormat::DEPTH32_FLOAT)
+			  .withUsages((uint32_t)RHI::TextureUsage::DEPTH_ATTACHMENT)
+			  .consume(RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::DepthStencilAttachment }
+				.enableDepthWrite(true).setAttachmentLoc(0)
+				.setDepthCompareFn(RHI::CompareFunction::LESS));
 			return reflector;
 		}
 
 		virtual auto execute(RDG::RenderContext* context, RDG::RenderData const& renderData) noexcept -> void {
-
 			GFX::Texture* depth = renderData.getTexture("Depth");
-
 			renderPassDescriptor = {
 				{},
 				RHI::RenderPassDepthStencilAttachment{
@@ -55,27 +53,23 @@ namespace SIByL
 				},
 			};
 
-			RHI::RenderPassEncoder* encoder = beginPass(context, depth);
-			
+			// bind resources
 			std::vector<RHI::BindGroupEntry>* set_0_entries = renderData.getBindGroupEntries("CommonScene");
 			getBindGroup(context, 0)->updateBinding(*set_0_entries);
-			RHI::Buffer* indirect_draw_buffer = RACommon::get()->structured_drawcalls.all_drawcall_device->buffer.get();
 
-
+			// issue draw call
+			RHI::RenderPassEncoder* encoder = beginPass(context, depth);
+			RHI::Buffer* indirect_draw_buffer = RACommon::get()->structured_drawcalls.all_drawcalls.get_primal();
 			auto const& drawcall_info = RACommon::get()->structured_drawcalls.opaque_drawcall;
-
 			if (drawcall_info.drawCount != 0) {
 				getBindGroup(context, 1)->updateBinding({
-					RHI::BindGroupEntry {0, RHI::BindingResource{ RHI::BufferBinding{indirect_draw_buffer, drawcall_info.offset, sizeof(RACommon::DrawIndexedIndirectEX) * drawcall_info.drawCount} }}
+				  RHI::BindGroupEntry {0, RHI::BindingResource{ 
+					RHI::BufferBinding{indirect_draw_buffer, drawcall_info.offset, 
+					sizeof(RACommon::DrawIndexedIndirectEX) * drawcall_info.drawCount} }}
 				});
-
 				renderData.getDelegate("PrepareDrawcalls")(prepareDelegateData(context, renderData));
 				encoder->drawIndexedIndirect(indirect_draw_buffer, drawcall_info.offset, drawcall_info.drawCount, sizeof(RACommon::DrawIndexedIndirectEX));
 			}
-			// do not use indirect
-			//getBindGroup(context, 1)->updateBinding(RACommon::get()->);
-			//renderData.getDelegate("IssueAllDrawcalls")(prepareDelegateData(context, renderData));
-
 			encoder->end();
 		}
 
@@ -97,13 +91,11 @@ namespace SIByL
 			RDG::PassReflection reflector;
 
 			reflector.addInputOutput("Depth")
-				.isTexture()
-				.withSize(Math::vec3(1, 1, 1))
+				.isTexture().withSize(Math::vec3(1, 1, 1))
 				.withFormat(RHI::TextureFormat::DEPTH32_FLOAT)
 				.withUsages((uint32_t)RHI::TextureUsage::DEPTH_ATTACHMENT)
 				.consume(RDG::TextureInfo::ConsumeEntry{ RDG::TextureInfo::ConsumeType::DepthStencilAttachment }
-					.enableDepthWrite(true)
-					.setAttachmentLoc(0)
+					.enableDepthWrite(true).setAttachmentLoc(0)
 					.setDepthCompareFn(RHI::CompareFunction::LESS));
 
 			return reflector;
@@ -122,12 +114,11 @@ namespace SIByL
 				},
 			};
 
-			RHI::RenderPassEncoder* encoder = beginPass(context, depth);
 
 			std::vector<RHI::BindGroupEntry>* set_0_entries = renderData.getBindGroupEntries("CommonScene");
 			getBindGroup(context, 0)->updateBinding(*set_0_entries);
-			RHI::Buffer* indirect_draw_buffer = RACommon::get()->structured_drawcalls.all_drawcall_device->buffer.get();
-
+			RHI::Buffer* indirect_draw_buffer = RACommon::get()->structured_drawcalls.all_drawcalls.get_primal();
+			RHI::RenderPassEncoder* encoder = beginPass(context, depth);
 
 			auto const& drawcall_info = RACommon::get()->structured_drawcalls.alphacut_drawcall;
 

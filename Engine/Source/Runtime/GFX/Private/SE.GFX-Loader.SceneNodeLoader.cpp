@@ -11,6 +11,7 @@
 #include <SE.GFX-Loader.MeshLoader.hpp>
 #include <SE.RHI.hpp>
 
+#include <span>
 #include <format>
 #include <string>
 #include <unordered_map>
@@ -349,18 +350,21 @@ struct glTFLoaderEnv {
   std::unordered_map<tinygltf::Texture const*, Core::GUID> textures;
   std::unordered_map<tinygltf::Material const*, Core::GUID> materials;
   std::vector<std::vector<Math::mat4>> skinning_matrices;
-  std::vector<GFX::AnimationComponent::AnimationSampler> anim_samplers;
-  std::unordered_map<uint32_t, std::vector<GFX::AnimationComponent::AnimationChannel>> anim_channels;
-
+  std::vector<std::vector<int>> skinning_indices;
+  std::vector<std::vector<GFX::AnimationComponent::AnimationSampler>> anim_samplers;
+  std::vector<std::unordered_map<uint32_t, std::vector<GFX::AnimationComponent::AnimationChannel>>> anim_channels;
+  std::unordered_map<int, GFX::GameObjectHandle> node2go;
 };
 
 auto loadGLTFAnimation(tinygltf::Model const* model, glTFLoaderEnv& env) {
+  env.anim_samplers.resize(model->animations.size());
+  env.anim_channels.resize(model->animations.size());
   for (size_t i = 0; i < model->animations.size(); i++) {
     const tinygltf::Animation& animation = model->animations[i];
     // load samplers
-    env.anim_samplers.resize(animation.samplers.size());
+    env.anim_samplers[i].resize(animation.samplers.size());
     for (size_t j = 0; j < animation.samplers.size(); j++) {
-      GFX::AnimationComponent::AnimationSampler& sampler_comp = env.anim_samplers[i];
+      GFX::AnimationComponent::AnimationSampler& sampler_comp = env.anim_samplers[i][j];
       const tinygltf::AnimationSampler& sampler = animation.samplers[j];
       { // copy input buffer to sampler
         const tinygltf::Accessor& accessor = model->accessors[sampler.input];
@@ -400,7 +404,7 @@ auto loadGLTFAnimation(tinygltf::Model const* model, glTFLoaderEnv& env) {
     // load channels
     for (size_t j = 0; j < animation.channels.size(); j++) {
       uint32_t const target_node = animation.channels[j].target_node;
-      std::vector<GFX::AnimationComponent::AnimationChannel>& channels = env.anim_channels[target_node];
+      std::vector<GFX::AnimationComponent::AnimationChannel>& channels = env.anim_channels[i][target_node];
       std::string const target = animation.channels[j].target_path;
       GFX::AnimationComponent::AnimationChannel channel;
       channel.samplerIndex = animation.channels[j].sampler;
@@ -444,6 +448,11 @@ auto loadGLTFSkinningMatrices(tinygltf::Model const* model, glTFLoaderEnv& env) 
         }
 
         env.skinning_matrices[s] = inverse_bind_matrices;
+        // also get the joints indices
+        if (env.skinning_indices.size() <= s + 1) {
+          env.skinning_indices.resize(s + 1);
+        }
+        env.skinning_indices[s] = skin.joints;
       }
     }
   }
@@ -459,6 +468,17 @@ auto loadGLTFMaterialTextures(tinygltf::Texture const* gltexture, tinygltf::Mode
 
   tinygltf::Image glimage = model->images[gltexture->source];
   std::string tex_path = env.directory + "\\" + glimage.uri;
+  if (!std::filesystem::exists(tex_path) ||
+      std::filesystem::is_directory(tex_path)) {
+    if (glimage.image.size() > 0) {
+      // inlined image, just save it to local
+      tex_path = env.directory + "\\" + std::to_string(gltexture->source) + ".png";
+      Image::PNG::writePNG(tex_path, glimage.width, glimage.height,
+                           glimage.component, (float*)glimage.image.data());
+    } else {
+      Core::LogManager::Error("GFX :: gltf loader :: Cannot find image properly!");
+    }
+  }
   Core::GUID guid =
       GFX::GFXManager::get()->registerTextureResource(tex_path.c_str());
 
@@ -483,15 +503,74 @@ auto loadGLTFMaterial(tinygltf::Material const* glmaterial, tinygltf::Model cons
   gfxmat.BxDF = 0;
   gfxmat.name = name;
 
+  auto to_sampler = [&](int sampler_idx) {
+    tinygltf::Sampler const& sampler = model->samplers[sampler_idx];
+    RHI::SamplerDescriptor desc;
+    // Min and Mipmap filter
+    if (sampler.minFilter == TINYGLTF_TEXTURE_FILTER_NEAREST) {
+      desc.minFilter = RHI::FilterMode::NEAREST;
+    } else if (sampler.minFilter == TINYGLTF_TEXTURE_FILTER_LINEAR) {
+      desc.minFilter = RHI::FilterMode::LINEAR;
+    } else if (sampler.minFilter ==
+               TINYGLTF_TEXTURE_FILTER_NEAREST_MIPMAP_NEAREST) {
+      desc.minFilter = RHI::FilterMode::NEAREST;
+      desc.mipmapFilter = RHI::MipmapFilterMode::NEAREST;
+    } else if (sampler.minFilter ==
+               TINYGLTF_TEXTURE_FILTER_LINEAR_MIPMAP_NEAREST) {
+      desc.minFilter = RHI::FilterMode::LINEAR;
+      desc.mipmapFilter = RHI::MipmapFilterMode::NEAREST;
+    } else if (sampler.minFilter ==
+               TINYGLTF_TEXTURE_FILTER_NEAREST_MIPMAP_LINEAR) {
+      desc.minFilter = RHI::FilterMode::NEAREST;
+      desc.mipmapFilter = RHI::MipmapFilterMode::LINEAR;
+    } else if (sampler.minFilter ==
+               TINYGLTF_TEXTURE_FILTER_LINEAR_MIPMAP_LINEAR) {
+      desc.minFilter = RHI::FilterMode::LINEAR;
+      desc.mipmapFilter = RHI::MipmapFilterMode::LINEAR;
+    }
+    // Mag filter
+    if (sampler.magFilter == TINYGLTF_TEXTURE_FILTER_NEAREST) {
+      desc.magFilter = RHI::FilterMode::NEAREST;
+    } else if (sampler.magFilter == TINYGLTF_TEXTURE_FILTER_LINEAR) {
+      desc.magFilter = RHI::FilterMode::LINEAR;
+    }
+    // WarpS
+    if (sampler.wrapS == TINYGLTF_TEXTURE_WRAP_REPEAT) {
+      desc.addressModeU = RHI::AddressMode::REPEAT;
+    } else if (sampler.wrapS == TINYGLTF_TEXTURE_WRAP_CLAMP_TO_EDGE) {
+      desc.addressModeU = RHI::AddressMode::CLAMP_TO_EDGE;
+    } else if (sampler.wrapS == TINYGLTF_TEXTURE_WRAP_MIRRORED_REPEAT) {
+      desc.addressModeU = RHI::AddressMode::MIRROR_REPEAT;
+    }
+    // WarpT
+    if (sampler.wrapT == TINYGLTF_TEXTURE_WRAP_REPEAT) {
+      desc.addressModeV = RHI::AddressMode::REPEAT;
+    } else if (sampler.wrapT == TINYGLTF_TEXTURE_WRAP_CLAMP_TO_EDGE) {
+      desc.addressModeV = RHI::AddressMode::CLAMP_TO_EDGE;
+    } else if (sampler.wrapT == TINYGLTF_TEXTURE_WRAP_MIRRORED_REPEAT) {
+      desc.addressModeV = RHI::AddressMode::MIRROR_REPEAT;
+    }
+    return desc;
+  };
+
   // load diffuse information
   { // load diffuse texture
-    Core::GUID texBasecolor = loadGLTFMaterialTextures(
-        &model->textures[glmaterial->pbrMetallicRoughness.baseColorTexture
-                             .index],
-        model, env, gfxscene, meshConfig);
-    glmaterial->pbrMetallicRoughness.baseColorTexture;
-    gfxmat.textures["base_color"] =
-        GFX::Material::TextureEntry{texBasecolor, 0};
+    if (glmaterial->pbrMetallicRoughness.baseColorTexture.index != -1) {
+      tinygltf::Texture const& texture = model->textures[glmaterial->pbrMetallicRoughness.baseColorTexture.index];
+      Core::GUID texBasecolor = loadGLTFMaterialTextures(&texture, model, env, gfxscene, meshConfig);
+      gfxmat.textures["base_color"] = GFX::Material::TextureEntry{texBasecolor, 0, to_sampler(texture.sampler)};
+    }
+  }
+  { // load diffuse color
+    if (glmaterial->pbrMetallicRoughness.baseColorFactor.size() > 0) {
+      gfxmat.baseOrDiffuseColor = Math::vec3{
+        (float)glmaterial->pbrMetallicRoughness.baseColorFactor[0],
+        (float)glmaterial->pbrMetallicRoughness.baseColorFactor[1],
+        (float)glmaterial->pbrMetallicRoughness.baseColorFactor[2],
+      };
+      gfxmat.roughness = (float)glmaterial->pbrMetallicRoughness.roughnessFactor;
+      gfxmat.metalness = (float)glmaterial->pbrMetallicRoughness.metallicFactor;
+    }
   }
   gfxmat.serialize();
   Core::GUID matID =
@@ -512,6 +591,8 @@ auto loadGLTFMaterial(tinygltf::Material const* glmaterial, tinygltf::Model cons
   std::vector<INDEX_TYPE> indexBuffer_uint = {};
   std::vector<float> vertexBuffer = {};
   std::vector<float> PositionBuffer = {};
+  std::vector<uint64_t> JointIndexBuffer = {};
+  std::vector<float> JointweightsBuffer = {};
   // Create GFX mesh, and add it to resource manager
   GFX::Mesh mesh;
   uint32_t submesh_index_offset = 0;
@@ -523,6 +604,8 @@ auto loadGLTFMaterial(tinygltf::Material const* glmaterial, tinygltf::Model cons
     std::vector<float> vertexBuffer_normalOnly = {};
     std::vector<float> vertexBuffer_uvOnly = {};
     std::vector<float> vertexBuffer_tangentOnly = {};
+    std::vector<uint64_t> vertexBuffer_joints = {};
+    std::vector<float> vertexBuffer_weights = {};
     auto const& indicesAccessor = model->accessors[meshPrimitive.indices];
     auto const& bufferView = model->bufferViews[indicesAccessor.bufferView];
     auto const& buffer = model->buffers[bufferView.buffer];
@@ -852,6 +935,114 @@ auto loadGLTFMaterial(tinygltf::Material const* glmaterial, tinygltf::Model cons
                 }
               }
             }  
+            if (attribute.first == "JOINTS_0") {
+              switch (attribAccessor.type) {
+                case TINYGLTF_TYPE_VEC4: {
+                  switch (attribAccessor.componentType) {
+                    case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: {
+                      ArrayAdapter<Math::Vector4<uint16_t>> joints(dataPtr, count, byte_stride);
+                      // For each triangle :
+                      for (size_t i{0}; i < indexArray_uint.size() / 3; ++i) {
+                        // get the i'th triange's indexes
+                        auto f0 = indexArray_uint[3 * i + 0];
+                        auto f1 = indexArray_uint[3 * i + 1];
+                        auto f2 = indexArray_uint[3 * i + 2];
+                        // get the 3 normal vectors for that face
+                        Math::Vector4<uint16_t> j0, j1, j2;
+                        j0 = joints[f0];
+                        j1 = joints[f1];
+                        j2 = joints[f2];
+                        // Put them in the array in the correct order
+                        vertexBuffer_joints.push_back(j0.x);
+                        vertexBuffer_joints.push_back(j0.y);
+                        vertexBuffer_joints.push_back(j0.z);
+                        vertexBuffer_joints.push_back(j0.w);
+
+                        vertexBuffer_joints.push_back(j1.x);
+                        vertexBuffer_joints.push_back(j1.y);
+                        vertexBuffer_joints.push_back(j1.z);
+                        vertexBuffer_joints.push_back(j1.w);
+
+                        vertexBuffer_joints.push_back(j2.x);
+                        vertexBuffer_joints.push_back(j2.y);
+                        vertexBuffer_joints.push_back(j2.z);
+                        vertexBuffer_joints.push_back(j2.w);
+                      }
+                    } break;
+                  }
+                }
+              }
+            }  
+            if (attribute.first == "WEIGHTS_0") {
+              switch (attribAccessor.type) {
+                case TINYGLTF_TYPE_VEC4: {
+                  switch (attribAccessor.componentType) {
+                    case TINYGLTF_COMPONENT_TYPE_FLOAT: {
+                      ArrayAdapter<Math::vec4> weights(dataPtr, count, byte_stride);
+                      // For each triangle :
+                      for (size_t i{0}; i < indexArray_uint.size() / 3; ++i) {
+                        // get the i'th triange's indexes
+                        auto f0 = indexArray_uint[3 * i + 0];
+                        auto f1 = indexArray_uint[3 * i + 1];
+                        auto f2 = indexArray_uint[3 * i + 2];
+                        // get the 3 normal vectors for that face
+                        Math::vec4 w0, w1, w2;
+                        w0 = weights[f0];
+                        w1 = weights[f1];
+                        w2 = weights[f2];
+                        // Put them in the array in the correct order
+                        vertexBuffer_weights.push_back(w0.x);
+                        vertexBuffer_weights.push_back(w0.y);
+                        vertexBuffer_weights.push_back(w0.z);
+                        vertexBuffer_weights.push_back(w0.w);
+
+                        vertexBuffer_weights.push_back(w1.x);
+                        vertexBuffer_weights.push_back(w1.y);
+                        vertexBuffer_weights.push_back(w1.z);
+                        vertexBuffer_weights.push_back(w1.w);
+
+                        vertexBuffer_weights.push_back(w2.x);
+                        vertexBuffer_weights.push_back(w2.y);
+                        vertexBuffer_weights.push_back(w2.z);
+                        vertexBuffer_weights.push_back(w2.w);
+                      }
+                    } break;
+                    case TINYGLTF_COMPONENT_TYPE_DOUBLE: {
+                      ArrayAdapter<Math::dvec4> tangents(dataPtr, count, byte_stride);
+                      // IMPORTANT: We need to reorder normals (and texture
+                      // coordinates into "facevarying" order) for each face
+                      // For each triangle :
+                      for (size_t i{0}; i < indexArray_uint.size() / 3; ++i) {
+                        // get the i'th triange's indexes
+                        auto f0 = indexArray_uint[3 * i + 0];
+                        auto f1 = indexArray_uint[3 * i + 1];
+                        auto f2 = indexArray_uint[3 * i + 2];
+                        // get the 3 normal vectors for that face
+                        Math::dvec4 w0, w1, w2;
+                        w0 = tangents[f0];
+                        w1 = tangents[f1];
+                        w2 = tangents[f2];
+                        // Put them in the array in the correct order
+                        vertexBuffer_weights.push_back(w0.x);
+                        vertexBuffer_weights.push_back(w0.y);
+                        vertexBuffer_weights.push_back(w0.z);
+                        vertexBuffer_weights.push_back(w0.w);
+
+                        vertexBuffer_weights.push_back(w1.x);
+                        vertexBuffer_weights.push_back(w1.y);
+                        vertexBuffer_weights.push_back(w1.z);
+                        vertexBuffer_weights.push_back(w1.w);
+
+                        vertexBuffer_weights.push_back(w2.x);
+                        vertexBuffer_weights.push_back(w2.y);
+                        vertexBuffer_weights.push_back(w2.z);
+                        vertexBuffer_weights.push_back(w2.w);
+                      }
+                    } break;
+                  }
+                }
+              }
+            }  
         }
           break;
         }
@@ -860,44 +1051,52 @@ auto loadGLTFMaterial(tinygltf::Material const* glmaterial, tinygltf::Model cons
             "GFX :: tinygltf :: primitive mode not implemented");
         break;
     }
-    // Assemble vertex buffer
+    // Compute the tangent vector if no provided
     if (vertexBuffer_tangentOnly.size() == 0) {
       for (size_t i = 0; i < indexArray_uint.size(); i += 3) {
-        size_t i0 = i + 0;
-        size_t i1 = i + 1;
-        size_t i2 = i + 2;
-        Math::vec3 pos1 = {vertexBuffer_positionOnly[i0 * 3 + 0],
-                           vertexBuffer_positionOnly[i0 * 3 + 1],
-                           vertexBuffer_positionOnly[i0 * 3 + 2]};
-        Math::vec3 pos2 = {vertexBuffer_positionOnly[i1 * 3 + 0],
-                           vertexBuffer_positionOnly[i1 * 3 + 1],
-                           vertexBuffer_positionOnly[i1 * 3 + 2]};
-        Math::vec3 pos3 = {vertexBuffer_positionOnly[i2 * 3 + 0],
-                           vertexBuffer_positionOnly[i2 * 3 + 1],
-                           vertexBuffer_positionOnly[i2 * 3 + 2]};
-        Math::vec2 uv1 = {vertexBuffer_uvOnly[i0 * 2 + 0],
-                          vertexBuffer_uvOnly[i0 * 2 + 1]};
-        Math::vec2 uv2 = {vertexBuffer_uvOnly[i1 * 2 + 0],
-                          vertexBuffer_uvOnly[i1 * 2 + 1]};
-        Math::vec2 uv3 = {vertexBuffer_uvOnly[i2 * 2 + 0],
-                          vertexBuffer_uvOnly[i2 * 2 + 1]};
-        Math::vec3 tangent;
-        Math::vec3 edge1 = pos2 - pos1;
-        Math::vec3 edge2 = pos3 - pos1;
-        Math::vec2 deltaUV1 = uv2 - uv1;
-        Math::vec2 deltaUV2 = uv3 - uv1;
-        float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
-        tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
-        tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
-        tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
-        tangent = Math::normalize(tangent);
-        for (int i = 0; i < 3; ++i) {
-            vertexBuffer_tangentOnly.push_back(tangent.x);
-            vertexBuffer_tangentOnly.push_back(tangent.y);
-            vertexBuffer_tangentOnly.push_back(tangent.z);
+        if (vertexBuffer_uvOnly.size() == 0) {
+            // if has no uv
+            for (int i = 0; i < 3; ++i) {
+              vertexBuffer_tangentOnly.push_back(0);
+              vertexBuffer_tangentOnly.push_back(0);
+              vertexBuffer_tangentOnly.push_back(0);
+            }
+        } else {
+            size_t i0 = i + 0; size_t i1 = i + 1; size_t i2 = i + 2;
+            Math::vec3 pos1 = {vertexBuffer_positionOnly[i0 * 3 + 0],
+                               vertexBuffer_positionOnly[i0 * 3 + 1],
+                               vertexBuffer_positionOnly[i0 * 3 + 2]};
+            Math::vec3 pos2 = {vertexBuffer_positionOnly[i1 * 3 + 0],
+                               vertexBuffer_positionOnly[i1 * 3 + 1],
+                               vertexBuffer_positionOnly[i1 * 3 + 2]};
+            Math::vec3 pos3 = {vertexBuffer_positionOnly[i2 * 3 + 0],
+                               vertexBuffer_positionOnly[i2 * 3 + 1],
+                               vertexBuffer_positionOnly[i2 * 3 + 2]};
+            Math::vec2 uv1  = {vertexBuffer_uvOnly[i0 * 2 + 0],
+                               vertexBuffer_uvOnly[i0 * 2 + 1]};
+            Math::vec2 uv2  = {vertexBuffer_uvOnly[i1 * 2 + 0],
+                               vertexBuffer_uvOnly[i1 * 2 + 1]};
+            Math::vec2 uv3  = {vertexBuffer_uvOnly[i2 * 2 + 0],
+                               vertexBuffer_uvOnly[i2 * 2 + 1]};
+            Math::vec3 tangent;
+            Math::vec3 edge1 = pos2 - pos1;
+            Math::vec3 edge2 = pos3 - pos1;
+            Math::vec2 deltaUV1 = uv2 - uv1;
+            Math::vec2 deltaUV2 = uv3 - uv1;
+            float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+            tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+            tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+            tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+            tangent = Math::normalize(tangent);
+            for (int i = 0; i < 3; ++i) {
+              vertexBuffer_tangentOnly.push_back(tangent.x);
+              vertexBuffer_tangentOnly.push_back(tangent.y);
+              vertexBuffer_tangentOnly.push_back(tangent.z);
+            }
         }
       }
     }
+    // Assemble vertex buffer
     for (size_t i = 0; i < indexArray_uint.size(); ++i) {
       for (auto const& entry : meshConfig.layout.layout) {
         // vertex position
@@ -922,12 +1121,23 @@ auto loadGLTFMaterial(tinygltf::Material const* glmaterial, tinygltf::Model cons
               return Core::INVALID_GUID;
             }
         } else if (entry.info == MeshDataLayout::VertexInfo::NORMAL) {
-            vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 0]);
-            vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 1]);
-            vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 2]);
+            if (vertexBuffer_normalOnly.size() == 0) { // if normal is not provided
+              vertexBuffer.push_back(0.f);
+              vertexBuffer.push_back(0.f);
+              vertexBuffer.push_back(0.f);            
+            } else {
+              vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 0]);
+              vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 1]);
+              vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 2]);            
+            }
         } else if (entry.info == MeshDataLayout::VertexInfo::UV) {
-            vertexBuffer.push_back(vertexBuffer_uvOnly[i * 2 + 0]);
-            vertexBuffer.push_back(vertexBuffer_uvOnly[i * 2 + 1]);
+            if (vertexBuffer_uvOnly.size() == 0) { // if uv is not provided
+              vertexBuffer.push_back(0.f);
+              vertexBuffer.push_back(0.f);
+            } else {
+              vertexBuffer.push_back(vertexBuffer_uvOnly[i * 2 + 0]);
+              vertexBuffer.push_back(vertexBuffer_uvOnly[i * 2 + 1]);            
+            }
         } else if (entry.info == MeshDataLayout::VertexInfo::TANGENT) {
             vertexBuffer.push_back(vertexBuffer_tangentOnly[i * 3 + 0]);
             vertexBuffer.push_back(vertexBuffer_tangentOnly[i * 3 + 1]);
@@ -943,6 +1153,12 @@ auto loadGLTFMaterial(tinygltf::Material const* glmaterial, tinygltf::Model cons
 
       indexBuffer_uint.push_back(i);
     }
+    // Assemble skin buffer
+    if (vertexBuffer_joints.size() != 0) {
+      JointIndexBuffer.insert(JointIndexBuffer.end(), vertexBuffer_joints.begin(), vertexBuffer_joints.end());
+      JointweightsBuffer.insert(JointweightsBuffer.end(), vertexBuffer_weights.begin(), vertexBuffer_weights.end());
+    }
+
     mesh.submeshes.push_back(GFX::Mesh::Submesh{
         submesh_index_offset, uint32_t(indexArray_uint.size()),
         submesh_vertex_offset, uint32_t(meshPrimitive.material)});
@@ -982,6 +1198,17 @@ auto loadGLTFMaterial(tinygltf::Material const* glmaterial, tinygltf::Model cons
         mesh.positionBufferInfo.onHost = true;
         mesh.positionBufferInfo.size = mesh.positionBuffer_host.size;
       }
+      if (true) {
+        mesh.jointIndexBuffer_host = Core::Buffer(sizeof(uint64_t) * JointIndexBuffer.size());
+        memcpy(mesh.jointIndexBuffer_host.data, JointIndexBuffer.data(), mesh.jointIndexBuffer_host.size);
+        mesh.jointIndexBufferInfo.onHost = true;
+        mesh.jointIndexBufferInfo.size = mesh.jointIndexBuffer_host.size;
+
+        mesh.jointWeightBuffer_host = Core::Buffer(sizeof(float) * JointweightsBuffer.size());
+        memcpy(mesh.jointWeightBuffer_host.data, JointweightsBuffer.data(), mesh.jointWeightBuffer_host.size);
+        mesh.jointWeightBufferInfo.onHost = true;
+        mesh.jointWeightBufferInfo.size = mesh.jointWeightBuffer_host.size;
+      }
     }
   }
 
@@ -998,13 +1225,34 @@ auto loadGLTFMaterial(tinygltf::Material const* glmaterial, tinygltf::Model cons
 
   return guid;
  }
+ 
+void DecomposeMatrixToComponents(Math::mat4 matrix, Math::vec3& translation,
+                                 Math::vec3& rotation, Math::vec3& scale) {
+  scale[0] = Math::length(Math::vec3(matrix.data[0][0], matrix.data[1][0], matrix.data[2][0]));
+  scale[1] = Math::length(Math::vec3(matrix.data[0][1], matrix.data[1][1], matrix.data[2][1]));
+  scale[2] = Math::length(Math::vec3(matrix.data[0][2], matrix.data[1][2], matrix.data[2][2]));
+  
+  matrix.data[0][0] /= scale[0]; matrix.data[1][0] /= scale[0]; matrix.data[2][0] /= scale[0];
+  matrix.data[0][1] /= scale[1]; matrix.data[1][1] /= scale[1]; matrix.data[2][1] /= scale[1];
+  matrix.data[0][2] /= scale[2]; matrix.data[1][2] /= scale[2]; matrix.data[2][2] /= scale[2];
+
+  const float RAD2DEG = 180.f / Math::float_Pi;
+  rotation[0] = RAD2DEG * atan2f(matrix.data[1][2], matrix.data[2][2]);
+  rotation[1] = RAD2DEG * atan2f(-matrix.data[0][2],
+                sqrtf(matrix.data[1][2] * matrix.data[1][2] + matrix.data[2][2] * matrix.data[2][2]));
+  rotation[2] = RAD2DEG * atan2f(matrix.data[0][1], matrix.data[0][0]);
+
+  translation[0] = matrix.data[0][3];
+  translation[1] = matrix.data[1][3];
+  translation[2] = matrix.data[2][3];
+}
 
  static inline auto processGLTFTransform(GameObjectHandle const& gfxNode,
     int node_id, tinygltf::Model const* model, glTFLoaderEnv& env, GFX::Scene& gfxscene,
     MeshLoaderConfig meshConfig = {}) noexcept -> void {
   tinygltf::Node const& node = model->nodes[node_id];
   gfxscene.getGameObject(gfxNode)->getEntity().getComponent<TagComponent>()
-    ->name = std::string(node.name);
+      ->name = (node.name == "") ? "nameless" : std::string(node.name);
   TransformComponent* transform = gfxscene.getGameObject(gfxNode)
     ->getEntity().getComponent<TransformComponent>();
   if (node.scale.size() == 3)
@@ -1021,7 +1269,7 @@ auto loadGLTFMaterial(tinygltf::Material const* glmaterial, tinygltf::Model cons
     double qz = node.rotation[2];
     double qw = node.rotation[3];
     double roll = atan2(2 * (qw * qx + qy * qz), 1 - 2 * (qx * qx + qy * qy));
-    double pitch = std::asin(2 * (qw * qy - qz * qx));
+    double pitch = -std::asin(2 * (qw * qy - qz * qx));
     double yaw = atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz));
     roll *= 180. / Math::double_Pi;
     pitch *= 180. / Math::double_Pi;
@@ -1029,6 +1277,16 @@ auto loadGLTFMaterial(tinygltf::Material const* glmaterial, tinygltf::Model cons
     transform->eulerAngles = {static_cast<float>(roll),
                               static_cast<float>(pitch),
                               static_cast<float>(yaw)};
+  }
+  if (node.matrix.size() == 16) {
+    Math::mat4 mat = Math::mat4 {
+      (float)node.matrix[0], (float)node.matrix[1], (float)node.matrix[2],  (float)node.matrix[3],
+      (float)node.matrix[4], (float)node.matrix[5], (float)node.matrix[6],  (float)node.matrix[7],
+      (float)node.matrix[8], (float)node.matrix[9], (float)node.matrix[10], (float)node.matrix[11],
+      (float)node.matrix[12],(float)node.matrix[13],(float)node.matrix[14], (float)node.matrix[15],
+    };
+    //DecomposeMatrixToComponents(mat, transform->translation,
+    //                            transform->eulerAngles, transform->scale);
   }
  }
 
@@ -1043,10 +1301,19 @@ auto loadGLTFMaterial(tinygltf::Material const* glmaterial, tinygltf::Model cons
   Core::GUID meshGUID = loadGLTFMesh(model->meshes[node.mesh], gfxNode, node_id,
                                      model, env, gfxscene, meshConfig);
   gfxscene.getGameObject(gfxNode)->getEntity().addComponent<MeshReference>();
-  GFX::Mesh* meshResourceRef =
-      Core::ResourceManager::get()->getResource<GFX::Mesh>(meshGUID);
-  meshResourceRef->ORID = meshGUID;
+  GFX::Mesh* meshResourceRef = Core::ResourceManager::get()->getResource<GFX::Mesh>(meshGUID);
   meshResourceRef->serialize();
+
+  if (node.skin != -1 && meshResourceRef->jointIndexBuffer_host.size > 0) {
+    std::span<uint64_t> indices(
+        (uint64_t*)meshResourceRef->jointIndexBuffer_host.data,
+        meshResourceRef->jointIndexBuffer_host.size / sizeof(uint64_t));
+    std::vector<int>& map = env.skinning_indices[node.skin];
+    for (int i = 0; i < indices.size(); ++i) {
+      indices[i] = map[indices[i]];
+    }
+  }
+
   // bind scene
   gfxscene.getGameObject(gfxNode)
       ->getEntity()
@@ -1059,8 +1326,11 @@ auto loadGLTFMaterial(tinygltf::Material const* glmaterial, tinygltf::Model cons
 
    for (auto const& meshPrimitive : model->meshes[node.mesh].primitives) {
     int matID = meshPrimitive.material;
-    Core::GUID matGUID = loadGLTFMaterial(&model->materials[matID], model, env,
-                                          gfxscene, meshConfig);
+    Core::GUID matGUID;
+    if (matID == -1) {
+      matGUID = GFX::GFXManager::get()->registerMaterialResource("WhiteBSDF.mat");
+    } else
+      matGUID = loadGLTFMaterial(&model->materials[matID], model, env, gfxscene, meshConfig);
     meshRenderer->materials.push_back(
         Core::ResourceManager::get()->getResource<GFX::Material>(matGUID));
   }
@@ -1069,18 +1339,22 @@ auto loadGLTFMaterial(tinygltf::Material const* glmaterial, tinygltf::Model cons
  static inline auto processGLTFAnimation(GameObjectHandle const& gfxNode, int node_id,
     tinygltf::Model const* model, glTFLoaderEnv& env, GFX::Scene& gfxscene,
     MeshLoaderConfig meshConfig = {}) noexcept -> void {
-  auto iter = env.anim_channels.find(node_id);
-  if (iter != env.anim_channels.end()) {
-    AnimationComponent* meshResourceRef = gfxscene.getGameObject(gfxNode)
-      ->getEntity().addComponent<AnimationComponent>();
-    std::vector<AnimationComponent::AnimationChannel>& channels = iter->second;
-    for (auto channel : channels) {
-      meshResourceRef->ani.samplers.push_back(env.anim_samplers[channel.samplerIndex]);
-      channel.samplerIndex = meshResourceRef->ani.samplers.size() - 1;
-      meshResourceRef->ani.channels.push_back(channel);
+  //for (size_t i = 0; i < env.anim_channels.size(); ++i) {
+  size_t i = 7;
+  {
+    auto iter = env.anim_channels[i].find(node_id);
+    if (iter != env.anim_channels[i].end()) {
+      AnimationComponent* meshResourceRef = gfxscene.getGameObject(gfxNode)
+        ->getEntity().addComponent<AnimationComponent>();
+      std::vector<AnimationComponent::AnimationChannel>& channels = iter->second;
+      for (auto channel : channels) {
+        meshResourceRef->ani.samplers.push_back(env.anim_samplers[i][channel.samplerIndex]);
+        channel.samplerIndex = meshResourceRef->ani.samplers.size() - 1;
+        meshResourceRef->ani.channels.push_back(channel);
+      }
     }
   }
-}
+ }
 
 void QuatToAngleAxis(const std::vector<double> quaternion,
                      double& outAngleDegrees, double* axis) {
@@ -1109,10 +1383,11 @@ static inline auto processGLTFNode(GameObjectHandle const& gfxNode, int node_id,
     tinygltf::Model const* model, glTFLoaderEnv& env, GFX::Scene& gfxscene,
     MeshLoaderConfig meshConfig = {}) noexcept -> void {
   // load tag, transform, mesh
+  env.node2go[node_id] = gfxNode;
   processGLTFTransform(gfxNode, node_id, model, env, gfxscene, meshConfig);
   processGLTFMesh(gfxNode, node_id, model, env, gfxscene, meshConfig);
   processGLTFAnimation(gfxNode, node_id, model, env, gfxscene, meshConfig);
-
+  
   // process the meshes for all the following nodes
   tinygltf::Node const& node = model->nodes[node_id];
   for (uint32_t i : node.children) {
@@ -1181,6 +1456,35 @@ auto SceneNodeLoader_glTF::loadSceneNode(
   for (auto node : scene.nodes) {
     GameObjectHandle subNode = gfxscene.createGameObject(rootNode);
     processGLTFNode(subNode, node, &model, env, gfxscene, meshConfig);
+  }
+
+  for (int i = 0; i < env.skinning_indices.size(); ++i) {
+    auto& skin_indices = env.skinning_indices[i];
+    auto& skin_matrices = env.skinning_matrices[i];
+    for (int j = 0; j < skin_indices.size(); ++j) {
+      int const index = skin_indices[j];
+      GFX::GameObjectHandle go = env.node2go[index];
+      TransformComponent* trans = gfxscene.getGameObject(go)
+        ->getEntity().getComponent<TransformComponent>();
+      trans->flag |= (uint32_t)TransformComponent::FlagBit::IS_SKELETON_JOINT;
+      trans->inverseJointTransform = skin_matrices[j];
+    }
+  }
+
+  // post-process all nodes
+  for (auto pair : env.node2go) {
+    MeshReference* meshref = gfxscene.getGameObject(pair.second)
+        ->getEntity().getComponent<MeshReference>();
+    if (meshref) {
+      // if has joint index buffer, assign the real handle
+      if (meshref->mesh->jointIndexBufferInfo.size > 0) {
+        uint64_t* indices = (uint64_t*)meshref->mesh->jointIndexBuffer_host.data;
+        size_t size = meshref->mesh->jointIndexBuffer_host.size / sizeof(uint64_t);
+        for (size_t i = 0; i < size; ++i) {
+          indices[i] = env.node2go[indices[i]];
+        }
+      }
+    }
   }
 }
 

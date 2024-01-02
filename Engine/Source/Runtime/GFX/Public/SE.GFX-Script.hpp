@@ -82,8 +82,10 @@ struct NativeScriptComponent {
     return entries.back();
   }
   /** serialize */
-  static auto serialize(void* emitter, Core::EntityHandle const& handle) -> void;
+  static auto serialize(void* emitter, Core::EntityHandle const& handle,
+                        Core::ComponentSerializeEnv const& env) -> void;
   /** deserialize */
-  static auto deserialize(void* compAoS, Core::EntityHandle const& handle) -> void;
+  static auto deserialize(void* compAoS, Core::EntityHandle const& handle,
+                          Core::ComponentSerializeEnv const& env) -> void;
 };
 }

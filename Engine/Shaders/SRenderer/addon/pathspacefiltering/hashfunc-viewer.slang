@@ -79,7 +79,7 @@ uint3 hash(float2 s) {
 float4 fragmentMain(in float2 uv: Coord) : SV_Target {
     uv = to_shadertoy_uv(uv);
     const float2 fragCoord = to_shadertoy_fragcoord(uv);
-
+    
     float4 fragColor = float4(uv, 0, 1);
     const uint bit = uint(8.0 * uv.x) + 8u * uint(4.0 * uv.y);
     float2 seed = fmod(fragCoord, float2(iResolution.x / 8.0, iResolution.y / 4.0));

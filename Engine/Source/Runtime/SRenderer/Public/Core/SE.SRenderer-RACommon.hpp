@@ -15,7 +15,7 @@
 
 namespace SIByL {
 SE_EXPORT struct RACommon {
-  RACommon() { singleton = this; }
+  RACommon();
   static auto get() noexcept -> RACommon* { return singleton; }
 
   struct DirectionalLightInfo {
@@ -86,11 +86,10 @@ SE_EXPORT struct RACommon {
     IndirectDrawcall alphacut_drawcall;
     std::unordered_map<uint32_t, IndirectDrawcall> bsdfs_drawcalls;
 
-    std::vector<DrawIndexedIndirectEX> all_drawcall_host;
-    GFX::Buffer* all_drawcall_device = nullptr;
+    GFX::HostDeviceBuffer<DrawIndexedIndirectEX> all_drawcalls;
+    auto invalidIndirectDrawcalls() noexcept -> void;
 
-    auto buildIndirectDrawcalls() noexcept -> void;
-
+    bool isDirty = false;
   } structured_drawcalls;
 
   GFX::CameraComponent const* mainCamera;

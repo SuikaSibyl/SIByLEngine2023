@@ -39,8 +39,21 @@ float3 unidirectional_path_tracing(in_ref(Ray) primaryRay, inout_ref(RandomSampl
         return float3(0, 0, 0);
     else if (pConst.renderMode == 0) {
         const PolymorphicLightInfo light = lights[0];
-        di += EvaluateDirectLight(primaryRay, payload.hit, light, RNG);
-        return di;
+        // di += EvaluateDirectLight(primaryRay, payload.hit, light, RNG);
+        const LightSample lightSample = SampleLight(payload.hit, light);
+        Ray shadowRay = SpawnRay(payload.hit, lightSample.wi);
+        shadowRay.tMax = distance(lightSample.position, payload.hit.position) - 0.01;
+        const bool occluded = TraceOccludeRay(shadowRay, RNG, SceneBVH);
+        const float visibility = occluded ? 0.0f : 1.0f;
+        const float3 bsdf = EvalBsdf(payload.hit, -primaryRay.direction, lightSample.wi);
+
+        const uint materialID = geometries[payload.hit.geometryID].materialID;
+        const MaterialInfo material = materials[materialID];
+        const float3 emission = material.emissiveColor;
+
+        return lightSample.radiance * bsdf / lightSample.pdf + emission;
+
+        // return shadowRay.origin * 0.2;
     }
     else if (pConst.renderMode == 2 || pConst.renderMode == 3) {
         const PolymorphicLightInfo light = lights[0];

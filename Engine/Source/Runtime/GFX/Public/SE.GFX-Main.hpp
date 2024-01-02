@@ -118,6 +118,9 @@ SE_EXPORT struct Mesh : public Core::Resource {
   Core::Buffer positionBuffer_host = {};
   Core::Buffer indexBuffer_host = {};
   Core::Buffer uv2Buffer_host = {};
+  Core::Buffer jointIndexBuffer_host = {};
+  Core::Buffer jointWeightBuffer_host = {};
+  Core::Buffer jointInvMatBuffer_host = {};
   /** host-device copy */
   struct DeviceHostBufferInfo {
     uint32_t size = 0;
@@ -127,6 +130,8 @@ SE_EXPORT struct Mesh : public Core::Resource {
   DeviceHostBufferInfo vertexBufferInfo;
   DeviceHostBufferInfo positionBufferInfo;
   DeviceHostBufferInfo indexBufferInfo;
+  DeviceHostBufferInfo jointIndexBufferInfo;
+  DeviceHostBufferInfo jointWeightBufferInfo;
   /** binded ORID */
   Core::ORID ORID = Core::INVALID_ORID;
   /** submeshes */
@@ -306,11 +311,11 @@ SE_EXPORT struct TagComponent {
   // game object name
   std::string name;
   /** serialize */
-  static auto serialize(void* emitter, Core::EntityHandle const& handle)
-      -> void;
+  static auto serialize(void* emitter, Core::EntityHandle const& handle,
+                        Core::ComponentSerializeEnv& env) -> void;
   /** deserialize */
-  static auto deserialize(void* compAoS, Core::EntityHandle const& handle)
-      -> void;
+  static auto deserialize(void* compAoS, Core::EntityHandle const& handle,
+                          Core::ComponentSerializeEnv const& env) -> void;
 };
 
 SE_EXPORT struct TransformComponent {
@@ -320,14 +325,26 @@ SE_EXPORT struct TransformComponent {
   Math::vec3 translation = {0.0f, 0.0f, 0.0f};
   /** decomposed transform - eulerAngles */
   Math::vec3 eulerAngles = {0.0f, 0.0f, 0.0f};
+  Math::Quaternion quaternion = {0.0f, 0.0f, 0.0f, 1.f};
   /** decomposed transform - scale */
   Math::vec3 scale = {1.0f, 1.0f, 1.0f};
   /** integrated world transform */
-  Math::Transform transform = {};
+  Math::mat4 transform = {};
   /** previous integrated world transform */
-  Math::Transform previousTransform = {};
+  Math::mat4 previousTransform = {};
+  /** base world transform inverse for skelton joints */
+  Math::mat4 inverseJointTransform = {};
+  /** integrated world transform has odd scaling */
+  bool oddScaling = false;
   /** check whether the transform is a static one */
-  uint32_t static_param = 1;
+  enum struct FlagBit : uint32_t {
+    IS_STATIC                       = 1 << 0,
+    IS_DIFFERENTIABLE_TRANSLATION   = 1 << 1,
+    IS_DIFFERENTIABLE_ROTATION      = 1 << 2,
+    IS_DIFFERENTIABLE_SCALING       = 1 << 3,
+    IS_SKELETON_JOINT               = 1 << 4,
+  };
+  uint32_t flag = 0;
   /** get transform */
   auto getTransform() noexcept -> Math::mat4;
   /** get rotated forward */
@@ -339,11 +356,11 @@ SE_EXPORT struct TransformComponent {
     return Math::vec3(rotated.x, rotated.y, rotated.z);
   }
   /** serialize */
-  static auto serialize(void* emitter, Core::EntityHandle const& handle)
-      -> void;
+  static auto serialize(void* emitter, Core::EntityHandle const& handle,
+                        Core::ComponentSerializeEnv& env) -> void;
   /** deserialize */
-  static auto deserialize(void* compAoS, Core::EntityHandle const& handle)
-      -> void;
+  static auto deserialize(void* compAoS, Core::EntityHandle const& handle,
+                          Core::ComponentSerializeEnv const& env) -> void;
 };
 
 SE_EXPORT struct AnimationComponent {
@@ -372,9 +389,11 @@ SE_EXPORT struct AnimationComponent {
   } ani;
 
   /** serialize */
-  static auto serialize(void* emitter, Core::EntityHandle const& handle) -> void;
+  static auto serialize(void* emitter, Core::EntityHandle const& handle,
+                        Core::ComponentSerializeEnv& env) -> void;
   /** deserialize */
-  static auto deserialize(void* compAoS, Core::EntityHandle const& handle) -> void;
+  static auto deserialize(void* compAoS, Core::EntityHandle const& handle,
+                          Core::ComponentSerializeEnv const& env) -> void;
 };
 
 /** Game object handle is also the entity handle contained */
@@ -434,11 +453,11 @@ SE_EXPORT struct CameraComponent {
   };
 
   /** serialize */
-  static auto serialize(void* emitter, Core::EntityHandle const& handle)
-      -> void;
+  static auto serialize(void* emitter, Core::EntityHandle const& handle,
+                        Core::ComponentSerializeEnv& env) -> void;
   /** deserialize */
-  static auto deserialize(void* compAoS, Core::EntityHandle const& handle)
-      -> void;
+  static auto deserialize(void* compAoS, Core::EntityHandle const& handle,
+                          Core::ComponentSerializeEnv const& env) -> void;
 
   float fovy = 45.f;
   float aspect = 1;
@@ -463,11 +482,11 @@ SE_EXPORT struct MeshReference {
   /** custom primitive flag */
   size_t customPrimitiveFlag = 0;
   /** serialize */
-  static auto serialize(void* emitter, Core::EntityHandle const& handle)
-      -> void;
+  static auto serialize(void* emitter, Core::EntityHandle const& handle,
+                        Core::ComponentSerializeEnv& env) -> void;
   /** deserialize */
-  static auto deserialize(void* compAoS, Core::EntityHandle const& handle)
-      -> void;
+  static auto deserialize(void* compAoS, Core::EntityHandle const& handle,
+                          Core::ComponentSerializeEnv const& env) -> void;
 };
 
 SE_EXPORT struct MeshRenderer {
@@ -476,11 +495,11 @@ SE_EXPORT struct MeshRenderer {
   /** materials in renderer */
   std::vector<Material*> materials = {};
   /** serialize */
-  static auto serialize(void* emitter, Core::EntityHandle const& handle)
-      -> void;
+  static auto serialize(void* emitter, Core::EntityHandle const& handle,
+                        Core::ComponentSerializeEnv& env) -> void;
   /** deserialize */
-  static auto deserialize(void* compAoS, Core::EntityHandle const& handle)
-      -> void;
+  static auto deserialize(void* compAoS, Core::EntityHandle const& handle,
+                          Core::ComponentSerializeEnv const& env) -> void;
 };
 
 SE_EXPORT struct LightComponent {
@@ -512,11 +531,11 @@ SE_EXPORT struct LightComponent {
   /** texture guid */
   GFX::Texture* texture = nullptr;
   /** serialize */
-  static auto serialize(void* emitter, Core::EntityHandle const& handle)
-      -> void;
+  static auto serialize(void* emitter, Core::EntityHandle const& handle,
+                        Core::ComponentSerializeEnv& env) -> void;
   /** deserialize */
-  static auto deserialize(void* compAoS, Core::EntityHandle const& handle)
-      -> void;
+  static auto deserialize(void* compAoS, Core::EntityHandle const& handle,
+                          Core::ComponentSerializeEnv const& env) -> void;
 };
 
 SE_EXPORT auto to_string(LightComponent::LightType type) noexcept
@@ -871,6 +890,47 @@ auto GFXManager::createStructuredArrayMultiStorageBuffer(
   view.size = array_size;
   return view;
 }
+
+SE_EXPORT template<class RESOURCE> struct DualResource {
+  std::unique_ptr<RESOURCE> primal = nullptr;
+  std::unique_ptr<RESOURCE> back = nullptr;
+  size_t primal_stamp = size_t(-1); size_t back_stamp = size_t(-1);
+  auto swap() noexcept -> void {
+    std::swap(primal, back);
+    std::swap(primal_stamp, back_stamp);
+  }
+};
+
+template <class TYPE>
+struct HostDeviceBuffer {
+  std::vector<TYPE> buffer_host;
+  GFX::DualResource<RHI::Buffer> buffer_device;
+  RHI::BufferUsagesFlags usage = 0;
+  size_t stamp = 0;
+  // update the cpu data to device is the stamp is different
+  auto update_to_device(RHI::Device* device) noexcept -> void {
+    if (buffer_device.primal_stamp != stamp) {
+      buffer_device.primal = device->createDeviceLocalBuffer(
+          buffer_host.data(), buffer_host.size() * sizeof(TYPE), usage);
+      buffer_device.primal_stamp = stamp;
+    }
+  }
+  auto get_primal() noexcept -> RHI::Buffer* {
+    return buffer_device.primal.get();
+  }
+  auto get_back() noexcept -> RHI::Buffer* { 
+      if (buffer_device.back.get() == nullptr) return get_primal();
+      else return buffer_device.back.get();
+  }
+  auto get_primal_binding() noexcept -> RHI::BindingResource {
+    return RHI::BindingResource{
+        {get_primal(), 0, get_primal() != 0 ? get_primal()->size() : 0}};
+  }
+  auto get_back_binding() noexcept -> RHI::BindingResource {
+    return RHI::BindingResource{
+        {get_back(), 0, get_back() != 0 ? get_back()->size() : 0}};
+  }
+};
 }
 
 namespace SIByL::Core {

@@ -98,7 +98,7 @@ SE_EXPORT struct CascadeShadowmapOpaquePass : public RDG::RenderPass {
     // renderData));
 
     RHI::Buffer* indirect_draw_buffer =
-        RACommon::get()->structured_drawcalls.all_drawcall_device->buffer.get();
+        RACommon::get()->structured_drawcalls.all_drawcalls.get_primal();
 
     auto const& drawcall_info =
         RACommon::get()->structured_drawcalls.opaque_drawcall;
@@ -198,7 +198,7 @@ SE_EXPORT struct CascadeShadowmapAlphaPass : public RDG::RenderPass {
     // renderData));
 
     RHI::Buffer* indirect_draw_buffer =
-        RACommon::get()->structured_drawcalls.all_drawcall_device->buffer.get();
+        RACommon::get()->structured_drawcalls.all_drawcalls.get_primal();
 
     auto const& drawcall_info =
         RACommon::get()->structured_drawcalls.alphacut_drawcall;

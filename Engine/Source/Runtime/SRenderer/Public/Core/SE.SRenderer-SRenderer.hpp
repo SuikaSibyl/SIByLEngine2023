@@ -17,9 +17,11 @@
 #include <SE.RHI.hpp>
 #include <SE.GFX.hpp>
 #include <SE.RDG.hpp>
+#include <Passes/ComputePasses/SE.SRenderer-Skinning.hpp>
 
 namespace SIByL {
 SE_EXPORT struct SRenderer {
+  SRenderer() { singleton = this; }
   /**
    * Config for SRenderer
    */
@@ -184,13 +186,6 @@ SE_EXPORT struct SRenderer {
     Math::vec4 padding_v2;
   };
 
-  struct TableDist1D {
-    TableDist1D() = default;
-    TableDist1D(std::vector<float> const& f);
-    std::vector<float> pmf;
-    std::vector<float> cdf;
-  };
-
   /**
    * Scene Updating
    * --------------------------------
@@ -199,36 +194,36 @@ SE_EXPORT struct SRenderer {
    */
   struct SceneDataPack {
     // integrated geometry data
-    std::unique_ptr<RHI::Buffer> vertex_buffer = nullptr;
-    std::unique_ptr<RHI::Buffer> position_buffer = nullptr;
-    std::unique_ptr<RHI::Buffer> uv2_buffer = nullptr;
-    std::unique_ptr<RHI::Buffer> index_buffer = nullptr;
-    std::unique_ptr<RHI::Buffer> material_buffer = nullptr;
-    std::unique_ptr<RHI::Buffer> back_material_buffer = nullptr;
-    std::unique_ptr<RHI::Buffer> light_buffer = nullptr;
-    std::unique_ptr<RHI::Buffer> back_light_buffer = nullptr;
-    std::unique_ptr<RHI::Buffer> sample_dist_buffer = nullptr;
-    std::unique_ptr<RHI::Buffer> back_sample_dist_buffer = nullptr;
+    GFX::HostDeviceBuffer<float> vertex_buffer;
+    GFX::HostDeviceBuffer<float> position_buffer;
+    GFX::HostDeviceBuffer<float> uv2_buffer;
+    GFX::HostDeviceBuffer<uint32_t> index_buffer;
+    GFX::HostDeviceBuffer<MaterialData> material_buffer;
+    GFX::HostDeviceBuffer<GeometryDrawData> geometry_buffer;
+    // integrated skeleton animation data
+    GFX::HostDeviceBuffer<float> skelpos_buffer;
+    GFX::HostDeviceBuffer<float> skelnormal_buffer;
+    GFX::HostDeviceBuffer<float> skelweights_buffer;
+    GFX::HostDeviceBuffer<uint32_t> skeloffset_buffer;
+    GFX::HostDeviceBuffer<uint32_t> skeljoints_buffer;
+    GFX::HostDeviceBuffer<Math::mat4> skeltransform_buffer;
+    GFX::HostDeviceBuffer<Math::mat4> skelinvtrans_buffer;
+    // integrated skeleton animation data
+    GFX::HostDeviceBuffer<PolymorphicLightInfo> light_buffer;
     // unbinded textures array to contain all textures
     std::vector<RHI::TextureView*> unbinded_textures = {};
-    // cpu data
-    std::vector<float> position_buffer_cpu = {};     // position buffer cpu
-    std::vector<float> vertex_buffer_cpu = {};       // vertex buffer cpu
-    std::vector<float> uv2_buffer_cpu = {};     // uv2 buffer cpu
-    std::vector<float> sample_dist_buffer_cpu = {};  // sample dist buffer cpu
-    std::vector<uint32_t> index_buffer_cpu = {};     // index buffer cpu
-    std::vector<GeometryDrawData> geometry_buffer_cpu = {};  // geometries data
-    std::vector<MaterialData> material_buffer_cpu = {};      // material data
-    std::vector<PolymorphicLightInfo> light_buffer_cpu = {};  // light data
+    std::vector<RHI::Sampler*> unbinded_samplers = {};
+    // tlas of the scene for ray tracing
     RHI::TLASDescriptor tlas_desc = {};
-    std::shared_ptr<RHI::TLAS> tlas = {};
-    std::shared_ptr<RHI::TLAS> back_tlas = {};
-    std::shared_ptr<RHI::TLAS> backback_tlas = {};
+    GFX::DualResource<RHI::TLAS> tlas = {};
+
 
     struct MeshRecord {
       std::vector<GeometryDrawData> submesh_geometry;
       RHI::BLASDescriptor blas_desc;
       std::unique_ptr<RHI::BLAS> blases = nullptr;
+      std::unique_ptr<RHI::BLAS> blases_back = nullptr;
+      bool need_rebuild = false;
     };
 
     struct MeshReferenceRecord {
@@ -242,21 +237,19 @@ SE_EXPORT struct SRenderer {
     struct EntityLightRecord {
       std::vector<uint32_t> lightIndices;
       std::vector<uint32_t> lightPowers;
-      std::vector<TableDist1D> tableDists;
       Math::vec3 scaling;
     };
-
+    
     bool geometryDirty = false;
     std::unordered_map<GFX::Mesh*, MeshRecord> mesh_record = {};
     std::unordered_map<GFX::Material*, uint32_t> material_record = {};
     std::unordered_map<GFX::Texture*, uint32_t> texture_record = {};
-    std::unordered_map<Core::EntityHandle, MeshReferenceRecord>
-        mesh_ref_record = {};
-    std::unordered_map<Core::EntityHandle, EntityLightRecord>
-        light_comp_record = {};
+    std::unordered_map<Core::EntityHandle, MeshReferenceRecord> mesh_ref_record = {};
+    std::unordered_map<Core::EntityHandle, EntityLightRecord> light_comp_record = {};
+    std::unordered_map<Core::EntityHandle, uint32_t> skinning_record = {};
+    SkinningPass skinning_pass;
 
     SceneInfoUniforms sceneInfoUniform = {};
-    TableDist1D lightTableDist = {};
   } sceneDataPack;
   /**
    * Custom Primitive definition
@@ -279,8 +272,6 @@ SE_EXPORT struct SRenderer {
   auto init(GFX::Scene& scene) noexcept -> void;
   /** invalid scene */
   auto invalidScene(GFX::Scene& scene) noexcept -> void;
-  /** pack scene to scene data pack */
-  auto packScene(GFX::Scene& scene) noexcept -> void;
   /** update main camera for the scene */
   auto updateCamera(GFX::TransformComponent const& transform,
                     GFX::CameraComponent const& camera,
@@ -328,8 +319,6 @@ SE_EXPORT struct SRenderer {
   struct SceneDataBuffers {
     GFX::StructuredUniformBufferView<GlobalUniforms> global_uniform_buffer;
     GFX::StructuredUniformBufferView<SceneInfoUniforms> scene_info_buffer;
-    GFX::StructuredArrayMultiStorageBufferView<GeometryDrawData>
-        geometry_buffer;
   } sceneDataBuffers;
 
   struct SceneStatisticsData {
@@ -339,6 +328,5 @@ SE_EXPORT struct SRenderer {
   GlobalUniforms globalUniRecord;
 
   static SRenderer* singleton;
-  static auto init() noexcept -> void;
 };
 }  // namespace SIByL
