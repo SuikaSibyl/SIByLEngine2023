@@ -22,8 +22,8 @@ void main() {
     RandomSamplerState RNG = InitRandomSampler(uvec2(0, tid), 0);
     const int rnd_element = clamp(int(GetNextRandom(RNG) * element_count), 0, element_count-1);
     const uint compactID = compactIndex[rnd_element];
-    const vec3 element = vec3(ReconstructIndex(int(compactID), 64));
-
+    const vec3 element = vec3(ReconstructIndex(int(compactID), voxelSize));
+    
     if(tid == 0) {
         // random choose the first seed
         const uint compactID = compactIndex[rnd_element];

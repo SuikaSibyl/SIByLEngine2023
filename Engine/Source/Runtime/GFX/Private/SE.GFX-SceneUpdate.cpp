@@ -2,32 +2,48 @@
 #include <stack>
 
 namespace SIByL::GFX {
-Math::vec3 rotationMatrixToEulerAngles(Math::mat3 R) {
-  float sy = std::sqrt(R.data[0][0] * R.data[0][0] + R.data[1][0] * R.data[1][0]);
-  bool singular = sy < 1e-6;
-  float x, y, z;
-  if (!singular) {
-    x = atan2(R.data[2][1], R.data[2][2]);
-    y = atan2(-R.data[2][0], sy);
-    z = atan2(R.data[1][0], R.data[0][0]);
-  } else {
-    x = atan2(-R.data[1][2], R.data[1][1]);
-    y = atan2(-R.data[2][0], sy);
-    z = 0;
-  }
-  return {x, y, z};
-}
-
 auto update_animation(GFX::Scene& scene) noexcept -> void {
   auto view = Core::ComponentManager::get()->view
       <GFX::TransformComponent, GFX::AnimationComponent>();
   float sec = GFX::GFXManager::get()->mTimeline.currentSec;
+  // sec *= 2;
+  // sec *= 2;
+
+  {
+    auto temp_view = Core::ComponentManager::get()
+        ->view<GFX::TransformComponent, GFX::TagComponent>();
+    //for (auto& [entity, transform, tag] : temp_view) {
+    //  if (tag.name == "DirectionalLight") {
+    //    transform.eulerAngles.z = 25 * std::cos(sec * 1.6);
+    //  }
+    //  if (tag.name == "Motor001") {
+    //    transform.eulerAngles.x = -89.9;
+    //    transform.eulerAngles.y = 300 * sec;
+    //  }
+    //  if (tag.name == "mask-1.fbx") {
+    //    transform.eulerAngles.y = 300 * sec;
+    //  }
+    //  if (tag.name == "fireplace.fbx") {
+    //    transform.eulerAngles.x = std::sin(2 * sec);
+    //    transform.eulerAngles.y = std::cos(3 * sec + 1.5f);
+    //    transform.eulerAngles.z = std::cos(7 * sec + 0.3f);
+    //  }
+    //}
+  }
+  // find the loop maximum time
+  float loop_time = 0.f;
+  for (auto& [entity, transform, anim] : view) {
+    for (auto& channel : anim.ani.channels) {
+      auto& sampler = anim.ani.samplers[channel.samplerIndex];
+      loop_time = std::max(loop_time, sampler.inputs.back());
+    }
+  }
   for (auto& [entity, transform, anim] : view) {
     for (auto& channel : anim.ani.channels) {
       auto& sampler = anim.ani.samplers[channel.samplerIndex];
       if (sampler.inputs.size() == 0) continue;
       float prev_time = 0.f;
-      float sec_mod = std::fmod(sec, sampler.inputs.back());
+      float sec_mod = std::min(std::fmod(sec, loop_time), sampler.inputs.back());
       for (int i = 0; i < sampler.inputs.size(); ++i) {
         float const curr_time = sampler.inputs[i];
         if (sec_mod >= prev_time && sec_mod <= curr_time) {
@@ -55,7 +71,7 @@ auto update_animation(GFX::Scene& scene) noexcept -> void {
               }
 
               Math::mat3 quat_transform = quat.toMat3();
-              Math::vec3 euler = rotationMatrixToEulerAngles(quat_transform);
+              Math::vec3 euler = Math::RotationMatrixToEulerAngles(quat_transform);
               euler.x *= 180. / Math::double_Pi;
               euler.y *= 180. / Math::double_Pi;
               euler.z *= 180. / Math::double_Pi;

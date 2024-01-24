@@ -113,10 +113,11 @@ VertexStageOutput vertexMain(
     // Each instance will have 360 (12 * 10 * 3) vertices
     const int vertexID = assembledVertex.vertexId % 30;
     // Map instanceID to 64x64x64 grid
-    const int3 voxelID = int3(instanceID % 64, (instanceID / 64) % 64, instanceID / (64 * 64));
+    uint32_t size = gVD.voxelSize;
+    const int3 voxelID = int3(instanceID % size, (instanceID / size) % size, instanceID / (size * size));
     const uint irradiance = u_irradiance[voxelID];
-
-    int voxelIDFlatten = FlatIndex(voxelID, 64);
+    
+    int voxelIDFlatten = FlatIndex(voxelID, size);
 
     VoxelTexInfo info = CreateVoxelTexInfo(gVD);
     AABB voxel_bound = VoxelToBound(voxelID, 0, info);

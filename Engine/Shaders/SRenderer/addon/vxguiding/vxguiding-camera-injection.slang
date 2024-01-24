@@ -72,7 +72,7 @@ void RgenMain() {
         u_shadingpoint[pixel] = float4(k_inf, k_inf, k_inf, 1);
         return;
     }
-
+    
     const GeometryHit hit = GetGeometryHit(vhit, primaryRay);
     u_shadingpoint[pixel] = float4(hit.position, asfloat(UnitVectorToUnorm32Octahedron(hit.geometryNormal)));
 
@@ -108,7 +108,7 @@ void RgenMain() {
         u_position[pixel] = float4(0);
         return;
     }
-
+    
     // inject irradiance to voxel where the hit position is
     const bool inject_1st_vertex = (pConst.setting & 0b1) == 0b1;
     const bool use_avg_not_max = (pConst.setting & 0b10) == 0b10;

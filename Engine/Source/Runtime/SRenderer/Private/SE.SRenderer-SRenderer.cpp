@@ -232,263 +232,11 @@ struct SceneDataPackState {
 
   bool invalidTLAS = false;
 };
-//
-//auto invalid_mesh_record(GFX::Mesh* mesh, SRenderer* srenderer,
-//                                SceneDataPackState& state) noexcept
-//    -> std::unordered_map<GFX::Mesh*,
-//                          SRenderer::SceneDataPack::MeshRecord>::iterator {
-//  srenderer->sceneDataPack.mesh_record[mesh] = {};
-//  auto meshRecord = srenderer->sceneDataPack.mesh_record.find(mesh);
-//  {  // create mesh record, add all data buffers
-//    uint32_t vertex_offset = srenderer->sceneDataPack.vertex_buffer_cpu.size();
-//    uint32_t position_offset =
-//        srenderer->sceneDataPack.position_buffer_cpu.size();
-//    srenderer->sceneDataPack.vertex_buffer_cpu.resize(
-//        vertex_offset + mesh->vertexBuffer_host.size / sizeof(float));
-//    memcpy(&(srenderer->sceneDataPack.vertex_buffer_cpu[vertex_offset]),
-//           mesh->vertexBuffer_host.data, mesh->vertexBuffer_host.size);
-//    if (srenderer->config.enableRayTracing) {
-//      srenderer->sceneDataPack.position_buffer_cpu.resize(
-//          position_offset + mesh->positionBuffer_host.size / sizeof(float));
-//      memcpy(&(srenderer->sceneDataPack.position_buffer_cpu[position_offset]),
-//             mesh->positionBuffer_host.data, mesh->positionBuffer_host.size);
-//    }
-//    uint32_t index_offset = srenderer->sceneDataPack.index_buffer_cpu.size();
-//    srenderer->sceneDataPack.index_buffer_cpu.resize(
-//        index_offset + mesh->indexBuffer_host.size / sizeof(uint32_t));
-//    memcpy(&(srenderer->sceneDataPack.index_buffer_cpu[index_offset]),
-//           mesh->indexBuffer_host.data, mesh->indexBuffer_host.size);
-//    // add all submeshes
-//    for (auto& submesh : mesh->submeshes) {
-//      SRenderer::GeometryDrawData geometry;
-//      geometry.vertexOffset =
-//          submesh.baseVertex + vertex_offset * sizeof(float) /
-//                                   SRenderer::vertexBufferLayout.arrayStride;
-//      geometry.indexOffset = submesh.offset + index_offset;
-//      geometry.materialID = 0;
-//      geometry.indexSize = submesh.size;
-//      geometry.geometryTransform = {};
-//      meshRecord->second.submesh_geometry.push_back(geometry);
-//      if (srenderer->config.enableRayTracing) {
-//        RHI::BLASDescriptor& blasDesc = meshRecord->second.blas_desc;
-//        blasDesc.triangleGeometries.push_back(RHI::BLASTriangleGeometry{
-//            nullptr, nullptr, nullptr, RHI::IndexFormat::UINT32_T,
-//            uint32_t(mesh->positionBuffer_host.size / (sizeof(float) * 3)),
-//            geometry.vertexOffset, geometry.indexSize / 3,
-//            uint32_t(geometry.indexOffset * sizeof(uint32_t)),
-//            RHI::AffineTransformMatrix{},
-//            (uint32_t)
-//                RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION,
-//            geometry.materialID});
-//      }
-//    }
-//    // set dirty of Vertex/Index/Position Buffer:
-//    state.invalidVIPBuffer = true;
-//  }
-//  return meshRecord;
-//}
 
 auto luminance(Math::vec3 const& rgb) noexcept -> float {
   return rgb.x * float(0.212671) + rgb.y * float(0.715160) +
          rgb.z * float(0.072169);
 }
-//
-//auto invalid_game_object(GFX::GameObject* gameobject, GFX::Scene& scene,
-//                                SRenderer* srenderer,
-//                                SceneDataPackState& state) noexcept -> void {
-//  // fetch components
-//  GFX::TransformComponent* transform =
-//      gameobject->getEntity().getComponent<GFX::TransformComponent>();
-//  GFX::MeshReference* meshref =
-//      gameobject->getEntity().getComponent<GFX::MeshReference>();
-//  GFX::MeshRenderer* meshrenderer =
-//      gameobject->getEntity().getComponent<GFX::MeshRenderer>();
-//  GFX::LightComponent* lightComponenet =
-//      gameobject->getEntity().getComponent<GFX::LightComponent>();
-//  // we do not cares those game object has no relative components
-//  if (meshref == nullptr && meshrenderer == nullptr &&
-//      lightComponenet == nullptr)
-//    return;
-//  // get transform
-//  Math::mat4 objectTransform;
-//  float oddScaling = 1.f;
-//  Math::vec3 scaling = Math::vec3{1, 1, 1};
-//  {  // get mesh transform matrix
-//    GFX::GameObject* go = gameobject;
-//    GFX::TransformComponent* transform =
-//        go->getEntity().getComponent<GFX::TransformComponent>();
-//    objectTransform = transform->getTransform() * objectTransform;
-//    oddScaling *= transform->scale.x * transform->scale.y * transform->scale.z;
-//    scaling *= transform->scale;
-//    while (go->parent != Core::NULL_ENTITY) {
-//      go = scene.getGameObject(go->parent);
-//      GFX::TransformComponent* transform =
-//          go->getEntity().getComponent<GFX::TransformComponent>();
-//      objectTransform = transform->getTransform() * objectTransform;
-//      oddScaling *=
-//          transform->scale.x * transform->scale.y * transform->scale.z;
-//      scaling *= transform->scale;
-//    }
-//  }
-//  // geometry processing
-//  bool transformChanged = false;
-//  if (meshref && meshrenderer) {
-//    // mesh resource
-//    GFX::Mesh* mesh = meshref->mesh;
-//    Math::bounds3 bounds = Math::Transform(objectTransform) * mesh->aabb;
-//    srenderer->statisticsData.aabb =
-//        Math::unionBounds(srenderer->statisticsData.aabb, bounds);
-//    auto meshRecord = srenderer->sceneDataPack.mesh_record.find(mesh);
-//    {  // insert mesh to the index / vertex buffer if it does not exist now
-//      if (meshRecord == srenderer->sceneDataPack.mesh_record.end())
-//        meshRecord = invalid_mesh_record(mesh, srenderer, state);
-//    }
-//    // mesh reference
-//    auto meshRefRecord =
-//        srenderer->sceneDataPack.mesh_ref_record.find(gameobject->entity);
-//    {  // add mesh reference if not exist now
-//      if (meshRefRecord == srenderer->sceneDataPack.mesh_ref_record.end()) {
-//        // 
-//        state.invalidGeometryBuffer = true;
-//      } else {
-//        // has
-//        for (auto idx : meshRefRecord->second.geometry_indices) {
-//          if (srenderer->sceneDataPack.geometry_buffer_cpu[idx]
-//                  .geometryTransform != objectTransform) {
-//            transformChanged = true;
-//            state.dirtyGeometryBuffer = true;
-//            state.invalidAccumulation = true;
-//            srenderer->sceneDataPack.geometry_buffer_cpu[idx]
-//                .geometryTransform = objectTransform;
-//            srenderer->sceneDataPack.geometry_buffer_cpu[idx]
-//                .geometryTransformInverse = Math::inverse(objectTransform);
-//            srenderer->sceneDataPack.geometry_buffer_cpu[idx]
-//                .oddNegativeScaling = oddScaling >= 0 ? 1.f : -1.f;
-//          }
-//        }
-//        meshRefRecord->second.blasInstance.transform = objectTransform;
-//        srenderer->sceneDataPack.tlas_desc.instances.push_back(
-//            meshRefRecord->second.blasInstance);
-//      }
-//    }
-//  }
-//  // light processing
-//  if (lightComponenet) {
-
-//}
-// 
-//auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
-  ////
-  //statisticsData.aabb = Math::bounds3{};
-  //raCommon.mainDirectionalLight = std::nullopt;
-  ////
-  //RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
-  //sceneDataPack.tlas_desc.instances.clear();
-
-  //// for all mesh refrences
-  //SceneDataPackState packstate;
-  //for (auto go_handle : scene.gameObjects) {
-  //  invalid_game_object(scene.getGameObject(go_handle.first), scene, this,
-  //                      packstate);
-  //}
-  //// for all materials
-  //bool invalid_material_buffer = false;
-  //for (auto& iter : sceneDataPack.material_record) {
-  //  if (iter.first->isDirty) {
-  //    MaterialData& matData = sceneDataPack.material_buffer_cpu[iter.second];
-  //    GFX::Material* mat = iter.first;
-  //    matData.bsdf_id = mat->BxDF;
-  //    matData.alphaCutoff = mat->alphaThreshold;
-  //    matData.roughness = mat->roughness;
-  //    matData.metalness = mat->metalness;
-  //    matData.baseOrDiffuseColor = mat->baseOrDiffuseColor;
-  //    matData.specularColor = mat->specularColor;
-  //    matData.emissiveColor = mat->emissiveColor;
-  //    matData.transmissionFactor = mat->eta;
-  //    iter.first->isDirty = false;
-  //    invalid_material_buffer = true;
-
-  //    Core::GUID baseTexGUID = mat->textures["base_color"].guid;
-  //    Core::GUID normTexGUID = mat->textures["normal_bump"].guid;
-  //    auto getTexID = [&](Core::GUID guid) -> uint32_t {
-  //        GFX::Texture* gfx_texture = Core::ResourceManager::get()->getResource<GFX::Texture>(guid);
-  //        RHI::TextureView* normTexView = gfx_texture->originalView.get();
-  //        auto findTex = sceneDataPack.texture_record.find(gfx_texture);
-  //        if (findTex == sceneDataPack.texture_record.end()) {
-  //        uint32_t texID = sceneDataPack.unbinded_textures.size();
-  //        sceneDataPack.unbinded_textures.push_back(normTexView);
-  //        sceneDataPack.texture_record[gfx_texture] = texID;
-  //        findTex = sceneDataPack.texture_record.find(gfx_texture);
-  //        }
-  //        return findTex->second;
-  //    };
-  //    if (baseTexGUID == 0 || !Core::ResourceManager::get()->getResource<GFX::Texture>(baseTexGUID)) {
-  //        baseTexGUID = GFX::GFXManager::get()->registerTextureResource("content/textures/white.png");
-  //    }
-  //    matData.baseOrDiffuseTextureIndex = getTexID(baseTexGUID);
-  //    matData.normalTextureIndex = (normTexGUID == Core::INVALID_GUID || normTexGUID == 0)
-  //            ? -1 : getTexID(normTexGUID);
-  //  }
-  //}
-  //if (invalid_material_buffer) {
-  //  sceneDataPack.back_material_buffer = std::move(sceneDataPack.material_buffer);
-  //  sceneDataPack.material_buffer = device->createDeviceLocalBuffer(
-  //      sceneDataPack.material_buffer_cpu.data(),
-  //      sceneDataPack.material_buffer_cpu.size() * sizeof(MaterialData),
-  //      (uint32_t)RHI::BufferUsage::STORAGE);
-  //}
-
-  //sceneDataPack.backback_tlas = sceneDataPack.back_tlas;
-  //sceneDataPack.back_tlas = sceneDataPack.tlas;
-
-  //// if (packstate.invalidTLAS)
-  //if (sceneDataPack.tlas_desc.instances.size() != 0)
-  //  if (device->getRayTracingExtension())
-  //    sceneDataPack.tlas = device->createTLAS(sceneDataPack.tlas_desc);
-
-  //sceneDataPack.back_light_buffer = std::move(sceneDataPack.light_buffer);
-  //sceneDataPack.light_buffer = device->createDeviceLocalBuffer(
-  //    sceneDataPack.light_buffer_cpu.data(),
-  //    sceneDataPack.light_buffer_cpu.size() * sizeof(PolymorphicLightInfo),
-  //    (uint32_t)RHI::BufferUsage::SHADER_DEVICE_ADDRESS |
-  //        (uint32_t)RHI::BufferUsage::STORAGE);
-
-  //RHI::MultiFrameFlights* multiFrameFlights =
-  //    GFX::GFXManager::get()->rhiLayer->getMultiFrameFlights();
-  //uint32_t fid = multiFrameFlights->getFlightIndex();
-
-  //// TODO
-  //commonDescData.set0_flights_resources[fid][5] = {
-  //    5, RHI::BindingResource{{sceneDataPack.light_buffer.get(), 0,
-  //                             sceneDataPack.light_buffer->size()}}};
-  //commonDescData.set1_flights_resources[fid][0] = {
-  //    0, RHI::BindingResource{sceneDataPack.tlas.get()}};
-  //commonDescData.set0_flights_resources[fid][4] = {
-  //    4, RHI::BindingResource{{sceneDataPack.material_buffer.get(), 0,
-  //                             sceneDataPack.material_buffer->size()}}};
-  //commonDescData.set0_flights_resources[fid][8] = {
-  //    8, RHI::BindingResource{
-  //           sceneDataPack.unbinded_textures,
-  //           GFX::GFXManager::get()->samplerTable.fetch(
-  //               RHI::AddressMode::REPEAT, RHI::FilterMode::LINEAR,
-  //               RHI::MipmapFilterMode::LINEAR)}};
-  //
-  //sceneDataPack.sceneInfoUniform.light_num =
-  //    sceneDataPack.light_buffer_cpu.size();
-  //sceneDataBuffers.scene_info_buffer.setStructure(
-  //    sceneDataPack.sceneInfoUniform, fid);
-    
-  //if (packstate.invalidAccumulation) {
-  //  state.batchIdx = 0;
-  //}
-  //if (sceneDataPack.geometry_buffer_cpu.size() > 0) {
-  //  sceneDataBuffers.geometry_buffer.setStructure(
-  //      sceneDataPack.geometry_buffer_cpu.data(), fid);
-  //}
-
-  //raCommon.sceneAABB = statisticsData.aabb;
-  //rtCommon.accumIDX = state.batchIdx;
-//}
 
 auto packTexture(SRenderer* srenderer, Core::GUID guid) -> uint32_t {
   GFX::Texture* texture = Core::ResourceManager::get()->getResource<GFX::Texture>(guid);
@@ -523,115 +271,176 @@ auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
 
     // update the mesh component
     if (meshref && meshrenderer) {
-      GFX::Mesh* mesh = meshref->mesh;
-      Math::bounds3 bounds = Math::Transform(transform->transform) * mesh->aabb;
-      statisticsData.aabb = Math::unionBounds(statisticsData.aabb, bounds);
+      // insert the aabb
+      Math::bounds3 bounds = Math::Transform(transform->transform) * meshref->mesh->aabb;
+      if (transform->flag & (uint32_t)GFX::TransformComponent::FlagBit::IS_STATIC) {
+        statisticsData.aabb = Math::unionBounds(statisticsData.aabb, bounds);
+      }
 
-      // mesh record
-      auto meshRecord = sceneDataPack.mesh_record.find(mesh);
-      if (meshRecord == sceneDataPack.mesh_record.end()) {
-        // insert mesh to the index / vertex buffer if it does not exist now
-        sceneDataPack.geometryDirty = true;
-        sceneDataPack.mesh_record[mesh] = {};
-        meshRecord = sceneDataPack.mesh_record.find(mesh);
-        // create mesh record, copy all data buffers like vertex buffer and index buffer
-        // then add submesh information for both rasterizer and raytracer if needed
-        { // copy the position buffer and index buffer
-          uint32_t vertex_offset = sceneDataPack.vertex_buffer.buffer_host.size();
-          uint32_t position_offset = sceneDataPack.position_buffer.buffer_host.size();
-          sceneDataPack.vertex_buffer.buffer_host.resize(vertex_offset + mesh->vertexBuffer_host.size / sizeof(float));
-          memcpy(&(sceneDataPack.vertex_buffer.buffer_host[vertex_offset]), mesh->vertexBuffer_host.data, mesh->vertexBuffer_host.size);
-          uint32_t index_offset = sceneDataPack.index_buffer.buffer_host.size();
-          sceneDataPack.index_buffer.buffer_host.resize(index_offset + mesh->indexBuffer_host.size / sizeof(uint32_t));
-          memcpy(&(sceneDataPack.index_buffer.buffer_host[index_offset]), mesh->indexBuffer_host.data, mesh->indexBuffer_host.size);
-          sceneDataPack.vertex_buffer.stamp++;
-          sceneDataPack.index_buffer.stamp++;
-          // also copy the position buffer if ray tracing is required
-          if (config.enableRayTracing) {
-            sceneDataPack.position_buffer.stamp++;
-            sceneDataPack.position_buffer.buffer_host.resize(position_offset + mesh->positionBuffer_host.size / sizeof(float));
-            memcpy(&(sceneDataPack.position_buffer.buffer_host[position_offset]), mesh->positionBuffer_host.data, mesh->positionBuffer_host.size);
-          }
-          // also copy uv2 buffer is 2nd parameterization is required
-          if (config.enableUV2 && mesh->uv2Buffer_host.size > 0) {
-            sceneDataPack.uv2_buffer.stamp++;
-            size_t uv2_offset = sceneDataPack.uv2_buffer.buffer_host.size();
-            sceneDataPack.uv2_buffer.buffer_host.resize(uv2_offset + mesh->uv2Buffer_host.size / sizeof(float));
-            memcpy(&(sceneDataPack.uv2_buffer.buffer_host[uv2_offset]), mesh->uv2Buffer_host.data, mesh->uv2Buffer_host.size);
-          }
-          // also copy skeleton information if required
-          if (mesh->jointIndexBuffer_host.size > 0) {
-            meshRecord->second.need_rebuild = true;
-            uint32_t const jointpos_offset = sceneDataPack.skelpos_buffer.buffer_host.size();
-            sceneDataPack.skelpos_buffer.stamp++;
-            sceneDataPack.skelpos_buffer.buffer_host.resize(jointpos_offset + mesh->positionBuffer_host.size / sizeof(float));
-            memcpy(&(sceneDataPack.skelpos_buffer.buffer_host[jointpos_offset]), mesh->positionBuffer_host.data, mesh->positionBuffer_host.size);
-            sceneDataPack.skelnormal_buffer.stamp++;
-            sceneDataPack.skelnormal_buffer.buffer_host.resize(jointpos_offset + mesh->positionBuffer_host.size / sizeof(float));
-            std::span<float> vertex_buffer((float*)mesh->vertexBuffer_host.data, mesh->vertexBuffer_host.size/sizeof(float));
-            for (size_t i = 0; i * 11 < vertex_buffer.size(); i++) {
-              sceneDataPack.skelnormal_buffer.buffer_host[jointpos_offset + i * 3 + 0] = vertex_buffer[i*11 + 3];
-              sceneDataPack.skelnormal_buffer.buffer_host[jointpos_offset + i * 3 + 1] = vertex_buffer[i*11 + 4];
-              sceneDataPack.skelnormal_buffer.buffer_host[jointpos_offset + i * 3 + 2] = vertex_buffer[i*11 + 5];
-            }
-            // also copy the weights buffer
-            uint32_t const jointweights_offset = sceneDataPack.skelweights_buffer.buffer_host.size();
-            sceneDataPack.skelweights_buffer.stamp++;
-            sceneDataPack.skelweights_buffer.buffer_host.resize(jointweights_offset + mesh->jointWeightBuffer_host.size / sizeof(float));
-            memcpy(&(sceneDataPack.skelweights_buffer.buffer_host[jointweights_offset]), mesh->jointWeightBuffer_host.data, mesh->jointWeightBuffer_host.size);
-            // also copy the index buffer
-            uint32_t const jointidx_offset = sceneDataPack.skeljoints_buffer.buffer_host.size();
-            sceneDataPack.skeljoints_buffer.stamp++;
-            sceneDataPack.skeloffset_buffer.stamp++;
-            std::span<uint64_t> joints_array(
-                (uint64_t*)mesh->jointIndexBuffer_host.data,
-                mesh->jointIndexBuffer_host.size / sizeof(uint64_t));
-            for (auto id : joints_array) {
-              auto iter = sceneDataPack.skinning_record.find(id);
-              if (iter == sceneDataPack.skinning_record.end()) {
-                sceneDataPack.skinning_record[id] = sceneDataPack.skinning_record.size();
-                iter = sceneDataPack.skinning_record.find(id);
-                uint32_t const jointtransform_offset = sceneDataPack.skeltransform_buffer.buffer_host.size();
-                sceneDataPack.skeltransform_buffer.stamp++;
-                sceneDataPack.skeltransform_buffer.buffer_host.resize(jointtransform_offset + 1);
-                sceneDataPack.skelinvtrans_buffer.buffer_host.resize(jointtransform_offset + 1);
-                auto* go = scene.getGameObject(id);
-                GFX::TransformComponent* transform = go->getEntity().getComponent<GFX::TransformComponent>();
-                sceneDataPack.skeltransform_buffer.buffer_host[jointtransform_offset] = transform->transform;
-                sceneDataPack.skelinvtrans_buffer.buffer_host[jointtransform_offset] = Math::transpose(transform->inverseJointTransform);
-              }
-              sceneDataPack.skeljoints_buffer.buffer_host.push_back(iter->second);
-            }
-            for (int i = 0; i < joints_array.size(); i += 3) {
-              sceneDataPack.skeloffset_buffer.buffer_host.push_back(position_offset / 3);
-            }
-            sceneDataPack.skeljoints_buffer.stamp++;
-            sceneDataPack.skeloffset_buffer.stamp++;
-          }
-          // add all submeshes
-          for (auto& submesh : mesh->submeshes) {
-            GeometryDrawData geometry;
-            geometry.vertexOffset = submesh.baseVertex + vertex_offset * sizeof(float) / SRenderer::vertexBufferLayout.arrayStride;
-            geometry.indexOffset = submesh.offset + index_offset;
-            geometry.materialID = 0;
-            geometry.indexSize = submesh.size;
-            geometry.geometryTransform = {};
-            meshRecord->second.submesh_geometry.push_back(geometry);
-            // also add submesh information to blas descriptor
+      auto query_mesh_record = [&](GFX::Mesh* mesh) {
+        auto meshRecord = sceneDataPack.mesh_record.find(mesh);
+        if (meshRecord == sceneDataPack.mesh_record.end()) {
+          // insert mesh to the index / vertex buffer if it does not exist now
+          sceneDataPack.geometryDirty = true;
+          sceneDataPack.mesh_record[mesh] = {};
+          meshRecord = sceneDataPack.mesh_record.find(mesh);
+          // create mesh record, copy all data buffers like vertex buffer and index buffer
+          // then add submesh information for both rasterizer and raytracer if needed
+          { // copy the position buffer and index buffer
+            uint32_t vertex_offset = sceneDataPack.vertex_buffer.buffer_host.size();
+            uint32_t position_offset = sceneDataPack.position_buffer.buffer_host.size();
+            sceneDataPack.vertex_buffer.buffer_host.resize(vertex_offset + mesh->vertexBuffer_host.size / sizeof(float));
+            memcpy(&(sceneDataPack.vertex_buffer.buffer_host[vertex_offset]), mesh->vertexBuffer_host.data, mesh->vertexBuffer_host.size);
+            uint32_t index_offset = sceneDataPack.index_buffer.buffer_host.size();
+            sceneDataPack.index_buffer.buffer_host.resize(index_offset + mesh->indexBuffer_host.size / sizeof(uint32_t));
+            memcpy(&(sceneDataPack.index_buffer.buffer_host[index_offset]), mesh->indexBuffer_host.data, mesh->indexBuffer_host.size);
+            sceneDataPack.vertex_buffer.stamp++;
+            sceneDataPack.index_buffer.stamp++;
+            // also copy the position buffer if ray tracing is required
             if (config.enableRayTracing) {
-              RHI::BLASDescriptor& blasDesc = meshRecord->second.blas_desc;
-              blasDesc.triangleGeometries.push_back(RHI::BLASTriangleGeometry{
-                  nullptr, nullptr, nullptr, RHI::IndexFormat::UINT32_T,
-                  uint32_t(mesh->positionBuffer_host.size / (sizeof(float) * 3)),
-                  geometry.vertexOffset, geometry.indexSize / 3,
-                  uint32_t(geometry.indexOffset * sizeof(uint32_t)),
-                  RHI::AffineTransformMatrix{},
-                  (uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION,
-                  geometry.materialID});
+              sceneDataPack.position_buffer.stamp++;
+              sceneDataPack.position_buffer.buffer_host.resize(position_offset + mesh->positionBuffer_host.size / sizeof(float));
+              memcpy(&(sceneDataPack.position_buffer.buffer_host[position_offset]), mesh->positionBuffer_host.data, mesh->positionBuffer_host.size);
+            }
+            // also copy uv2 buffer is 2nd parameterization is required
+            if (config.enableUV2 && mesh->uv2Buffer_host.size > 0) {
+              sceneDataPack.uv2_buffer.stamp++;
+              size_t uv2_offset = sceneDataPack.uv2_buffer.buffer_host.size();
+              sceneDataPack.uv2_buffer.buffer_host.resize(uv2_offset + mesh->uv2Buffer_host.size / sizeof(float));
+              memcpy(&(sceneDataPack.uv2_buffer.buffer_host[uv2_offset]), mesh->uv2Buffer_host.data, mesh->uv2Buffer_host.size);
+            }
+            // also copy skeleton information if required
+            if (mesh->jointIndexBuffer_host.size > 0) {
+              meshRecord->second.need_rebuild = true;
+              uint32_t const jointpos_offset = sceneDataPack.skelpos_buffer.buffer_host.size();
+              sceneDataPack.skelpos_buffer.stamp++;
+              sceneDataPack.skelpos_buffer.buffer_host.resize(jointpos_offset + mesh->positionBuffer_host.size / sizeof(float));
+              memcpy(&(sceneDataPack.skelpos_buffer.buffer_host[jointpos_offset]), mesh->positionBuffer_host.data, mesh->positionBuffer_host.size);
+              sceneDataPack.skelnormal_buffer.stamp++;
+              sceneDataPack.skelnormal_buffer.buffer_host.resize(jointpos_offset + mesh->positionBuffer_host.size / sizeof(float));
+              std::span<float> vertex_buffer((float*)mesh->vertexBuffer_host.data, mesh->vertexBuffer_host.size/sizeof(float));
+              for (size_t i = 0; i * 11 < vertex_buffer.size(); i++) {
+                sceneDataPack.skelnormal_buffer.buffer_host[jointpos_offset + i * 3 + 0] = vertex_buffer[i*11 + 3];
+                sceneDataPack.skelnormal_buffer.buffer_host[jointpos_offset + i * 3 + 1] = vertex_buffer[i*11 + 4];
+                sceneDataPack.skelnormal_buffer.buffer_host[jointpos_offset + i * 3 + 2] = vertex_buffer[i*11 + 5];
+              }
+              // also copy the weights buffer
+              uint32_t const jointweights_offset = sceneDataPack.skelweights_buffer.buffer_host.size();
+              sceneDataPack.skelweights_buffer.stamp++;
+              sceneDataPack.skelweights_buffer.buffer_host.resize(jointweights_offset + mesh->jointWeightBuffer_host.size / sizeof(float));
+              memcpy(&(sceneDataPack.skelweights_buffer.buffer_host[jointweights_offset]), mesh->jointWeightBuffer_host.data, mesh->jointWeightBuffer_host.size);
+              // also copy the index buffer
+              uint32_t const jointidx_offset = sceneDataPack.skeljoints_buffer.buffer_host.size();
+              sceneDataPack.skeljoints_buffer.stamp++;
+              sceneDataPack.skeloffset_buffer.stamp++;
+              std::span<uint64_t> joints_array(
+                  (uint64_t*)mesh->jointIndexBuffer_host.data,
+                  mesh->jointIndexBuffer_host.size / sizeof(uint64_t));
+              for (auto id : joints_array) {
+                auto iter = sceneDataPack.skinning_record.find(id);
+                if (iter == sceneDataPack.skinning_record.end()) {
+                  sceneDataPack.skinning_record[id] = sceneDataPack.skinning_record.size();
+                  iter = sceneDataPack.skinning_record.find(id);
+                  uint32_t const jointtransform_offset = sceneDataPack.skeltransform_buffer.buffer_host.size();
+                  sceneDataPack.skeltransform_buffer.stamp++;
+                  sceneDataPack.skeltransform_buffer.buffer_host.resize(jointtransform_offset + 1);
+                  sceneDataPack.skelinvtrans_buffer.buffer_host.resize(jointtransform_offset + 1);
+                  auto* go = scene.getGameObject(id);
+                  GFX::TransformComponent* transform = go->getEntity().getComponent<GFX::TransformComponent>();
+                  sceneDataPack.skeltransform_buffer.buffer_host[jointtransform_offset] = transform->transform;
+                  sceneDataPack.skelinvtrans_buffer.buffer_host[jointtransform_offset] = Math::transpose(transform->inverseJointTransform);
+                }
+                sceneDataPack.skeljoints_buffer.buffer_host.push_back(iter->second);
+              }
+              size_t vertex_size = mesh->positionBuffer_host.size / (sizeof(float) * 3);
+              uint32_t skel_offset = position_offset / 3 - sceneDataPack.skeloffset_buffer.buffer_host.size();
+              for (int i = 0; i < vertex_size; i++) {
+                sceneDataPack.skeloffset_buffer.buffer_host.push_back(skel_offset);
+              }
+              sceneDataPack.skeljoints_buffer.stamp++;
+              sceneDataPack.skeloffset_buffer.stamp++;
+            }
+            // add all submeshes
+            for (auto& submesh : mesh->submeshes) {
+              GeometryDrawData geometry;
+              geometry.vertexOffset = submesh.baseVertex + vertex_offset * sizeof(float) / SRenderer::vertexBufferLayout.arrayStride;
+              geometry.indexOffset = submesh.offset + index_offset;
+              geometry.materialID = 0;
+              geometry.indexSize = submesh.size;
+              geometry.geometryTransform = {};
+              meshRecord->second.submesh_geometry.push_back(geometry);
+              // also add submesh information to blas descriptor
+              if (config.enableRayTracing) {
+                RHI::BLASDescriptor& blasDesc = meshRecord->second.blas_desc;
+                blasDesc.triangleGeometries.push_back(RHI::BLASTriangleGeometry{
+                    nullptr, nullptr, nullptr, RHI::IndexFormat::UINT32_T,
+                    uint32_t(mesh->positionBuffer_host.size / (sizeof(float) * 3)),
+                    geometry.vertexOffset, geometry.indexSize / 3,
+                    uint32_t(geometry.indexOffset * sizeof(uint32_t)),
+                    RHI::AffineTransformMatrix{},
+                    (uint32_t)RHI::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION,
+                    geometry.materialID});
+              }
             }
           }
         }
-      }
+        return meshRecord;
+      };
+      auto query_material = [&](GFX::Material* mat) {
+        auto findMat = sceneDataPack.material_record.find(mat);
+        if (findMat == sceneDataPack.material_record.end()) {
+          uint32_t matID = sceneDataPack.material_buffer.buffer_host.size();
+          MaterialData matData;
+          Core::GUID baseTexGUID = mat->textures["base_color"].guid;
+          Core::GUID normTexGUID = mat->textures["normal_bump"].guid;
+          auto getTexID =
+              [&](Core::GUID guid,
+                  RHI::SamplerDescriptor const& sampler) -> uint32_t {
+            GFX::Texture* gfx_texture =
+                Core::ResourceManager::get()->getResource<GFX::Texture>(guid);
+            RHI::TextureView* tex_view = gfx_texture->originalView.get();
+            auto findTex = sceneDataPack.texture_record.find(gfx_texture);
+            if (findTex == sceneDataPack.texture_record.end()) {
+              uint32_t texID = sceneDataPack.unbinded_textures.size();
+              sceneDataPack.unbinded_textures.push_back(tex_view);
+              sceneDataPack.unbinded_samplers.push_back(
+                  GFX::GFXManager::get()->samplerTable.fetch(sampler));
+              sceneDataPack.texture_record[gfx_texture] = texID;
+              findTex = sceneDataPack.texture_record.find(gfx_texture);
+            }
+            return findTex->second;
+          };
+          matData.bsdf_id = mat->BxDF;
+          if (baseTexGUID == 0 ||
+              !Core::ResourceManager::get()->getResource<GFX::Texture>(
+                  baseTexGUID)) {
+            baseTexGUID = GFX::GFXManager::get()->registerTextureResource(
+                "content/textures/white.png");
+          }
+          matData.baseOrDiffuseTextureIndex =
+              getTexID(baseTexGUID, mat->textures["base_color"].sampler);
+          matData.normalTextureIndex =
+              (normTexGUID == Core::INVALID_GUID || normTexGUID == 0)
+                  ? -1
+                  : getTexID(normTexGUID, mat->textures["normal_bump"].sampler);
+          matData.alphaCutoff = mat->alphaThreshold;
+          matData.roughness = mat->roughness;
+          matData.metalness = mat->metalness;
+          matData.baseOrDiffuseColor = mat->baseOrDiffuseColor;
+          matData.specularColor = mat->specularColor;
+          matData.emissiveColor = mat->emissiveColor;
+          matData.transmissionFactor = mat->eta;
+          sceneDataPack.material_buffer.buffer_host.push_back(matData);
+          sceneDataPack.material_buffer.stamp++;
+          sceneDataPack.material_record[mat] = matID;
+          findMat = sceneDataPack.material_record.find(mat);
+        }
+        return findMat;
+      };
+
+      // require all mesh LoD levels
+      query_mesh_record(meshref->mesh);
+      for (auto& lod_mesh : meshref->lod_meshes) query_mesh_record(lod_mesh);
 
       // mesh reference
       auto meshRefRecord = sceneDataPack.mesh_ref_record.find(go->entity);
@@ -641,116 +450,113 @@ auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
           sceneDataPack.geometryDirty = true;
           sceneDataPack.mesh_ref_record[go->entity] = {};
           meshRefRecord = sceneDataPack.mesh_ref_record.find(go->entity);
-          {  // create mesh record
-          int mesh_primitive_type = meshref->customPrimitiveFlag;
-          meshRefRecord->second.mesh = mesh;
-          meshRefRecord->second.meshReference = meshref;
-          uint32_t geometry_start = sceneDataPack.geometry_buffer.buffer_host.size();
-          uint32_t offset = 0;
-          // push all submesh geometry to the global geometry buffer
-          // then check whether the material has been registered
-          for (auto& iter : meshRecord->second.submesh_geometry) {
-            meshRefRecord->second.geometry_indices.push_back(sceneDataPack.geometry_buffer.buffer_host.size());
-            GFX::Material* mat = meshrenderer->materials[offset++];
-            // check whether material has been registered
-            auto findMat = sceneDataPack.material_record.find(mat);
-            if (findMat == sceneDataPack.material_record.end()) {
-              uint32_t matID = sceneDataPack.material_buffer.buffer_host.size();
-              MaterialData matData;
-              Core::GUID baseTexGUID = mat->textures["base_color"].guid;
-              Core::GUID normTexGUID = mat->textures["normal_bump"].guid;
-              auto getTexID = [&](Core::GUID guid, RHI::SamplerDescriptor const& sampler) -> uint32_t {
-                GFX::Texture* gfx_texture = Core::ResourceManager::get()->getResource<GFX::Texture>(guid);
-                RHI::TextureView* tex_view = gfx_texture->originalView.get();
-                auto findTex = sceneDataPack.texture_record.find(gfx_texture);
-                if (findTex == sceneDataPack.texture_record.end()) {
-                  uint32_t texID = sceneDataPack.unbinded_textures.size();
-                  sceneDataPack.unbinded_textures.push_back(tex_view);
-                  sceneDataPack.unbinded_samplers.push_back(GFX::GFXManager::get()->samplerTable.fetch(sampler));
-                  sceneDataPack.texture_record[gfx_texture] = texID;
-                  findTex = sceneDataPack.texture_record.find(gfx_texture);
+          { // create mesh reference record
+            int mesh_primitive_type = meshref->customPrimitiveFlag;
+            meshRefRecord->second.meshes.push_back(meshref->mesh);
+            for (auto& lod_mesh : meshref->lod_meshes)
+              meshRefRecord->second.meshes.push_back(lod_mesh);
+            meshRefRecord->second.meshReference = meshref;
+            meshRefRecord->second.lod_shown = meshref->lod_shown;
+            uint32_t offset = 0;
+            size_t lod_count = meshRefRecord->second.meshes.size();
+            meshRefRecord->second.geometry_indices.resize(lod_count);
+            meshRefRecord->second.blasInstance.resize(lod_count);
+            // for every level of LoDs of the mesh
+            size_t lod_level = 0;
+            for (GFX::Mesh* mesh : meshRefRecord->second.meshes) {
+              uint32_t geometry_start = sceneDataPack.geometry_buffer.buffer_host.size();
+              // push all submesh geometry to the global geometry buffer
+              // then check whether the material has been registered
+              auto meshRecord = query_mesh_record(mesh);
+              auto& geometry_indices = meshRefRecord->second.geometry_indices[lod_level];
+              for (auto& iter : meshRecord->second.submesh_geometry) {
+                geometry_indices.push_back(sceneDataPack.geometry_buffer.buffer_host.size());
+                GFX::Material* mat;
+                // TODO :: Handle lod materials
+                if (lod_level == 0) mat = meshrenderer->materials[offset++];
+                else mat = meshrenderer->materials[0];
+                // check whether material has been registered
+                auto findMat = query_material(mat);
+
+                int primitiveType = meshref->customPrimitiveFlag;
+                if (mat->alphaState != GFX::Material::AlphaState::Opaque) {
+                  primitiveType += 1;
+                  mesh_primitive_type = primitiveType;
                 }
-                return findTex->second;
-              };
-              matData.bsdf_id = mat->BxDF;
-              if (baseTexGUID == 0 || !Core::ResourceManager::get()->getResource<GFX::Texture>(baseTexGUID)) {
-                baseTexGUID = GFX::GFXManager::get()->registerTextureResource(
-                    "content/textures/white.png");
+              
+                GFX::TransformComponent* transform =
+                    go->getEntity().getComponent<GFX::TransformComponent>();
+                uint32_t primitiveWithFlag = primitiveType;
+                if (transform->flag & (uint32_t)GFX::TransformComponent::FlagBit::IS_STATIC) {
+                  primitiveWithFlag |= 1 << 31;
+                }
+              
+                GeometryDrawData geometrydata = iter;
+                geometrydata.geometryTransform = transform->transform;
+                geometrydata.geometryTransformInverse = Math::inverse(transform->transform);
+                geometrydata.oddNegativeScaling = transform->oddScaling;
+                geometrydata.materialID = findMat->second;
+                geometrydata.primitiveType = primitiveWithFlag;
+                geometrydata.lightID = lightComponenet ? 0 : 4294967295;
+                uint32_t geometry_id = sceneDataPack.geometry_buffer.buffer_host.size();
+                sceneDataPack.geometry_buffer.buffer_host.push_back(geometrydata);
+                sceneDataPack.geometry_buffer.stamp++;
+              
+                // Add indirect draw info
+                {
+                  raCommon.structured_drawcalls.isDirty = true;
+                  RACommon::DrawIndexedIndirectEX drawcall = {
+                      geometrydata.indexSize,    1, geometrydata.indexOffset,
+                      geometrydata.vertexOffset, 0, geometry_id};
+                  if (primitiveType == 0 || primitiveType == 2) {
+                    uint32_t offset = raCommon.structured_drawcalls.opaque_drawcalls_host.size();
+                    meshRefRecord->second.basic_drawcall_offset.push_back(offset);
+                    raCommon.structured_drawcalls.opaque_drawcalls_host.push_back(drawcall);
+                  } else if (primitiveType == 1 || primitiveType == 3) {
+                    uint32_t offset = raCommon.structured_drawcalls.alphacut_drawcalls_host.size();
+                    meshRefRecord->second.basic_drawcall_offset.push_back(offset);
+                    raCommon.structured_drawcalls.alphacut_drawcalls_host.push_back(drawcall);
+                  }
+                  raCommon.structured_drawcalls.bsdf_drawcalls_host[mat->BxDF].push_back(drawcall);
+                }
               }
-              matData.baseOrDiffuseTextureIndex = getTexID(baseTexGUID, mat->textures["base_color"].sampler);
-              matData.normalTextureIndex =
-                  (normTexGUID == Core::INVALID_GUID || normTexGUID == 0)
-                      ? -1
-                      : getTexID(normTexGUID, mat->textures["normal_bump"].sampler);
-              matData.alphaCutoff = mat->alphaThreshold;
-              matData.roughness = mat->roughness;
-              matData.metalness = mat->metalness;
-              matData.baseOrDiffuseColor = mat->baseOrDiffuseColor;
-              matData.specularColor = mat->specularColor;
-              matData.emissiveColor = mat->emissiveColor;
-              matData.transmissionFactor = mat->eta;
-              sceneDataPack.material_buffer.buffer_host.push_back(matData);
-              sceneDataPack.material_buffer.stamp++;
-              sceneDataPack.material_record[mat] = matID;
-              findMat = sceneDataPack.material_record.find(mat);
+              meshRefRecord->second.blasInstance[lod_level].instanceCustomIndex = geometry_start;
+              lod_level++;
             }
-
-            int primitiveType = meshref->customPrimitiveFlag;
-            if (mat->alphaState != GFX::Material::AlphaState::Opaque) {
-              primitiveType += 1;
-              mesh_primitive_type = primitiveType;
-            }
-
-            GFX::TransformComponent* transform =
-                go->getEntity().getComponent<GFX::TransformComponent>();
-            uint32_t primitiveWithFlag = primitiveType;
-            if (transform->flag & (uint32_t)GFX::TransformComponent::FlagBit::IS_STATIC) {
-              primitiveWithFlag |= 1 << 31;
-            }
-
-            GeometryDrawData geometrydata = iter;
-            geometrydata.geometryTransform = transform->transform;
-            geometrydata.geometryTransformInverse = Math::inverse(transform->transform);
-            geometrydata.oddNegativeScaling = transform->oddScaling;
-            geometrydata.materialID = findMat->second;
-            geometrydata.primitiveType = primitiveWithFlag;
-            geometrydata.lightID = lightComponenet ? 0 : 4294967295;
-            uint32_t geometry_id = sceneDataPack.geometry_buffer.buffer_host.size();
-            sceneDataPack.geometry_buffer.buffer_host.push_back(geometrydata);
-            sceneDataPack.geometry_buffer.stamp++;
-
-            // Add indirect draw info
-            {
-              raCommon.structured_drawcalls.isDirty = true;
-              RACommon::DrawIndexedIndirectEX drawcall = {
-                  geometrydata.indexSize,    1, geometrydata.indexOffset,
-                  geometrydata.vertexOffset, 0, geometry_id};
-              if (primitiveType == 0 || primitiveType == 2) {
-                raCommon.structured_drawcalls.opaque_drawcalls_host.push_back(drawcall);
-              } else if (primitiveType == 1 || primitiveType == 3) {
-                raCommon.structured_drawcalls.alphacut_drawcalls_host.push_back(drawcall);
-              }
-              raCommon.structured_drawcalls.bsdf_drawcalls_host[mat->BxDF].push_back(drawcall);
-            }
-          }
-          meshRefRecord->second.blasInstance.instanceCustomIndex =
-              geometry_start;
           meshRefRecord->second.primitiveType = mesh_primitive_type;
           }
-      } 
+      }
       // has already get the mesh reference, try to do following things:
       // - update the transform is needed
       else {
-          for (auto idx : meshRefRecord->second.geometry_indices) {
+          if (meshRefRecord->second.lod_shown != meshref->lod_shown) {
+            meshRefRecord->second.lod_shown = meshref->lod_shown;
+          }
+          //    RACommon::DrawIndexedIndirectEX drawcall = {
+          //        subgeom.indexSize,    1, subgeom.indexOffset,
+          //        subgeom.vertexOffset, 0, geom_idx};
+          //    int primitiveType = meshref->customPrimitiveFlag;
+          //    uint32_t const basic_dracall_idx = meshRefRecord->second.basic_drawcall_offset[i];
+          //    if (primitiveType == 0 || primitiveType == 2) {
+          //      raCommon.structured_drawcalls.opaque_drawcalls_host[basic_dracall_idx] = drawcall;
+          //    } else if (primitiveType == 1 || primitiveType == 3) {
+          //      raCommon.structured_drawcalls.alphacut_drawcalls_host[basic_dracall_idx] = drawcall;
+          //    }
+          //  }
+          //}
+          for (auto& lod_geoms : meshRefRecord->second.geometry_indices) {
             // update the transform if is dirty
             if (dirty_trasnfrom) {
-              sceneDataPack.geometry_buffer.buffer_host[idx].geometryTransform = transform->transform;
-              sceneDataPack.geometry_buffer.buffer_host[idx].geometryTransformInverse = Math::inverse(transform->transform);
-              sceneDataPack.geometry_buffer.buffer_host[idx].oddNegativeScaling = transform->oddScaling;
-              sceneDataPack.geometry_buffer.stamp++;
+              for (auto idx : lod_geoms) {
+                sceneDataPack.geometry_buffer.buffer_host[idx].geometryTransform = transform->transform;
+                sceneDataPack.geometry_buffer.buffer_host[idx].geometryTransformInverse = Math::inverse(transform->transform);
+                sceneDataPack.geometry_buffer.buffer_host[idx].oddNegativeScaling = transform->oddScaling;
+              }
             }
+            sceneDataPack.geometry_buffer.stamp++;
           }
-          meshRefRecord->second.blasInstance.transform = transform->transform;
+          for (auto& instance : meshRefRecord->second.blasInstance)
+            instance.transform = transform->transform;
       }
     }
 
@@ -902,10 +708,6 @@ auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
     }
   }
 
-  // TODO :: do light sampling precomputation
-  {
-  }
-
   // update all buffers
   sceneDataPack.vertex_buffer.buffer_device.swap();
   sceneDataPack.index_buffer.buffer_device.swap();
@@ -966,6 +768,48 @@ auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
     device->getGraphicsQueue()->waitIdle();
   }
 
+  // update material buffer if need
+  for (auto& iter : sceneDataPack.material_record) {
+     if (iter.first->isDirty) {
+       MaterialData& matData = sceneDataPack.material_buffer.buffer_host[iter.second];
+       GFX::Material* mat = iter.first;
+       matData.bsdf_id = mat->BxDF;
+       matData.alphaCutoff = mat->alphaThreshold;
+       matData.roughness = mat->roughness;
+       matData.metalness = mat->metalness;
+       matData.baseOrDiffuseColor = mat->baseOrDiffuseColor;
+       matData.specularColor = mat->specularColor;
+       matData.emissiveColor = mat->emissiveColor;
+       matData.transmissionFactor = mat->eta;
+       iter.first->isDirty = false;
+       sceneDataPack.material_buffer.stamp++;
+
+      //Core::GUID baseTexGUID = mat->textures["base_color"].guid;
+      //Core::GUID normTexGUID = mat->textures["normal_bump"].guid;
+      //auto getTexID = [&](Core::GUID guid) -> uint32_t {
+      //    GFX::Texture* gfx_texture =
+      //    Core::ResourceManager::get()->getResource<GFX::Texture>(guid);
+      //    RHI::TextureView* normTexView = gfx_texture->originalView.get();
+      //    auto findTex = sceneDataPack.texture_record.find(gfx_texture);
+      //    if (findTex == sceneDataPack.texture_record.end()) {
+      //    uint32_t texID = sceneDataPack.unbinded_textures.size();
+      //    sceneDataPack.unbinded_textures.push_back(normTexView);
+      //    sceneDataPack.texture_record[gfx_texture] = texID;
+      //    findTex = sceneDataPack.texture_record.find(gfx_texture);
+      //    }
+      //    return findTex->second;
+      //};
+      //if (baseTexGUID == 0 ||
+      //!Core::ResourceManager::get()->getResource<GFX::Texture>(baseTexGUID)) {
+      //    baseTexGUID =
+      //    GFX::GFXManager::get()->registerTextureResource("content/textures/white.png");
+      //}
+      //matData.baseOrDiffuseTextureIndex = getTexID(baseTexGUID);
+      //matData.normalTextureIndex = (normTexGUID == Core::INVALID_GUID ||
+      //normTexGUID == 0) ? -1 : getTexID(normTexGUID);
+    }
+  }
+  
   // create BLAS / TLAS
   for (auto& iter : sceneDataPack.mesh_record) {
     if (iter.second.blases == nullptr) {
@@ -991,18 +835,19 @@ auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
   for (auto& iter : sceneDataPack.mesh_ref_record) {
     // if BLAS is not created
     if (iter.second.primitiveType == 0 || iter.second.primitiveType == 1) {
-      iter.second.blasInstance.blas =
-          sceneDataPack.mesh_record[iter.second.mesh].blases.get();
-      iter.second.blasInstance.instanceShaderBindingTableRecordOffset =
-          iter.second.primitiveType;
-    } else if (iter.second.primitiveType == 2 ||
-               iter.second.primitiveType == 3) {
-      iter.second.blasInstance.blas =
-          customPrimitive.sphere.meshRecord.blases.get();
-      iter.second.blasInstance.instanceShaderBindingTableRecordOffset =
-          iter.second.primitiveType;
+      for (size_t i = 0; i < iter.second.meshes.size(); ++i) {
+        GFX::Mesh* mesh = iter.second.meshes[i];
+        iter.second.blasInstance[i].blas = sceneDataPack.mesh_record[mesh].blases.get();
+        iter.second.blasInstance[i].instanceShaderBindingTableRecordOffset = iter.second.primitiveType;
+      }
+      sceneDataPack.tlas_desc.instances.push_back(iter.second.blasInstance[iter.second.lod_shown]);
     }
-    sceneDataPack.tlas_desc.instances.push_back(iter.second.blasInstance);
+    // else if the primitive is sphere / alphacut sphere
+    else if (iter.second.primitiveType == 2 || iter.second.primitiveType == 3) {
+      iter.second.blasInstance[0].blas = customPrimitive.sphere.meshRecord.blases.get();
+      iter.second.blasInstance[0].instanceShaderBindingTableRecordOffset = iter.second.primitiveType;
+      sceneDataPack.tlas_desc.instances.push_back(iter.second.blasInstance[0]);
+    }
   }
   sceneDataPack.tlas_desc.allowRefitting = true;
 
@@ -1028,26 +873,6 @@ auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
     {7, RHI::BindingResource{sceneDataPack.unbinded_textures, sceneDataPack.unbinded_samplers}},
   };
 
-    // sceneDataPack.sceneInfoUniform.light_num =
-    //     sceneDataPack.light_buffer_cpu.size();
-    // sceneDataBuffers.scene_info_buffer.setStructure(
-    //     sceneDataPack.sceneInfoUniform, fid);
-    
-    // commonDescData.set0_flights_resources[fid][6] = {
-    //     6, RHI::BindingResource{{sceneDataPack.sample_dist_buffer.get(), 0,
-    //                              sceneDataPack.sample_dist_buffer.get() != 0
-    //                                  ?
-    //                                  sceneDataPack.sample_dist_buffer->size()
-    //                                  : 0}}};
-   
-    // if (packstate.invalidAccumulation) {
-    //   state.batchIdx = 0;
-    // }
-    // if (sceneDataPack.geometry_buffer_cpu.size() > 0) {
-    //   sceneDataBuffers.geometry_buffer.setStructure(
-    //       sceneDataPack.geometry_buffer_cpu.data(), fid);
-    // }
-    
   commonDescData.set1_flights_resources[fid] = std::vector<RHI::BindGroupEntry>{
     {0, RHI::BindingResource{sceneDataPack.tlas.primal.get()}},
   };
@@ -1201,19 +1026,52 @@ auto SRenderer::updateRDGData(RDG::Graph* graph) noexcept -> void {
               sceneDataPack.index_buffer.get_primal()->size());
           data.passEncoder.render->setBindGroup(
               0, data.pipelinePass->bindgroups[0][flightIdx].get(), 0, 0);
-          uint32_t geometry_idx = 0;
-          for (auto& geometry : sceneDataPack.geometry_buffer.buffer_host) {
-            if ((geometry.primitiveType >> 31) == 0) {
-              data.passEncoder.render->pushConstants(
-                  &geometry_idx, (uint32_t)RHI::ShaderStages::VERTEX, 0,
-                  sizeof(uint32_t));
-              data.passEncoder.render->drawIndexed(geometry.indexSize, 1,
-                                                   geometry.indexOffset,
-                                                   geometry.vertexOffset, 0);                
+
+          int lod_level = 0;
+          if (data.customData != nullptr) {
+            lod_level = *(int*)data.customData;
+          }
+
+          for (auto& pair : sceneDataPack.mesh_ref_record) {
+            int lod_max = pair.second.geometry_indices.size();
+            if (lod_max > lod_level) {
+              for (auto geometry_idx : pair.second.geometry_indices[lod_level]) {
+                auto& geometry = sceneDataPack.geometry_buffer.buffer_host[geometry_idx];
+                if ((geometry.primitiveType >> 31) == 0) {  // is not static
+                  data.passEncoder.render->pushConstants(
+                      &geometry_idx, (uint32_t)RHI::ShaderStages::VERTEX, 0,
+                      sizeof(uint32_t));
+                  data.passEncoder.render->drawIndexed(
+                      geometry.indexSize, 1, geometry.indexOffset,
+                      geometry.vertexOffset, 0);
+                }     
+              }
             }
-            geometry_idx++;
           }
         }
+      });
+  graph->renderData.setDelegate(
+      "IssueVisibleDrawcalls",
+      [&, flightIdx = flightIdx](RDG::RenderData::DelegateData const& data) {
+        if (sceneDataPack.geometry_buffer.buffer_host.size() > 0) {
+          data.passEncoder.render->setIndexBuffer(
+              sceneDataPack.index_buffer.get_primal(), RHI::IndexFormat::UINT32_T, 0,
+              sceneDataPack.index_buffer.get_primal()->size());
+          data.passEncoder.render->setBindGroup(
+              0, data.pipelinePass->bindgroups[0][flightIdx].get(), 0, 0);
+
+          for (auto& pair : sceneDataPack.mesh_ref_record) {
+            for (auto geometry_idx : pair.second.geometry_indices[pair.second.lod_shown]) {
+                auto& geometry = sceneDataPack.geometry_buffer.buffer_host[geometry_idx];
+                data.passEncoder.render->pushConstants(
+                    &geometry_idx, (uint32_t)RHI::ShaderStages::VERTEX, 0,
+                    sizeof(uint32_t));
+                data.passEncoder.render->drawIndexed(
+                    geometry.indexSize, 1, geometry.indexOffset,
+                    geometry.vertexOffset, 0);
+              }
+            }
+          }
       });
   graph->renderData.setDelegate(
       "IssueDrawcalls_LightOnly",

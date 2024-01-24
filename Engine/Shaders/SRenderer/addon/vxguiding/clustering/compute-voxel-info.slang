@@ -29,7 +29,7 @@ void LoadNeighbors(
         for (offset.y = -1; offset.y <= 1; offset.y++) {
             for (offset.x = -1; offset.x <= 1; offset.x++) {
                 int3 neighborPos = pos + offset;
-                if (any(neighborPos < 0 || neighborPos >= 64)) {
+                if (any(neighborPos < 0 || neighborPos >= gVD.voxelSize)) {
                     neighbors[offset.x + 1][offset.y + 1][offset.z + 1] = 0;
                 }
                 else {
@@ -52,7 +52,7 @@ void ComputeMain(
     const uint voxelID = u_pCompactIndex[DTid.x];
 
     uint neighbors[3][3][3];
-    const int3 mapPos = ReconstructIndex(voxelID, 64);
+    const int3 mapPos = ReconstructIndex(voxelID, gVD.voxelSize);
     LoadNeighbors(neighbors, mapPos);
     const float3 normalColor = GetNormal(neighbors);
     u_vxNormal[DTid.x] = float4(normalize(normalColor), 0.0f);

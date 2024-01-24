@@ -97,7 +97,7 @@ void RgenMain() {
         // radiance += material.emissiveColor;
         const PolymorphicLightInfo light = lights[0];
         radiance += EvaluateDirectLight(primaryRay, hit, light, RNG);
-
+        
         u_color[pixel] = float4(radiance, 1);
     }
 }

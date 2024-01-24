@@ -227,11 +227,15 @@ SE_EXPORT struct SRenderer {
     };
 
     struct MeshReferenceRecord {
-      GFX::Mesh* mesh;
       GFX::MeshReference* meshReference;
-      RHI::BLASInstance blasInstance;
-      std::vector<uint32_t> geometry_indices;
+      // meshes and geometry indices for all LoDs
+      std::vector<GFX::Mesh*> meshes;
+      std::vector<std::vector<uint32_t>> geometry_indices;
+      std::vector<RHI::BLASInstance> blasInstance;
       uint32_t primitiveType = 0;
+      uint32_t lod_shown = 0;
+      std::vector<uint32_t> basic_drawcall_offset;
+      std::vector<uint32_t> bsdf_drawcall_offset;
     };
 
     struct EntityLightRecord {

@@ -77,7 +77,7 @@ SE_EXPORT using EntityHandle = uint64_t;
 /** An entity is a wrapper of entity handle */
 struct Entity;
 /** Max number of entities */
-SE_EXPORT inline EntityHandle const constexpr MAX_ENTITIES = 2048;
+SE_EXPORT inline EntityHandle const constexpr MAX_ENTITIES = 65536;
 /** Max number of entities */
 SE_EXPORT inline EntityHandle const constexpr NULL_ENTITY =
     static_cast<EntityHandle>(-1);

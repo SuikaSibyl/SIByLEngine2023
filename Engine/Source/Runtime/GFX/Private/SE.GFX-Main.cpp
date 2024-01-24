@@ -1185,22 +1185,30 @@ auto MeshReference::serialize(void* pemitter, Core::EntityHandle const& handle,
   Core::Entity entity(handle);
   MeshReference* meshRef = entity.getComponent<MeshReference>();
   if (meshRef != nullptr) {
-    // if has joint index buffer, interpret
-    if (meshRef->mesh->jointIndexBuffer_host.size != 0) {
-      Core::Buffer joint_idx = std::move(meshRef->mesh->jointIndexBuffer_host);
-      std::vector<uint64_t> interpret_idx(joint_idx.size / sizeof(uint64_t));
-      memcpy(interpret_idx.data(), joint_idx.data, joint_idx.size);
-      for (size_t i = 0; i < interpret_idx.size(); ++i) {
-        interpret_idx[i] = env.mapper.find(Core::ORID(interpret_idx[i]))->second;
+    auto process_joints = [&env](GFX::Mesh* mesh) {
+      // if has joint index buffer, interpret
+      if (mesh->jointIndexBuffer_host.size != 0) {
+        Core::Buffer joint_idx = std::move(mesh->jointIndexBuffer_host);
+        std::vector<uint64_t> interpret_idx(joint_idx.size / sizeof(uint64_t));
+        memcpy(interpret_idx.data(), joint_idx.data, joint_idx.size);
+        for (size_t i = 0; i < interpret_idx.size(); ++i) {
+          interpret_idx[i] = env.mapper.find(Core::ORID(interpret_idx[i]))->second;
+        }
+        Core::Buffer idx_proxy;
+        idx_proxy.data = interpret_idx.data();
+        idx_proxy.size = joint_idx.size;
+        idx_proxy.isReference = true;
+        mesh->jointIndexBuffer_host = idx_proxy;
+        mesh->serialize();
+        mesh->jointIndexBuffer_host = std::move(joint_idx);
       }
-      Core::Buffer idx_proxy;
-      idx_proxy.data = interpret_idx.data();
-      idx_proxy.size = joint_idx.size;
-      idx_proxy.isReference = true;
-      meshRef->mesh->jointIndexBuffer_host = idx_proxy;
-      meshRef->mesh->serialize();
-      meshRef->mesh->jointIndexBuffer_host = std::move(joint_idx);
+    };
+    
+    process_joints(meshRef->mesh);
+    for (auto& lodmesh : meshRef->lod_meshes) {
+      process_joints(lodmesh);
     }
+
     emitter << YAML::Key << "MeshReference";
     emitter << YAML::Value << YAML::BeginMap;
     emitter << YAML::Key << "ORID" << YAML::Value
@@ -1208,6 +1216,15 @@ auto MeshReference::serialize(void* pemitter, Core::EntityHandle const& handle,
                                            : meshRef->mesh->ORID);
     emitter << YAML::Key << "CPF" << YAML::Value
             << meshRef->customPrimitiveFlag;
+    if (meshRef->lod_meshes.size() != 0) {
+      emitter << YAML::Key << "LoD_Num" << YAML::Value << meshRef->lod_meshes.size();
+      emitter << YAML::Key << "LoD_ORIDs";
+      emitter << YAML::Value << YAML::BeginSeq;
+      for (auto& lod_mesh : meshRef->lod_meshes) {
+        emitter << lod_mesh->ORID;
+      }
+      emitter << YAML::EndSeq;
+    }
     emitter << YAML::EndMap;
   }
 }
@@ -1219,28 +1236,39 @@ auto MeshReference::deserialize(void* compAoS, Core::EntityHandle const& handle,
   auto meshRefComponentAoS = components["MeshReference"];
   if (meshRefComponentAoS) {
     MeshReference* meshRef = entity.addComponent<MeshReference>();
-    Core::ORID orid = meshRefComponentAoS["ORID"].as<uint64_t>();
-    Core::GUID guid =
-        Core::ResourceManager::get()->requestRuntimeGUID<GFX::Mesh>();
-    if (orid == Core::INVALID_ORID) {
-      meshRef->mesh = nullptr;
-    } else {
-      GFX::Mesh mesh;
-      Core::ResourceManager::get()->addResource(guid, std::move(mesh));
-      Core::ResourceManager::get()->getResource<GFX::Mesh>(guid)->deserialize(
-          RHI::RHILayer::get()->getDevice(), orid);
-      meshRef->mesh =
-          Core::ResourceManager::get()->getResource<GFX::Mesh>(guid);
-      if (meshRef->mesh->jointIndexBuffer_host.size != 0) {
-        Core::Buffer joint_idx = std::move(meshRef->mesh->jointIndexBuffer_host);
-        std::vector<uint64_t> interpret_idx(joint_idx.size / sizeof(uint64_t));
-        memcpy(interpret_idx.data(), joint_idx.data, joint_idx.size);
-        for (size_t i = 0; i < interpret_idx.size(); ++i) {
-          interpret_idx[i] = env.mapper.find(Core::ORID(interpret_idx[i]))->second;
+
+    auto get_resource = [&env](Core::ORID orid) -> GFX::Mesh* {
+      Core::GUID guid = Core::ResourceManager::get()->requestRuntimeGUID<GFX::Mesh>();
+      if (orid == Core::INVALID_ORID) {
+        return nullptr;
+      } else {
+        GFX::Mesh mesh;
+        Core::ResourceManager::get()->addResource(guid, std::move(mesh));
+        Core::ResourceManager::get()->getResource<GFX::Mesh>(guid)->deserialize(
+            RHI::RHILayer::get()->getDevice(), orid);
+        GFX::Mesh* ret = Core::ResourceManager::get()->getResource<GFX::Mesh>(guid);
+        if (ret->jointIndexBuffer_host.size != 0) {
+          Core::Buffer joint_idx = std::move(ret->jointIndexBuffer_host);
+          std::vector<uint64_t> interpret_idx(joint_idx.size / sizeof(uint64_t));
+          memcpy(interpret_idx.data(), joint_idx.data, joint_idx.size);
+          for (size_t i = 0; i < interpret_idx.size(); ++i) {
+            interpret_idx[i] = env.mapper.find(Core::ORID(interpret_idx[i]))->second;
+          }
+          Core::Buffer idx_intepreted(joint_idx.size);
+          memcpy(idx_intepreted.data, interpret_idx.data(), idx_intepreted.size);
+          ret->jointIndexBuffer_host = std::move(idx_intepreted);
         }
-        Core::Buffer idx_intepreted(joint_idx.size);
-        memcpy(idx_intepreted.data, interpret_idx.data(), idx_intepreted.size);
-        meshRef->mesh->jointIndexBuffer_host = std::move(idx_intepreted);
+        return ret;
+      }
+    };
+
+    Core::ORID orid = meshRefComponentAoS["ORID"].as<uint64_t>();
+    meshRef->mesh = get_resource(orid);
+    if (meshRefComponentAoS["LoD_Num"]) {
+      meshRef->lod_meshes.resize(meshRefComponentAoS["LoD_Num"].as<size_t>());
+      size_t i = 0;
+      for (auto node : meshRefComponentAoS["LoD_ORIDs"]) {
+        meshRef->lod_meshes[i++] = get_resource(node.as<size_t>());
       }
     }
     meshRef->customPrimitiveFlag = meshRefComponentAoS["CPF"].as<size_t>();
@@ -1386,7 +1414,8 @@ auto GFXManager::shutDown() noexcept -> void {
 auto GFXManager::onUpdate() noexcept -> void {
   // update timeline
   if (mTimeline.play) {
-    mTimeline.currentSec += mTimeline.timer->deltaTime();
+    //mTimeline.currentSec += mTimeline.timer->deltaTime();
+    mTimeline.currentSec += 1.f / mTimeline.step_per_sec;
   }
   // update extension
   for (auto& ext : extensions) ext.second->onUpdate();

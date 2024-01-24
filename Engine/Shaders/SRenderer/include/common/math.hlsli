@@ -19,15 +19,25 @@ float minComponent(in const float3 v) {
 /** Returns the largest component of the vector. */
 float maxComponent(in const float3 v) {
     return max(v.x, max(v.y, v.z)); }
+/** Returns the largest component of the vector. */
+float maxComponent(in const float4 v) {
+    return max(max(v.x, v.y), max(v.z, v.w)); }
 
 /** Returns the index of the smallest component of the vector. */
 int minDimension(in const float3 v) {
     return (v.x < v.y) ? ((v.x < v.z) ? 0 : 2) : 
            ((v.y < v.z) ? 1 : 2); }
 /** Returns the index of the largest component of the vector. */
+int maxDimension(in const float2 v) {
+    return (v.x >= v.y) ? 0 : 1; }
+/** Returns the index of the largest component of the vector. */
 int maxDimension(in const float3 v) {
     return (v.x > v.y) ? ((v.x > v.z) ? 0 : 2) : 
            ((v.y > v.z) ? 1 : 2); }
+/** Returns the index of the largest component of the vector. */
+int maxDimension(in const float4 v) {
+    int4 isMax = select(v == maxComponent(v), int4(1), int4(0));
+    return dot(isMax, int4(0, 1, 2, 3)); }
 
 // permute a float3 vector
 float3 permute(in const float3 v, int x, int y, int z) {

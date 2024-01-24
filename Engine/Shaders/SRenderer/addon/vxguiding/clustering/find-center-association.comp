@@ -18,6 +18,12 @@ layout(binding = 5, set = 0) buffer SVXInfoBuffer { svoxel_info svxInfo[]; };
 layout(binding = 6, set = 0) buffer SVXAccumInfoBuffer { svoxel_info accumSVXInfo[]; };
 layout(binding = 7, set = 0) buffer CounterBuffer { int counter[]; };
 layout(binding = 8, set = 0) buffer DebugBuffer { float debug[]; };
+layout(binding = 9, set = 0) buffer VoxerlizerData { 
+    vec3 aabbMin;
+    int voxelSize;
+    vec3 aabbMax;
+    int padding;
+};
 
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
@@ -27,7 +33,7 @@ void main() {
     if(compactID >= counterCount) return;
 
     const int voxelID = int(compactIndices[compactID]);
-    const ivec3 voxelPos = ReconstructIndex(voxelID, 64);
+    const ivec3 voxelPos = ReconstructIndex(voxelID, voxelSize);
     const ivec3 gridPos = voxelPos / 8;
 
     int clusterIDs[32];

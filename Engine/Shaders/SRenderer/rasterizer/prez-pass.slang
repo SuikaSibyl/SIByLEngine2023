@@ -1,17 +1,18 @@
-#include "../include/common/indirect_draw.hlsli"
 #include "../include/scene_descriptor_set.hlsli"
 
-StructuredBuffer<DrawIndexedIndirectEX> indirect_draws;
+[[vk::push_constant]]
+cbuffer PushConstants {
+    struct PushConstants {
+        uint geometry_idx;
+    } pConst;
+};
 
 struct AssembledVertex { int vertexId : SV_VertexId; };
 struct VertexStageOutput { float4 sv_position : SV_Position; };
 
 [shader("vertex")]
 VertexStageOutput vertexMain_Indirect(AssembledVertex assembledVertex) {
-    const uint draw_idx = 0;
-    const uint geometry_idx = indirect_draws[draw_idx].geometryID;
-
-    const GeometryInfo geometry = geometries[geometry_idx];
+    const GeometryInfo geometry = geometries[pConst.geometry_idx];
     const float4x4 o2w = ObjectToWorld(geometry);
 
     const float3 positionOS = fetchVertexPosition(assembledVertex.vertexId);

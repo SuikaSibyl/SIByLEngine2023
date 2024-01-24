@@ -18,6 +18,6 @@ layout(binding = 0, set = 0) buffer TopLevelTreeBuffer { float tltree[]; };
 layout(binding = 1, set = 0) buffer ClusterNodesBuffer { int cluster[]; };
 layout(binding = 2, set = 0) buffer TreeNodesBuffer { TreeNode nodes[]; };
 layout(binding = 3, set = 0, r32ui) readonly uniform uimage2D visibilityIMG;
-layout(binding = 4, set = 0) buffer AvgVisibilityBuffer { uint8_t avg_visibility[]; };
+layout(binding = 4, set = 0) buffer AvgVisibilityBuffer { float avg_visibility[]; };
 
 // layout(binding = 4, set = 0) buffer TopLevelProbBuffer { float tlprob[]; };

@@ -145,11 +145,20 @@ auto SceneNodeLoader_obj::loadSceneNode(std::filesystem::path const& path,
           positions[v] = {attrib.vertices[3 * size_t(idx.vertex_index) + 0],
                           attrib.vertices[3 * size_t(idx.vertex_index) + 1],
                           attrib.vertices[3 * size_t(idx.vertex_index) + 2]};
-          normals[v] = {attrib.normals[3 * size_t(idx.normal_index) + 0],
-                        attrib.normals[3 * size_t(idx.normal_index) + 1],
-                        attrib.normals[3 * size_t(idx.normal_index) + 2]};
-          uvs[v] = {attrib.texcoords[2 * size_t(idx.texcoord_index) + 0],
-                    -attrib.texcoords[2 * size_t(idx.texcoord_index) + 1]};
+          if (attrib.normals.size() == 0) {
+            normals[v] = {0, 0, 0};  
+          } else {
+            normals[v] = {attrib.normals[3 * size_t(idx.normal_index) + 0],
+                          attrib.normals[3 * size_t(idx.normal_index) + 1],
+                          attrib.normals[3 * size_t(idx.normal_index) + 2]};          
+          }
+          if (attrib.texcoords.size() == 0) {
+            uvs[v] = {0, 0};
+          } else {
+            uvs[v] = {attrib.texcoords[2 * size_t(idx.texcoord_index) + 0],
+                      -attrib.texcoords[2 * size_t(idx.texcoord_index) + 1]};
+
+          }
         }
         Math::vec3 edge1 = positions[1] - positions[0];
         Math::vec3 edge2 = positions[2] - positions[0];
@@ -1339,8 +1348,8 @@ void DecomposeMatrixToComponents(Math::mat4 matrix, Math::vec3& translation,
  static inline auto processGLTFAnimation(GameObjectHandle const& gfxNode, int node_id,
     tinygltf::Model const* model, glTFLoaderEnv& env, GFX::Scene& gfxscene,
     MeshLoaderConfig meshConfig = {}) noexcept -> void {
-  //for (size_t i = 0; i < env.anim_channels.size(); ++i) {
-  size_t i = 7;
+  if (env.anim_channels.size() == 0) return;
+  size_t i = 0;
   {
     auto iter = env.anim_channels[i].find(node_id);
     if (iter != env.anim_channels[i].end()) {
@@ -1492,7 +1501,69 @@ struct AssimpLoaderEnv {
   std::string directory;
   std::unordered_map<std::string, Core::GUID> textures;
   std::unordered_map<aiMaterial*, Core::GUID> materials;
+  std::unordered_map<std::string, GFX::AnimationComponent> animation_map;
 };
+
+auto loadAssimpAnimation(aiScene const* scene, AssimpLoaderEnv& env) {
+  if (scene->mNumAnimations == 0) return;
+  aiAnimation const* aianimation = scene->mAnimations[0];
+  //env.anim_samplers.resize(aianimation->mNumChannels);
+  //env.anim_channels.resize(aianimation->mNumChannels);
+  for (size_t i = 0; i < aianimation->mNumChannels; i++) {
+    aiNodeAnim const* channel = aianimation->mChannels[i];
+    std::string channel_name = channel->mNodeName.data;
+    auto iter = env.animation_map.find(channel_name);
+    if (iter == env.animation_map.end()) {
+      env.animation_map[channel_name] = {};
+      iter = env.animation_map.find(channel_name);
+    }
+    auto& ani = iter->second.ani;
+    ani.name = channel_name;
+    if (channel->mNumPositionKeys != 0) {
+      GFX::AnimationComponent::AnimationSampler sampler;
+      sampler.interpolation = GFX::AnimationComponent::AnimationSampler::InterpolationType::LINEAR;
+      for (size_t j = 0; j < channel->mNumPositionKeys; ++j) {
+        aiVectorKey const& key = channel->mPositionKeys[j];
+        sampler.inputs.push_back(key.mTime / aianimation->mTicksPerSecond);
+        sampler.outputsVec3.push_back(
+          Math::vec3{key.mValue.x, key.mValue.y, key.mValue.z});
+      }
+      ani.channels.push_back(GFX::AnimationComponent::AnimationChannel{
+          GFX::AnimationComponent::AnimationChannel::PathType::TRANSLATION,
+          uint32_t(ani.samplers.size())});
+      ani.samplers.push_back(sampler);
+    }
+    if (channel->mNumRotationKeys != 0) {
+      GFX::AnimationComponent::AnimationSampler sampler;
+      sampler.interpolation = GFX::AnimationComponent::AnimationSampler::InterpolationType::LINEAR;
+      for (size_t j = 0; j < channel->mNumRotationKeys; ++j) {
+        aiQuatKey const& key = channel->mRotationKeys[j];
+        sampler.inputs.push_back(key.mTime / aianimation->mTicksPerSecond);
+        sampler.outputsVec4.push_back(
+          Math::vec4{key.mValue.x, key.mValue.y, key.mValue.z, key.mValue.w});
+      }
+      ani.channels.push_back(GFX::AnimationComponent::AnimationChannel{
+          GFX::AnimationComponent::AnimationChannel::PathType::ROTATION,
+          uint32_t(ani.samplers.size())});
+      ani.samplers.push_back(sampler);
+    }
+    if (channel->mNumScalingKeys != 0) {
+      GFX::AnimationComponent::AnimationSampler sampler;
+      sampler.interpolation = GFX::AnimationComponent::AnimationSampler::InterpolationType::LINEAR;
+      for (size_t j = 0; j < channel->mNumScalingKeys; ++j) {
+        aiVectorKey const& key = channel->mScalingKeys[j];
+        sampler.inputs.push_back(key.mTime / aianimation->mTicksPerSecond);
+        sampler.outputsVec3.push_back(
+          Math::vec3{key.mValue.x, key.mValue.y, key.mValue.z});
+      }
+      ani.channels.push_back(GFX::AnimationComponent::AnimationChannel{
+          GFX::AnimationComponent::AnimationChannel::PathType::SCALE,
+          uint32_t(ani.samplers.size())});
+      ani.samplers.push_back(sampler);
+    }
+  }
+}
+
 
 auto loadMaterialTextures(aiMaterial* mat, aiTextureType type,
                           AssimpLoaderEnv& env) noexcept
@@ -1552,8 +1623,9 @@ auto loadMaterial(aiMaterial* material, AssimpLoaderEnv& env) noexcept
     std::vector<Core::GUID> normalMaps =
         loadMaterialTextures(material, aiTextureType_NORMALS, env);
     if (normalMaps.size() != 1) {
-      Core::LogManager::Error(
-          "GFX :: SceneNodeLoader_assimp :: roughness map number is not 1.");
+      // No normal map
+      //Core::LogManager::Error(
+      //    "GFX :: SceneNodeLoader_assimp :: roughness map number is not 1.");
     } else {
       gfxmat.textures["normal_bump"] =
           GFX::Material::TextureEntry{normalMaps[0], 0};
@@ -1562,51 +1634,28 @@ auto loadMaterial(aiMaterial* material, AssimpLoaderEnv& env) noexcept
   { // load roughness texture
     std::vector<Core::GUID> roughnessMaps =
         loadMaterialTextures(material, aiTextureType_DIFFUSE_ROUGHNESS, env);
-    float roughness_factor = 1.f;
+    float roughness_factor = 1.f; float eta = 1.f;
     material->Get(AI_MATKEY_ROUGHNESS_FACTOR, roughness_factor);
+    material->Get(AI_MATKEY_REFRACTI, eta);
+    aiColor3D emissive_color(0.f, 0.f, 0.f);
+    aiColor3D specular_color(0.f, 0.f, 0.f);
+    material->Get(AI_MATKEY_COLOR_EMISSIVE, emissive_color);
+    material->Get(AI_MATKEY_COLOR_SPECULAR, specular_color);
+    gfxmat.emissiveColor =  {emissive_color.r, emissive_color.g, emissive_color.b};
+    if (roughness_factor < 1.f) {
+      gfxmat.roughness = std::max(0.05f, roughness_factor);
+      gfxmat.eta = 3;
+      gfxmat.specularColor =  {specular_color.r, specular_color.g, specular_color.b};
+      gfxmat.BxDF = 1;
+    }
     if (roughnessMaps.size() != 1) {
-      Core::LogManager::Error(
-          "GFX :: SceneNodeLoader_assimp :: roughness map number is not 1.");
+      // no roughness map
+      //Core::LogManager::Error(
+      //    "GFX :: SceneNodeLoader_assimp :: roughness map number is not 1.");
     } else {
       gfxmat.textures["roughness"] =
           GFX::Material::TextureEntry{roughnessMaps[0], 0};
     }
-    { 
-      //std::vector<Core::GUID> unknownMaps =
-      //  loadMaterialTextures(material, aiTextureType_UNKNOWN, env);
-      //if (unknownMaps.size() != 1) {
-      //  Core::LogManager::Error(
-      //      "GFX :: SceneNodeLoader_assimp :: unknown map number is not 1.");
-      //} else {
-      //  gfxmat.textures["base_color"] =
-      //      GFX::Material::TextureEntry{unknownMaps[0], 0};
-      //}
-    }
-    std::vector<Core::GUID> unknownMaps =
-        loadMaterialTextures(material, aiTextureType_DIFFUSE, env);
-    unknownMaps = loadMaterialTextures(material, aiTextureType_SPECULAR, env);
-    unknownMaps = loadMaterialTextures(material, aiTextureType_AMBIENT, env);
-    unknownMaps = loadMaterialTextures(material, aiTextureType_EMISSIVE, env);
-    unknownMaps = loadMaterialTextures(material, aiTextureType_HEIGHT, env);
-    unknownMaps = loadMaterialTextures(material, aiTextureType_NORMALS, env);
-    unknownMaps = loadMaterialTextures(material, aiTextureType_SHININESS, env);
-    unknownMaps = loadMaterialTextures(material, aiTextureType_OPACITY, env);
-    unknownMaps =
-        loadMaterialTextures(material, aiTextureType_DISPLACEMENT, env);
-    unknownMaps = loadMaterialTextures(material, aiTextureType_LIGHTMAP, env);
-    unknownMaps = loadMaterialTextures(material, aiTextureType_REFLECTION, env);
-    unknownMaps = loadMaterialTextures(material, aiTextureType_BASE_COLOR, env);
-    unknownMaps =
-        loadMaterialTextures(material, aiTextureType_NORMAL_CAMERA, env);
-    unknownMaps = loadMaterialTextures(material, aiTextureType_EMISSION_COLOR, env);
-    unknownMaps =
-        loadMaterialTextures(material, aiTextureType_EMISSION_COLOR, env);
-    unknownMaps = loadMaterialTextures(material, aiTextureType_METALNESS, env);
-    unknownMaps =
-        loadMaterialTextures(material, aiTextureType_DIFFUSE_ROUGHNESS, env);
-    unknownMaps =
-        loadMaterialTextures(material, aiTextureType_AMBIENT_OCCLUSION, env);
-    unknownMaps = loadMaterialTextures(material, aiTextureType_UNKNOWN, env);
   }
   gfxmat.serialize();
   Core::GUID matID =
@@ -1615,11 +1664,49 @@ auto loadMaterial(aiMaterial* material, AssimpLoaderEnv& env) noexcept
   return matID;
 }
 
+Math::vec3 createTangent(Math::vec3 n) {
+  if (n[2] < float(-1 + 1e-6)) {
+    return Math::vec3(0, -1, 0);
+  } else {
+    const float a = 1 / (1 + n[2]);
+    const float b = -n[0] * n[1] * a;
+    return Math::vec3(1 - n[0] * n[0] * a, b, -n[0]);
+  }
+}
+
 static inline auto processAssimpMesh(GameObjectHandle const& gfxNode,
                                      aiNode const* node, aiScene const* scene,
                                      AssimpLoaderEnv& env, GFX::Scene& gfxscene,
                                      MeshLoaderConfig meshConfig = {}) noexcept
     -> void {
+  auto entity = gfxscene.getGameObject(gfxNode)->getEntity();
+  // set transformation
+  auto* transform = entity.getComponent<TransformComponent>();
+  {  // apply the transformation
+    auto& input_transform = node->mTransformation;
+    Math::mat4 transform_mat = {
+        input_transform.a1, input_transform.a2, input_transform.a3,
+        input_transform.a4, input_transform.b1, input_transform.b2,
+        input_transform.b3, input_transform.b4, input_transform.c1,
+        input_transform.c2, input_transform.c3, input_transform.c4,
+        input_transform.d1, input_transform.d2, input_transform.d3,
+        input_transform.d4,
+    };
+    Math::vec3 t, r, s;
+    Math::Decompose(transform_mat, &t, &r, &s);
+    transform->translation = t;
+    transform->eulerAngles = r;
+    transform->scale = s;
+  }
+
+  // set animation
+  auto anim_find = env.animation_map.find(std::string(node->mName.C_Str()));
+  if (anim_find != env.animation_map.end()) {
+    AnimationComponent* anim = entity.addComponent<AnimationComponent>();
+    *anim = anim_find->second;
+  }
+
+  // load mesh
   uint32_t vertex_offset = 0;
   std::unordered_map<uint64_t, uint32_t> uniqueVertices{};
 
@@ -1677,9 +1764,21 @@ static inline auto processAssimpMesh(GameObjectHandle const& gfxNode,
             vertex.push_back(0);
           }
         } else if (entry.info == MeshDataLayout::VertexInfo::TANGENT) {
-          vertex.push_back(mesh->mTangents[i].x);
-          vertex.push_back(mesh->mTangents[i].y);
-          vertex.push_back(mesh->mTangents[i].z);
+          if (mesh->mTangents) {
+            vertex.push_back(mesh->mTangents[i].x);
+            vertex.push_back(mesh->mTangents[i].y);
+            vertex.push_back(mesh->mTangents[i].z);
+          } else {
+            Math::vec3 tangent = createTangent(Math::vec3{
+              mesh->mNormals[i].x,
+              mesh->mNormals[i].y,
+              mesh->mNormals[i].z,
+            });
+            //createTangent
+            vertex.push_back(tangent.x);
+            vertex.push_back(tangent.y);
+            vertex.push_back(tangent.z);          
+          }
         } else if (entry.info == MeshDataLayout::VertexInfo::COLOR) {
           // Optional: vertex colors
           vertex.push_back(mesh->mColors[0][i].r);
@@ -1763,14 +1862,11 @@ static inline auto processAssimpMesh(GameObjectHandle const& gfxNode,
   meshResourceRef->ORID = orid;
   meshResourceRef->serialize();
   // bind scene
-  gfxscene.getGameObject(gfxNode)
-      ->getEntity()
-      .addComponent<MeshReference>()
-      ->mesh = meshResourceRef;
+  entity.addComponent<MeshReference>()->mesh = meshResourceRef;
   gfxscene.getGameObject(gfxNode)->getEntity().addComponent<MeshRenderer>();
 
   MeshRenderer* meshRenderer =
-      gfxscene.getGameObject(gfxNode)->getEntity().getComponent<MeshRenderer>();
+    gfxscene.getGameObject(gfxNode)->getEntity().getComponent<MeshRenderer>();
   // meshRenderer->materials.push_back(i)
   for (unsigned int i = 0; i < node->mNumMeshes; i++) {
     aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
@@ -1778,7 +1874,7 @@ static inline auto processAssimpMesh(GameObjectHandle const& gfxNode,
       aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
       Core::GUID matID = loadMaterial(material, env);
       meshRenderer->materials.push_back(
-          Core::ResourceManager::get()->getResource<GFX::Material>(matID));
+        Core::ResourceManager::get()->getResource<GFX::Material>(matID));
     }
   }
 }
@@ -1812,7 +1908,7 @@ auto SceneNodeLoader_assimp::loadSceneNode(
   std::string path_str = path.string();
   const aiScene* scene =
       importer.ReadFile(path_str, aiProcess_Triangulate | aiProcess_FlipUVs |
-                                      aiProcess_CalcTangentSpace);
+                    aiProcess_GenUVCoords | aiProcess_CalcTangentSpace);
 
   if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE ||
       !scene->mRootNode) {
@@ -1830,8 +1926,8 @@ auto SceneNodeLoader_assimp::loadSceneNode(
 
   AssimpLoaderEnv env;
   env.directory = directory;
-  processAssimpNode(rootNode, scene->mRootNode, scene, env, gfxscene,
-                    meshConfig);
+  loadAssimpAnimation(scene, env);
+  processAssimpNode(rootNode, scene->mRootNode, scene, env, gfxscene, meshConfig);
 }
 
 struct MitsubaLoaderEnv {
@@ -1966,7 +2062,7 @@ auto loadMeshNode(TPM_NAMESPACE::Object const* node, GFX::Scene& gfxscene,
         transform.matrix[12], transform.matrix[13], transform.matrix[14], transform.matrix[15]
     };
     Math::vec3 t, r, s;
-    Math::decompose(transform_mat, &t, &r, &s);
+    Math::Decompose(transform_mat, &t, &r, &s);
     GFX::TransformComponent* transform_component =
         gfxscene.getGameObject(obj_node)
             ->getEntity()
@@ -1999,7 +2095,7 @@ auto loadMeshNode(TPM_NAMESPACE::Object const* node, GFX::Scene& gfxscene,
         transform.matrix[12], transform.matrix[13], transform.matrix[14],
         transform.matrix[15]};
     Math::vec3 t, r, s;
-    Math::decompose(transform_mat, &t, &r, &s);
+    Math::Decompose(transform_mat, &t, &r, &s);
     GFX::TransformComponent* transform_component =
         gfxscene.getGameObject(obj_node)
             ->getEntity()
@@ -2034,7 +2130,7 @@ auto loadMeshNode(TPM_NAMESPACE::Object const* node, GFX::Scene& gfxscene,
         transform.matrix[12], transform.matrix[13], transform.matrix[14],
         transform.matrix[15]};
     Math::vec3 t, r, s;
-    Math::decompose(transform_mat, &t, &r, &s);
+    Math::Decompose(transform_mat, &t, &r, &s);
     GFX::TransformComponent* transform_component =
         gfxscene.getGameObject(obj_node)
             ->getEntity()

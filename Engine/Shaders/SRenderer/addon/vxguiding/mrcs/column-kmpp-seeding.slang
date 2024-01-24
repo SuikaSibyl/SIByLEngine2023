@@ -1,4 +1,5 @@
 #include "../../../include/common/random.hlsli"
+#include "../../vxgi/include/conetrace_utils.hlsli"
 #include "cluster-common.hlsli"
 
 RWStructuredBuffer<int> u_Seeds;
@@ -6,6 +7,8 @@ RWStructuredBuffer<svoxel_info> u_RowClusterInfo;
 
 const StructuredBuffer<uint4> u_IndirectArgs;
 const StructuredBuffer<uint4> u_RowVisibility;
+const StructuredBuffer<uint> u_CompactIndices;
+const StructuredBuffer<float> u_PremulIrradiance;
 
 #ifndef DESC_TYPE
 #define DESC_TYPE uint4
@@ -13,7 +16,13 @@ const StructuredBuffer<uint4> u_RowVisibility;
 
 groupshared float warp_prob[32];
 groupshared DESC_TYPE current_center;
+groupshared float3 current_center_pos;
+groupshared float current_center_intensity;
 groupshared int selected_cluster;
+
+cbuffer VoxelizerUniform {
+    VoxerlizerData gVD;
+}
 
 [shader("compute")]
 [numthreads(1024, 1, 1)]
@@ -26,13 +35,18 @@ void ComputeMain(int3 DTid: SV_DispatchThreadID) {
     RandomSamplerState RNG = InitRandomSampler(uint2(0, tid), 0);
     const int rnd_element = clamp(int(GetNextRandom(RNG) * element_count), 0, element_count - 1);
 
+    const int voxelID = int(u_CompactIndices[rnd_element]);
+    const float3 position = float3(ReconstructIndex(voxelID, gVD.voxelSize));
     const DESC_TYPE element = u_RowVisibility[rnd_element];
-
+    const float intensity = u_PremulIrradiance[rnd_element];
+    
     if (tid == 0) {
         // random choose the first seed
         current_center = element;
+        current_center_pos = position;
+        current_center_intensity = intensity;
         u_Seeds[0] = rnd_element;
-        u_RowClusterInfo[0] = svoxel_info(element, float3(0), 1);
+        u_RowClusterInfo[0] = svoxel_info(element, position, intensity);
     }
     if (sg == 0) {
         // reset the prob tree
@@ -45,9 +59,15 @@ void ComputeMain(int3 DTid: SV_DispatchThreadID) {
     for (int seed_id = 1; seed_id < 32; ++seed_id) {
         // calculate the distance to the nearest center
         const DESC_TYPE cluster_element = current_center;
-        const float d = ComputeDistance(element, cluster_element);
-        dist = min(dist, d);
+        const float3 cluster_center_pos = current_center_pos;
+        const float cluster_center_intensity = current_center_intensity;
 
+        const float d = ComputeDistance(element, cluster_element, true,
+                                        position, cluster_center_pos,
+                                        intensity, cluster_center_intensity,
+                                        0.f, 1.f);
+        dist = min(dist, d);
+        
         // calculate the prob of being selected
         float weight = dist * dist;
         const float warp_weight_sum = WaveActiveSum(weight);
@@ -94,7 +114,7 @@ void ComputeMain(int3 DTid: SV_DispatchThreadID) {
         int selected_subid = WaveReadLaneAt(nid, 0);
         if (sg == selected_cluster && sgid == selected_subid) {
             u_Seeds[seed_id] = rnd_element;
-            u_RowClusterInfo[seed_id] = svoxel_info(element, float3(0), 1);
+            u_RowClusterInfo[seed_id] = svoxel_info(element, position, intensity);
             current_center = element;
         }
 

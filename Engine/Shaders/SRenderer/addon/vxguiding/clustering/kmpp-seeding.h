@@ -8,3 +8,9 @@ layout(binding = 2, set = 0) buffer SVXInfoBuffer { vec4 vxNormal[]; };
 layout(binding = 3, set = 0) buffer CounterBuffer { int counter[]; };
 
 layout(binding = 4, set = 0) buffer DebugBuffer { float debug[]; };
+layout(binding = 5, set = 0) buffer VoxerlizerData { 
+    vec3 aabbMin;
+    int voxelSize;
+    vec3 aabbMax;
+    int padding;
+};

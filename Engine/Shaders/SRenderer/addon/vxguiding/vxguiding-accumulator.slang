@@ -280,7 +280,7 @@ void RgenMain() {
 
         // sample top level tree
         double top_pdf = 1.f;
-        const int topIndex = SampleTopLevelTree(u_topLevelTree, spixelID, GetNextRandom(RNG), top_pdf);
+        const int topIndex = SampleTopLevelTree(u_topLevelTree, spixelID, GetNextRandom(RNG), info, top_pdf);
 
         float max_irradiance = 0.f;
         float4 vpl_pos = float4(0);

@@ -141,10 +141,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Private\Quadric.Simplify.hpp" />
     <ClInclude Include="Public\SE.MeSh.Lightmap.hpp" />
+    <ClInclude Include="Public\SE.MeSh.Simplify.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Private\SE.MeSh.Lightmap.cpp" />
+    <ClCompile Include="Private\SE.MeSh.Simplify.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\ThirdParty\xatlas\xatlas.vcxproj">

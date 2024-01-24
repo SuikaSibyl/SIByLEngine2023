@@ -30,9 +30,9 @@ void ComputeMain(int3 DTid: SV_DispatchThreadID) {
 
     // Otherwise we need to do some per-voxel work
     const uint voxelID = u_CompactIndex[compactID];
-    const int3 mapPos = ReconstructIndex(voxelID, 64);
+    const int3 mapPos = ReconstructIndex(voxelID, gVD.voxelSize);
     // Compute the irradiance * surface area
-    const float irradiance = UnpackIrradiance(u_IrradianceMap[mapPos]) / u_VPLCount[mapPos];
+    const float irradiance = UnpackIrradiance(u_IrradianceMap[mapPos], 100) / u_VPLCount[mapPos];
     const VoxelTexInfo info = CreateVoxelTexInfo(gVD);
     const AABB aabb = VoxelToBound(mapPos, 0, info);
     const AABB compact_bound = UnpackCompactAABB(aabb, u_pMin[voxelID].xyz, u_pMax[voxelID].xyz);

@@ -57,7 +57,7 @@ void LoadNeighbors(inout_ref(uint) neighbors[3][3][3], int3 pos) {
         for (offset.y = -1; offset.y <= 1; offset.y++) {
             for (offset.x = -1; offset.x <= 1; offset.x++) {
                 int3 neighborPos = pos + offset;
-                if (any(neighborPos < 0 || neighborPos >= 64)) {
+                if (any(neighborPos < 0 || neighborPos >= gVD.voxelSize)) {
                     neighbors[offset.x + 1][offset.y + 1][offset.z + 1] = 0;
                 }
                 else {

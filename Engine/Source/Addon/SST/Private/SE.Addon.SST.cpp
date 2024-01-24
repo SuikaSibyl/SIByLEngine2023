@@ -633,6 +633,6 @@ SSTTestGraph::SSTTestGraph() {
   addPass(std::make_unique<Addon::Postprocess::ToneMapperPass>(), "ToneMapper Pass");
   addEdge("Accumulation Pass", "Output", "ToneMapper Pass", "Input");
 
-  markOutput("Accumulation Pass", "Output");
+  markOutput("ToneMapper Pass", "Output");
 }
 }

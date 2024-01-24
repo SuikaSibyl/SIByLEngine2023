@@ -477,8 +477,12 @@ SE_EXPORT struct CameraComponent {
 SE_EXPORT struct MeshReference {
   /* constructor */
   MeshReference() = default;
-  /** mesh */
+  /** core mesh */
   Mesh* mesh = nullptr;
+  /** lod meshes */
+  std::vector<Mesh*> lod_meshes;
+  /** the lod level showing for current frame */
+  uint32_t lod_shown = 0;
   /** custom primitive flag */
   size_t customPrimitiveFlag = 0;
   /** serialize */

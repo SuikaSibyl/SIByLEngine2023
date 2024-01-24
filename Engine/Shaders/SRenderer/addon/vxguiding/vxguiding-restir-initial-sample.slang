@@ -77,7 +77,7 @@ void RgenMain() {
         return;
     }
     const GeometryHit hit = GetGeometryHit(vhit, primaryRay);
-
+    
     // Data preparation for VXPG
     // --------------------------------------------------------------------
     // Prepare payload structure for path tracing
@@ -119,7 +119,7 @@ void RgenMain() {
 
         // sample top level tree
         double top_pdf = 1.f;
-        const int topIndex = SampleTopLevelTree(u_topLevelTree, spixelID, GetNextRandom(RNG), top_pdf);
+        const int topIndex = SampleTopLevelTree(u_topLevelTree, spixelID, GetNextRandom(RNG), info, top_pdf);
 
         float max_irradiance = 0.f;
         float4 vpl_pos = float4(0);
@@ -133,7 +133,8 @@ void RgenMain() {
                 primaryRay, bsdfRay,
                 double(bsdf_pdf),
                 hit, payload, RNG, di);
-
+            // di += EvaluateMultibounceIndirect(bsdfRay, 1, float3(1), payload, RNG);
+            
             const float irradiance = maxComponent(di);
             if (irradiance != 0) {
                 const uint hitNormal = UnitVectorToUnorm32Octahedron(payload.hit.geometryNormal);
@@ -141,7 +142,7 @@ void RgenMain() {
                 vpl_pos = float4(payload.hit.position, asfloat(hitNormal));
             }
             
-            if (any(indirect > 0)) {
+            if (true) {
                 float w1 = bsdf_pdf;
                 float w2 = 0;
                 {
@@ -170,7 +171,7 @@ void RgenMain() {
                         if (top_pdf <= 0) {
                         }
                         pdf *= double(top_pdf);
-
+                        
                         // pdf of sample the spherical voxel
                         float sph_pdf = PdfSampleSphericalVoxel(
                             vxID,
@@ -189,6 +190,70 @@ void RgenMain() {
                 float mis_weight = w1 / (w1 + w2);
                 radiance += indirect * mis_weight;
 
+                // multibounce
+                if (HasHit(payload.hit)) {
+                    float3 multi_bounce = float3(0);
+                    Ray prev_bsdf_ray = bsdfRay;
+                    GeometryHit secondary_hit = payload.hit;
+                    // extra bounce testing
+                    // MIS the bsdf sampling and voxel guider sampling
+                    VoxelGuidingConfig config;
+                    config.type = VoxelGuidingType::VG_Irradiance;
+                    config.visibility = VisibilityType::None;
+                    int VXCount = u_vxCounter.Load(0);
+                    const int3 currVXID = int3(WorldToVoxel(secondary_hit.position.xyz, info) * info.volumeDimension);
+
+                    { // BSDF sampling, we really sample the bsdf sampling
+                        float bsdf_pdf;
+                        Ray bsdf_ray = SpawnBsdfRay(secondary_hit, -prev_bsdf_ray.direction, RNG, bsdf_pdf);
+                        float3 gi = EvaluateIndirectLight(
+                            prev_bsdf_ray, bsdf_ray,
+                            double(bsdf_pdf),
+                            secondary_hit, payload, RNG);
+                        const float3 indirect = gi;
+                        if (any(indirect > 0)) {
+                            const int3 vxID = int3(WorldToVoxel(payload.hit.position.xyz, info) * info.volumeDimension);
+                            float w1 = bsdf_pdf;
+                            float w2 = float(PdfVoxelGuiding(
+                                VXCount, vxID, currVXID, secondary_hit, info, config,
+                                u_pMin, u_pMax, u_pCompactIndex, u_TreeNodes, u_inverseIndex, u_compact2leaf, u_pIrradiance));
+                            if (power_mis) {
+                                w1 *= w1;
+                                w2 *= w2;
+                            }
+                            di += indirect * w1 / (w1 + w2);
+                        }
+                        payload.hit = secondary_hit;
+                    }
+                    { // Semi NEE - voxel2sphere
+                        double pdf;
+                        AABB aabb;
+                        const float3 guidedDir = SampleVoxelGuiding(
+                            VXCount, pixel, uv, currVXID, secondary_hit, info, config, RNG,
+                            u_pMin, u_pMax, u_pCompactIndex, u_TreeNodes,
+                            u_spixelIdx, u_fuzzyWeight, u_fuzzyIDX, u_topLevelTree, u_clusterRoots,
+                            aabb, pdf);
+                        Ray guidedRay = SpawnRay(secondary_hit, guidedDir);
+                        float3 gi = EvaluateIndirectLight(
+                            prev_bsdf_ray, guidedRay,
+                            pdf,
+                            secondary_hit, payload, RNG);
+
+                        if ((all(payload.hit.position >= aabb.min) && all(payload.hit.position <= aabb.max))) {
+                            if (any(gi > 0)) {
+                                float w1 = PdfBsdfSample(secondary_hit, -prev_bsdf_ray.direction, guidedRay.direction);
+                                float w2 = float(pdf);
+                                if (power_mis) {
+                                    w1 *= w1;
+                                    w2 *= w2;
+                                }
+                                di += gi * w2 / (w1 + w2);
+                            }
+                        }
+                        payload.hit = secondary_hit;
+                    }
+                }
+                
                 {
                     GIReservoir local = MakeGIReservoir(payload.hit.position, payload.hit.geometryNormal, di, bsdf_pdf, RNGState);
                     const float target_pdf = GetGISampleTargetPdfForSurface(local.position, local.radiance, hit, globalUniform.cameraData.posW);
@@ -197,67 +262,6 @@ void RgenMain() {
                     }
                 }
             }
-            
-            // // multibounce
-            // if (HasHit(payload.hit) && any(throughput != float3(0))) {
-            //     float3 multi_bounce = float3(0);
-            //     Ray prev_bsdf_ray = bsdfRay;
-            //     GeometryHit secondary_hit = payload.hit;
-            //     // extra bounce testing
-            //     // MIS the bsdf sampling and voxel guider sampling
-            //     VoxelGuidingConfig config;
-            //     config.type = VoxelGuidingType::VG_Irradiance;
-            //     config.visibility = VisibilityType::None;
-            //     int VXCount = u_vxCounter.Load(0);
-            //     const int3 currVXID = int3(WorldToVoxel(secondary_hit.position.xyz, info) * info.volumeDimension);
-            //     { // BSDF sampling, we really sample the bsdf sampling
-            //         float bsdf_pdf;
-            //         Ray bsdf_ray = SpawnBsdfRay(secondary_hit, -prev_bsdf_ray.direction, RNG, bsdf_pdf);
-            //         float3 gi = EvaluateIndirectLight(
-            //             prev_bsdf_ray, bsdf_ray,
-            //             double(bsdf_pdf),
-            //             secondary_hit, payload, RNG);
-            //         const float3 indirect = gi * throughput;
-            //         if (any(indirect > 0)) {
-            //             const int3 vxID = int3(WorldToVoxel(payload.hit.position.xyz, info) * info.volumeDimension);
-            //             float w1 = bsdf_pdf;
-            //             float w2 = float(PdfVoxelGuiding(
-            //                 VXCount, vxID, currVXID, secondary_hit, info, config,
-            //                 u_pMin, u_pMax, u_pCompactIndex, u_TreeNodes, u_inverseIndex, u_compact2leaf, u_pIrradiance));
-            //             if (power_mis) {
-            //                 w1 *= w1;
-            //                 w2 *= w2;
-            //             }
-            //             radiance += indirect * w1 / (w1 + w2);
-            //         }
-            //     }
-            //     { // Semi NEE - voxel2sphere
-            //         double pdf;
-            //         AABB aabb;
-            //         const float3 guidedDir = SampleVoxelGuiding(
-            //             VXCount, pixel, uv, currVXID, secondary_hit, info, config, RNG,
-            //             u_pMin, u_pMax, u_pCompactIndex, u_TreeNodes,
-            //             u_spixelIdx, u_fuzzyWeight, u_fuzzyIDX, u_topLevelTree, u_clusterRoots,
-            //             aabb, pdf);
-            //         Ray guidedRay = SpawnRay(secondary_hit, guidedDir);
-            //         float3 gi = EvaluateIndirectLight(
-            //             prev_bsdf_ray, guidedRay,
-            //             pdf,
-            //             secondary_hit, payload, RNG);
-
-            //         if ((all(payload.hit.position >= aabb.min) && all(payload.hit.position <= aabb.max))) {
-            //             if (any(gi > 0)) {
-            //                 float w1 = PdfBsdfSample(secondary_hit, -prev_bsdf_ray.direction, guidedRay.direction);
-            //                 float w2 = float(pdf);
-            //                 if (power_mis) {
-            //                     w1 *= w1;
-            //                     w2 *= w2;
-            //                 }
-            //                 radiance += gi * throughput * w2 / (w1 + w2);
-            //             }
-            //         }
-            //     }
-            // }
         }
         // Then draw voxel samples
         if (topIndex != -1) {
@@ -295,6 +299,7 @@ void RgenMain() {
                     primaryRay, guidedRay,
                     pdf * double(sph_pdf),
                     hit, payload, RNG, di);
+                di += EvaluateMultibounceIndirect(guidedRay, 1, float3(1), payload, RNG);
                 
                 // const float irradiance = maxComponent(di);
                 // if (irradiance != 0 && max_irradiance == 0) {

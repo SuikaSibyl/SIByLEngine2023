@@ -20,7 +20,7 @@ void ComputeMain(int3 dtid: SV_DispatchThreadID) {
     const int valid_component = countbits(data_mask);
     const int component = sizeof(DATA_TYPE) / sizeof(float);
     DATA_TYPE gradient = DATA_TYPE(0.0f);
-
+    
     // Fetch the gradient of each differentiable component
     const float2 uv = (pixel + 0.5f) / image_size;
     const int mip_max = 1 + int(floor(log2(width)));

@@ -1232,7 +1232,12 @@ auto GroundTruthPass::reflect() noexcept -> RDG::PassReflection {
               RDG::TextureInfo::ConsumeType::StorageBinding}
               .addStage(
                   (uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
-
+  reflector.addInput("VBuffer")
+    .isTexture().withSize(Math::vec3(1, 1, 1))
+    .withUsages((uint32_t)RHI::TextureUsage::STORAGE_BINDING)
+    .consume(RDG::TextureInfo::ConsumeEntry{
+        RDG::TextureInfo::ConsumeType::StorageBinding}
+    .addStage((uint32_t)RHI::PipelineStages::RAY_TRACING_SHADER_BIT_KHR));
   return reflector;
 }
 
@@ -1251,6 +1256,7 @@ auto GroundTruthPass::execute(RDG::RenderContext* context,
                      RDG::RenderData const& renderData) noexcept
     -> void {
   GFX::Texture* color = renderData.getTexture("Color");
+  GFX::Texture* vbuffer = renderData.getTexture("VBuffer");
 
   std::vector<RHI::BindGroupEntry>* set_0_entries =
       renderData.getBindGroupEntries("CommonScene");
@@ -1260,6 +1266,7 @@ auto GroundTruthPass::execute(RDG::RenderContext* context,
   getBindGroup(context, 1)->updateBinding(*set_1_entries);
   updateBindings(context, {
     {"u_Color", RHI::BindingResource{color->getUAV(0, 0, 1)}},
+    {"u_VBuffer", RHI::BindingResource{vbuffer->getSRV(0, 1, 0, 1)}},
   });
 
   RHI::RayTracingPassEncoder* encoder = beginPass(context);

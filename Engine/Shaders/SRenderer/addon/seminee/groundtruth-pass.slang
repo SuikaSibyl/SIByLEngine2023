@@ -4,6 +4,7 @@
 #include "../../include/common/sampling.hlsli"
 #include "../../include/scene_descriptor_set.hlsli"
 #include "../../include/raytracer_descriptor_set.hlsli"
+#include "../vbuffer/vbuffer.hlsli"
 
 [[vk::push_constant]]
 cbuffer PushConstants {
@@ -18,78 +19,56 @@ cbuffer PushConstants {
 };
 
 RWTexture2D<float4> u_Color;
+Texture2D<uint4> u_VBuffer;
 
-float3 unidirectional_path_tracing(in_ref(Ray) primaryRay, inout_ref(RandomSamplerState) RNG) {
-    RayDesc ray = ToRayDesc(primaryRay);
-    
+float3 unidirectional_path_tracing(in_ref(Ray) primaryRay, inout_ref(RandomSamplerState) RNG, VBufferData vhit) {
+    const GeometryHit hit = GetGeometryHit(vhit, primaryRay);
+    GeometryInfo geometry = geometries[hit.geometryID];
+    MaterialInfo material = materials[geometry.materialID];
+
     PrimaryPayload payload;
     payload.RND = RNG;
-    // payload.occluded = false;
-    
-    uint instanceMask = 0xff;
-    uint rayFlags = RAY_FLAG_NONE;
-    TraceRay(SceneBVH, rayFlags, instanceMask, 0, 0, 0, ray, payload);
-    RNG = payload.RND;
 
-    float3 radiance = float3(0, 0, 0);
-    float3 di = float3(0, 0, 0);
-    float3 gi = float3(0, 0, 0);
+    const PolymorphicLightInfo light = lights[0];
+    float3 di = EvaluateDirectLight(primaryRay, hit, light, RNG);
 
-    if (HasHit(payload.hit) == false)
-        return float3(0, 0, 0);
-    else if (pConst.renderMode == 0) {
-        const PolymorphicLightInfo light = lights[0];
-        // di += EvaluateDirectLight(primaryRay, payload.hit, light, RNG);
-        const LightSample lightSample = SampleLight(payload.hit, light);
-        Ray shadowRay = SpawnRay(payload.hit, lightSample.wi);
-        shadowRay.tMax = distance(lightSample.position, payload.hit.position) - 0.01;
-        const bool occluded = TraceOccludeRay(shadowRay, RNG, SceneBVH);
-        const float visibility = occluded ? 0.0f : 1.0f;
-        const float3 bsdf = EvalBsdf(payload.hit, -primaryRay.direction, lightSample.wi);
-
-        const uint materialID = geometries[payload.hit.geometryID].materialID;
-        const MaterialInfo material = materials[materialID];
-        const float3 emission = material.emissiveColor;
-
-        return lightSample.radiance * bsdf / lightSample.pdf + emission;
-
-        // return shadowRay.origin * 0.2;
-    }
-    else if (pConst.renderMode == 2 || pConst.renderMode == 3) {
-        const PolymorphicLightInfo light = lights[0];
-        di += EvaluateDirectLight(primaryRay, payload.hit, light, RNG);
+    if (pConst.renderMode == 0) {
+        return di;
     }
 
+    float3 gi = float3(0);
     float3 multi_bounce = float3(0);
-    GeometryHit primalHit = payload.hit;
+
+    float3 bsdfRadiance = float3(0);
+    float3 first_gi = float3(0);
+    float bsdf_pdf;
+    Ray bsdfRay = SpawnBsdfRay(hit, -primaryRay.direction, RNG, bsdf_pdf);
+    float3 first_bsdf = EvalBsdf(hit, -primaryRay.direction, bsdfRay.direction);
+    float3 throughput = first_bsdf / bsdf_pdf;
+    float3 vpl_position = float3(0);
+
     for (int i = 0; i < pConst.spp; ++i) {
-        payload.hit = primalHit;
-        // compute first bounce
-        float bsdf_pdf;
-        Ray bsdfRay = SpawnBsdfRay(payload.hit, -primaryRay.direction, RNG, bsdf_pdf);
-        float3 first_bsdf = EvalBsdf(payload.hit, -primaryRay.direction, bsdfRay.direction);
-        float3 throughput = first_bsdf / bsdf_pdf;
-        if (bsdf_pdf == 0) throughput = float3(0, 0, 0);
-        Intersection(bsdfRay, SceneBVH, payload, RNG);
-        if (HasHit(payload.hit)) {
-            const PolymorphicLightInfo light = lights[0];
-            gi += EvaluateDirectLight(bsdfRay, payload.hit, light, RNG) * throughput;
-            // further bounces
-            multi_bounce += EvaluateMultibounceIndirect(bsdfRay, pConst.bounce_count, throughput, payload, RNG);
+        float3 extra_gi = float3(0);
+        const float3 bsdf_dir = bsdfRay.direction;
+        if (bsdf_pdf != 0) {
+            Intersection(bsdfRay, SceneBVH, payload, RNG);
+            if (HasHit(payload.hit)) {
+                const PolymorphicLightInfo light = lights[0];
+                bsdfRadiance = EvaluateDirectLight(bsdfRay, payload.hit, light, RNG) * throughput;
+                gi += bsdfRadiance;
+                multi_bounce += EvaluateMultibounceIndirect(bsdfRay, 1, throughput, payload, RNG);
+            }
         }
     }
     for (int i = 0; i < pConst.one_bounce_spp; ++i) {
-        payload.hit = primalHit;
-        // compute first bounce
-        float bsdf_pdf;
-        Ray bsdfRay = SpawnBsdfRay(payload.hit, -primaryRay.direction, RNG, bsdf_pdf);
-        float3 first_bsdf = EvalBsdf(payload.hit, -primaryRay.direction, bsdfRay.direction);
-        float3 throughput = first_bsdf / bsdf_pdf;
-        if (bsdf_pdf == 0) throughput = float3(0, 0, 0);
-        Intersection(bsdfRay, SceneBVH, payload, RNG);
-        if (HasHit(payload.hit)) {
-            const PolymorphicLightInfo light = lights[0];
-            gi += EvaluateDirectLight(bsdfRay, payload.hit, light, RNG) * throughput;
+        const float3 bsdf_dir = bsdfRay.direction;
+        if (bsdf_pdf != 0) {
+            Intersection(bsdfRay, SceneBVH, payload, RNG);
+            if (HasHit(payload.hit)) {
+                const PolymorphicLightInfo light = lights[0];
+                bsdfRadiance = EvaluateDirectLight(bsdfRay, payload.hit, light, RNG) * throughput;
+                gi += bsdfRadiance;
+            }
         }
     }
 
@@ -133,7 +112,12 @@ void UDPTRgen() {
         false,
         globalUniform.cameraData
     );
-        
-    float3 pixelColor = unidirectional_path_tracing(primaryRay, RNG);
+    const VBufferData vhit = UnpackVBufferData(u_VBuffer[pixel]);
+    if (IsInvalid(vhit)) {
+        u_Color[pixel] = float4(0, 0, 0, 1);
+        return;
+    }
+
+    float3 pixelColor = unidirectional_path_tracing(primaryRay, RNG, vhit);
     u_Color[pixel] = float4(pixelColor, 1);
 }

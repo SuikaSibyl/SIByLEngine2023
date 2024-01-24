@@ -9,12 +9,11 @@
 #include "../../vxgi/include/conetrace_utils.hlsli"
 #include "../tree/shared.hlsli"
 
-
-float UnpackIrradiance(uint packed, float scalar = 65535.0f) {
+float UnpackIrradiance(uint packed, float scalar = 100.0f) {
     return float(packed) / scalar;
 }
 
-uint PackIrradiance(float unpacked, float scalar = 65535.0f) {
+uint PackIrradiance(float unpacked, float scalar = 100.0f) {
     return uint(unpacked * scalar);
 }
 
@@ -948,6 +947,7 @@ int SampleTopLevelTree(
     in_ref(StructuredBuffer<float>) top_level_tree,
     in_ref(int) spixelID,
     in_ref(float) rnd,
+    VoxelTexInfo info,
     out_ref(double) pdf
 ) {
     const int topLevelOffset = spixelID * 64;
@@ -990,7 +990,8 @@ int SampleTopLevelTree(
 float PdfSampleTopLevelTree(
     in_ref(StructuredBuffer<float>) top_level_tree,
     in_ref(int) spixelID,
-    in_ref(int) topIndex
+    in_ref(int) topIndex,
+    VoxelTexInfo info
 ) {
     const int topLevelOffset = spixelID * 64;
     const float topImportance = top_level_tree[topLevelOffset + 1];
@@ -1253,7 +1254,7 @@ float3 SampleSphericalVoxel(
     out_ref(AABB) voxelBound,
     out_ref(float) pdf
 ) {
-    const int3 vxID = ReconstructIndex(vxFlatten, 64);
+    const int3 vxID = ReconstructIndex(vxFlatten, info.volumeDimension);
     voxelBound = VoxelToBound(vxID, 0, info);
     const AABB compact_bound = UnpackCompactAABB(voxelBound, pMin[vxFlatten].xyz, pMax[vxFlatten].xyz);
     const float3 voxelExtent = float3(compact_bound.max - compact_bound.min) / 2;
@@ -1276,7 +1277,7 @@ float3 SampleSphericalVoxel(
     out_ref(AABB) voxelBound,
     out_ref(float) pdf
 ) {
-    const int3 vxID = ReconstructIndex(vxFlatten, 64);
+    const int3 vxID = ReconstructIndex(vxFlatten, info.volumeDimension);
     voxelBound = VoxelToBound(vxID, 0, info);
     const AABB compact_bound = UnpackCompactAABB(voxelBound, pMin[vxFlatten].xyz, pMax[vxFlatten].xyz);
     const float3 voxelExtent = float3(compact_bound.max - compact_bound.min) / 2;
@@ -1372,7 +1373,7 @@ float3 SampleVoxelGuiding(
     if (config.type == VoxelGuidingType::VG_Uniform) {
         const int selectedID = clamp(int(VXCount * GetNextRandom(RNG)), 0, VXCount - 1);
         vxFlatten = compact_indices[selectedID];
-        vxID = ReconstructIndex(vxFlatten, 64);
+        vxID = ReconstructIndex(vxFlatten, info.volumeDimension);
         pdf = 1. / VXCount;
     }
     else if (config.type == VoxelGuidingType::VG_Irradiance) {
@@ -1385,7 +1386,7 @@ float3 SampleVoxelGuiding(
         if (selectedID != -1) {
             selectedID = tree_nodes[selectedID].vx_idx;
             vxFlatten = compact_indices[selectedID];
-            vxID = ReconstructIndex(vxFlatten, 64);
+            vxID = ReconstructIndex(vxFlatten, info.volumeDimension);
         }
     }
     else if (config.type == VoxelGuidingType::VG_VisibilityIrradiance) {
@@ -1403,10 +1404,10 @@ float3 SampleVoxelGuiding(
                 }
             }
         }
-
+        
         // sample top level tree
         double top_pdf = 1.f;
-        const int topIndex = SampleTopLevelTree(topLevelTree, spixelID, GetNextRandom(RNG), top_pdf);
+        const int topIndex = SampleTopLevelTree(topLevelTree, spixelID, GetNextRandom(RNG), info, top_pdf);
         if (topIndex==-1) {
             pdf = 0.f;
             return float3(0);
@@ -1423,7 +1424,7 @@ float3 SampleVoxelGuiding(
             selectedID = tree_nodes[selectedID].vx_idx;
             pdf = top_pdf * bottom_pdf;
             vxFlatten = compact_indices[selectedID];
-            vxID = ReconstructIndex(vxFlatten, 64);
+            vxID = ReconstructIndex(vxFlatten, info.volumeDimension);
         }
     }
     else if (config.type == VoxelGuidingType::VG_SLC) {
@@ -1438,7 +1439,7 @@ float3 SampleVoxelGuiding(
         if (selectedID != -1) {
             selectedID = tree_nodes[selectedID].vx_idx;
             vxFlatten = compact_indices[selectedID];
-            vxID = ReconstructIndex(vxFlatten, 64);
+            vxID = ReconstructIndex(vxFlatten, info.volumeDimension);
         }
     }
     // If the current voxel is the selected voxel, return 0.0

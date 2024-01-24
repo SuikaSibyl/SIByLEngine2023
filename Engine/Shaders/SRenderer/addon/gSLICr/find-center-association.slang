@@ -39,11 +39,14 @@ struct FuzzyVec {
     [mutating]
     void insert(int c, float d2) {
         if (size < 4) {
+            // if size smaller than 4, 
+            // just push back the id/dist
             center[size] = c;
             dist2[size] = d2;
             size++;
-        }
-        else {
+        } else {
+            // find the slot with maximum distance,
+            // displace it if the distance is smaller.
             int max_idx = get_maximum();
             if (d2 < dist2[max_idx]) {
                 center[max_idx] = c;
@@ -166,7 +169,7 @@ void find_center_association(
     fuzzy_vec_fallback.size = 0;
 
     GroupMemoryBarrierWithGroupSync();
-
+    
     // search 3x3 neighborhood
     // TODO :: use shared memory to speed up
     float3 spixel_pos_neighbor;
@@ -178,7 +181,7 @@ void find_center_association(
     float3 spixel_pos_preload;
     float3 spixel_normal_preload;
     float2 spixel_xy_preload;
-
+    
     [unroll]
     for (int n = 0; n < 9; ++n) {
         const int i = n / 3 - 1;

@@ -36,7 +36,7 @@ void InjectVPL(
 ) {
     const int3 voxelPos = int3(WorldToVoxel(position, info) * info.volumeDimension);
     const int voxelIDFlatten = FlatIndex(voxelPos, info.volumeDimension);
-    const uint packedIrr = PackIrradiance(irradiance);
+    const uint packedIrr = PackIrradiance(irradiance, 100);
     if (use_avg_not_max) {
         InterlockedAdd(u_pIrradiance[voxelPos], packedIrr);
         InterlockedAdd(u_vplCount[voxelPos], 1);

@@ -21,6 +21,7 @@
 #include <SE.Core.Reflect.hpp>
 #include <SE.RHI.Reflection.hpp>
 #include <SE.MeSh.Lightmap.hpp>
+#include <SE.MeSh.Simplify.hpp>
 
 namespace SIByL::Editor {
 auto drawBoolControl(std::string const& label, bool& value,
@@ -941,6 +942,9 @@ namespace SIByL::Editor {
     if (ImGui::InputInt("", &currentFrame)) {
       timeline.currentSec = currentFrame * 1.f / timeline.step_per_sec;
     }
+    //if (currentFrame == 75) {
+    //  timeline.currentSec = currentFrame * 1.f / timeline.step_per_sec;
+    //}
     ImGui::EndMenuBar();
    }
 
@@ -1457,7 +1461,7 @@ auto ViewportWidget::onDrawGui() noexcept -> void {
 
    ImVec2 p = ImGui::GetCursorScreenPos();
 
-   if (texture) {
+   if (texture && texture->texture) {
     ImGui::Image(
         Editor::TextureUtils::getImGuiTexture(texture->guid)->getTextureID(),
         {(float)texture->texture->width(), (float)texture->texture->height()},
@@ -2016,6 +2020,14 @@ auto SceneWidget::onDrawGui() noexcept -> void {
             path, *scene, GFX::GFXManager::get()->config.meshLoaderConfig);
         save_scene();
       }
+      if (ImGui::MenuItem("DAE (.dae)")) {
+        std::string path = ImGuiLayer::get()
+                               ->rhiLayer->getRHILayerDescriptor()
+                               .windowBinded->openFile(".dae");
+        GFX::SceneNodeLoader_assimp::loadSceneNode(
+            path, *scene, GFX::GFXManager::get()->config.meshLoaderConfig);
+        save_scene();
+      }
       if (ImGui::MenuItem("Mitsuba (.xml)")) {
         std::string path = ImGuiLayer::get()
                                ->rhiLayer->getRHILayerDescriptor()
@@ -2474,6 +2486,19 @@ auto TagComponentFragment::elucidateComponent(
    }
 }
 
+void set_node_static(GFX::GameObject* go, bool is_static, GFX::Scene* scene) {
+  if (is_static) {
+    go->getEntity().getComponent<GFX::TransformComponent>()->flag |=
+        (uint32_t)GFX::TransformComponent::FlagBit::IS_STATIC;
+  } else {
+    auto& flag = go->getEntity().getComponent<GFX::TransformComponent>()->flag;
+    flag = flag & ~(uint32_t)GFX::TransformComponent::FlagBit::IS_STATIC;
+  }
+  for (auto child : go->children) {
+    set_node_static(scene->getGameObject(child), is_static, scene);
+  }
+};
+
 auto TransformComponentFragment::elucidateComponent(
     GameObjectInspector::GameObjectData* data) noexcept -> void {
    GFX::GameObject* go = data->scene->getGameObject(data->handle);
@@ -2482,7 +2507,7 @@ auto TransformComponentFragment::elucidateComponent(
    if (transformComponent) {
     drawComponent<GFX::TransformComponent>(
         go, "Transform",
-        [](GFX::TransformComponent* component) {
+        [&](GFX::TransformComponent* component) {
           // set translation
           Math::vec3 translation = component->translation;
           drawVec3Control("Translation", translation, 0, 100);
@@ -2504,6 +2529,9 @@ auto TransformComponentFragment::elucidateComponent(
             bool is_static = (flag & (uint32_t)GFX::TransformComponent::FlagBit::IS_STATIC);
             if (ImGui::Checkbox("Static  ", &is_static)) {
               component->flag ^= (uint32_t)GFX::TransformComponent::FlagBit::IS_STATIC;
+              for (auto child : go->children) {
+                set_node_static(data->scene->getGameObject(child), is_static, data->scene);
+              }
             }
             ImGui::SameLine();
             bool is_joint = (flag & (uint32_t)GFX::TransformComponent::FlagBit::IS_SKELETON_JOINT);
@@ -2524,64 +2552,45 @@ auto MeshReferenceComponentFragment::elucidateComponent(
    if (meshReference) {
     drawComponent<GFX::MeshReference>(
         go, "MeshReference", [](GFX::MeshReference* component) {
-          if (component->mesh) {
-            const int index_size =
-                component->mesh->primitiveState.stripIndexFormat ==
-                        RHI::IndexFormat::UINT16_t
-                    ? sizeof(uint16_t)
-                    : sizeof(uint32_t);
-            const int index_count =
-                component->mesh->indexBufferInfo.size / index_size;
+          auto draw_mesh_info = [&](GFX::Mesh* mesh) {
+            if (mesh == nullptr) {
+              ImGui::Text("Empty mesh");
+              return;
+            }
+            const int index_size = mesh->primitiveState.stripIndexFormat ==
+                RHI::IndexFormat::UINT16_t ? sizeof(uint16_t) : sizeof(uint32_t);
+            const int index_count = mesh->indexBufferInfo.size / index_size;
             const int primitive_count = index_count / 3;
             if (ImGui::TreeNode("Vertex Buffer")) {
-              ImGui::BulletText(
-                  (std::string("Size (bytes): ") +
-                   std::to_string(component->mesh->vertexBufferInfo.size))
-                      .c_str());
+              ImGui::BulletText((std::string("Size (bytes): ") +
+                   std::to_string(mesh->vertexBufferInfo.size)).c_str());
               if (ImGui::TreeNode("Buffer Layout")) {
-                ImGui::BulletText(
-                    (std::string("Array Stride: ") +
-                     std::to_string(
-                         component->mesh->vertexBufferLayout.arrayStride))
-                        .c_str());
-                ImGui::BulletText(
-                    (std::string("Step Mode: ") +
-                     to_string(component->mesh->vertexBufferLayout.stepMode))
-                        .c_str());
+                ImGui::BulletText((std::string("Array Stride: ") + std::to_string(
+                  mesh->vertexBufferLayout.arrayStride)).c_str());
+                ImGui::BulletText((std::string("Step Mode: ") +
+                     to_string(mesh->vertexBufferLayout.stepMode)).c_str());
                 if (ImGui::TreeNode("Attributes Layouts:")) {
-                  for (auto& item :
-                       component->mesh->vertexBufferLayout.attributes) {
-                    ImGui::BulletText(
-                        (to_string(item.format) + std::string(" | OFF: ") +
-                         std::to_string(item.offset) + std::string(" | LOC: ") +
-                         std::to_string(item.shaderLocation))
-                            .c_str());
+                  for (auto& item : mesh->vertexBufferLayout.attributes) {
+                    ImGui::BulletText((to_string(item.format) + std::string(" | OFF: ") +
+                      std::to_string(item.offset) + std::string(" | LOC: ") +
+                      std::to_string(item.shaderLocation)).c_str());
                   }
-                  ImGui::TreePop();
-                }
-                ImGui::TreePop();
-              }
+                  ImGui::TreePop(); }
+                ImGui::TreePop(); }
               ImGui::TreePop();
             }
             if (ImGui::TreeNode("Index Buffer")) {
+              ImGui::BulletText((std::string("Size (bytes): ") +
+                std::to_string(mesh->indexBufferInfo.size)).c_str());
               ImGui::BulletText(
-                  (std::string("Size (bytes): ") +
-                   std::to_string(component->mesh->indexBufferInfo.size))
-                      .c_str());
-              ImGui::BulletText(
-                  (std::string("Index Count: ") + std::to_string(index_count))
-                      .c_str());
+                (std::string("Index Count: ") + std::to_string(index_count)).c_str());
               ImGui::TreePop();
             }
             if (ImGui::TreeNode("Primitive Status")) {
               ImGui::BulletText((std::string("Primitive Count: ") +
-                                 std::to_string(primitive_count))
-                                    .c_str());
-              ImGui::BulletText(
-                  (std::string("Topology: ") +
-                   to_string(component->mesh->primitiveState.topology))
-                      .c_str());
-
+                std::to_string(primitive_count)).c_str());
+              ImGui::BulletText((std::string("Topology: ") +
+                to_string(component->mesh->primitiveState.topology)).c_str());
               ImGui::TreePop();
             }
             if (ImGui::TreeNode("2nd UV Status")) {
@@ -2594,7 +2603,40 @@ auto MeshReferenceComponentFragment::elucidateComponent(
                   (component->mesh->indexBuffer_host.size > 0 ? "true" : "false")).c_str());
               ImGui::TreePop();
             }
+          };
+          if (ImGui::TreeNode("Base Mesh")) {
+            draw_mesh_info(component->mesh);
+            ImGui::TreePop();
           }
+          bool open_lodlist = ImGui::TreeNode("LoD Meshes");
+          ImGui::SameLine();
+           if (ImGui::Button("+")) {
+            component->lod_meshes.push_back(nullptr);
+          }
+          if (open_lodlist) {
+            for (size_t i = 0; i < component->lod_meshes.size(); ++i) {
+              if (ImGui::TreeNode(("LoD-" + std::to_string(i)).c_str())) {
+                draw_mesh_info(component->lod_meshes[i]);
+                ImGui::TreePop();
+              }
+            }
+            static float simplify_ratio = 1.f;
+            ImGui::DragFloat("Submesh Ratio", &simplify_ratio, 0.05, 0.f, 1.f);
+            ImGui::SameLine();
+            if (ImGui::Button("Generate LoD")) {
+              GFX::Mesh lodmesh = MeSh::MeshSimplifier::quadric_simplify(*component->mesh, -1, simplify_ratio);
+              lodmesh.serialize();
+              Core::GUID lod_guid = GFX::GFXManager::get()->requestOfflineMeshResource(lodmesh.ORID);
+              component->lod_meshes.push_back(Core::ResourceManager::get()
+                  ->getResource<GFX::Mesh>(lod_guid));
+            }
+            ImGui::TreePop();
+          }
+
+          int lod_shown = (int)component->lod_shown;
+          ImGui::DragInt("LoD Level", &lod_shown, 1.f, 0);
+          component->lod_shown = lod_shown;
+
           ImGui::BulletText("Custom Primitive ID: ");
           ImGui::SameLine();
           ImGui::PushItemWidth(

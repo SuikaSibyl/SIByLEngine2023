@@ -52,7 +52,7 @@ void ComputeMain(uint3 DTid: SV_DispatchThreadID,
     const float3 a_position = skeleton_pos.Load<float3>(tid * 12);
     const float3 a_normal = skeleton_normal.Load<float3>(tid * 12);
     const uint32_t offset = skeleton_offset[tid];
-
+    
     const float3 worldPosition = mul(skinMat, float4(a_position, 1.0)).xyz;
     const float3 worldNormal = normalize(mul(skinMat, float4(a_normal, 0.0)).xyz);
     

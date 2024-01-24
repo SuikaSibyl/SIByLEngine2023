@@ -3,6 +3,7 @@
 #include "../include/common/math.hlsli"
 #include "../include/common/packing.hlsli"
 #include "../include/scene_descriptor_set.hlsli"
+#include "../addon/pathspacefiltering/include.hlsli"
 
 [[vk::push_constant]]
 cbuffer PushConstants {
@@ -39,8 +40,11 @@ struct GeoVisUniform {
     // wireframe settings
     float3 wireframe_color;
     uint use_wireframe;
+    // wireframe setting + custom info
     float wireframe_smoothing;
     float wireframe_thickness;
+    float padding0;
+    float padding1;
 };
 
 [[vk::binding(0, 1)]]
@@ -186,30 +190,16 @@ float4 fragmentMain(
         // const float3 diffuse = sRGBToLinear(texture(Texture0, uvMatcap).rgb) * getCurvature(materialNormal);
         // const float3 frag = diffuse;
     }
+    else if (uni.showEnum == ShowEnum::Emission) {
+        uint2 vhash = positional_directional_hashing_no_jitter(positionWS, geometryNormalWS, globalUniform.cameraData.posW, uni.padding0);
+        const uint colorPacked = murmur3(vhash.y);
+        color = UNPACK_FLOAT3_UINT(colorPacked);
+    }
     else {
         uint colorPacked = Hash_murmur(primitiveID);
         color = UNPACK_FLOAT3_UINT(colorPacked);
     }
     
-    // vec3 localVertex = Vertex.xyz;
-    // localVertex += Vertex.w;
-    // localVertex = localVertex * uQVS * vec3(5.693428104390918e+0, 1.1196796730479215e+0, 6.345989923538313e+0).zxy + uQVT;
-    // vec3 localNormal = Normal.xyy;
-    // localNormal.z = dot(localNormal.xy, localNormal.xy);
-    // localNormal.xyz = vec3(2.0 * localNormal.xy * sqrt(1.0 - localNormal.z), 1.0 - 2.0 * localNormal.z); ;
-    // vViewNormal = uModelViewNormalMatrix * localNormal;
-    // vViewVertex = uModelViewMatrix * vec4(localVertex, 1.0);
-    // mat4 jitteredProjection = uProjectionMatrix;
-    // jitteredProjection[2].xy += (1.0 - uDisplay2D) * (uHalton.xy * uGlobalTexRatio.xy / uGlobalTexSize.xy);
-    // gl_Position = jitteredProjection * vViewVertex;
-    // gl_PointSize = min(64.0, max(1.0, -uPointSize / vViewVertex.z));
-
-    // GeometrySample gs = getGeometryFromHit(g_Instance.instance, g_Instance.geometryIndex, primitiveID, i_bary.yz,
-    //                                        GeomAttr_All, t_InstanceData, t_GeometryData, t_MaterialConstants);
-    // float3x3 TBN = buildTangentToWorld(coarseVertex.tangentWS, coarseVertex.normalWS);
-    // if (!isFrontFace) TBN[2] = -TBN[2];
-
-
     if(uni.use_wireframe != 0) {
         color = GetAlbedoWithWireframe(color, bary);
     }

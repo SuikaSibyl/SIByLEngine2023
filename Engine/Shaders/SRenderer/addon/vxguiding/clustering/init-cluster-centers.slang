@@ -28,6 +28,10 @@ RWStructuredBuffer<int4> u_indirectDispatchArgs;
 groupshared uint gs_SpatialHashingCounts[8][8][8];
 groupshared uint gs_SpatialHashingIndices[8][8][8];
 
+cbuffer VoxelizerUniform {
+    VoxerlizerData gVD;
+}
+
 [shader("compute")]
 [numthreads(8, 8, 8)]
 void ComputeMain(
@@ -55,7 +59,7 @@ void ComputeMain(
         }
 
         const uint voxelID = u_pCompactIndex[seedID];
-        const int3 voxelPos = ReconstructIndex(voxelID, 64);
+        const int3 voxelPos = ReconstructIndex(voxelID, gVD.voxelSize);
         const float4 normal = u_vxNormal[seedID];
 
         svoxel_info voxel_info;

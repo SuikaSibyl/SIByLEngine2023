@@ -89,6 +89,10 @@ void RgenMain() {
 
         radiance *= visibility * first_bsdf;
         diffuse += radiance;
+        // radiance += material.emissiveColor;
+        const PolymorphicLightInfo light = lights[0];
+        diffuse += EvaluateDirectLight(primaryRay, primarySurface, light, RNG);
+
         // diffuse += visibility * radiance;
     }
 

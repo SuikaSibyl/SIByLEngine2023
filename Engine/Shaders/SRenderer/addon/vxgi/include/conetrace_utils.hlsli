@@ -148,7 +148,7 @@ VoxelTexInfo CreateVoxelTexInfo(in_ref(VoxerlizerData) data) {
     VoxelTexInfo info;
     info.minPoint = center - float3(extentMax);
     info.voxelScale = 1.0f / (extentMax * 2.0f);
-    info.volumeDimension = VOXEL_DIMENSION;
+    info.volumeDimension = data.voxelSize;
     return info;
 }
 
@@ -159,8 +159,8 @@ AABB VoxelToBound(
 ) {
     const int voxel_count = 1 << mipLevel;
     AABB bound;
-    bound.min = info.minPoint + (voxelCoord + 0) * voxel_count * 1.0f / (info.voxelScale * 64);
-    bound.max = info.minPoint + (voxelCoord + 1) * voxel_count * 1.0f / (info.voxelScale * 64);
+    bound.min = info.minPoint + (voxelCoord + 0) * voxel_count * 1.0f / (info.voxelScale * info.volumeDimension);
+    bound.max = info.minPoint + (voxelCoord + 1) * voxel_count * 1.0f / (info.voxelScale * info.volumeDimension);
     return bound;
 } 
 

@@ -372,8 +372,8 @@ float3 EvaluateDirectLight(
 
     const uint materialID = geometries[hit.geometryID].materialID;
     const MaterialInfo material = materials[materialID];
-    const float3 emission = material.emissiveColor;
-
+    const float3 emission = material.emissiveColor * textures[material.baseOrDiffuseTextureIndex].Sample(hit.texcoord).rgb;
+    
     return lightSample.radiance * bsdf * visibility / lightSample.pdf + emission;
 }
 
@@ -390,8 +390,13 @@ SplitShading EvaluateDirectLightSplit(
     const float visibility = occluded ? 0.0f : 1.0f;
     const SplitShading bsdf = EvalBsdfSplit(hit, -previousRay.direction, lightSample.wi);
     const float3 tmp = lightSample.radiance * visibility / lightSample.pdf;
+
+    const uint materialID = geometries[hit.geometryID].materialID;
+    const MaterialInfo material = materials[materialID];
+    const float3 emission = material.emissiveColor * textures[material.baseOrDiffuseTextureIndex].Sample(hit.texcoord).rgb;
+
     SplitShading split;
-    split.diffuse = tmp * bsdf.diffuse;
+    split.diffuse = tmp * bsdf.diffuse + emission;
     split.specular = tmp * bsdf.specular;
     return split;
 }
@@ -443,7 +448,12 @@ float3 EvaluateDirectLight(
     const bool occluded = TraceOccludeRay(shadowRay, RNG, SceneBVH);
     const float visibility = occluded ? 0.0f : 1.0f;
     const float3 bsdf = EvalBsdf(surface, -previousRay.direction, lightSample.wi);
-    return lightSample.radiance * bsdf * visibility / lightSample.pdf;
+
+    const uint materialID = geometries[hit.geometryID].materialID;
+    const MaterialInfo material = materials[materialID];
+    const float3 emission = material.emissiveColor * textures[material.baseOrDiffuseTextureIndex].Sample(hit.texcoord).rgb;
+
+    return lightSample.radiance * bsdf * visibility / lightSample.pdf + emission;
 }
 
 SplitShading EvaluateDirectLightSplit(
@@ -460,8 +470,13 @@ SplitShading EvaluateDirectLightSplit(
     const float visibility = occluded ? 0.0f : 1.0f;
     const SplitShading bsdf = EvalBsdfSplit(surface, -previousRay.direction, lightSample.wi);
     const float3 tmp = lightSample.radiance * visibility / lightSample.pdf;
+
+    const uint materialID = geometries[hit.geometryID].materialID;
+    const MaterialInfo material = materials[materialID];
+    const float3 emission = material.emissiveColor * textures[material.baseOrDiffuseTextureIndex].Sample(hit.texcoord).rgb;
+
     SplitShading split;
-    split.diffuse = tmp * bsdf.diffuse;
+    split.diffuse = tmp * bsdf.diffuse + emission;
     split.specular = tmp * bsdf.specular;
     return split;
 }

@@ -8,6 +8,108 @@
 #include "../../vxgi/include/vxgi_interface.hlsli"
 #include "../include/vxguiding_interface.hlsli"
 
+void EvalLambertian(inout_ref(BSDFEvalQuery) cBSDFEvalQuery) {
+    if (dot(cBSDFEvalQuery.geometric_normal, cBSDFEvalQuery.dir_in) < 0 ||
+        dot(cBSDFEvalQuery.geometric_normal, cBSDFEvalQuery.dir_out) < 0) {
+        // No light below the surface
+        cBSDFEvalQuery.bsdf = float3(0);
+        cBSDFEvalQuery.dir_out = float3(0); // override specular
+        return;
+    }
+    // Making sure the shading frame is consistent with the view direction.
+    float3x3 frame = cBSDFEvalQuery.frame;
+    const QueryBitfield bitfield = UnpackQueryBitfield(cBSDFEvalQuery.misc_flag);
+
+    // Evaluate bsdf
+    float3 albedo;
+    if (cBSDFEvalQuery.mat_id == 0xFFFFFFFF) {
+        albedo = UnpackRGBE(asuint(cBSDFEvalQuery.bsdf.x));
+    }
+    else {
+        const MaterialInfo material = materials[cBSDFEvalQuery.mat_id];
+        const float3 texAlbedo = textures[material.baseOrDiffuseTextureIndex]
+                                     .Sample(cBSDFEvalQuery.uv, 0) .xyz;
+        albedo = material.baseOrDiffuseColor * texAlbedo;
+    }
+    const float3 demodulate = saturate(dot(frame[2], cBSDFEvalQuery.dir_out)) / k_pi;
+    cBSDFEvalQuery.bsdf = bitfield.split_query ? demodulate : albedo * demodulate;
+    cBSDFEvalQuery.dir_out = float3(0); // override specular
+}
+
+void EvalRoughPlastic(inout_ref(BSDFEvalQuery) cBSDFEvalQuery) {
+    // First load the material info
+    // -------------------------------------------------------------
+    float3 Kd;
+    float3 Ks;
+    float eta;
+    float roughness;
+    if (cBSDFEvalQuery.mat_id == 0xFFFFFFFF) {
+        // info is already packed in the query
+        Kd = UnpackRGBE(asuint(cBSDFEvalQuery.bsdf.x));
+        Ks = UnpackRGBE(asuint(cBSDFEvalQuery.uv.y));
+        eta = cBSDFEvalQuery.bsdf.y;
+        roughness = cBSDFEvalQuery.uv.x;
+    } else { // load info from the material buffer
+        const MaterialInfo material = materials[cBSDFEvalQuery.mat_id];
+        const float3 texAlbedo = textures[material.baseOrDiffuseTextureIndex]
+                                     .Sample(cBSDFEvalQuery.uv, 0) .xyz;
+        Kd = material.baseOrDiffuseColor * texAlbedo;
+        Ks = material.specularColor;
+        eta = material.transmissionFactor;
+        roughness = material.roughness;
+    }
+    // Clamp roughness to avoid numerical issues.
+    roughness = clamp(roughness, 0.01f, 1.f);
+    const QueryBitfield bitfield = UnpackQueryBitfield(cBSDFEvalQuery.misc_flag);
+
+    // Then evaluate the BSDF
+    // -------------------------------------------------------------
+    cBSDFEvalQuery.bsdf = float3(0);
+    if (dot(cBSDFEvalQuery.geometric_normal, cBSDFEvalQuery.dir_in) < 0 ||
+        dot(cBSDFEvalQuery.geometric_normal, cBSDFEvalQuery.dir_out) < 0) {
+        // No light below the surface
+        cBSDFEvalQuery.dir_out = float3(0);
+        return;
+    }
+    // Making sure the shading frame is consistent with the view direction.
+    float3x3 frame = cBSDFEvalQuery.frame;
+    if (dot(frame[2], cBSDFEvalQuery.dir_in) < 0) {
+        frame = -frame;
+    }
+
+    const float3 half_vector = normalize(cBSDFEvalQuery.dir_in + cBSDFEvalQuery.dir_out);
+    const float n_dot_h = dot(frame[2], half_vector);
+    const float n_dot_in = dot(frame[2], cBSDFEvalQuery.dir_in);
+    const float n_dot_out = dot(frame[2], cBSDFEvalQuery.dir_out);
+    if (n_dot_out <= 0 || n_dot_h <= 0) {
+        cBSDFEvalQuery.dir_out = float3(0);
+        return;
+    }
+
+    // dielectric layer:
+    // F_o is the reflection percentage.
+    const float F_o = FresnelDielectric(dot(half_vector, cBSDFEvalQuery.dir_out), eta);
+    const float D = GTR2_NDF(n_dot_h, roughness);
+    const float G = IsotropicGGX_Masking(to_local(frame, cBSDFEvalQuery.dir_in), roughness) *
+                    IsotropicGGX_Masking(to_local(frame, cBSDFEvalQuery.dir_out), roughness);
+    const float3 spec_contrib = Ks * (G * F_o * D) / (4 * n_dot_in * n_dot_out);
+    // diffuse layer:
+    // In order to reflect from the diffuse layer,
+    // the photon needs to bounce through the dielectric layers twice.
+    // The transmittance is computed by 1 - fresnel.
+    const float F_i = FresnelDielectric(dot(half_vector, cBSDFEvalQuery.dir_in), eta);
+    // Multiplying with Fresnels leads to an overly dark appearance at the
+    // object boundaries. Disney BRDF proposes a fix to this -- we will implement this in problem set 1.
+    const float3 diffuse_contrib = (1.f - F_o) * (1.f - F_i) / k_pi;
+    if (bitfield.split_query) {
+        cBSDFEvalQuery.bsdf = diffuse_contrib * n_dot_out;
+        cBSDFEvalQuery.dir_out = spec_contrib * n_dot_out;
+    } else {
+        cBSDFEvalQuery.bsdf = (spec_contrib + Kd * diffuse_contrib) * n_dot_out;
+    }
+    return;
+}
+
 Texture2D<int2> u_spixel_gathered;
 Texture2D<uint> u_spixel_counter;
 StructuredBuffer<uint> u_cluster_counter;
@@ -17,71 +119,28 @@ Texture2D<uint4> u_vBuffer;
 RWTexture2D<uint> u_spixel_visibility;
 RWTexture2D<float4> u_Debug;
 
-RWStructuredBuffer<uint8_t> u_spixel_avg_visibility;
-
-// const StructuredBuffer<uint4> u_BoundMin;
-// const StructuredBuffer<uint4> u_BoundMax;
-// const StructuredBuffer<uint64_t> u_DirectionHash;
-// const StructuredBuffer<uint16_t2> u_Descendant;
-// const StructuredBuffer<int> u_ClusterRoots;
+RWStructuredBuffer<float> u_spixel_avg_visibility;
 
 [[vk::push_constant]]
 cbuffer PushConstants {
     int2 resolution;
     int2 map_size;
     int seed;
+    bool use_bsdf;
+    bool use_distance;
 };
 
-groupshared uint sharedVisibility[32];
+groupshared float sharedVisibility[32];
 groupshared uint groupVisibility;
-
-// float4 GrabVXSample(
-//     in_ref(VoxelTexInfo) info,
-//     int leafID,
-//     in float3 ref_pos,
-//     inout RandomSamplerState RNG,
-//     out float3 direction
-// ) {
-//     const uint3 bound_min = u_BoundMin[leafID].xyz;
-//     const uint3 bound_max = u_BoundMax[leafID].xyz;
-//     const uint vxFlatten = u_BoundMax[leafID].w;
-//     const int3 vxIDFlatten = ReconstructIndex(vxFlatten, info.volumeDimension);
-//     const AABB voxelBound = VoxelToBound(vxIDFlatten, 0, info);
-//     const AABB compact_bound = UnpackCompactAABB(voxelBound, u_BoundMin[vxFlatten].xyz, u_BoundMax[vxFlatten].xyz);
-//     const float3 voxelExtent = float3(compact_bound.max - compact_bound.min) / 2;
-//     const float3 voxelCenter = 0.5 * (compact_bound.min + compact_bound.max);
-//     float pdf;
-//     float3 direction = SampleSphericalVoxel(
-//         voxelCenter,
-//         voxelExtent,
-//         ref_pos,
-//         float3(GetNextRandom(RNG), GetNextRandom(RNG), GetNextRandom(RNG)),
-//         pdf);
-//     float t = rayBoxIntersect(ref_pos, direction, compact_bound.min, compact_bound.max);
-//     direction = normalize(direction);
-//     return float4(direction, t);
-// }
-
-// float4 GrabVXSample(
-//     in_ref(VoxelTexInfo) info,
-//     in uint clusterID,
-//     in float3 ref_pos,
-//     inout RandomSamplerState RNG,
-//     out float3 direction 
-// ) {
-//     int root = u_ClusterRoots[clusterID];
-//     int2 descendant = u_Descendant[root];
-//     int leafID = descendant.x + int((descendant.y - descendant.x) * GetNextRandom(RNG));
-//     leafID = clamp(leafID, descendant.x, descendant.y - 1);
-//     return GrabVXSample(info, leafID, ref_pos, RNG, direction);
-// }
 
 bool HandleVisibilityCheck(
     int2 spixelID,
     int2 dispatchID,
     int2 taskOffset,
     int clusterToCheck,
+    out float bsdf
 ) {
+    bsdf = 0.f;
     RandomSamplerState RNG = InitRandomSampler(dispatchID, seed);
 
     // Grab from vsibility buffer
@@ -99,7 +158,7 @@ bool HandleVisibilityCheck(
         false,
         globalUniform.cameraData
     );
-
+    
     const VBufferData vhit = UnpackVBufferData(u_vBuffer[pixelID]);
     if (IsInvalid(vhit)) {
         return false;
@@ -133,6 +192,38 @@ bool HandleVisibilityCheck(
             visible = false;
         }
     }
+
+    if (visible) {
+        if (use_bsdf) {
+            uint materialID = geometries[hit.geometryID].materialID;
+            uint bsdf_type = materials[materialID].bsdfID;
+            if (bsdf_type == 0) {
+                bsdf = 1.f;
+            } else if (bsdf_type == 1) {
+                BSDFEvalQuery cBSDFEvalQuery;
+                cBSDFEvalQuery.dir_in = -primaryRay.direction;
+                cBSDFEvalQuery.dir_out = visiblityRay.direction;
+                cBSDFEvalQuery.mat_id = materialID;
+                cBSDFEvalQuery.geometric_normal = hit.geometryNormal;
+                cBSDFEvalQuery.uv = hit.texcoord;
+                cBSDFEvalQuery.frame = createONB(hit.shadingNormal);
+                QueryBitfield flag;
+                flag.transport_mode = 0;
+                flag.face_forward = IsFaceForward(hit);
+                flag.split_query = false;
+                cBSDFEvalQuery.misc_flag = PackQueryBitfield(flag);
+                EvalRoughPlastic(cBSDFEvalQuery);
+                bsdf = maxComponent(cBSDFEvalQuery.bsdf);
+            }
+        } 
+        else {
+            bsdf = 1.f;
+        }
+        if (use_distance) {
+            bsdf /= (distannce * distannce);
+        }
+    } 
+
     return visible;
 }
 
@@ -159,17 +250,21 @@ void ComputeMain(
     }
     GroupMemoryBarrierWithGroupSync();
 
-    bool visible = HandleVisibilityCheck(spixelID, dispatchID, taskOffset, clusterToCheck);
-    sharedVisibility[clusterToCheck] = WaveActiveSum(visible ? 1 : 0);
-
+    float bsdf;
+    bool visible = HandleVisibilityCheck(spixelID, dispatchID, taskOffset, clusterToCheck, bsdf);
+    sharedVisibility[clusterToCheck] = WaveActiveSum(visible ? bsdf : 0);
+    
     GroupMemoryBarrierWithGroupSync();
     if (gidx < 32) {
-        uint32_t visibility = sharedVisibility[gidx];
+        float visibility = sharedVisibility[gidx];
+        const uint spixelIDFlatten = spixelID.y * map_size.x + spixelID.x;
+        const int cluster_offset = (clusterToCheck / 8) * 8;
+        if (gidx >= cluster_offset && gidx < (cluster_offset + 8)) {
+            u_spixel_avg_visibility[spixelIDFlatten * 32 + gidx] = visibility;
+        }
         if (visibility != 0) {
             InterlockedOr(groupVisibility, uint(1 << gidx));
-            const uint spixelIDFlatten = spixelID.y * map_size.x + spixelID.x;
-            u_spixel_avg_visibility[spixelIDFlatten * 32 + gidx] = uint8_t(visibility);
-        }
+        } 
     }
     if (gidx == 0) {
         InterlockedOr(u_spixel_visibility[spixelID], groupVisibility);

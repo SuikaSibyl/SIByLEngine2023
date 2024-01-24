@@ -16,7 +16,9 @@
 #include <SE.Addon.SLC.hpp>
 #include <SE.Addon.SST.hpp>
 #include <SE.Addon.VPL.hpp>
+#include <SE.Addon.SSPM.hpp>
 #include <SE.Addon.PSFiltering.hpp>
+#include <SE.Addon.Fluid.hpp>
 #include <SE.Application.hpp>
 #include <SE.Editor.Config.hpp>
 #include <SE.Editor.Core.hpp>
@@ -83,24 +85,37 @@ struct SandBoxApplication : public Application::ApplicationBase {
     InvalidScene();
     device->waitIdle();
 
-    pipeline1 = std::make_unique<Addon::Differentiable::AutoDiffPipeline>();
-    //pipeline2 = std::make_unique<Addon::Lightmap::LightmapVisualizePipeline>();
-    rtgi_pipeline = std::make_unique<Addon::Differentiable::NeuralRadiosityPipeline>();
-    //// pipeline1 = std::make_unique<CustomPipeline>();
-    //// pipeline2 = std::make_unique<VXPGReSTIRPipeline>();
-    //// pipeline1 = std::make_unique<Addon::SLC::SLCTestPipeline>();
-    //// pipeline2 = std::make_unique<SSPGReSTIRPipeline>();
-    pipeline2 = std::make_unique<GTPipeline>();
-    ////      rtgi_pipeline = std::make_unique<RestirGIPipeline>();
-    //rtgi_pipeline = std::make_unique<RestirGIPipeline>();
+    //pipeline1 = std::make_unique<Addon::Differentiable::AutoDiffPipeline>();
+    //pipeline1 = std::make_unique<SRP::GeoInspectPipeline>();
+    pipeline1 = std::make_unique<GTPipeline>();
+    ////pipeline2 = std::make_unique<Addon::Lightmap::LightmapVisualizePipeline>();
+    ////rtgi_pipeline = std::make_unique<Addon::Differentiable::NeuralRadiosityPipeline>();
+    ////// pipeline1 = std::make_unique<CustomPipeline>();
+    ////// pipeline2 = std::make_unique<VXPGReSTIRPipeline>();
+    ////// pipeline1 = std::make_unique<Addon::SLC::SLCTestPipeline>();
+    ////// pipeline2 = std::make_unique<SSPGReSTIRPipeline>();
+    ////pipeline2 = std::make_unique<Addon::SSPM::SSPMGPipeline>();
+    ////pipeline2 = std::make_unique<Addon::Fluid::LBMPipeline>();
+    ////pipeline2 = std::make_unique<Addon::SLC::SLCTestPipeline>();
+    pipeline2 = std::make_unique<RestirGIPipeline>();
+    //////rtgi_pipeline = std::make_unique<Addon::VXGuiding::GeometryPrebakePipeline>();
+    rtgi_pipeline = std::make_unique<VXPGReSTIRPipeline>();
+    ////rtgi_pipeline = std::make_unique<Addon::SST::SSTTestPipeline>();
+    //////rtgi_pipeline = std::make_unique<VXPGASVGFPipeline>();
+    ////////      rtgi_pipeline = std::make_unique<RestirGIPipeline>();
+    //////rtgi_pipeline = std::make_unique<RestirGIPipeline>();
 
-    //// geoinsp_pipeline = std::make_unique<SSPGP_GMM_Pipeline>();
-    //geoinsp_pipeline = std::make_unique<GTPipeline>();
-    geoinsp_pipeline = std::make_unique<SRP::GeoInspectPipeline>();
-    //vxgi_pipeline = std::make_unique<SSPGPipeline>();
-    //vxdi_pipeline = std::make_unique<VXPGPipeline>();
-    vxgi_pipeline = std::make_unique<VXPGPipeline>();
-    vxdi_pipeline = std::make_unique<CustomPipeline>();
+    // //geoinsp_pipeline = std::make_unique<SSPGP_GMM_Pipeline>();
+    ////geoinsp_pipeline = std::make_unique<GTPipeline>();
+    //geoinsp_pipeline = std::make_unique<SRP::GeoInspectPipeline>();
+    geoinsp_pipeline = std::make_unique<CustomPipeline>();
+    ////vxgi_pipeline = std::make_unique<SSPGPipeline>();
+    //////vxdi_pipeline = std::make_unique<VXPGPipeline>();
+    vxgi_pipeline = std::make_unique<VXPGASVGFPipeline>();
+    ////vxdi_pipeline = std::make_unique<SSPGP_GMM_Pipeline>();
+    //vxdi_pipeline = std::make_unique<VXPGASVGFPipeline>();
+    vxdi_pipeline = std::make_unique<VXPGPipeline>();
+    //vxdi_pipeline = std::make_unique<Addon::VXGuiding::GeometryPrebakePipeline>();
     //vxdi_pipeline = std::make_unique<Addon::GBufferInspectorPass>();
     pipeline1->build();
     pipeline2->build();
@@ -133,9 +148,28 @@ struct SandBoxApplication : public Application::ApplicationBase {
 
   /** Update the application every loop */
   virtual auto Update(double deltaTime) noexcept -> void override {
-    GFX::GFXManager::get()->onUpdate();
+    // start new frame
+    imguiLayer->startNewFrame();
+    Editor::DebugDraw::Clear();
+      RHI::Device* device = rhiLayer->getDevice();
+    RHI::SwapChain* swapChain = rhiLayer->getSwapChain();
+    RHI::MultiFrameFlights* multiFrameFlights = rhiLayer->getMultiFrameFlights();
+    { 
+      PROFILE_SCOPE("wait_idle");
+      multiFrameFlights->frameStart();
+      device->waitIdle();
+    }
+    {
+      PROFILE_SCOPE("gfx::onupdate");
+      GFX::GFXManager::get()->onUpdate();
+    }
+
+    if (scene.isDirty == true) {
+      cameraController.forceReset = true;
+    }
     // update camera
     {
+      PROFILE_SCOPE("update_camera");
       int width = 1280; int height = 720;
       auto view = Core::ComponentManager::get()->view<GFX::CameraComponent>();
       for (auto& [entity, camera] : view) {
@@ -157,17 +191,12 @@ struct SandBoxApplication : public Application::ApplicationBase {
       cameraController.onUpdate();
       // Core::LogManager::Log(std::to_string(timer.deltaTime()));
     }
-    GFX::update_animation(scene);
-    GFX::update_transforms(scene);
+    {
+      PROFILE_SCOPE("update anim/transform");
+      GFX::update_animation(scene);
+      GFX::update_transforms(scene);
+    }
     
-    // start new frame
-    imguiLayer->startNewFrame();
-    Editor::DebugDraw::Clear();
-    RHI::SwapChain* swapChain = rhiLayer->getSwapChain();
-    RHI::MultiFrameFlights* multiFrameFlights = rhiLayer->getMultiFrameFlights();
-    multiFrameFlights->frameStart();
-
-    RHI::Device* device = rhiLayer->getDevice();
     std::unique_ptr<RHI::CommandEncoder> commandEncoder =
         device->createCommandEncoder({multiFrameFlights->getCommandBuffer()});
 
@@ -176,8 +205,8 @@ struct SandBoxApplication : public Application::ApplicationBase {
       InvalidScene();
       device->waitIdle();
       scene.isDirty = false;
-      cameraController.forceReset = true;
     } else {
+      PROFILE_SCOPE("invalid scene");
       srenderer->invalidScene(scene);
     }
     
@@ -212,34 +241,44 @@ struct SandBoxApplication : public Application::ApplicationBase {
       ImGui::End();
     }
 
+    {
+      ImGui::Begin("Host Profiler");
+      if (ImGui::Button("Begin")) {
+        SIByL::Core::ProfileSession::get().beginSession("hello");
+      }
+      if (ImGui::Button("End")) {
+        SIByL::Core::ProfileSession::get().endSession();
+      }
+      ImGui::End();
+    }
+
+    static int pipeline_id = 0;
     ImGui::Begin("Pipeline Choose");
     {  // Select an item type
       const char* item_names[] = {"Auto Diff",      "Forward",
                                   "RTGI Pipeline",  "Geo Inspector",
                                   "VXGI Inspector", "VXDI Inspector"};
-      static int pipeline_id = 0;
-      ImGui::Combo("Mode", &pipeline_id, item_names, IM_ARRAYSIZE(item_names),
+      bool reselect = ImGui::Combo("Mode", &pipeline_id, item_names, IM_ARRAYSIZE(item_names),
                    IM_ARRAYSIZE(item_names));
+      if (reselect) {
+        frames2capture = 6;
+      }
       if (pipeline_id == 0) {
-        frames2capture = 50;
         pipeline = pipeline1.get();
         editorLayer->getWidget<Editor::RDGViewerWidget>()->pipeline = pipeline;
       } else if (pipeline_id == 1) {
         pipeline = pipeline2.get();
         editorLayer->getWidget<Editor::RDGViewerWidget>()->pipeline = pipeline;
       } else if (pipeline_id == 2) {
-        frames2capture = 50;
         pipeline = rtgi_pipeline.get();
         editorLayer->getWidget<Editor::RDGViewerWidget>()->pipeline = pipeline;
       } else if (pipeline_id == 3) {
         pipeline = geoinsp_pipeline.get();
         editorLayer->getWidget<Editor::RDGViewerWidget>()->pipeline = pipeline;
       } else if (pipeline_id == 4) {
-        frames2capture = 150;
         pipeline = vxgi_pipeline.get();
         editorLayer->getWidget<Editor::RDGViewerWidget>()->pipeline = pipeline;
       } else if (pipeline_id == 5) {
-        frames2capture = 50;
         pipeline = vxdi_pipeline.get();
         editorLayer->getWidget<Editor::RDGViewerWidget>()->pipeline = pipeline;
       }
@@ -256,16 +295,16 @@ struct SandBoxApplication : public Application::ApplicationBase {
             mainWindow.get()->getInput(),
             &(editorLayer->getWidget<Editor::ViewportWidget>()->info));
       }
+    { PROFILE_SCOPE("execute pipeline");
+      Singleton<RHI::DeviceProfilerManager>::instance()->beginSegment(
+          commandEncoder.get(), RHI::PipelineStages::TOP_OF_PIPE_BIT,
+          "total_pipe");
+      pipeline->execute(commandEncoder.get());
 
-    Singleton<RHI::DeviceProfilerManager>::instance()->beginSegment(
-        commandEncoder.get(), RHI::PipelineStages::TOP_OF_PIPE_BIT,
-        "total_pipe");
-    pipeline->execute(commandEncoder.get());
-
-    Singleton<RHI::DeviceProfilerManager>::instance()->endSegment(
-        commandEncoder.get(), RHI::PipelineStages::BOTTOM_OF_PIPE_BIT,
-        "total_pipe");
-
+      Singleton<RHI::DeviceProfilerManager>::instance()->endSegment(
+          commandEncoder.get(), RHI::PipelineStages::BOTTOM_OF_PIPE_BIT,
+          "total_pipe");
+    }
     // Editor::DebugDraw::DrawAABB(srenderer->statisticsData.aabb, 5., 5.);
     // auto editor_graphs =
     // Editor::DebugDraw::get()->pipeline->getActiveGraphs(); for (auto* graph :
@@ -286,18 +325,27 @@ struct SandBoxApplication : public Application::ApplicationBase {
     multiFrameFlights->frameEnd();
 
     pipeline->readback();
-     if (frames2capture > 0) {
-    	static int i = 0;
-     //   if (i < 102) {
-     //       
-    	//}
-     //   if (i == 100) {
+    if (frames2capture > 0) {
+      auto& timeline = GFX::GFXManager::get()->mTimeline;
+      int currentFrame = timeline.currentSec * timeline.step_per_sec;
+      static bool should_capture_next = false;
+      if (currentFrame == 155) {
+      //if (currentFrame == 105) {
+        should_capture_next = false;
+        device->waitIdle();
+        GFX::CaptureImage(pipeline->getOutput(),
+            "D:/Art/Objects/hip_hop_dancing_women_gltf/pipeline-" +
+            //"D:/Art/Scenes/BrainStem-gltf/glTF/dynamic_capture/pipeline-" +
+            //"D:/Art/Scenes/BrainStem-gltf/glTF/zeroday/pipeline-" +
+            std::to_string(pipeline_id));
+        frames2capture = 0;
+      }
+     //   if (frames2capture == 1) {
      //       device->waitIdle();
      //       GFX::CaptureImage(pipeline->getOutput(),
-     //                     "D:/data/adaptation/sspg_gmm/test");            
+     //           "D:/data/adaptation/new/bsdf-" + std::to_string(pipeline_id));            
      //   }
-        i++;
-    	frames2capture--;
+    	//frames2capture--;
     }
   };
 

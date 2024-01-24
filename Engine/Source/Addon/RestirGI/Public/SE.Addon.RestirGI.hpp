@@ -28,7 +28,7 @@ SE_EXPORT struct InitialSample : public RDG::RayTracingPass {
       -> void override;
   virtual auto renderUI() noexcept -> void override;
   GIResamplingRuntimeParameters* param;
-  bool extra_bounce = false;
+  bool extra_bounce = true;
 };
 
 SE_EXPORT struct TemporalResampling : public RDG::RayTracingPass {

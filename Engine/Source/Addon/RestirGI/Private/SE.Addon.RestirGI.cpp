@@ -129,9 +129,6 @@ auto TemporalResampling::execute(RDG::RenderContext* context,
   std::vector<RHI::BindGroupEntry>* set_0_entries =
       renderData.getBindGroupEntries("CommonScene");
   getBindGroup(context, 0)->updateBinding(*set_0_entries);
-  std::vector<RHI::BindGroupEntry>* set_1_entries =
-      renderData.getBindGroupEntries("CommonRT");
-  //getBindGroup(context, 1)->updateBinding(*set_1_entries);
   GBufferUtils::bindGBufferResource(this, context, renderData);
   GBufferUtils::bindPrevGBufferResource(this, context, renderData);
 
@@ -142,6 +139,9 @@ auto TemporalResampling::execute(RDG::RenderContext* context,
                 renderData.getBindingResource("PrevGlobalUniforms").value());
   updateBinding(context, "PrevSceneBVH",
                 renderData.getBindingResource("PrevSceneBVH").value());
+  std::vector<RHI::BindGroupEntry>* set_1_entries =
+      renderData.getBindGroupEntries("CommonRT");
+  getBindGroup(context, 1)->updateBinding(*set_1_entries);
 
   uint32_t frameID = renderData.getUInt("FrameIdx");
   struct PushConstant {

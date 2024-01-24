@@ -119,7 +119,7 @@ void RgenMain() {
 
     // sample top level tree
     double top_pdf = 1.f;
-    const int topIndex = SampleTopLevelTree(u_topLevelTree, spixelID, GetNextRandom(RNG), top_pdf);
+    const int topIndex = SampleTopLevelTree(u_topLevelTree, spixelID, GetNextRandom(RNG), info, top_pdf);
 
     if (topIndex != -1) {            
         const int clusterRoot = u_clusterRoots[topIndex];

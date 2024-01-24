@@ -92,7 +92,7 @@ void ComputeMain(
     const int compactID = u_inverse_index[vxID];
     const int clusterID = u_associate_buffer[compactID];
     if (clusterID == -1) return;
-
+    
     // virtual point llight injection
     uint clusterSubtaskIDFlatten;
     InterlockedAdd(u_cluster_counter[clusterID], 1, clusterSubtaskIDFlatten);

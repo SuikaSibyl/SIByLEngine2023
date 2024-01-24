@@ -35,6 +35,8 @@ void EvalRoughPlastic(inout_ref(BSDFEvalQuery) cBSDFEvalQuery) {
     // Clamp roughness to avoid numerical issues.
     roughness = clamp(roughness, 0.01f, 1.f);
     const QueryBitfield bitfield = UnpackQueryBitfield(cBSDFEvalQuery.misc_flag);
+    // Kd *= 3;
+    // Ks *= 10;
 
     // Then evaluate the BSDF
     // -------------------------------------------------------------

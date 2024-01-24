@@ -8,11 +8,14 @@ RWStructuredBuffer<uint> u_pCompactIndex;
 
 RWStructuredBuffer<uint> u_vplCounter;
 
+cbuffer VoxelizerUniform {
+    VoxerlizerData gVD;
+}
 [shader("compute")]
 [numthreads(8, 8, 8)] // 8x8x8 threads in a group
 void ComputeMain(uint3 gid: SV_GroupID, uint3 gtid: SV_GroupThreadID, uint gi: SV_GroupIndex) {
     const uint3 voxelToFetch = gid * 8 + gtid;
-    int voxelIDFlatten = FlatIndex(int3(voxelToFetch), 64);
+    int voxelIDFlatten = FlatIndex(int3(voxelToFetch), gVD.voxelSize);
 
     // Store the VPL
     float irradiance = UnpackIrradiance(u_pIrradiance[voxelToFetch]);

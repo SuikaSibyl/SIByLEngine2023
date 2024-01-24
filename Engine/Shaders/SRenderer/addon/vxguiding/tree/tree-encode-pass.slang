@@ -29,12 +29,12 @@ void ComputeMain(uint3 dtid: SV_DispatchThreadID) {
     VoxelTexInfo info = CreateVoxelTexInfo(gVD);
     const uint leafID = tid;
     const uint voxelID = u_compactIndex[leafID];
-    const int3 mapPos = ReconstructIndex(voxelID, 64);
+    const int3 mapPos = ReconstructIndex(voxelID, gVD.voxelSize);
     const AABB aabb = VoxelToBound(mapPos, 0, info);
     const uint clusterID = u_clusterIndex[leafID];
-    
+
     // Also write codes
-    const float3 unipos = clamp(mapPos + 0.5, 0, 64) / 64.0;
+    const float3 unipos = clamp(mapPos + 0.5, 0, gVD.voxelSize) / gVD.voxelSize;
     const uint64_t posCode = ZCurve3DToMortonCode(unipos);
     const uint64_t clusterCode = clusterID;
     const uint64_t idCode = leafID;

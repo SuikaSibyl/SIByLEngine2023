@@ -630,7 +630,7 @@ SLCTestGraph::SLCTestGraph() {
   addEdge("Accumulation Pass", "Output", "ToneMapper Pass", "Input");
 
   
-  markOutput("Accumulation Pass", "Output");
+  markOutput("ToneMapper Pass", "Output");
   //markOutput("TestVBuffer Pass", "Color");
 }
 }

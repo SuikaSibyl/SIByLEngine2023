@@ -1,8 +1,8 @@
 #ifndef _SRENDERER_VXGI_VOXELIZER_UTILS_HEADER_
 #define _SRENDERER_VXGI_VOXELIZER_UTILS_HEADER_
 
-#include "../../include/common/cpp_compatible.hlsli"
-#include "../../include/common/geometry.hlsli"
+#include "../../../include/common/cpp_compatible.hlsli"
+#include "../../../include/common/geometry.hlsli"
 
 /***********************************************************************
  * Voxelizer Utils

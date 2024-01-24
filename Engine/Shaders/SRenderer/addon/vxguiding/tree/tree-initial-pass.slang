@@ -55,7 +55,7 @@ void ComputeMain(uint3 dtid: SV_DispatchThreadID) {
     const uint leafID = tid - numInternalNodes;
     const uint compactID = uint(u_Codes[leafID] & 0XFFFF);
     const uint voxelID = u_compactIndex[compactID];
-    const int3 mapPos = ReconstructIndex(voxelID, 64);
+    const int3 mapPos = ReconstructIndex(voxelID, gVD.voxelSize);
     const AABB aabb = VoxelToBound(mapPos, 0, info);
     const uint clusterID = u_clusterIndex[compactID];
     node.setAABBMin(aabb.min);

@@ -312,7 +312,7 @@ void RgenMain() {
 
         // sample top level tree
         double top_pdf = 1.f;
-        const int topIndex = SampleTopLevelTree(u_topLevelTree, spixelID, GetNextRandom(RNG), top_pdf);
+        const int topIndex = SampleTopLevelTree(u_topLevelTree, spixelID, GetNextRandom(RNG), info, top_pdf);
         
         TreeEvaluateConfig fb_config;
         fb_config.intensity_only = true;
@@ -556,8 +556,8 @@ void RgenMain() {
             }
         }
 
-        u_intensity[pixel] = max_irradiance;
-        u_position[pixel] = vpl_pos;
+        // u_intensity[pixel] = max_irradiance;
+        // u_position[pixel] = vpl_pos;
     }
     else if (sample_stragegy == 8) {
         float bsdf_pdf;

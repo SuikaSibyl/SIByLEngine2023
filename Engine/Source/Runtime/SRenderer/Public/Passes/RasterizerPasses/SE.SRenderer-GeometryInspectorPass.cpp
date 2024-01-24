@@ -69,9 +69,13 @@ auto GeometryInspectorPass::renderUI() noexcept -> void {
   ImGui::Checkbox("Use Wireframe", &use_wireframe);
   geo_vis.use_wireframe = use_wireframe ? 1 : 0;
   if (geo_vis.use_wireframe) {
+    ImGui::ColorPicker3("Wireframe Color", (float*)&geo_vis.wireframe_color);
     ImGui::DragFloat("- Wireframe Smoothing X", &geo_vis.wireframe_smoothing, 0.01);
     ImGui::DragFloat("- Wireframe Thickness", &geo_vis.wireframe_thickness, 0.01);    
   }
+  ImGui::DragFloat("- CustomData-0", &geo_vis.padding_0, 0.01);    
+  ImGui::DragFloat("- CustomData-1", &geo_vis.padding_1, 0.01);    
+
 }
 
 auto GeometryInspectorPass::execute(
@@ -115,7 +119,7 @@ auto GeometryInspectorPass::execute(
 
   RHI::RenderPassEncoder* encoder = beginPass(context, color);
 
-  renderData.getDelegate("IssueAllDrawcalls")(
+  renderData.getDelegate("IssueVisibleDrawcalls")(
       prepareDelegateData(context, renderData));
 
   encoder->end();

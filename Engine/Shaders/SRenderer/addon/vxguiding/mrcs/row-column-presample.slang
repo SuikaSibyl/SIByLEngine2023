@@ -2,7 +2,6 @@
 #include "../../vbuffer/vbuffer.hlsli"
 #include "../../vxgi/include/conetrace_utils.hlsli"
 #include "../../vxgi/include/vxgi_interface.hlsli"
-#include "../include/directional-hash.hlsli"
 
 [[vk::push_constant]]
 cbuffer PushConstants {
@@ -72,12 +71,6 @@ void ComputeMain(
     int3 Gid: SV_GroupID
 ) {
     const int2 pixelID = DTid.xy;
-    const Ray primaryRay = generateRay(
-        pixelID,
-        resolution,
-        false,
-        globalUniform.cameraData
-    );
 
     // Grab the bsdf sampled buffer
     const VoxelTexInfo info = CreateVoxelTexInfo(gVD);
@@ -102,6 +95,8 @@ void ComputeMain(
 
         const VBufferData vhit = UnpackVBufferData(u_vBuffer[pixel_int]);
         if (!IsInvalid(vhit)) {
+            const Ray primaryRay = generateRay(
+                pixel_int, resolution, false, globalUniform.cameraData);
             const GeometryHit hit = GetGeometryHit(vhit, primaryRay);
             u_RepresentPixel[flatten_id] = float4(hit.position, UnitVectorToUnorm32Octahedron(hit.shadingNormal));
         } else {

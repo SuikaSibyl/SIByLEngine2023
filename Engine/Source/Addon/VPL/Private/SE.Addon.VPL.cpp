@@ -138,7 +138,7 @@ auto VPLSpawnPass::execute(RDG::RenderContext* context,
 
   RHI::RayTracingPassEncoder* encoder = beginPass(context);
 
-  const Math::bounds3 aabb = RACommon::get()->sceneAABB;
+  const Math::bounds3 aabb = *(Math::bounds3*)renderData.getPtr("SceneAABB");
   const Math::vec3 center = 0.5 * (aabb.pMax + aabb.pMin);
   const float radius = 0.5 * Math::length(aabb.pMax - aabb.pMin);
 

@@ -168,7 +168,8 @@ SE_EXPORT struct CustomGraph : public RDG::Graph {
     addPass(std::make_unique<Addon::Postprocess::ToneMapperPass>(), "ToneMapper Pass");
     addEdge("Accum Pass", "Output", "ToneMapper Pass", "Input");
 
-    markOutput("ToneMapper Pass", "Output");
+    // markOutput("ToneMapper Pass", "Output");
+    markOutput("Accum Pass", "Output");
   }
 };
 
@@ -216,7 +217,8 @@ SE_EXPORT struct RestirGIGraph : public RDG::Graph {
     addPass(std::make_unique<Addon::Postprocess::ToneMapperPass>(), "ToneMapper Pass");
     addEdge("Accum Pass", "Output", "ToneMapper Pass", "Input");
 
-    markOutput("ToneMapper Pass", "Output");
+    // markOutput("ToneMapper Pass", "Output");
+    markOutput("Accum Pass", "Output");
   }
   Addon::RestirGI::GIResamplingRuntimeParameters restirgi_param;
 };
@@ -325,11 +327,12 @@ SE_EXPORT struct SemiNEEPipeline : public RDG::SingleGraphPipeline {
 
 SE_EXPORT struct GTGraph : public RDG::Graph {
   GTGraph() {
-    addPass(std::make_unique<Addon::SemiNEE::GroundTruthPass>(), "UDPT Pass");
-    addPass(std::make_unique<AccumulatePass>(), "Accum Pass");
-    addEdge("UDPT Pass", "Color", "Accum Pass", "Input");
 
     addPass(std::make_unique<Addon::VBuffer::RayTraceVBuffer>(), "VBuffer Pass");
+    addPass(std::make_unique<Addon::SemiNEE::GroundTruthPass>(), "UDPT Pass");
+    addEdge("VBuffer Pass", "VBuffer", "UDPT Pass", "VBuffer");
+    addPass(std::make_unique<AccumulatePass>(), "Accum Pass");
+    addEdge("UDPT Pass", "Color", "Accum Pass", "Input");
     //addPass(std::make_unique<Addon::SSGuiding::PdfNormalize_ClearPass>(), "PdfClear Pass");
     //addPass(std::make_unique<Addon::SSGuiding::PdfNormalize_TestPass>(), "PdfTest Pass");
     //addEdge("VBuffer Pass", "VBuffer", "PdfTest Pass", "VBuffer");
@@ -344,7 +347,7 @@ SE_EXPORT struct GTGraph : public RDG::Graph {
     addPass(std::make_unique<Addon::Postprocess::ToneMapperPass>(), "ToneMapper Pass");
     addEdge("Accum Pass", "Output", "ToneMapper Pass", "Input");
 
-
+    // markOutput("ToneMapper Pass", "Output");
     markOutput("Accum Pass", "Output");
   }
 };
@@ -383,140 +386,6 @@ SE_EXPORT struct CDQGraph : public RDG::Graph {
 SE_EXPORT struct CDQPipeline : public RDG::SingleGraphPipeline {
   CDQPipeline() { pGraph = &graph; }
   CDQGraph graph;
-};
-
-SE_EXPORT struct VXDIGraph : public RDG::Graph {
-  Addon::VXGI::VXGISetting setting;
-  Addon::VXGuiding::DITestSetting diTestSetting;
-
-  VXDIGraph() {
-    setting.clipmapSetting.mip = 6;
-
-    addPass(std::make_unique<Addon::VXGuiding::VoxelClear6DPass>(&setting),
-            "Voxelize6DClear Pass");
-
-    addPass(std::make_unique<Addon::VXGuiding::Voxelize6DPass>(&setting),
-                "Voxelize6D Pass");
-    for (int i = 0; i < 6; ++i)
-        addEdge("Voxelize6DClear Pass", "RadOpaVox6DTex" +
-        std::to_string(i),
-                "Voxelize6D Pass", "RadOpaVox6DTex" + std::to_string(i));
-
-    addPass(std::make_unique<Addon::VXGuiding::DITestInjectPass>(&diTestSetting,
-                                                                 &setting),
-            "DITestInject Pass");
-    addEdge("Voxelize6D Pass", "Depth", "DITestInject Pass", "Depth");
-    for (int i = 0; i < 6; ++i)
-        addEdge("Voxelize6D Pass", "RadOpaVox6DTex" + std::to_string(i),
-                "DITestInject Pass", "RadOpaVox6DTex" + std::to_string(i));
-   
-    // Create mipmap
-    addPass(std::make_unique<Addon::VXGuiding::VoxelMip6DPass>(&setting, false),
-            "VoxelMIP6D 1st Pass");
-    for (int i = 0; i < 6; ++i)
-        addEdge("DITestInject Pass", "RadOpaVox6DTex" + std::to_string(i),
-                "VoxelMIP6D 1st Pass", "RadOpaVox6DTex" + std::to_string(i));
-    addPass(std::make_unique<Addon::VXGuiding::VoxelMip6DPass>(&setting, true),
-            "VoxelMIP6D 2nd Pass");
-    for (int i = 0; i < 6; ++i)
-        addEdge("VoxelMIP6D 1st Pass", "RadOpaVox6DTex" + std::to_string(i),
-                "VoxelMIP6D 2nd Pass", "RadOpaVox6DTex" + std::to_string(i));
-
-    addPass(std::make_unique<Addon::VXGuiding::DITestVoxelCheckPass>(
-                &diTestSetting, &setting),
-            "Vox6dVisualize Pass");
-    for (int i = 0; i < 6; ++i)
-        addEdge("VoxelMIP6D 2nd Pass", "RadOpaVox6DTex" + std::to_string(i),
-                "Vox6dVisualize Pass", "RadOpaVox6DTex" + std::to_string(i));
-
-    addPass(std::make_unique<Addon::VXGuiding::DITestPass>(&diTestSetting,
-                                                           &setting),
-            "DITestComp Pass");
-    for (int i = 0; i < 6; ++i)
-        addEdge("VoxelMIP6D 2nd Pass", "RadOpaVox6DTex" + std::to_string(i),
-                "DITestComp Pass", "RadOpaVox6DTex" + std::to_string(i));
-
-    addPass(std::make_unique<AccumulatePass>(), "Accum Pass");
-    addEdge("DITestComp Pass", "Color", "Accum Pass", "Input");
-
-    markOutput("Accum Pass", "Output");
-  }
-};
-
-SE_EXPORT struct VXDIPipeline : public RDG::SingleGraphPipeline {
-  VXDIPipeline() { pGraph = &graph; }
-  VXDIGraph graph;
-};
-
-SE_EXPORT struct VXGIGraph : public RDG::Graph {
-  Addon::VXGI::VXGISetting setting;
-  Addon::VXGuiding::DITestSetting diTestSetting;
-
-  VXGIGraph() {
-    setting.clipmapSetting.mip = 6;
-
-    addPass(std::make_unique<Addon::VXGuiding::VoxelClear6DPass>(&setting),
-            "Voxelize6DClear Pass");
-
-    addPass(std::make_unique<Addon::VXGuiding::Voxelize6DPass>(&setting),
-            "Voxelize6D Pass");
-    for (int i = 0; i < 6; ++i)
-      addEdge("Voxelize6DClear Pass", "RadOpaVox6DTex" + std::to_string(i),
-              "Voxelize6D Pass", "RadOpaVox6DTex" + std::to_string(i));
-
-    // Injection direct light by ray tracing (?)
-    addPass(std::make_unique<Addon::VXGuiding::Voxel6DRTInjection>(&setting),
-            "RTInject Pass");
-    for (int i = 0; i < 6; ++i)
-      addEdge("Voxelize6D Pass", "RadOpaVox6DTex" + std::to_string(i),
-              "RTInject Pass", "RadOpaVox6DTex" + std::to_string(i));
-    
-    // Create mipmap
-    addPass(std::make_unique<Addon::VXGuiding::VoxelMip6DPass>(&setting, false),
-            "VoxelMIP6D 1st Pass");
-    for (int i = 0; i < 6; ++i)
-      addEdge("RTInject Pass", "RadOpaVox6DTex" + std::to_string(i),
-              "VoxelMIP6D 1st Pass", "RadOpaVox6DTex" + std::to_string(i));
-    addPass(std::make_unique<Addon::VXGuiding::VoxelMip6DPass>(&setting, true),
-            "VoxelMIP6D 2nd Pass");
-    for (int i = 0; i < 6; ++i)
-      addEdge("VoxelMIP6D 1st Pass", "RadOpaVox6DTex" + std::to_string(i),
-              "VoxelMIP6D 2nd Pass", "RadOpaVox6DTex" + std::to_string(i));
-
-    addPass(std::make_unique<Addon::VXGuiding::Voxel6DVisualizePass>(&setting),
-            "Vox6dVisualize Pass");
-    for (int i = 0; i < 6; ++i)
-      addEdge("VoxelMIP6D 2nd Pass", "RadOpaVox6DTex" + std::to_string(i),
-              "Vox6dVisualize Pass", "RadOpaVox6DTex" + std::to_string(i));
-
-    addPass(std::make_unique<Addon::VXGuiding::GITestPass>(&setting),
-            "GITestComp Pass");
-    for (int i = 0; i < 6; ++i)
-      addEdge("VoxelMIP6D 2nd Pass", "RadOpaVox6DTex" + std::to_string(i),
-              "GITestComp Pass", "RadOpaVox6DTex" + std::to_string(i));
-
-    addPass(std::make_unique<Addon::VXGI::ConeTraceDebuggerPass>(&setting),
-            "ConetraceDebugger Pass");
-    addEdge("GITestComp Pass", "Color", "ConetraceDebugger Pass", "Color");
-    for (int i = 0; i < 6; ++i)
-      addEdge("VoxelMIP6D 2nd Pass", "RadOpaVox6DTex" + std::to_string(i),
-              "ConetraceDebugger Pass", "RadOpaVox6DTex" + std::to_string(i));
-
-    addPass(std::make_unique<Addon::VXGuiding::ImportInjectPass>(&setting),
-            "Importance Pass");
-    for (int i = 0; i < 6; ++i)
-      addEdge("VoxelMIP6D 2nd Pass", "RadOpaVox6DTex" + std::to_string(i),
-              "Importance Pass", "RadOpaVox6DTex" + std::to_string(i));
-    addPass(std::make_unique<Addon::VXGuiding::Voxel6DVisualizePass>(&setting, true),
-            "ImportanceVis Pass");
-    addEdge("Importance Pass", "ImportTex",
-            "ImportanceVis Pass", "RadOpaVox6DTex");
-
-    addPass(std::make_unique<AccumulatePass>(), "Accum Pass");
-    addEdge("ConetraceDebugger Pass", "Color", "Accum Pass", "Input");
-
-    markOutput("Accum Pass", "Output");
-  }
 };
 
 SE_EXPORT struct SSPGGraph : public RDG::Graph {
@@ -748,7 +617,7 @@ SE_EXPORT struct SSPG_GMM_Graph : public RDG::Graph {
     addEdge("Sample Pass", "GMMStatisticsPack1Prev", "BlitPack1", "Target");
 
     // output the accum result
-    markOutput("Accum Pass", "Output");
+    markOutput("ToneMapper Pass", "Output");
     // Visualize screen space path guding
     bool vis_gmm = false;
     if (vis_gmm) {
@@ -783,23 +652,21 @@ SE_EXPORT struct SSPGP_GMM_Pipeline : public RDG::SingleGraphPipeline {
 };
 
 SE_EXPORT struct VXGuidingPrebakeGraph : public RDG::Graph {
-  Addon::VXGI::VXGISetting setting;
-  VXGuidingPrebakeGraph() {
-    addPass(std::make_unique<Addon::VXGuiding::VXGuiderBakeCleanPass>(), "PrebakeClean Pass");
-    addPass(std::make_unique<Addon::VXGuiding::VXGuiderGeometryBakePass>(&setting), "Prebake Pass");
+  VXGuidingPrebakeGraph(Addon::VXGI::VXGISetting* setting) {
+    addPass(std::make_unique<Addon::VXGuiding::VXGuiderBakeCleanPass>(setting), "PrebakeClean Pass");
+    addPass(std::make_unique<Addon::VXGuiding::VXGuiderGeometryBakePass>(setting), "Prebake Pass");
     addEdge("PrebakeClean Pass", "AABBMin", "Prebake Pass", "AABBMin");
     addEdge("PrebakeClean Pass", "AABBMax", "Prebake Pass", "AABBMax");
   }
 };
 
 SE_EXPORT struct VXGuidingASVGFGraph : public RDG::Graph {
-  Addon::VXGI::VXGISetting setting;
   Addon::VXGuiding::DITestSetting diTestSetting;
   Addon::gSLICr::gSLICrSetting slicSetting;
   Addon::VXGuiding::VXGuidingSetting vxgSetting;
   bool need_rebake = false;
 
-  VXGuidingASVGFGraph() {
+  VXGuidingASVGFGraph(Addon::VXGI::VXGISetting& setting) {
     setting.clipmapSetting.mip = 6;
     slicSetting.img_size = {1280, 720};
     slicSetting.map_size = {(1280 + 31) / 32, (720 + 31) / 32};
@@ -881,15 +748,18 @@ SE_EXPORT struct VXGuidingASVGFGraph : public RDG::Graph {
       addEdge("RCPresample Pass", "RepresentVPL", "RowVisibility Pass", "RepresentVPL");
       addEdge("RCPresample Pass", "IndirectArgs", "RowVisibility Pass", "IndirectArgs");
     
-      addPass(std::make_unique<Addon::VXGuiding::RowKmppCenterPass>(), "RowKmppCenter Pass");
+      addPass(std::make_unique<Addon::VXGuiding::RowKmppCenterPass>(&setting), "RowKmppCenter Pass");
       addEdge("RCPresample Pass", "IndirectArgs", "RowKmppCenter Pass", "IndirectArgs");
       addEdge("RowVisibility Pass", "RowVisibility", "RowKmppCenter Pass", "RowVisibility");
+      addEdge("RCClear Pass", "VXPremulIrradiance", "RowKmppCenter Pass", "Irradiance");
+      addEdge("VXGuiderCompact Pass", "CompactIndices", "RowKmppCenter Pass", "CompactIndices");
     
-      addPass(std::make_unique<Addon::VXGuiding::RowFindCenterPass>(), "RowFindCenter Pass");
+      addPass(std::make_unique<Addon::VXGuiding::RowFindCenterPass>(&setting), "RowFindCenter Pass");
       addEdge("RCPresample Pass", "IndirectArgs", "RowFindCenter Pass", "IndirectArgs");
       addEdge("RowVisibility Pass", "RowVisibility", "RowFindCenter Pass", "RowVisibility");
       addEdge("RowKmppCenter Pass", "RowClusterInfo", "RowFindCenter Pass", "RowClusterInfo");
       addEdge("VXGuiderCompact Pass", "CompactIndices", "RowFindCenter Pass", "CompactIndices");
+      addEdge("RCClear Pass", "VXPremulIrradiance", "RowFindCenter Pass", "Irradiance");
     }
 
     // BL - VXTree building
@@ -959,7 +829,7 @@ SE_EXPORT struct VXGuidingASVGFGraph : public RDG::Graph {
     if (use_mcrs_cluster) addEdge("RowFindCenter Pass", "Clusters", "VisibilityGather Pass", "VXClusterAssociation");
     else addEdge("VXClusterFindAssociate2 Pass", "AssociateBuffer", "VisibilityGather Pass", "VXClusterAssociation");
 
-    addPass(std::make_unique<Addon::VXGuiding::SPixelVisibilityEXPass>(&setting), "VisibilityAdditional Pass");
+    addPass(std::make_unique<Addon::VXGuiding::SPixelVisibilityEXPass>(), "VisibilityAdditional Pass");
     addEdge("VisibilityGather Pass", "SPixelGathered", "VisibilityAdditional Pass", "SPixelGathered");
     addEdge("VisibilityGather Pass", "ClusterGathered", "VisibilityAdditional Pass", "ClusterGathered");
     addEdge("VisibilityGather Pass", "SPixelCounter", "VisibilityAdditional Pass", "SPixelCounter");
@@ -1119,7 +989,8 @@ SE_EXPORT struct VXGuidingASVGFGraph : public RDG::Graph {
     addPass(std::make_unique<Addon::Postprocess::ToneMapperPass>(), "ToneMapper Pass");
     addEdge("Accum Pass", "Output", "ToneMapper Pass", "Input");
 
-    markOutput("ToneMapper Pass", "Output");
+    // markOutput("ToneMapper Pass", "Output");
+    markOutput("Accum Pass", "Output");
   }
 
   Addon::BitonicSort::BitonicSortSetting sort_setting;
@@ -1133,15 +1004,14 @@ SE_EXPORT struct VXPGASVGFPipeline : public RDG::Pipeline {
   } curr_phase = Phase::GeometryBaking;
 
   virtual auto build() noexcept -> void {
-    prebake_graph.build();
-    GFX::Buffer* prebake_geom_min =
-        prebake_graph.getBufferResource("Prebake Pass", "AABBMin");
-    GFX::Buffer* prebake_geom_max =
-        prebake_graph.getBufferResource("Prebake Pass", "AABBMax");
-    runtime_graph.setExternal("Prebake Pass", "AABBMin", prebake_geom_min);
-    runtime_graph.setExternal("Prebake Pass", "AABBMax", prebake_geom_max);
-    runtime_graph.build();
-  }
+    prebake_graph = std::make_unique<VXGuidingPrebakeGraph>(&setting);
+    runtime_graph = std::make_unique<VXGuidingASVGFGraph>(setting);
+    prebake_graph->build();
+    GFX::Buffer* prebake_geom_min = prebake_graph->getBufferResource("Prebake Pass", "AABBMin");
+    GFX::Buffer* prebake_geom_max = prebake_graph->getBufferResource("Prebake Pass", "AABBMax");
+    runtime_graph->setExternal("Prebake Pass", "AABBMin", prebake_geom_min);
+    runtime_graph->setExternal("Prebake Pass", "AABBMax", prebake_geom_max);
+    runtime_graph->build();  }
 
   virtual auto execute(RHI::CommandEncoder* encoder) noexcept -> void {
     auto graphs = getActiveGraphs();
@@ -1149,39 +1019,48 @@ SE_EXPORT struct VXPGASVGFPipeline : public RDG::Pipeline {
     if (curr_phase == Phase::GeometryBaking) {
       curr_phase = Phase::Runtime;
     }
-    if (runtime_graph.need_rebake) {
+    if (runtime_graph->need_rebake) {
       curr_phase = Phase::GeometryBaking;
-      runtime_graph.need_rebake = false;
+      runtime_graph->need_rebake = false;
     }
   }
 
   virtual auto getActiveGraphs() noexcept -> std::vector<RDG::Graph*> {
     if (curr_phase == Phase::GeometryBaking)
-      return {&prebake_graph};
+      return {prebake_graph.get()};
     else if (curr_phase == Phase::Runtime)
-      return {&runtime_graph};
+      return {runtime_graph.get()};
     else
       return {};
   }
 
   virtual auto getOutput() noexcept -> GFX::Texture* {
-    return runtime_graph.getOutput();
+    return runtime_graph->getOutput();
   }
 
-  VXGuidingPrebakeGraph prebake_graph;
-  VXGuidingASVGFGraph runtime_graph;
+  virtual auto renderUI() noexcept -> void override {
+    int resolution = setting.clipmapSetting.size;
+    if (ImGui::DragInt("VX Resolution", &resolution)) {
+      setting.clipmapSetting.size = resolution;
+    }
+    if (ImGui::Button("Rebuild")) {
+      RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
+      device->waitIdle();
+      build();
+    }
+  }
+  Addon::VXGI::VXGISetting setting;
+  std::unique_ptr<VXGuidingPrebakeGraph> prebake_graph;
+  std::unique_ptr<VXGuidingASVGFGraph> runtime_graph;
 };
 
-
 SE_EXPORT struct VXGuidingGraph : public RDG::Graph {
-  Addon::VXGI::VXGISetting setting;
   Addon::VXGuiding::DITestSetting diTestSetting;
   Addon::gSLICr::gSLICrSetting slicSetting;
   Addon::VXGuiding::VXGuidingSetting vxgSetting;
   bool need_rebake = false;
 
-  VXGuidingGraph() {
-    setting.clipmapSetting.mip = 6;
+  VXGuidingGraph(Addon::VXGI::VXGISetting& setting) {
     slicSetting.img_size = {1280, 720};
     slicSetting.map_size = {(1280 + 31) / 32, (720 + 31) / 32};
     slicSetting.number_iter = 5;
@@ -1195,14 +1074,14 @@ SE_EXPORT struct VXGuidingGraph : public RDG::Graph {
     addEdge("Prebake Pass", "AABBMin", "GuiderClear Pass", "AABBMinPrebake");
     addEdge("Prebake Pass", "AABBMax", "GuiderClear Pass", "AABBMaxPrebake");
 
-    addPass(std::make_unique<Addon::VXGuiding::VXGuiderLightInjection>(&setting, &vxgSetting), "ImportonInjection Pass");
-    //addPass(std::make_unique<Addon::VXGuiding::VXGuider1stBounceInjection>(&setting, &vxgSetting), "ImportonInjection Pass");
+    //addPass(std::make_unique<Addon::VXGuiding::VXGuiderLightInjection>(&setting, &vxgSetting), "ImportonInjection Pass");
+    addPass(std::make_unique<Addon::VXGuiding::VXGuider1stBounceInjection>(&setting, &vxgSetting), "ImportonInjection Pass");
     addEdge("VBuffer Pass", "VBuffer", "ImportonInjection Pass", "VBuffer");
     addEdge("GuiderClear Pass", "Irradiance", "ImportonInjection Pass", "Irradiance");
     addEdge("GuiderClear Pass", "VPLCount", "ImportonInjection Pass", "VPLCount");
 
     // geometry injection of dynamic objects
-    addPass(std::make_unique<Addon::VXGuiding::VXGuiderGeometryPass>(&setting), "GuiderGeom Pass");
+    addPass(std::make_unique<Addon::VXGuiding::VXGuiderGeometryDynamicPass>(&setting), "GuiderGeom Pass");
     addEdge("GuiderClear Pass", "AABBMin", "GuiderGeom Pass", "AABBMin");
     addEdge("GuiderClear Pass", "AABBMax", "GuiderGeom Pass", "AABBMax");
     addEdge("ImportonInjection Pass", "Irradiance", "GuiderGeom Pass", "Irradiance");
@@ -1229,7 +1108,7 @@ SE_EXPORT struct VXGuidingGraph : public RDG::Graph {
       addEdge("ImportonInjection Pass", "Irradiance", "VXClusterComputeInfo Pass", "Irradiance");
       addEdge("VXGuiderCompact Pass", "CounterBuffer", "VXClusterComputeInfo Pass", "CounterBuffer");
 
-      addPass(std::make_unique<Addon::VXGuiding::VXClusterSeedingPass>(), "VXGuiderSeed Pass");
+      addPass(std::make_unique<Addon::VXGuiding::VXClusterSeedingPass>(&setting), "VXGuiderSeed Pass");
       addEdge("VXGuiderCompact Pass", "CompactIndices", "VXGuiderSeed Pass", "CompactIndices");
       addEdge("VXGuiderCompact Pass", "CounterBuffer", "VXGuiderSeed Pass", "CounterBuffer");
       addEdge("VXClusterComputeInfo Pass", "VXNormal", "VXGuiderSeed Pass", "VXNormal");
@@ -1292,15 +1171,18 @@ SE_EXPORT struct VXGuidingGraph : public RDG::Graph {
       addEdge("RCPresample Pass", "RepresentVPL", "RowVisibility Pass", "RepresentVPL");
       addEdge("RCPresample Pass", "IndirectArgs", "RowVisibility Pass", "IndirectArgs");
     
-      addPass(std::make_unique<Addon::VXGuiding::RowKmppCenterPass>(), "RowKmppCenter Pass");
+      addPass(std::make_unique<Addon::VXGuiding::RowKmppCenterPass>(&setting), "RowKmppCenter Pass");
       addEdge("RCPresample Pass", "IndirectArgs", "RowKmppCenter Pass", "IndirectArgs");
       addEdge("RowVisibility Pass", "RowVisibility", "RowKmppCenter Pass", "RowVisibility");
+      addEdge("RCClear Pass", "VXPremulIrradiance", "RowKmppCenter Pass", "Irradiance");
+      addEdge("VXGuiderCompact Pass", "CompactIndices", "RowKmppCenter Pass", "CompactIndices");
     
-      addPass(std::make_unique<Addon::VXGuiding::RowFindCenterPass>(), "RowFindCenter Pass");
+      addPass(std::make_unique<Addon::VXGuiding::RowFindCenterPass>(&setting), "RowFindCenter Pass");
       addEdge("RCPresample Pass", "IndirectArgs", "RowFindCenter Pass", "IndirectArgs");
       addEdge("RowVisibility Pass", "RowVisibility", "RowFindCenter Pass", "RowVisibility");
       addEdge("RowKmppCenter Pass", "RowClusterInfo", "RowFindCenter Pass", "RowClusterInfo");
       addEdge("VXGuiderCompact Pass", "CompactIndices", "RowFindCenter Pass", "CompactIndices");
+      addEdge("RCClear Pass", "VXPremulIrradiance", "RowFindCenter Pass", "Irradiance");
     }
 
     // BL - VXTree building
@@ -1370,7 +1252,7 @@ SE_EXPORT struct VXGuidingGraph : public RDG::Graph {
     if (use_mcrs_cluster) addEdge("RowFindCenter Pass", "Clusters", "VisibilityGather Pass", "VXClusterAssociation");
     else addEdge("VXClusterFindAssociate2 Pass", "AssociateBuffer", "VisibilityGather Pass", "VXClusterAssociation");
 
-    addPass(std::make_unique<Addon::VXGuiding::SPixelVisibilityEXPass>(&setting), "VisibilityAdditional Pass");
+    addPass(std::make_unique<Addon::VXGuiding::SPixelVisibilityEXPass>(), "VisibilityAdditional Pass");
     addEdge("VisibilityGather Pass", "SPixelGathered", "VisibilityAdditional Pass", "SPixelGathered");
     addEdge("VisibilityGather Pass", "ClusterGathered", "VisibilityAdditional Pass", "ClusterGathered");
     addEdge("VisibilityGather Pass", "SPixelCounter", "VisibilityAdditional Pass", "SPixelCounter");
@@ -1433,7 +1315,7 @@ SE_EXPORT struct VXGuidingGraph : public RDG::Graph {
     else addEdge("VXClusterFindAssociate2 Pass", "AssociateBuffer", "VXGuiderGI Pass", "AssociateBuffer");
 
     // visualize the VXPG distribution via accumulation
-    bool accumPdf = false;
+    bool accumPdf = true;
     if (accumPdf) {
       addPass(std::make_unique<Addon::SSGuiding::PdfAccum_ClearPass>(), "PdfAccumClear Pass");
       addPass(std::make_unique<Addon::VXGuiding::VXGuiderAccumPass>(&setting), "VXGuiderGIAccum Pass");
@@ -1479,15 +1361,19 @@ SE_EXPORT struct VXGuidingGraph : public RDG::Graph {
 
     bool visualizeVXs = false;
     if (visualizeVXs) {
-       addSubgraph(std::make_unique<PreZPass>(), "Pre-Z Pass");
-       // addPass(std::make_unique<GeometryInspectorPass>(), "GeoInspect Pass");
-       // addEdge("Pre-Z Pass", "Depth", "GeoInspect Pass", "Depth");
-       addPass(std::make_unique<Addon::VXGuiding::VXGuiderVisualizePass>(&setting), "VXGuiderVIS Pass");
-       addEdge("Pre-Z Pass", "Depth", "VXGuiderVIS Pass", "Depth");
-       addEdge("Accum Pass", "Output", "VXGuiderVIS Pass", "Color");
-       addEdge("GuiderGeom Pass", "AABBMin", "VXGuiderVIS Pass", "AABBMin");
-       addEdge("GuiderGeom Pass", "AABBMax", "VXGuiderVIS Pass", "AABBMax");
-       addEdge("ImportonInjection Pass", "Irradiance", "VXGuiderVIS Pass", "Irradiance");
+      addSubgraph(std::make_unique<PreZPass>(), "Pre-Z Pass");
+      //addPass(std::make_unique<GeometryInspectorPass>(), "GeoInspect Pass");
+      //addEdge("Pre-Z Pass", "Depth", "GeoInspect Pass", "Depth");
+      addPass(std::make_unique<Addon::VXGuiding::VXGuiderVisualizePass>(&setting), "VXGuiderVIS Pass");
+      addEdge("Pre-Z Pass", "Depth", "VXGuiderVIS Pass", "Depth");
+      addEdge("Accum Pass", "Output", "VXGuiderVIS Pass", "Color");
+      //addEdge("GeoInspect Pass", "Color", "VXGuiderVIS Pass", "Color");
+      addEdge("GuiderGeom Pass", "AABBMin", "VXGuiderVIS Pass", "AABBMin");
+      addEdge("GuiderGeom Pass", "AABBMax", "VXGuiderVIS Pass", "AABBMax");
+      //addEdge("GuiderClear Pass", "AABBMin", "VXGuiderVIS Pass", "AABBMin");
+      //addEdge("GuiderClear Pass", "AABBMax", "VXGuiderVIS Pass", "AABBMax");
+      addEdge("ImportonInjection Pass", "Irradiance", "VXGuiderVIS Pass", "Irradiance");
+      markOutput("VXGuiderVIS Pass", "Color");
     }
 
     bool visualizeSPixels = false;
@@ -1499,7 +1385,8 @@ SE_EXPORT struct VXGuidingGraph : public RDG::Graph {
       addEdge("VXGuiderVIS Pass", "Color", "VisualizeSPixel Pass", "Color");
       markOutput("VisualizeSPixel Pass", "Color");
     } else {
-      markOutput("ToneMapper Pass", "Output");
+      // markOutput("ToneMapper Pass", "Output");
+      markOutput("Accum Pass", "Output");
     }
   }
 
@@ -1507,7 +1394,7 @@ SE_EXPORT struct VXGuidingGraph : public RDG::Graph {
 };
 
 SE_EXPORT struct VXGuidingPipeline : public RDG::SingleGraphPipeline {
-  VXGuidingPipeline() { pGraph = &graph; }
+  VXGuidingPipeline(Addon::VXGI::VXGISetting& setting) :graph(setting) { pGraph = &graph; }
   VXGuidingGraph graph;
 };
 
@@ -1519,12 +1406,14 @@ SE_EXPORT struct VXPGPipeline : public RDG::Pipeline {
   } curr_phase = Phase::GeometryBaking;
 
   virtual auto build() noexcept -> void {
-    prebake_graph.build();
-    GFX::Buffer* prebake_geom_min = prebake_graph.getBufferResource("Prebake Pass", "AABBMin");
-    GFX::Buffer* prebake_geom_max = prebake_graph.getBufferResource("Prebake Pass", "AABBMax");
-    runtime_graph.setExternal("Prebake Pass", "AABBMin", prebake_geom_min);
-    runtime_graph.setExternal("Prebake Pass", "AABBMax", prebake_geom_max);
-    runtime_graph.build();
+    prebake_graph = std::make_unique<VXGuidingPrebakeGraph>(&setting);
+    runtime_graph = std::make_unique<VXGuidingGraph>(setting);
+    prebake_graph->build();
+    GFX::Buffer* prebake_geom_min = prebake_graph->getBufferResource("Prebake Pass", "AABBMin");
+    GFX::Buffer* prebake_geom_max = prebake_graph->getBufferResource("Prebake Pass", "AABBMax");
+    runtime_graph->setExternal("Prebake Pass", "AABBMin", prebake_geom_min);
+    runtime_graph->setExternal("Prebake Pass", "AABBMax", prebake_geom_max);
+    runtime_graph->build();
   }
 
   virtual auto execute(RHI::CommandEncoder* encoder) noexcept -> void {
@@ -1533,30 +1422,42 @@ SE_EXPORT struct VXPGPipeline : public RDG::Pipeline {
     if (curr_phase == Phase::GeometryBaking) {
       curr_phase = Phase::Runtime;
     }
-    if (runtime_graph.need_rebake) {
+    if (runtime_graph->need_rebake) {
       curr_phase = Phase::GeometryBaking;
-      runtime_graph.need_rebake = false;
+      runtime_graph->need_rebake = false;
     }
   }
 
   virtual auto getActiveGraphs() noexcept -> std::vector<RDG::Graph*> {
-    if (curr_phase == Phase::GeometryBaking) return { &prebake_graph };
-    else if (curr_phase == Phase::Runtime) return { &runtime_graph };
+    if (curr_phase == Phase::GeometryBaking) return { prebake_graph.get() };
+    else if (curr_phase == Phase::Runtime) return {runtime_graph.get()};
     else return {};
   }
 
   virtual auto getOutput() noexcept -> GFX::Texture* {
-    return runtime_graph.getOutput();
+    return runtime_graph->getOutput();
   }
 
-  VXGuidingPrebakeGraph prebake_graph;
-  VXGuidingGraph runtime_graph;
+  virtual auto renderUI() noexcept -> void override {
+    int resolution = setting.clipmapSetting.size;
+    if (ImGui::DragInt("VX Resolution", &resolution)) {
+      setting.clipmapSetting.size = resolution;
+    }
+    if (ImGui::Button("Rebuild")) {
+      RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
+      device->waitIdle();
+      build();
+    }
+  }
+
+  Addon::VXGI::VXGISetting setting;
+  std::unique_ptr<VXGuidingPrebakeGraph> prebake_graph;
+  std::unique_ptr<VXGuidingGraph> runtime_graph;
 };
 
 SE_EXPORT struct VXPGRestirGIGraph : public RDG::Graph {
-  VXPGRestirGIGraph() {
+  VXPGRestirGIGraph(Addon::VXGI::VXGISetting& setting) {
     restirgi_param = Addon::RestirGI::InitializeParameters(1280, 720);
-    setting.clipmapSetting.mip = 6;
     slicSetting.img_size = {1280, 720};
     slicSetting.map_size = {(1280 + 31) / 32, (720 + 31) / 32};
     slicSetting.number_iter = 5;
@@ -1578,7 +1479,8 @@ SE_EXPORT struct VXPGRestirGIGraph : public RDG::Graph {
     addEdge("Prebake Pass", "AABBMin", "GuiderClear Pass", "AABBMinPrebake");
     addEdge("Prebake Pass", "AABBMax", "GuiderClear Pass", "AABBMaxPrebake");
 
-    addPass(std::make_unique<Addon::VXGuiding::VXGuiderLightInjection>(&setting, &vxgSetting), "ImportonInjection Pass");
+    addPass(std::make_unique<Addon::VXGuiding::VXGuider1stBounceInjection>(&setting, &vxgSetting), "ImportonInjection Pass");
+    //addPass(std::make_unique<Addon::VXGuiding::VXGuiderLightInjection>(&setting, &vxgSetting), "ImportonInjection Pass");
     addEdge("VBuffer Pass", "VBuffer", "ImportonInjection Pass", "VBuffer");
     addEdge("GuiderClear Pass", "Irradiance", "ImportonInjection Pass", "Irradiance");
     addEdge("GuiderClear Pass", "VPLCount", "ImportonInjection Pass", "VPLCount");
@@ -1626,15 +1528,18 @@ SE_EXPORT struct VXPGRestirGIGraph : public RDG::Graph {
       addEdge("RCPresample Pass", "RepresentVPL", "RowVisibility Pass", "RepresentVPL");
       addEdge("RCPresample Pass", "IndirectArgs", "RowVisibility Pass", "IndirectArgs");
     
-      addPass(std::make_unique<Addon::VXGuiding::RowKmppCenterPass>(), "RowKmppCenter Pass");
+      addPass(std::make_unique<Addon::VXGuiding::RowKmppCenterPass>(&setting), "RowKmppCenter Pass");
       addEdge("RCPresample Pass", "IndirectArgs", "RowKmppCenter Pass", "IndirectArgs");
       addEdge("RowVisibility Pass", "RowVisibility", "RowKmppCenter Pass", "RowVisibility");
-    
-      addPass(std::make_unique<Addon::VXGuiding::RowFindCenterPass>(), "RowFindCenter Pass");
+      addEdge("RCClear Pass", "VXPremulIrradiance", "RowKmppCenter Pass", "Irradiance");
+      addEdge("VXGuiderCompact Pass", "CompactIndices", "RowKmppCenter Pass", "CompactIndices");
+
+      addPass(std::make_unique<Addon::VXGuiding::RowFindCenterPass>(&setting), "RowFindCenter Pass");
       addEdge("RCPresample Pass", "IndirectArgs", "RowFindCenter Pass", "IndirectArgs");
       addEdge("RowVisibility Pass", "RowVisibility", "RowFindCenter Pass", "RowVisibility");
       addEdge("RowKmppCenter Pass", "RowClusterInfo", "RowFindCenter Pass", "RowClusterInfo");
       addEdge("VXGuiderCompact Pass", "CompactIndices", "RowFindCenter Pass", "CompactIndices");
+      addEdge("RCClear Pass", "VXPremulIrradiance", "RowFindCenter Pass", "Irradiance");
     }
 
     // BL - VXTree building
@@ -1702,7 +1607,7 @@ SE_EXPORT struct VXPGRestirGIGraph : public RDG::Graph {
     addEdge("VXGuiderCompact Pass", "InverseIndex", "VisibilityGather Pass", "VXInverseIndex");
     addEdge("RowFindCenter Pass", "Clusters", "VisibilityGather Pass", "VXClusterAssociation");
 
-    addPass(std::make_unique<Addon::VXGuiding::SPixelVisibilityEXPass>(&setting), "VisibilityAdditional Pass");
+    addPass(std::make_unique<Addon::VXGuiding::SPixelVisibilityEXPass>(), "VisibilityAdditional Pass");
     addEdge("VisibilityGather Pass", "SPixelGathered", "VisibilityAdditional Pass", "SPixelGathered");
     addEdge("VisibilityGather Pass", "ClusterGathered", "VisibilityAdditional Pass", "ClusterGathered");
     addEdge("VisibilityGather Pass", "SPixelCounter", "VisibilityAdditional Pass", "SPixelCounter");
@@ -1763,11 +1668,11 @@ SE_EXPORT struct VXPGRestirGIGraph : public RDG::Graph {
     addPass(std::make_unique<Addon::Postprocess::ToneMapperPass>(), "ToneMapper Pass");
     addEdge("Accum Pass", "Output", "ToneMapper Pass", "Input");
 
+    // markOutput("ToneMapper Pass", "Output");
     markOutput("Accum Pass", "Output");
   }
 
   Addon::RestirGI::GIResamplingRuntimeParameters restirgi_param;
-  Addon::VXGI::VXGISetting setting;
   Addon::VXGuiding::DITestSetting diTestSetting;
   Addon::gSLICr::gSLICrSetting slicSetting;
   Addon::VXGuiding::VXGuidingSetting vxgSetting;
@@ -1783,14 +1688,16 @@ SE_EXPORT struct VXPGReSTIRPipeline : public RDG::Pipeline {
   } curr_phase = Phase::GeometryBaking;
 
   virtual auto build() noexcept -> void {
-    prebake_graph.build();
+    prebake_graph = std::make_unique<VXGuidingPrebakeGraph>(&setting);
+    runtime_graph = std::make_unique<VXPGRestirGIGraph>(setting);
+    prebake_graph->build();
     GFX::Buffer* prebake_geom_min =
-        prebake_graph.getBufferResource("Prebake Pass", "AABBMin");
+        prebake_graph->getBufferResource("Prebake Pass", "AABBMin");
     GFX::Buffer* prebake_geom_max =
-        prebake_graph.getBufferResource("Prebake Pass", "AABBMax");
-    runtime_graph.setExternal("Prebake Pass", "AABBMin", prebake_geom_min);
-    runtime_graph.setExternal("Prebake Pass", "AABBMax", prebake_geom_max);
-    runtime_graph.build();
+        prebake_graph->getBufferResource("Prebake Pass", "AABBMax");
+    runtime_graph->setExternal("Prebake Pass", "AABBMin", prebake_geom_min);
+    runtime_graph->setExternal("Prebake Pass", "AABBMax", prebake_geom_max);
+    runtime_graph->build();
   }
 
   virtual auto execute(RHI::CommandEncoder* encoder) noexcept -> void {
@@ -1799,27 +1706,39 @@ SE_EXPORT struct VXPGReSTIRPipeline : public RDG::Pipeline {
     if (curr_phase == Phase::GeometryBaking) {
       curr_phase = Phase::Runtime;
     }
-    if (runtime_graph.need_rebake) {
+    if (runtime_graph->need_rebake) {
       curr_phase = Phase::GeometryBaking;
-      runtime_graph.need_rebake = false;
+      runtime_graph->need_rebake = false;
     }
   }
 
   virtual auto getActiveGraphs() noexcept -> std::vector<RDG::Graph*> {
     if (curr_phase == Phase::GeometryBaking)
-      return {&prebake_graph};
+      return {prebake_graph.get()};
     else if (curr_phase == Phase::Runtime)
-      return {&runtime_graph};
+      return {runtime_graph.get()};
     else
       return {};
   }
 
   virtual auto getOutput() noexcept -> GFX::Texture* {
-    return runtime_graph.getOutput();
+    return runtime_graph->getOutput();
   }
 
-  VXGuidingPrebakeGraph prebake_graph;
-  VXPGRestirGIGraph runtime_graph;
+  virtual auto renderUI() noexcept -> void override {
+    int resolution = setting.clipmapSetting.size;
+    if (ImGui::DragInt("VX Resolution", &resolution)) {
+      setting.clipmapSetting.size = resolution;
+    }
+    if (ImGui::Button("Rebuild")) {
+      RHI::Device* device = GFX::GFXManager::get()->rhiLayer->getDevice();
+      device->waitIdle();
+      build();
+    }
+  }
+  Addon::VXGI::VXGISetting setting;
+  std::unique_ptr<VXGuidingPrebakeGraph> prebake_graph;
+  std::unique_ptr<VXPGRestirGIGraph> runtime_graph;
 };
 
 SE_EXPORT struct ADGTGraph : public RDG::Graph {

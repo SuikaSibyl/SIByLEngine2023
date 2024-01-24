@@ -18,13 +18,13 @@ namespace SIByL
 {
 	SE_EXPORT struct PreZOpaquePass :public RDG::RenderPass {
 		PreZOpaquePass() {
-            //auto [vert, frag] = GFX::ShaderLoader_SLANG::load(
-            // "../Engine/Shaders/SRenderer/rasterizer/prez-pass.slang",
-            // std::array<std::pair<std::string, RHI::ShaderStages>, 2>{
-            //     std::make_pair("vertexMain_Indirect", RHI::ShaderStages::VERTEX),
-            //     std::make_pair("fragmentMain", RHI::ShaderStages::FRAGMENT),});
-			vert = GFX::GFXManager::get()->registerShaderModuleResource("../Engine/Binaries/Runtime/spirv/SRenderer/rasterizer/prez_pass/prez_pass_indirect_vert.spv", { nullptr, RHI::ShaderStages::VERTEX });
-			frag = GFX::GFXManager::get()->registerShaderModuleResource("../Engine/Binaries/Runtime/spirv/SRenderer/rasterizer/prez_pass/prez_pass_frag.spv", { nullptr, RHI::ShaderStages::FRAGMENT });
+            auto [vert, frag] = GFX::ShaderLoader_SLANG::load(
+             "../Engine/Shaders/SRenderer/rasterizer/prez-pass.slang",
+             std::array<std::pair<std::string, RHI::ShaderStages>, 2>{
+                 std::make_pair("vertexMain_Indirect", RHI::ShaderStages::VERTEX),
+                 std::make_pair("fragmentMain", RHI::ShaderStages::FRAGMENT),});
+			//vert = GFX::GFXManager::get()->registerShaderModuleResource("../Engine/Binaries/Runtime/spirv/SRenderer/rasterizer/prez_pass/prez_pass_indirect_vert.spv", { nullptr, RHI::ShaderStages::VERTEX });
+			//frag = GFX::GFXManager::get()->registerShaderModuleResource("../Engine/Binaries/Runtime/spirv/SRenderer/rasterizer/prez_pass/prez_pass_frag.spv", { nullptr, RHI::ShaderStages::FRAGMENT });
 			RDG::RenderPass::init(
 				Core::ResourceManager::get()->getResource<GFX::ShaderModule>(vert),
 				Core::ResourceManager::get()->getResource<GFX::ShaderModule>(frag));
@@ -59,17 +59,21 @@ namespace SIByL
 
 			// issue draw call
 			RHI::RenderPassEncoder* encoder = beginPass(context, depth);
-			RHI::Buffer* indirect_draw_buffer = RACommon::get()->structured_drawcalls.all_drawcalls.get_primal();
-			auto const& drawcall_info = RACommon::get()->structured_drawcalls.opaque_drawcall;
-			if (drawcall_info.drawCount != 0) {
-				getBindGroup(context, 1)->updateBinding({
-				  RHI::BindGroupEntry {0, RHI::BindingResource{ 
-					RHI::BufferBinding{indirect_draw_buffer, drawcall_info.offset, 
-					sizeof(RACommon::DrawIndexedIndirectEX) * drawcall_info.drawCount} }}
-				});
-				renderData.getDelegate("PrepareDrawcalls")(prepareDelegateData(context, renderData));
-				encoder->drawIndexedIndirect(indirect_draw_buffer, drawcall_info.offset, drawcall_info.drawCount, sizeof(RACommon::DrawIndexedIndirectEX));
-			}
+
+			renderData.getDelegate("IssueVisibleDrawcalls")(
+				prepareDelegateData(context, renderData));
+
+			//RHI::Buffer* indirect_draw_buffer = RACommon::get()->structured_drawcalls.all_drawcalls.get_primal();
+			//auto const& drawcall_info = RACommon::get()->structured_drawcalls.opaque_drawcall;
+			//if (drawcall_info.drawCount != 0) {
+			//	getBindGroup(context, 1)->updateBinding({
+			//	  RHI::BindGroupEntry {0, RHI::BindingResource{ 
+			//		RHI::BufferBinding{indirect_draw_buffer, drawcall_info.offset, 
+			//		sizeof(RACommon::DrawIndexedIndirectEX) * drawcall_info.drawCount} }}
+			//	});
+			//	renderData.getDelegate("PrepareDrawcalls")(prepareDelegateData(context, renderData));
+			//	encoder->drawIndexedIndirect(indirect_draw_buffer, drawcall_info.offset, drawcall_info.drawCount, sizeof(RACommon::DrawIndexedIndirectEX));
+			//}
 			encoder->end();
 		}
 

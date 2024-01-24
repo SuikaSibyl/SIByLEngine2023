@@ -498,4 +498,77 @@ auto AnimatedTransform::boundPointMotion(point3 const& p) const noexcept
   return bounds3{};
 }
 
+Math::vec3 RotationMatrixToEulerAngles(Math::mat3 R) {
+  float sy =
+      std::sqrt(R.data[0][0] * R.data[0][0] + R.data[1][0] * R.data[1][0]);
+  bool singular = sy < 1e-6;
+  float x, y, z;
+  if (!singular) {
+    x = atan2(R.data[2][1], R.data[2][2]);
+    y = atan2(-R.data[2][0], sy);
+    z = atan2(R.data[1][0], R.data[0][0]);
+  } else {
+    x = atan2(-R.data[1][2], R.data[1][1]);
+    y = atan2(-R.data[2][0], sy);
+    z = 0;
+  }
+  return {x, y, z};
+}
+
+void Decompose(mat4 const& m, vec3* t, vec3* r, vec3* s) {
+  // Extract translation T from transformation matrix
+  // which could be found directly from matrix
+  t->x = m.data[0][3];
+  t->y = m.data[1][3];
+  t->z = m.data[2][3];
+
+  // Compute new transformation matrix M without translation
+  mat4 M = m;
+  for (int i = 0; i < 3; i++) M.data[i][3] = M.data[3][i] = 0.f;
+  M.data[3][3] = 1.f;
+
+  // Extract rotation R from transformation matrix
+  // use polar decomposition, decompose into R&S by averaging M with its
+  // inverse transpose until convergence to get R (because pure rotation
+  // matrix has similar inverse and transpose)
+  float norm;
+  int count = 0;
+  mat4 R = M;
+  do {
+    // Compute next matrix Rnext in series
+    mat4 rNext;
+    mat4 rInvTrans = inverse(transpose(R));
+    for (int i = 0; i < 4; ++i)
+      for (int j = 0; j < 4; ++j)
+        rNext.data[i][j] = 0.5f * (R.data[i][j] + rInvTrans.data[i][j]);
+    // Compute norm of difference between R and Rnext
+    norm = 0.f;
+    for (int i = 0; i < 3; ++i) {
+      float n = std::abs(R.data[i][0] = rNext.data[i][0]) +
+                std::abs(R.data[i][1] = rNext.data[i][1]) +
+                std::abs(R.data[i][2] = rNext.data[i][2]);
+      norm = std::max(norm, n);
+    }
+    R = rNext;
+  } while (++count < 100 && norm > .0001);
+
+  Math::vec3 euler = RotationMatrixToEulerAngles(Math::mat3{R});
+  r->x = euler.x * 180. / Math::double_Pi;
+  r->y = euler.y * 180. / Math::double_Pi;
+  r->z = euler.z * 180. / Math::double_Pi;
+  // r->y = std::asin(-R.data[2][0]);
+  //if (std::cos(r->y) != 0) {
+  //  r->x = atan2(R.data[2][1], R.data[2][2]);
+  //  r->z = atan2(R.data[1][0], R.data[0][0]);
+  //} else {
+  //  r->x = atan2(-R.data[0][2], R.data[1][1]);
+  //  r->z = 0;
+  //}
+
+  // Compute scale S using rotationand original matrix
+  mat4 smat = mul(inverse(R), M);
+  s->x = Math::vec3(smat.data[0][0], smat.data[1][0], smat.data[2][0]).length();
+  s->y = Math::vec3(smat.data[0][1], smat.data[1][1], smat.data[2][1]).length();
+  s->z = Math::vec3(smat.data[0][2], smat.data[1][2], smat.data[2][2]).length();
+}
 }  // namespace SIByL::Math

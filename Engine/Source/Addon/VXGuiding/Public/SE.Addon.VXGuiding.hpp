@@ -2,6 +2,7 @@
 #include <SE.SRenderer.hpp>
 #include <SE.Addon.VXGI.hpp>
 #include <SE.Addon.RestirGI.hpp>
+#include <SE.Addon.BitonicSort.hpp>
 
 namespace SIByL::Addon::VXGuiding {
 SE_EXPORT struct DITestSetting {
@@ -134,12 +135,31 @@ SE_EXPORT struct VXGuiderGeometryPass : public RDG::RenderPass {
   bool injectGeometries = false;
 };
 
-SE_EXPORT struct VXGuiderBakeCleanPass : public RDG::ComputePass {
-  VXGuiderBakeCleanPass();
+SE_EXPORT struct VXGuiderGeometryDynamicPass : public RDG::RenderPass {
+  VXGuiderGeometryDynamicPass(VXGI::VXGISetting* setting);
   virtual auto reflect() noexcept -> RDG::PassReflection override;
   virtual auto execute(RDG::RenderContext* context,
                        RDG::RenderData const& renderData) noexcept
       -> void override;
+  virtual auto renderUI() noexcept -> void override;
+  VXGI::VXGISetting* const setting;
+  struct alignas(64) VoxelSetting {
+    int use_compact = 0;
+    int z_conservative = 0;
+    int clipping = 0;
+  } gVoxelSetting;
+  GFX::StructuredUniformBufferView<VoxelSetting> settingBuffer;
+  bool injectGeometries = false;
+  int inject_id = 0;
+};
+
+SE_EXPORT struct VXGuiderBakeCleanPass : public RDG::ComputePass {
+  VXGuiderBakeCleanPass(VXGI::VXGISetting* setting);
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept
+      -> void override;
+  VXGI::VXGISetting* const setting;
 };
 
 SE_EXPORT struct VXGuiderGeometryBakePass : public RDG::RenderPass {
@@ -256,17 +276,6 @@ SE_EXPORT struct VXGuiderViewPass : public RDG::FullScreenPass {
     Math::ivec2 debugPixel = {0, 0};
     float scalar = 1.f;
   } pConst;
-};
-
-SE_EXPORT struct Voxelize6DPass : public RDG::RenderPass {
-  Voxelize6DPass(VXGI::VXGISetting* setting);
-  virtual auto reflect() noexcept -> RDG::PassReflection override;
-  virtual auto execute(RDG::RenderContext* context,
-                       RDG::RenderData const& renderData) noexcept
-      -> void override;
-  VXGI::VXGISetting* const setting;
-  VXGI::VoxelizeUniform gUniform;
-  GFX::StructuredUniformBufferView<VXGI::VoxelizeUniform> uniformBuffer;
 };
 
 SE_EXPORT struct VoxelMip6DPass : public RDG::ComputePass {
@@ -411,11 +420,12 @@ SE_EXPORT struct VXClusterInitCenterPass : public RDG::ComputePass {
 
 
 SE_EXPORT struct VXClusterSeedingPass : public RDG::ComputePass {
-  VXClusterSeedingPass();
+  VXClusterSeedingPass(VXGI::VXGISetting* vx_set);
   virtual auto reflect() noexcept -> RDG::PassReflection override;
   virtual auto execute(RDG::RenderContext* context,
                        RDG::RenderData const& renderData) noexcept
       -> void override;
+  VXGI::VXGISetting* voxel_setting;
 };
 
 SE_EXPORT struct VXClusterFindAssociatePass : public RDG::ComputePass {
@@ -526,19 +536,21 @@ SE_EXPORT struct RowVisibilityPass : public RDG::ComputePass {
 };
 
 SE_EXPORT struct RowKmppCenterPass : public RDG::ComputePass {
-  RowKmppCenterPass();
+  RowKmppCenterPass(VXGI::VXGISetting* setting);
   virtual auto reflect() noexcept -> RDG::PassReflection override;
   virtual auto execute(RDG::RenderContext* context,
                        RDG::RenderData const& renderData) noexcept
       -> void override;
+  VXGI::VXGISetting* setting;
 };
 
 SE_EXPORT struct RowFindCenterPass : public RDG::ComputePass {
-  RowFindCenterPass();
+  RowFindCenterPass(VXGI::VXGISetting* setting);
   virtual auto reflect() noexcept -> RDG::PassReflection override;
   virtual auto execute(RDG::RenderContext* context,
                        RDG::RenderData const& renderData) noexcept
       -> void override;
+  VXGI::VXGISetting* setting;
 };
 
 SE_EXPORT struct VXInfoRearrangePass : public RDG::ComputePass {
@@ -562,14 +574,15 @@ SE_EXPORT struct SPixelVisibilityPass : public RDG::RayTracingPass {
 };
 
 SE_EXPORT struct SPixelVisibilityEXPass : public RDG::ComputePass {
-  SPixelVisibilityEXPass(VXGI::VXGISetting* vx_set);
+  SPixelVisibilityEXPass();
   virtual auto reflect() noexcept -> RDG::PassReflection override;
   virtual auto execute(RDG::RenderContext* context,
                        RDG::RenderData const& renderData) noexcept
       -> void override;
   virtual auto renderUI() noexcept -> void override;
   bool do_execute = true;
-  VXGI::VXGISetting* voxel_setting;
+  bool use_bsdf = true;
+  bool use_distance = false;
 };
 
 SE_EXPORT struct VPLVisualizePass : public RDG::RenderPass {
@@ -583,5 +596,238 @@ SE_EXPORT struct VPLVisualizePass : public RDG::RenderPass {
   struct PushConstantBuffer {
     float gVPLRenderScale = 0.05f;
   } pConst;
+};
+
+SE_EXPORT struct GeomIJConfig {
+  struct alignas(64) DataPack {
+    Math::vec3 aabbMin;      // min of world AABB
+    uint32_t size = 64;      // length of one dim over world AABB
+    Math::vec3 aabbMax;      // max of world AABB
+    int HashmapSize = 65536; // hash map size
+    enum struct Mode : uint32_t { Hash, Unroll } mode = Mode::Hash;
+    int bucket_mode = 0;
+    int bucket_size = 8;
+    int use_compact = 0;
+    int z_conservative = 0;
+    int clipping = 0;
+  } data;
+  GFX::StructuredUniformBufferView<DataPack> ubo = {nullptr};
+  // get the cell count under this config
+  uint32_t get_cell_count() const noexcept;
+};
+
+SE_EXPORT struct GeometryBakeClearPass : public RDG::ComputePass {
+  GeometryBakeClearPass(GeomIJConfig* config);
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept -> void override;
+  GeomIJConfig* config;
+};
+
+SE_EXPORT struct GeometryBakePass : public RDG::RenderPass {
+  GeometryBakePass(GeomIJConfig* config);
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept -> void override;
+  GeomIJConfig* const config;
+};
+
+SE_EXPORT struct GeometryVisualizePass : public RDG::RenderPass {
+  GeometryVisualizePass(GeomIJConfig* config);
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto renderUI() noexcept -> void override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept -> void override;
+  struct PushConstantBuffer {
+    Math::vec2 resolution;
+    float line_width = 5.f;
+  } pConst;
+  bool visualize = true;
+  GeomIJConfig* const config;
+};
+
+SE_EXPORT struct GeometryVisualize2Pass : public RDG::RenderPass {
+  GeometryVisualize2Pass(GeomIJConfig* config);
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto renderUI() noexcept -> void override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept -> void override;
+  struct PushConstantBuffer {
+    int play_mode = 0;
+  } pConst;
+  bool visualize = true;
+  GeomIJConfig* const config;
+};
+
+SE_EXPORT struct DataPreparePass : public RDG::ComputePass {
+  DataPreparePass(GeomIJConfig* config);
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept
+      -> void override;
+  GeomIJConfig* const config;
+};
+
+SE_EXPORT struct LightIJPass : public RDG::RayTracingPass {
+  LightIJPass(GeomIJConfig* config);
+  virtual auto renderUI() noexcept -> void override;
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept
+      -> void override;
+  GeomIJConfig* const config;
+};
+
+SE_EXPORT struct GeometryReloadPass : public RDG::ComputePass {
+  GeometryReloadPass(GeomIJConfig* config);
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept
+      -> void override;
+  GeomIJConfig* const config;
+};
+
+SE_EXPORT struct GeometryIJPass : public RDG::RenderPass {
+  GeometryIJPass(GeomIJConfig* config);
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto renderUI() noexcept -> void override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept -> void override;
+  GeomIJConfig* const config;
+  int lod_level = 0;
+};
+
+SE_EXPORT struct VoxelCompactPass : public RDG::ComputePass {
+  VoxelCompactPass(GeomIJConfig* config);
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept -> void override;
+  GeomIJConfig* const config;
+};
+
+SE_EXPORT struct SPixelCenterPass : public RDG::ComputePass {
+  SPixelCenterPass();
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto renderUI() noexcept -> void override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept -> void override;
+};
+
+SE_EXPORT struct SPixelFindPass : public RDG::ComputePass {
+  SPixelFindPass();
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept -> void override;
+};
+
+SE_EXPORT struct SPixelVisualizePass : public RDG::ComputePass {
+  SPixelVisualizePass();
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept -> void override;
+  virtual auto renderUI() noexcept -> void override;
+  bool drawBoundary = true;
+  int debug_mode = 0;
+};
+//
+//SE_EXPORT struct RowColumnPresamplePass : public RDG::ComputePass {
+//  RowColumnPresamplePass(VXGI::VXGISetting* voxel_setting);
+//  virtual auto reflect() noexcept -> RDG::PassReflection override;
+//  virtual auto execute(RDG::RenderContext* context,
+//                       RDG::RenderData const& renderData) noexcept
+//      -> void override;
+//  VXGI::VXGISetting* voxel_setting;
+//};
+
+SE_EXPORT struct SVoxelRowPresamplePass : public RDG::ComputePass {
+  SVoxelRowPresamplePass();
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept -> void override;
+};
+
+SE_EXPORT struct SVoxelColumnPresamplePass : public RDG::ComputePass {
+  SVoxelColumnPresamplePass();
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept -> void override;
+};
+
+SE_EXPORT struct SVoxelTreeEncodePass : public RDG::ComputePass {
+  SVoxelTreeEncodePass(GeomIJConfig* config);
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept -> void override;
+  GeomIJConfig* config;
+};
+
+SE_EXPORT struct SVoxelTreeIIntializePass : public RDG::ComputePass {
+  SVoxelTreeIIntializePass(GeomIJConfig* config);
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept -> void override;
+  GeomIJConfig* config;
+};
+
+SE_EXPORT struct SVoxelInfoClearPass : public RDG::ComputePass {
+  SVoxelInfoClearPass(GeomIJConfig* config);
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept
+      -> void override;
+  GeomIJConfig* config;
+};
+
+SE_EXPORT struct SVoxelRowColumnPresamplePass : public RDG::ComputePass {
+  SVoxelRowColumnPresamplePass(GeomIJConfig* config);
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept
+      -> void override;
+  GeomIJConfig* config;
+};
+
+SE_EXPORT struct SPixelInfoGather : public RDG::ComputePass {
+  SPixelInfoGather(GeomIJConfig* config);
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept
+      -> void override;
+  GeomIJConfig* config;
+};
+
+SE_EXPORT struct VXPGuidingPass : public RDG::RayTracingPass {
+  VXPGuidingPass(GeomIJConfig* config);
+  virtual auto reflect() noexcept -> RDG::PassReflection override;
+  virtual auto execute(RDG::RenderContext* context,
+                       RDG::RenderData const& renderData) noexcept
+      -> void override;
+  virtual auto renderUI() noexcept -> void override;
+  GeomIJConfig* config;
+  int strategy = 6;
+  int traverse_mode = 0;
+  int mis_mode = 0;
+  int visibility_mode = 0;
+  bool second = true;
+  int splitbar = 1280;
+};
+
+SE_EXPORT struct GeometryPrebakePipeline : public RDG::Pipeline {
+  GeometryPrebakePipeline();
+  virtual auto execute(RHI::CommandEncoder* encoder) noexcept -> void override;
+  virtual auto renderUI() noexcept -> void override;
+  virtual auto getActiveGraphs() noexcept -> std::vector<RDG::Graph*> override;
+  virtual auto getOutput() noexcept -> GFX::Texture* override;
+  virtual auto build() noexcept -> void override;
+
+  GeomIJConfig config;
+  struct GeometryPrebakeGraph : public RDG::Graph {
+    GeometryPrebakeGraph(GeomIJConfig* config); };
+  struct VXPGGraph : public RDG::Graph {
+    VXPGGraph(GeomIJConfig* config);
+    Addon::BitonicSort::BitonicSortSetting sort_setting; };
+  std::unique_ptr<GeometryPrebakeGraph> prebake_graph;
+  std::unique_ptr<VXPGGraph> vxpg_graph;
+  int graph_chosen = 0;
 };
 }

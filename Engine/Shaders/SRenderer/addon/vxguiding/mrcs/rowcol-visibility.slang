@@ -113,7 +113,7 @@ void ComputeMain(
 
     bool visible = HandleVisibilityCheck(spixelID, dispatchID, taskOffset, clusterToCheck);
     sharedVisibility[clusterToCheck] = WaveActiveSum(visible ? 1 : 0);
-
+    
     GroupMemoryBarrierWithGroupSync();
     if (gidx < 32) {
         uint32_t visibility = sharedVisibility[gidx];

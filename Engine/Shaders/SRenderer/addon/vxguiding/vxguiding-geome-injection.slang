@@ -8,9 +8,7 @@
 
 [[vk::push_constant]]
 cbuffer PushConstants {
-    struct PushConstants {
-        uint geometry_idx;
-    } pConst;
+    uint geometry_idx;
 };
 
 cbuffer VoxelConfig {
@@ -26,7 +24,6 @@ cbuffer VoxelizerUniform {
 struct AssembledVertex { int vertexId : SV_VertexId; };
 struct CoarseVertex {
     float3 posVS;
-    float3 posWS;
 };
 struct VertexStageOutput {
     CoarseVertex coarseVertex : CoarseVertex;
@@ -37,7 +34,7 @@ struct VertexStageOutput {
 VertexStageOutput vertexMain(
     AssembledVertex assembledVertex)
 {
-    const GeometryInfo geometry = geometries[pConst.geometry_idx];
+    const GeometryInfo geometry = geometries[geometry_idx];
     const float4x4 o2w = ObjectToWorld(geometry);
 
     const float3 positionOS = fetchVertexPosition(assembledVertex.vertexId);
@@ -50,14 +47,11 @@ VertexStageOutput vertexMain(
     VertexStageOutput output;
     output.sv_position = float4((positionWS.xyz - center) / extentMax, 1.0);
     output.coarseVertex.posVS = output.sv_position.xyz;
-    output.coarseVertex.posWS = positionWS;
     return output;
 }
 
 struct GeometryStageOutput {
-    nointerpolation AABB aabb : AABB;
     nointerpolation float3 posVS[3] : VoxelPosition;
-    nointerpolation float3 posWS[3] : WorldPosition;
     nointerpolation int dominantAxis : DominantAxis;
     float4 sv_position : SV_Position; // [-1,+1]^3
 };
@@ -75,19 +69,15 @@ void geometryMain(
                                      input[2].sv_position.xyz);
     GeometryStageOutput vertex[3];
     float3 posVS[3];
-    float3 posWS[3];
     for (int i = 0; i < 3; ++i) {
         vertex[i].sv_position = float4(ProjectAlongAxis(input[i].sv_position.xyz, axis), 1.0, 1.0);
         vertex[i].dominantAxis = axis;
         posVS[i] = (input[i].coarseVertex.posVS.xyz + 1.0) * 0.5 * gVD.voxelSize;
-        posWS[i] = input[i].coarseVertex.posWS;
     }
-    AABB aabb = GetTriangleAABB(posVS[0], posVS[1], posVS[2]);
 
     for (int i = 0; i < 3; ++i) {
-        vertex[i].aabb = aabb;
+        // vertex[i].aabb = aabb;
         vertex[i].posVS = posVS;
-        vertex[i].posWS = posWS;
         output.Append(vertex[i]);
     }
 
@@ -109,9 +99,11 @@ void TriangleVoxelBoundInjection(
 
     int posCount = 3;
     VoxelTexInfo info = CreateVoxelTexInfo(gVD);
-    AABB voxel_bound = VoxelToBound(voxelID, 0, info);
+    AABB voxel_bound;
+    voxel_bound.min = float3(voxelID);
+    voxel_bound.max = float3(voxelID) + float3(1);
     int voxelIDFlatten = FlatIndex(voxelID, info.volumeDimension);
-
+    
     if (u_pIrradiance[voxelID] == 0) {
         return;
     }
@@ -150,18 +142,18 @@ void TriangleVoxelBoundInjection(
 [shader("fragment")]
 void fragmentMain(
     nointerpolation in int primitiveID: SV_PrimitiveID,
-    nointerpolation in AABB aabb: AABB,
     nointerpolation in float3 posVS[3]: VoxelPosition,
-    nointerpolation in float3 posWS[3]: WorldPosition,
     nointerpolation in int dominantAxis: DominantAxis,
     in bool isFrontFace: SV_IsFrontFace,
     in float3 bary: SV_Barycentrics)
 {
+    AABB aabb = GetTriangleAABB(posVS[0], posVS[1], posVS[2]);
+
     const float3 posVSBasry = interpolate(posVS, bary);
 
     // Insertion center voxel
     const int3 voxelID = int3(posVSBasry);
-    TriangleVoxelBoundInjection(posWS, voxelID);
+    TriangleVoxelBoundInjection(posVS, voxelID);
 
     // To be more conservative, we also write to the adjacent voxels in z-axis (if necessary).
     int3 offset = int3(0, 0, 0);
@@ -172,15 +164,15 @@ void fragmentMain(
         if (voxelID[dominantAxis] < gVD.voxelSize - 1 && AABBConditionTest(voxelID + offset, aabb)) {
             if (EdgeVoxelConditionTest(posVS, voxelID + offset + float3(0.5))) {
                 // Has intersection
-                TriangleVoxelBoundInjection(posWS, voxelID + offset);
+                TriangleVoxelBoundInjection(posVS, voxelID + offset);
             }
         }
-        
+
         // check the voxel back to the dominant axis
         if (voxelID[dominantAxis] > 0 && AABBConditionTest(voxelID - offset, aabb)) {
             if (EdgeVoxelConditionTest(posVS, voxelID - offset + float3(0.5))) {
                 // Has intersection
-                TriangleVoxelBoundInjection(posWS, voxelID - offset);
+                TriangleVoxelBoundInjection(posVS, voxelID - offset);
             }
         }
     }
