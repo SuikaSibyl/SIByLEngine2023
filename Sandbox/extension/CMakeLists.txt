@@ -1,0 +1,16 @@
+set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/Engine/binary/libs/${CURRENT_PLATFORM})
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Engine/binary/libs/${CURRENT_PLATFORM})
+set(RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Engine/binary/libs/${CURRENT_PLATFORM})
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Engine/binary/dlls/${CURRENT_PLATFORM})
+# set(CMAKE_DEBUG_POSTFIX "_d")
+
+set(PROJECT_NAME pyapp)
+add_library(${PROJECT_NAME} SHARED)
+# target_include_directories(${PROJECT_NAME} PUBLIC include)
+target_link_libraries(${PROJECT_NAME} PRIVATE core ${TORCH_LIBRARIES} ${TORCH_PYTHON_LIBRARY})
+target_sources(${PROJECT_NAME} PRIVATE "py.reparam.cpp")
+set_target_properties(
+    ${PROJECT_NAME}
+    PROPERTIES
+    CXX_STANDARD 20
+    SUFFIX ".pyd")

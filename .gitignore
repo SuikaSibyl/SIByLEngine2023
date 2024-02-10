@@ -1,0 +1,5 @@
+.vs
+*.ilk
+*.pdb
+Sandbox/*.dll
+Sandbox/se/*.dll
