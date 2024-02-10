@@ -91,6 +91,22 @@ By default, Nvidia GPU with Turing or higher architecture is required to correct
   <a href="https://github.com/SuikaSibyl/SIByLEngine2023/tree/main/Demo/Elastic">[code]</a>
 </p>
 
+<p align="center">
+  <img src="https://imagehost-suikasibyl-us.oss-us-west-1.aliyuncs.com/img/coordinate-network.gif" height="260">
+  <br />
+  <em>Vulkan tiny-MLP writen by </em>
+  <a href="https://developer.nvidia.com/blog/differentiable-slang-a-shading-language-for-renderers-that-learn/">Differentiable Slang</a>
+  <em> with glsl WMMA</em>
+</p>
+
+<p align="center">
+  <img src="https://imagehost-suikasibyl-us.oss-us-west-1.aliyuncs.com/img/differentiable_triangle.gif" height="260">
+  <br />
+  <em>Calling Vulkan functionality in PyTorch in </em>
+  <a href="https://github.com/SuikaSibyl/SIByLEngine2023/tree/dev-24">[SE2024]</a>
+  <em>! A simple differentiable rendering demo is shown.</em>
+</p>
+
 ## Selected Feature List
 
 - ### Primitive Intersection and Sampling
