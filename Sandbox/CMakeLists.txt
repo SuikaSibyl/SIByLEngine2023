@@ -3,8 +3,8 @@ add_subdirectory("extension")
 set(PROJECT_NAME sandbox)
 add_executable(${PROJECT_NAME})
 target_sources(${PROJECT_NAME} PRIVATE
-  "main.cpp")
-target_link_libraries(${PROJECT_NAME} PUBLIC core pyapp ${TORCH_LIBRARIES} ${TORCH_PYTHON_LIBRARY})
+  "main.cpp" "source/geometry_inspector.cpp" "source/nerf_fwd.cpp" "source/neumat_fwd.cpp")
+target_link_libraries(${PROJECT_NAME} PUBLIC core editor ${TORCH_LIBRARIES} ${TORCH_PYTHON_LIBRARY})
 set_target_properties(
     ${PROJECT_NAME}
     PROPERTIES

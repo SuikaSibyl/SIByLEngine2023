@@ -1,5 +1,7 @@
 .vs
 *.ilk
 *.pdb
-Sandbox/*.dll
-Sandbox/se/*.dll
+*.comp
+*.spv
+__pycache__
+Sandbox

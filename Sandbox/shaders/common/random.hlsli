@@ -63,6 +63,12 @@ uint Hash_murmur(uint a) {
  */
 struct RandomSamplerState { uint state; };
 
+RandomSamplerState InitRandomSampler(uint threadIndex, uint frameIndex) {
+    RandomSamplerState r;
+    r.state = frameIndex + Hash_CRNG(threadIndex);
+    return r;
+}
+
 RandomSamplerState InitRandomSampler(uint2 pixelPos, uint frameIndex) {
     RandomSamplerState r;
     r.state = frameIndex + Hash_CRNG((pixelPos.x << 16) | pixelPos.y);
@@ -158,6 +164,15 @@ float GetNextRandom(inout RandomSamplerState r) {
 
 float2 GetNextRandomFloat2(inout RandomSamplerState r) {
     return float2(GetNextRandom(r), GetNextRandom(r));
+}
+
+Array<float, n> GetNextNRandomFloat<let n : int>(inout RandomSamplerState r) {
+    Array<float, n> result;
+    [ForceUnroll]
+    for (int i = 0; i < n; i++) {
+        result[i] = GetNextRandom(r);
+    }
+    return result;
 }
 
 uint GetNextRandomUint(inout RandomSamplerState r) {

@@ -1,7 +1,8 @@
 #ifndef SIByL_CORE_MODULE_UTILS
 #define SIByL_CORE_MODULE_UTILS
-
+#include <string>
 #include <cstdint>
+#include <unordered_map>
 using RUID = std::uint64_t;
 #define ENTT_ID_TYPE std::uint64_t;
 #include <ex.entt.hpp>
@@ -49,6 +50,18 @@ void Singleton<T>::release() {
 }
 template <class T>
 T* Singleton<T>::pinstance = nullptr;
+
+SIByL_API struct RuntimeConfig {
+    RuntimeConfig();
+    static auto set_config_file(std::string const& path) noexcept -> void;
+    static auto get() -> RuntimeConfig const*;
+    auto string_property(std::string const& name) const noexcept -> std::string;
+    auto string_array_property(std::string const& name) const noexcept -> std::vector<std::string> const&;
+    std::unordered_map<std::string, std::string> string_properties;
+    std::unordered_map<std::string, std::vector<std::string>> string_array_properties;
+    static RuntimeConfig* singleton;
+    static std::string config_file_path;
+};
 }
 
 template <class T>

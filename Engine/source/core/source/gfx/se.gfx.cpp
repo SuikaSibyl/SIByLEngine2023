@@ -5,6 +5,9 @@
 #include <slang.h>
 #include <slang-com-ptr.h>
 #include <filesystem>
+#define TINYGLTF_IMPLEMENTATION
+#include <tinygltf/tiny_gltf.h>
+#include <se.image.hpp>
 
 namespace se::gfx {
 // ===========================================================================
@@ -287,6 +290,36 @@ ShaderModuleLoader::result_type ShaderModuleLoader::operator()(
   return this->operator()(from_spirv_tag{}, &spirv_code, stage);
 }
 
+inline uint64_t hash(rhi::SamplerDescriptor const& desc) {
+  uint64_t hashed_value = 0;
+  hashed_value |= (uint64_t)(desc.addressModeU) << 62;
+  hashed_value |= (uint64_t)(desc.addressModeV) << 60;
+  hashed_value |= (uint64_t)(desc.addressModeW) << 58;
+  hashed_value |= (uint64_t)(desc.magFilter) << 57;
+  hashed_value |= (uint64_t)(desc.minFilter) << 56;
+  hashed_value |= (uint64_t)(desc.mipmapFilter) << 55;
+  hashed_value |= (uint64_t)(desc.compare) << 50;
+  return hashed_value;
+}
+
+SamplerLoader::result_type SamplerLoader::operator()(
+    SamplerLoader::from_desc_tag, rhi::SamplerDescriptor const& desc) {
+  auto ptr = GFXContext::device->createSampler(desc);
+  return ptr;
+}
+
+SamplerLoader::result_type SamplerLoader::operator()(
+    SamplerLoader::from_mode_tag, rhi::AddressMode address, rhi::FilterMode filter, rhi::MipmapFilterMode mipmap) {
+  rhi::SamplerDescriptor desc;
+  desc.addressModeU = address;
+  desc.addressModeV = address;
+  desc.addressModeW = address;
+  desc.magFilter = filter;
+  desc.minFilter = filter;
+  desc.mipmapFilter = mipmap;
+  return operator()(SamplerLoader::from_desc_tag{}, desc);
+}
+
 namespace slang_inline {
 using Slang::ComPtr;
 
@@ -349,9 +382,27 @@ SlangSession::SlangSession(
   sessionDesc.targetCount = 1;
   // set search path
   std::string parent_path = path.parent_path().string();
-  char const* search_path = parent_path.c_str();
-  sessionDesc.searchPaths = &search_path;
-  sessionDesc.searchPathCount = 1;
+  auto const& engine_shader_path = RuntimeConfig::get()->string_array_property("shader_path");
+  std::vector<std::string> search_paths_str;
+  std::vector<const char*> search_paths;
+  for (auto& shader_path : engine_shader_path) {
+    search_paths_str.push_back(shader_path);
+    search_paths_str.push_back(shader_path + parent_path);
+  }
+  search_paths_str.push_back(parent_path);
+  for (auto& path_str : search_paths_str) {
+    search_paths.push_back(path_str.c_str());
+  }
+  std::filesystem::path input_path = filepath;
+  for (auto& path : search_paths_str) {
+    auto concate_path = std::filesystem::path(path) / input_path.filename();
+    if (std::filesystem::exists(concate_path)) {
+      this->filepath = concate_path.string();
+      break;
+    }
+  }
+  sessionDesc.searchPaths = search_paths.data();
+  sessionDesc.searchPathCount = search_paths.size();
   // push pre-defined macros
   std::vector<slang::PreprocessorMacroDesc> macro_list;
   for (auto const& macro : macros)
@@ -555,21 +606,81 @@ auto SlangSession::load(
     }
   }
   for (size_t i = 0; i < entrypoints.size(); ++i) {
-    sms[i]->reflection.bindingInfo = bindingInfo;
+    sms[i].get()->reflection.bindingInfo = bindingInfo;
   }
   return sms;
 }
 }
 
-//ShaderModuleLoader::result_type ShaderModuleLoader::operator()(
-//  ShaderModuleLoader::from_slang_tag, 
-//  se::buffer* buffer,
-//  rhi::ShaderStageBit stage) {
-//  
-//}
+auto Buffer::hostToDevice() noexcept -> void {
+  // if nothing is on device, create both buffer and previous
+  if (buffer == nullptr && previous == nullptr) {
+    bool host_buffer_is_empty = false;
+    if (host.size() == 0) {
+      host_buffer_is_empty = true;
+      host.resize(64);
+    }
+    buffer = GFXContext::device->createDeviceLocalBuffer(
+      static_cast<void const*>(host.data()), host.size() * sizeof(unsigned char), usages);
+    previous = GFXContext::device->createDeviceLocalBuffer(
+      static_cast<void const*>(host.data()), host.size() * sizeof(unsigned char), usages);
+    buffer_stamp = host_stamp;
+    previous_stamp = host_stamp;
+    if (host_buffer_is_empty)host.resize(0);
+  }
+  // otherwise update the gpu buffer as long as prev is not equal to host
+  else if (previous_stamp != host_stamp) {
+    previous = std::move(buffer);
+    buffer = GFXContext::device->createDeviceLocalBuffer(
+      static_cast<void const*>(host.data()), host.size() * sizeof(unsigned char), usages);
+    previous_stamp = buffer_stamp;
+    buffer_stamp = host_stamp;
+  }
+}
+
+auto Buffer::deviceToHost() noexcept -> void {
+  if (host.size() < buffer->size()) host.resize(buffer->size());
+  GFXContext::device->readbackDeviceLocalBuffer(buffer.get(), host.data(), buffer->size());
+}
+
+auto Buffer::getHost() noexcept -> std::vector<unsigned char>& {
+  return host;
+}
 
 auto Buffer::getName() const noexcept -> char const* {
   return buffer->getName().c_str();
+}
+
+BufferLoader::result_type BufferLoader::operator()(from_empty_tag) {
+  BufferLoader::result_type result = std::make_shared<Buffer>();
+  return result;
+}
+
+BufferLoader::result_type BufferLoader::operator()(from_desc_tag, rhi::BufferDescriptor desc) {
+  BufferLoader::result_type result = std::make_shared<Buffer>();
+  result->buffer = GFXContext::device->createBuffer(desc);
+  return result;
+}
+
+BufferLoader::result_type BufferLoader::operator()(from_gltf_tag, tinygltf::Buffer const& input) {
+  auto const& usage_ext = input.extensions.find("usages");
+  if (usage_ext == input.extensions.end()) {
+    std::string const error = "BufferLoader::from_gltf_tag receive a buffer without \"usages\" extension.";
+    root::print::error(error);
+    throw error;
+  }
+  rhi::BufferUsages usages = usage_ext->second.GetNumberAsInt();
+  BufferLoader::result_type result = std::make_shared<Buffer>();
+  result->buffer = GFXContext::device->createDeviceLocalBuffer(
+    static_cast<void const*>(input.data.data()), input.data.size() * sizeof(unsigned char), usages);
+  return result;
+}
+
+BufferLoader::result_type BufferLoader::operator()(from_host_tag, se::buffer const& input, rhi::BufferUsages usages) {
+  BufferLoader::result_type result = std::make_shared<Buffer>();
+  result->buffer = GFXContext::device->createDeviceLocalBuffer(
+    static_cast<void const*>(input.data), input.size, usages);
+  return result;
 }
 
 bool ViewIndex::operator==(ViewIndex const& p) const {
@@ -675,31 +786,274 @@ auto Texture::getSRV(uint32_t mostDetailedMip, uint32_t mipCount,
   return find->second.get();
 }
 
+auto Texture::getWidth() noexcept -> uint32_t {
+  return texture->width();
+}
+
+auto Texture::getHeight() noexcept -> uint32_t {
+  return texture->height();
+}
+
+TextureLoader::result_type TextureLoader::operator()(from_desc_tag, rhi::TextureDescriptor const& desc) {
+  TextureLoader::result_type result = std::make_shared<Texture>();
+  result->texture = GFXContext::device->createTexture(desc);
+  return result;
+}
+
+TextureLoader::result_type TextureLoader::operator()(from_file_tag, std::filesystem::path const& path) {
+  TextureLoader::result_type result = std::make_shared<Texture>();
+  std::unique_ptr<image::Texture> host_tex = image::load_image(path);
+  // create staging buffer
+  rhi::BufferDescriptor stagingBufferDescriptor;
+  stagingBufferDescriptor.size = host_tex->data_size;
+  stagingBufferDescriptor.usage = (uint32_t)rhi::BufferUsageBit::COPY_SRC;
+  stagingBufferDescriptor.memoryProperties =
+    (uint32_t)rhi::MemoryPropertyBit::HOST_VISIBLE_BIT |
+    (uint32_t)rhi::MemoryPropertyBit::HOST_COHERENT_BIT;
+  stagingBufferDescriptor.mappedAtCreation = true;
+  std::unique_ptr<rhi::Buffer> stagingBuffer = GFXContext::device->createBuffer(stagingBufferDescriptor);
+  std::future<bool> mapped = stagingBuffer->mapAsync(0, 0, stagingBufferDescriptor.size);
+  if (mapped.get()) {
+    void* mapdata = stagingBuffer->getMappedRange(0, stagingBufferDescriptor.size);
+    memcpy(mapdata, host_tex->getData(), (size_t)stagingBufferDescriptor.size);
+    stagingBuffer->unmap();
+  }
+  std::unique_ptr<rhi::CommandEncoder> commandEncoder = GFXContext::device->createCommandEncoder({nullptr});
+  // create texture image
+  result->texture = GFXContext::device->createTexture(host_tex->getDescriptor());
+  // copy to target
+  commandEncoder->pipelineBarrier(rhi::BarrierDescriptor{
+    (uint32_t)rhi::PipelineStageBit::TOP_OF_PIPE_BIT,
+    (uint32_t)rhi::PipelineStageBit::TRANSFER_BIT,
+    (uint32_t)rhi::DependencyType::NONE,
+    {}, {}, { rhi::TextureMemoryBarrierDescriptor{
+      result->texture.get(),
+      rhi::ImageSubresourceRange{(uint32_t)rhi::TextureAspectBit::COLOR_BIT, 0,
+                                     host_tex->mip_levels, 0, host_tex->array_layers},
+      (uint32_t)rhi::AccessFlagBits::NONE,
+      (uint32_t)rhi::AccessFlagBits::TRANSFER_WRITE_BIT,
+      rhi::TextureLayout::UNDEFINED,
+      rhi::TextureLayout::TRANSFER_DST_OPTIMAL}}});
+
+  for (auto const& subresource : host_tex->subResources) {
+    commandEncoder->copyBufferToTexture(
+      {subresource.offset, 0, 0, stagingBuffer.get()},
+      { result->texture.get(),
+      subresource.mip,
+      {},
+      (uint32_t)rhi::TextureAspectBit::COLOR_BIT},
+      {subresource.width, subresource.height, 1});
+  }
+
+  commandEncoder->pipelineBarrier(rhi::BarrierDescriptor{
+      (uint32_t)rhi::PipelineStageBit::TRANSFER_BIT,
+      (uint32_t)rhi::PipelineStageBit::FRAGMENT_SHADER_BIT,
+      (uint32_t)rhi::DependencyType::NONE,
+      {}, {},
+      {rhi::TextureMemoryBarrierDescriptor{
+          result->texture.get(),
+          rhi::ImageSubresourceRange{(uint32_t)rhi::TextureAspectBit::COLOR_BIT, 0,
+                                     host_tex->mip_levels, 0, host_tex->array_layers},
+          (uint32_t)rhi::AccessFlagBits::TRANSFER_WRITE_BIT,
+          (uint32_t)rhi::AccessFlagBits::SHADER_READ_BIT,
+          rhi::TextureLayout::TRANSFER_DST_OPTIMAL,
+          rhi::TextureLayout::SHADER_READ_ONLY_OPTIMAL}}});
+
+  GFXContext::device->getGraphicsQueue()->submit({commandEncoder->finish()});
+  GFXContext::device->waitIdle();
+  return result;
+}
+
 // Base class definition
+// ===========================================================================
+// Material Resource
+
+Material::operator tinygltf::Material() const {
+  tinygltf::Material material_gltf;
+  material_gltf.pbrMetallicRoughness.baseColorFactor = {
+    baseOrDiffuseColor.r, baseOrDiffuseColor.g, baseOrDiffuseColor.b, 1.0f };
+  material_gltf.doubleSided = doubleSided;
+  material_gltf.extensions.emplace("bxdf", bxdf);
+  return material_gltf;
+}
+
+auto Material::getName() const noexcept -> char const* { return name.c_str(); }
+
+MaterialLoader::result_type MaterialLoader::operator()(from_empty_tag) {
+  MaterialLoader::result_type mat = std::make_shared<Material>();
+  return mat;
+}
+
+auto SerializeData::query_material(Material* mat) noexcept -> int32_t {
+  auto iter = materials.find(mat);
+  if (iter == materials.end()) {
+    int32_t index = materials.size();;
+    materials[mat] = index;
+    return index;
+  } else return iter->second;
+}
+
+auto Mesh::getName() const noexcept -> char const* { return name.c_str(); }
+
+Mesh::operator tinygltf::Mesh() const {
+  tinygltf::Mesh mesh_gltf;
+  for (auto& prim : primitives) {
+    //prim.material = 
+    //mesh_gltf.primitives.emplace_back(tinygltf::Primitive(prim));
+  }
+  return mesh_gltf;
+}
+
+MeshLoader::result_type MeshLoader::operator()(MeshLoader::from_empty_tag) {
+  auto ptr = std::make_shared<Mesh>();
+  return ptr;
+}
+
+auto Transform::local() const noexcept -> se::mat4 {
+  se::mat4 trans = se::mat4::translate(translation);
+  se::mat4 rotat = rotation.toMat4();
+  se::mat4 scal = se::mat4::scale(scale);
+  se::mat4 rotscal = rotat * scal;
+  return trans * rotscal;
+}
+
+auto Transform::forward() const noexcept -> se::vec3 {
+  se::vec4 rotated = rotation.toMat4() * se::vec4(0, 0, -1, 0);
+  return se::vec3(rotated.x, rotated.y, rotated.z);
+}
+
+auto Camera::getViewMat() noexcept -> se::mat4 {
+  return se::mat4{};
+}
+
+auto Camera::getProjectionMat() const noexcept -> se::mat4 {
+  se::mat4 projection;
+  if (projectType == ProjectType::PERSPECTIVE) {
+    projection = se::perspective(yfov, aspectRatio, znear, zfar).m;
+  } else if (projectType == ProjectType::ORTHOGONAL) {
+    projection = se::ortho(-aspectRatio * bottom_top, aspectRatio * bottom_top,
+    -bottom_top, bottom_top, znear, zfar).m;
+  }
+  return projection;
+}
+
+// Material Resource
 // ===========================================================================
 // GFX Context definition
 
 rhi::Device* GFXContext::device = nullptr;
+std::unique_ptr<rhi::MultiFrameFlights> GFXContext::flights = nullptr;
+ex::resource_cache<Mesh, MeshLoader> GFXContext::meshs = {};
+ex::resource_cache<Material, MaterialLoader> GFXContext::materials = {};
+ex::resource_cache<Buffer, BufferLoader> GFXContext::buffers = {};
+ex::resource_cache<Texture, TextureLoader> GFXContext::textures = {};
+ex::resource_cache<rhi::Sampler, SamplerLoader> GFXContext::samplers = {};
 ex::resource_cache<ShaderModule, ShaderModuleLoader> GFXContext::shaders = {};
 
 auto GFXContext::initialize(rhi::Device* device) noexcept -> void {
   GFXContext::device = device;
 }
 
+auto GFXContext::createFlights(int maxFlightNum, rhi::SwapChain* swapchain) -> void {
+  flights = device->createMultiFrameFlights({ MULTIFRAME_FLIGHTS_COUNT, nullptr });
+}
+
+auto GFXContext::getFlights() -> rhi::MultiFrameFlights* {
+  return flights.get();
+}
+
 auto GFXContext::finalize() noexcept -> void {
+  buffers.clear();
+  meshs.clear();
   shaders.clear();
+  materials.clear();
+  textures.clear();
+  samplers.clear();
+  scenes.clear();
+  flights = nullptr;
+}
+
+auto GFXContext::load_buffer_empty() noexcept -> BufferHandle {
+  RUID const ruid = root::resource::queryRUID();
+  auto ret = buffers.load(ruid, BufferLoader::from_empty_tag{});
+  return BufferHandle{ ret.first->second };
+}
+
+auto GFXContext::load_buffer_gltf(tinygltf::Buffer const& buffer) noexcept -> BufferHandle {
+  RUID const ruid = root::resource::queryRUID();
+  auto ret = buffers.load(ruid, BufferLoader::from_gltf_tag{}, buffer);
+  return BufferHandle{ ret.first->second };
+}
+
+auto GFXContext::load_buffer_host(se::buffer const& buffer, rhi::BufferUsages usages) noexcept -> BufferHandle {
+  RUID const ruid = root::resource::queryRUID();
+  auto ret = buffers.load(ruid, BufferLoader::from_host_tag{}, buffer, usages);
+  return BufferHandle{ ret.first->second };
+}
+
+auto GFXContext::create_buffer_desc(rhi::BufferDescriptor const& desc) noexcept -> BufferHandle {
+  RUID const ruid = root::resource::queryRUID();
+  auto ret = buffers.load(ruid, BufferLoader::from_desc_tag{}, desc);
+  return BufferHandle{ ret.first->second };
+}
+
+auto GFXContext::create_texture_desc(rhi::TextureDescriptor const& desc) noexcept -> TextureHandle {
+  RUID const ruid = root::resource::queryRUID();
+  auto ret = textures.load(ruid, TextureLoader::from_desc_tag{}, desc);
+  return TextureHandle{ ret.first->second };
+}
+
+auto GFXContext::create_texture_file(std::filesystem::path const& path) noexcept -> TextureHandle {
+  RUID const ruid = root::resource::queryRUID();
+  auto ret = textures.load(ruid, TextureLoader::from_file_tag{}, path);
+  return TextureHandle{ ret.first->second };
+}
+
+auto GFXContext::create_sampler_desc(
+    rhi::SamplerDescriptor const& desc
+) noexcept -> SamplerHandle {
+  const uint64_t id = hash(desc);
+  auto ret = samplers.load(id, SamplerLoader::from_desc_tag{}, desc);
+  return SamplerHandle{ ret.first->second };
+}
+
+auto GFXContext::create_sampler_desc(
+    rhi::AddressMode address, rhi::FilterMode filter, rhi::MipmapFilterMode mipmap
+) noexcept -> SamplerHandle {
+  rhi::SamplerDescriptor desc;
+  desc.addressModeU = address;
+  desc.addressModeV = address;
+  desc.addressModeW = address;
+  desc.magFilter = filter;
+  desc.minFilter = filter;
+  desc.mipmapFilter = mipmap;
+  const uint64_t id = hash(desc);
+  auto ret = samplers.load(id, SamplerLoader::from_desc_tag{}, desc);
+  return SamplerHandle{ ret.first->second };
+}
+
+auto GFXContext::load_mesh_empty() noexcept -> MeshHandle {
+  RUID const ruid = root::resource::queryRUID();
+  auto ret = meshs.load(ruid, MeshLoader::from_empty_tag{});
+  return MeshHandle{ ret.first->second };
+}
+
+auto GFXContext::load_material_empty() noexcept -> MaterialHandle {
+  RUID const ruid = root::resource::queryRUID();
+  auto ret = materials.load(ruid, MaterialLoader::from_empty_tag{});
+  return MaterialHandle{ ret.first->second };
 }
 
 auto GFXContext::load_shader_spirv(se::buffer* buffer, rhi::ShaderStageBit stage) noexcept -> ShaderHandle {
   RUID const ruid = root::resource::queryRUID();
   auto ret = shaders.load(ruid, ShaderModuleLoader::from_spirv_tag{}, buffer, stage);
-  return ret.first->second;
+  return ShaderHandle{ ret.first->second };
 }
 
-auto GFXContext::load_shader_glsl(const char* path, rhi::ShaderStageBit stage) noexcept -> ex::resource<se::gfx::ShaderModule> {
+auto GFXContext::load_shader_glsl(const char* path, rhi::ShaderStageBit stage) noexcept -> ShaderHandle {
   RUID const ruid = root::resource::queryRUID();
   auto ret = shaders.load(ruid, ShaderModuleLoader::from_glsl_tag{}, std::string(path), stage);
-  return ret.first->second;
+  return ShaderHandle{ ret.first->second };
 }
 
 auto GFXContext::load_shader_slang(
@@ -707,8 +1061,118 @@ auto GFXContext::load_shader_slang(
   std::vector<std::pair<std::string, rhi::ShaderStageBit>> const& entrypoints,
   std::vector<std::pair<char const*, char const*>> const& macros,
   bool glsl_intermediate
-) noexcept -> std::vector<ex::resource<se::gfx::ShaderModule>> {
+) noexcept -> std::vector<ShaderHandle> {
   slang_inline::SlangSession session(path, macros, glsl_intermediate);
   return session.load(entrypoints);
+}
+
+auto captureImage(TextureHandle src) noexcept -> void {
+  se::window* mainWindow = gfx::GFXContext::device->fromAdapter()->fromContext()->getBindedWindow();
+  gfx::Texture* tex = src.get();
+  size_t width = tex->texture->width();
+  size_t height = tex->texture->height();
+
+  rhi::TextureFormat format;
+  size_t pixelSize;
+  if (tex->texture->format() == rhi::TextureFormat::RGBA32_FLOAT) {
+    format = rhi::TextureFormat::RGBA32_FLOAT;
+    pixelSize = sizeof(se::vec4);
+  }
+  else if (tex->texture->format() == rhi::TextureFormat::RGBA8_UNORM) {
+    format = rhi::TextureFormat::RGBA8_UNORM;
+    pixelSize = sizeof(uint8_t) * 4;
+  }
+  else {
+    root::print::error(
+      "Editor :: ViewportWidget :: captureImage() :: Unsupported format to "
+      "capture."); return;
+  }
+  
+  std::unique_ptr<rhi::CommandEncoder> commandEncoder =
+    gfx::GFXContext::device->createCommandEncoder({});
+  
+  TextureHandle copyDst{};
+  if (copyDst.get() == nullptr) {
+    rhi::TextureDescriptor desc{
+      {uint32_t(width), uint32_t(height), 1}, 1, 1, 1,
+      rhi::TextureDimension::TEX2D, format,
+      (uint32_t)rhi::TextureUsageBit::COPY_DST |
+      (uint32_t)rhi::TextureUsageBit::TEXTURE_BINDING,
+      {format}, (uint32_t)rhi::TextureFlagBit::HOSTI_VISIBLE };
+    copyDst = GFXContext::create_texture_desc(desc);
+    commandEncoder->pipelineBarrier(rhi::BarrierDescriptor{
+      (uint32_t)rhi::PipelineStageBit::ALL_GRAPHICS_BIT,
+      (uint32_t)rhi::PipelineStageBit::TRANSFER_BIT,
+      (uint32_t)rhi::DependencyType::NONE,
+      {}, {}, {rhi::TextureMemoryBarrierDescriptor{
+        copyDst->texture.get(),
+        rhi::ImageSubresourceRange{(uint32_t)rhi::TextureAspectBit::COLOR_BIT, 0, 1, 0, 1},
+        (uint32_t)rhi::AccessFlagBits::NONE,
+        (uint32_t)rhi::AccessFlagBits::TRANSFER_WRITE_BIT,
+        rhi::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
+        rhi::TextureLayout::TRANSFER_DST_OPTIMAL}} });
+  }
+  gfx::GFXContext::device->waitIdle();
+  commandEncoder->pipelineBarrier(rhi::BarrierDescriptor{
+    (uint32_t)rhi::PipelineStageBit::FRAGMENT_SHADER_BIT,
+    (uint32_t)rhi::PipelineStageBit::TRANSFER_BIT,
+    (uint32_t)rhi::DependencyType::NONE,
+    {}, {}, { rhi::TextureMemoryBarrierDescriptor{
+      src->texture.get(),
+      rhi::ImageSubresourceRange{(uint32_t)rhi::TextureAspectBit::COLOR_BIT, 0, 1, 0, 1},
+      (uint32_t)rhi::AccessFlagBits::SHADER_READ_BIT |
+          (uint32_t)rhi::AccessFlagBits::SHADER_WRITE_BIT,
+      (uint32_t)rhi::AccessFlagBits::TRANSFER_READ_BIT,
+      rhi::TextureLayout::SHADER_READ_ONLY_OPTIMAL,
+      rhi::TextureLayout::TRANSFER_SRC_OPTIMAL}} });
+  commandEncoder->copyTextureToTexture(
+    rhi::ImageCopyTexture{ src->texture.get() },
+    rhi::ImageCopyTexture{ copyDst->texture.get() },
+    rhi::Extend3D{ uint32_t(width), uint32_t(height), 1 });
+  commandEncoder->pipelineBarrier(rhi::BarrierDescriptor{
+    (uint32_t)rhi::PipelineStageBit::TRANSFER_BIT,
+    (uint32_t)rhi::PipelineStageBit::FRAGMENT_SHADER_BIT,
+    (uint32_t)rhi::DependencyType::NONE,
+    {}, {}, { rhi::TextureMemoryBarrierDescriptor{
+      src->texture.get(),
+      rhi::ImageSubresourceRange{(uint32_t)rhi::TextureAspectBit::COLOR_BIT, 0, 1, 0, 1},
+      (uint32_t)rhi::AccessFlagBits::TRANSFER_READ_BIT,
+      (uint32_t)rhi::AccessFlagBits::SHADER_READ_BIT |
+          (uint32_t)rhi::AccessFlagBits::SHADER_WRITE_BIT,
+      rhi::TextureLayout::TRANSFER_SRC_OPTIMAL,
+      rhi::TextureLayout::SHADER_READ_ONLY_OPTIMAL}} });
+  commandEncoder->pipelineBarrier(rhi::BarrierDescriptor{
+    (uint32_t)rhi::PipelineStageBit::TRANSFER_BIT,
+    (uint32_t)rhi::PipelineStageBit::HOST_BIT,
+    (uint32_t)rhi::DependencyType::NONE,
+    {}, {}, { rhi::TextureMemoryBarrierDescriptor{
+      copyDst->texture.get(),
+      rhi::ImageSubresourceRange{(uint32_t)rhi::TextureAspectBit::COLOR_BIT, 0, 1, 0, 1},
+      (uint32_t)rhi::AccessFlagBits::TRANSFER_WRITE_BIT,
+      (uint32_t)rhi::AccessFlagBits::HOST_READ_BIT,
+      rhi::TextureLayout::TRANSFER_DST_OPTIMAL,
+      rhi::TextureLayout::TRANSFER_DST_OPTIMAL}} });
+
+  gfx::GFXContext::device->getGraphicsQueue()->submit(
+      { commandEncoder->finish() });
+  gfx::GFXContext::device->waitIdle();
+  std::future<bool> mapped = copyDst->texture->mapAsync((uint32_t)rhi::MapMode::READ, 0,
+    width * height * pixelSize);
+  if (mapped.get()) {
+    void* data = copyDst->texture->getMappedRange(0, width * height * pixelSize);
+    if (tex->texture->format() == rhi::TextureFormat::RGBA32_FLOAT) {
+      std::string filepath = mainWindow->saveFile(
+        "", se::worldtime::get().to_string() + ".exr");
+      image::EXR::writeEXR(filepath, width, height, 4,
+        reinterpret_cast<float*>(data));
+    }
+    else if (tex->texture->format() == rhi::TextureFormat::RGBA8_UNORM) {
+        //std::string filepath = mainWindow->saveFile(
+        //    "", Core::WorldTimePoint::get().to_string() + ".bmp");
+        //Image::BMP::writeBMP(filepath, width, height, 4,
+        //    reinterpret_cast<float*>(data));
+    }
+    copyDst->texture->unmap();
+  }
 }
 }

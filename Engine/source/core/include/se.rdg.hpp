@@ -3,10 +3,10 @@
 #include <se.math.hpp>
 #include <se.rhi.hpp>
 #include <se.gfx.hpp>
+#include <se.editor.hpp>
 
 namespace se::editor {
 struct RDGViewerWidget;
-struct WidgetInfo;
 }
 
 namespace se::rdg {
@@ -26,7 +26,7 @@ struct SIByL_API BufferInfo {
   uint32_t size = 0;
   rhi::BufferUsages usages = 0;
   ResourceFlags flags = 0;
-  gfx::Buffer* reference = nullptr;
+  gfx::BufferHandle reference;
 
   struct ConsumeEntry {
     rhi::AccessFlags access;
@@ -73,7 +73,7 @@ struct SIByL_API TextureInfo {
   rhi::TextureLayout laytout = rhi::TextureLayout::GENERAL;
   rhi::ShaderStages sflags = 0;
 
-  gfx::Texture* reference = nullptr;
+  gfx::TextureHandle reference;
   std::string sizeRefName;
 
   enum struct ConsumeType {
@@ -83,7 +83,7 @@ struct SIByL_API TextureInfo {
     StorageBinding,
   };
 
-  struct ConsumeEntry {
+  struct SIByL_API ConsumeEntry {
     ConsumeType type;
     rhi::AccessFlags access;
     rhi::PipelineStages stages;
@@ -95,6 +95,16 @@ struct SIByL_API TextureInfo {
     bool depthWrite = false;
     rhi::CompareFunction depthCmp = rhi::CompareFunction::ALWAYS;
     uint32_t attachLoc = uint32_t(-1);
+    ConsumeEntry() = default;
+    ConsumeEntry(ConsumeType _type,
+      rhi::AccessFlags _access = 0, rhi::PipelineStages _stages = 0,
+      uint32_t _level_beg = 0, uint32_t _level_end = 1,
+      uint32_t _mip_beg = 0, uint32_t _mip_end = 1,
+      rhi::TextureLayout _layout = rhi::TextureLayout::UNDEFINED,
+      bool _depthWrite = false, rhi::CompareFunction _depthCmp = rhi::CompareFunction::ALWAYS,
+      uint32_t _attachLoc = uint32_t(-1)) : type(_type), access(_access), stages(_stages),
+      level_beg(_level_beg), level_end(_level_end), mip_beg(_mip_beg), mip_end(_mip_end),
+      layout(_layout), depthWrite(_depthWrite), depthCmp(_depthCmp), attachLoc(_attachLoc) {}
 
     auto addStage(rhi::PipelineStages stage) noexcept -> ConsumeEntry&;
     auto setLayout(rhi::TextureLayout _layout) noexcept -> ConsumeEntry&;
@@ -147,7 +157,7 @@ struct SIByL_API Resource { RUID ruid; };
 
 struct SIByL_API BufferResource : public Resource {
   rhi::BufferDescriptor desc;
-  gfx::Buffer* buffer;
+  gfx::BufferHandle buffer;
   struct ConsumeHistory {
     size_t passID;
     std::vector<BufferInfo::ConsumeEntry> entries; };
@@ -156,7 +166,7 @@ struct SIByL_API BufferResource : public Resource {
 
 struct SIByL_API TextureResource : public Resource {
   rhi::TextureDescriptor desc;
-  gfx::Texture* texture;
+  gfx::TextureHandle texture;
   std::string name;
   struct ConsumeHistory {
     size_t passID;
@@ -225,8 +235,8 @@ struct SIByL_API RenderData {
     std::vector<rhi::BindGroupEntry>* bindGroup) noexcept -> void;
   auto getBindGroupEntries(std::string const& name) const noexcept
     -> std::vector<rhi::BindGroupEntry>*;
-  auto getTexture(std::string const& name) const noexcept -> gfx::Texture*;
-  auto getBuffer(std::string const& name) const noexcept -> gfx::Buffer*;
+  auto getTexture(std::string const& name) const noexcept -> gfx::TextureHandle;
+  auto getBuffer(std::string const& name) const noexcept -> gfx::BufferHandle;
 
   auto setUVec2(std::string const& name, se::uvec2 v) noexcept -> void;
   auto getUVec2(std::string const& name) const noexcept -> se::uvec2;
@@ -237,8 +247,11 @@ struct SIByL_API RenderData {
   auto setMat4(std::string const& name, se::mat4 m) noexcept -> void;
   auto getMat4(std::string const& name) const noexcept -> se::mat4;
 
+  auto getScene() const noexcept -> gfx::SceneHandle;
+
   Graph* graph;
   Pass* pass;
+  gfx::SceneHandle scene = {};
   std::unordered_map<std::string, std::vector<rhi::BindGroupEntry>*> bindGroups;
   std::unordered_map<std::string, rhi::BindingResource> bindingResources;
   std::unordered_map<std::string, se::uvec2> uvec2s;
@@ -250,13 +263,19 @@ struct SIByL_API RenderData {
 
 struct SIByL_API Pass {
   Pass() = default;
+  Pass(Pass&&) = default;
+  Pass(Pass const&) = delete;
   virtual ~Pass() = default;
+  auto operator=(Pass&&)->Pass & = default;
+  auto operator=(Pass const&)->Pass & = delete;
+
   virtual auto reflect() noexcept -> PassReflection = 0;
   virtual auto execute(RenderContext* context, RenderData const& renderData) noexcept -> void = 0;
   virtual auto readback(RenderData const& renderData) noexcept -> void {}
   virtual auto renderUI() noexcept -> void {}
-  virtual auto onInteraction(se::input* input, editor::WidgetInfo* info) noexcept -> void {}
+  virtual auto onInteraction(se::input* input, editor::Widget::WidgetInfo* info) noexcept -> void {}
   virtual auto generateMarker() noexcept -> void;
+  auto pass() noexcept -> Pass* { return this; }
 
   PassReflection pReflection;
   rhi::DebugUtilLabelDescriptor marker;
@@ -323,14 +342,19 @@ struct SIByL_API RenderPass : public PipelinePass {
   auto beginPass(RenderContext* context, uint32_t width, uint32_t height) noexcept -> rhi::RenderPassEncoder*;
   auto prepareDelegateData(RenderContext* context, RenderData const& renderData) noexcept -> RenderData::DelegateData;
   virtual auto generateMarker() noexcept -> void;
-
+  virtual auto init(gfx::ShaderModule* vertex, gfx::ShaderModule* fragment) noexcept -> void;
+  // utils functions
+  auto setRenderPassDescriptor(rhi::RenderPassDescriptor const& renderPassDescriptor) noexcept -> void;
+  auto issueDirectDrawcalls(rhi::RenderPassEncoder* encoder, gfx::SceneHandle scene) noexcept -> void;
+  virtual auto beforeDirectDrawcall(rhi::RenderPassEncoder* encoder, int geometry_idx,
+    gfx::Scene::GeometryDrawData const& data) noexcept -> void {}
  protected:
   auto prepareDispatch(RenderContext* context, gfx::Texture* target) noexcept -> void;
   auto prepareDispatch(rdg::RenderContext* context, uint32_t width, uint32_t height) noexcept -> void;
 
   using RenderPipelineDescCallback = std::function<void(rhi::RenderPipelineDescriptor&)>;
   virtual auto init(gfx::ShaderModule* vertex, gfx::ShaderModule* fragment,
-    std::optional<RenderPipelineDescCallback> callback =  std::nullopt) noexcept -> void;
+    std::optional<RenderPipelineDescCallback> callback) noexcept -> void;
   virtual auto init(gfx::ShaderModule* vertex, gfx::ShaderModule* geometry,
     gfx::ShaderModule* fragment, std::optional<RenderPipelineDescCallback> callback = std::nullopt) noexcept -> void;
 };
@@ -341,7 +365,6 @@ struct SIByL_API FullScreenPass : public RenderPass {
   auto dispatchFullScreen(rdg::RenderContext* context) noexcept -> void;
   virtual auto init(gfx::ShaderModule* fragment) noexcept -> void;
   virtual auto generateMarker() noexcept -> void;
-  static gfx::ShaderModule* fullscreen_vertex;
 };
 
 struct SIByL_API ComputePass : public PipelinePass {
@@ -368,123 +391,164 @@ struct SIByL_API RayTracingPass : public PipelinePass {
   virtual auto generateMarker() noexcept -> void;
   //virtual auto init(gfx::SBTsDescriptor const& sbt, uint32_t max_depth) noexcept -> void;
 };
-//
-//struct SIByL_API Graph {
-//  /** build the graph */
-//  auto build() noexcept -> bool;
-//
-//  /** execute the graph */
-//  auto execute(RHI::CommandEncoder* encoder) noexcept -> void;
-//
-//  /** read back the information */
-//  virtual auto readback() noexcept -> void;
-//
-//  /** render graph ui */
-//  virtual auto renderUI() noexcept -> void {}
-//
-//
-//  /**
-//   * Add a RDPass to the RDGraph
-//   * @param pass		: the pass to add
-//   * @param identifier	: identifier of the pass added
-//   */
-//  auto addPass(std::unique_ptr<Pass>&& pass,
-//               std::string const& identifier) noexcept -> void;
-//
-//  /**
-//   * Add a Subgraph to the RDGraph
-//   * @param subgraph	: the subgraph to add
-//   * @param identifier	: identifier of the pass added
-//   */
-//  auto addSubgraph(std::unique_ptr<Subgraph>&& subgraph,
-//                   std::string const& identifier) noexcept -> void;
-//
-//  /**
-//   * Adding dependency from src_pass.src_resource to dst_pass.dst_resource.
-//   * @param src_pass: identifier of source pass
-//   * @param src_pass: identifier of the source output of source pass
-//   * @param dst_pass: identifier of destination pass
-//   * @param dst_pass: identifier of the destination input of destination pass
-//   */
-//  auto addEdge(std::string const& src_pass, std::string const& src_resource,
-//               std::string const& dst_pass,
-//               std::string const& dst_resource) noexcept -> void;
-//
-//  auto addEdge(std::string const& src_pass,
-//               std::string const& dst_pass) noexcept -> void;
-//
-//  /**
-//   * Set external resource
-//   * @param pass		: the pass where the resource is in
-//   * @param resource	: the resource to set
-//   */
-//  auto setExternal(std::string const& pass, std::string const& resource,
-//                   GFX::Texture* tex) noexcept -> void;
-//  auto setExternal(std::string const& pass, std::string const& resource,
-//                   GFX::Buffer* tex) noexcept -> void;
-//
-//  /**
-//   * Mark the main output of the render graph.
-//   * @param pass		: the pass produce the output
-//   * @param identifier	: identifier of the output resource
-//   */
-//  auto markOutput(std::string const& pass, std::string const& output) noexcept
-//      -> void;
-//
-//  inline auto getOutput() noexcept -> GFX::Texture*;
-//
-//  inline auto getTextureResource(std::string const& pass,
-//                                 std::string const& output) noexcept
-//      -> GFX::Texture*;
-//  
-//  inline auto getBufferResource(std::string const& pass,
-//                                std::string const& output) noexcept
-//      -> GFX::Buffer*;
-//
-//  RenderData renderData;
-//
-//  inline auto getFlattenedPasses() noexcept -> std::vector<size_t> const& {
-//    return flattenedPasses;
-//  }
-//  inline auto getPass(size_t i) noexcept -> Pass* { return passes[i].get(); }
-//
-//  inline auto getPass(std::string const& name) noexcept -> Pass* { 
-//    auto iter = passNameList.find(name);
-//    if (iter == passNameList.end())
-//      return nullptr;
-//    else
-//      return passes[iter->second].get();
-//  }
-//
-// private:
-//  friend RenderData;
-//  friend Editor::RDGViewerWidget;
-//  DAG dag;
-//  size_t passID = 0;
-//  size_t subgraphID = 0;
-//  std::unordered_map<std::string, size_t> passNameList;
-//  std::unordered_map<size_t, std::unique_ptr<Pass>> passes;
-//  std::unordered_map<size_t, std::string> subgraphNameList;
-//  std::unordered_map<std::string, std::unique_ptr<Subgraph>> subgraphs;
-//  std::unordered_map<std::string, AliasDict> subgraphsAlias;
-//  std::unordered_map<size_t, std::vector<RHI::BarrierDescriptor>> barriers;
-//  std::vector<size_t> flattenedPasses;
-//  std::vector<size_t> subgraphStack;
-//
-//  std::string output_pass;
-//  std::string output_resource;
-//
-//  Math::ivec3 standardSize = {1280, 720, 1};
-//
-//  size_t resourceID = 0;
-//  std::unordered_map<size_t, std::unique_ptr<TextureResource>> textureResources;
-//  std::unordered_map<size_t, std::unique_ptr<BufferResource>> bufferResources;
-//
-//  auto generateBufferBarriers() noexcept -> void;
-//  auto generateTextureBarriers() noexcept -> void;
-//
-//  auto decodeAlias(std::string& pass, std::string& resource) noexcept -> void;
-//};
 
+struct SIByL_API DAG {
+  auto addEdge(uint32_t src, uint32_t dst) noexcept -> void;
+  auto reverse() const noexcept -> DAG;
+  std::unordered_map<uint32_t, std::set<uint32_t>> adj;
+};
+
+auto SIByL_API flatten_bfs(DAG const& g, size_t output) noexcept
+-> std::optional<std::vector<size_t>>;
+
+struct SIByL_API Graph {
+  /** virtual destructor */
+  virtual ~Graph() = default;
+  /** virtual constructor */
+  Graph() = default;
+  Graph(Graph&&) = default;
+  Graph(Graph const&) = delete;
+  auto operator=(Graph&&) ->Graph & = default;
+  auto operator=(Graph const&) ->Graph & = delete;
+
+  /** build the graph */
+  auto build() noexcept -> bool;
+  /** execute the graph */
+  auto execute(rhi::CommandEncoder* encoder) noexcept -> void;
+  /** read back the information */
+  virtual auto readback() noexcept -> void;
+  /** render graph ui */
+  virtual auto renderUI() noexcept -> void {}
+
+  /** Add a RDPass to the RDGraph
+   * @param pass		: the pass to add
+   * @param identifier	: identifier of the pass added */
+  auto addPass(std::unique_ptr<Pass>&& pass,
+               std::string const& identifier) noexcept -> void;
+  auto addPass(Pass* pass, std::string const& identifier) noexcept -> void;
+
+  /** Add a Subgraph to the RDGraph
+   * @param subgraph	: the subgraph to add
+   * @param identifier	: identifier of the pass added */
+  auto addSubgraph(std::unique_ptr<Subgraph>&& subgraph,
+                   std::string const& identifier) noexcept -> void;
+
+  /** Adding dependency from src_pass.src_resource to dst_pass.dst_resource.
+   * @param src_pass: identifier of source pass
+   * @param src_pass: identifier of the source output of source pass
+   * @param dst_pass: identifier of destination pass
+   * @param dst_pass: identifier of the destination input of destination pass */
+  auto addEdge(std::string const& src_pass, std::string const& src_resource,
+               std::string const& dst_pass,
+               std::string const& dst_resource) noexcept -> void;
+  auto addEdge(std::string const& src_pass,
+               std::string const& dst_pass) noexcept -> void;
+
+  /** Set external resource
+   * @param pass		: the pass where the resource is in
+   * @param resource	: the resource to set */
+  auto setExternal(std::string const& pass, std::string const& resource,
+                   gfx::TextureHandle tex) noexcept -> void;
+  auto setExternal(std::string const& pass, std::string const& resource,
+                   gfx::BufferHandle tex) noexcept -> void;
+
+  /** Mark the main output of the render graph.
+   * @param pass		: the pass produce the output
+   * @param identifier	: identifier of the output resource */
+  auto markOutput(std::string const& pass, std::string const& output) noexcept -> void;
+
+  auto getOutput() noexcept -> gfx::TextureHandle;
+
+  auto getTextureResource(std::string const& pass,
+      std::string const& output) noexcept
+      -> gfx::TextureHandle;
+  
+  auto getBufferResource(std::string const& pass,
+      std::string const& output) noexcept
+      -> gfx::BufferHandle;
+
+
+  auto getFlattenedPasses() noexcept -> std::vector<size_t> const& { return flattenedPasses; }
+  auto getPass(size_t i) noexcept -> Pass* { return passes[i]; }
+  auto getPass(std::string const& name) noexcept -> Pass*;
+  auto bindScene(gfx::SceneHandle scene) noexcept -> void;
+
+  RenderData renderData;
+  DAG dag;
+  size_t passID = 0;
+  size_t subgraphID = 0;
+  std::unordered_map<std::string, size_t> passNameList;
+  std::unordered_map<size_t, Pass*> passes;
+  std::unordered_map<size_t, std::string> subgraphNameList;
+  std::unordered_map<std::string, std::unique_ptr<Subgraph>> subgraphs;
+  std::unordered_map<std::string, AliasDict> subgraphsAlias;
+  std::unordered_map<size_t, std::vector<rhi::BarrierDescriptor>> barriers;
+  std::vector<size_t> flattenedPasses;
+  std::vector<size_t> subgraphStack;
+  // contrain the pass objects if necessary
+  // only useful for C++ case
+  std::unordered_map<size_t, std::unique_ptr<Pass>> passesContainer;
+
+  std::string output_pass;
+  std::string output_resource;
+
+  se::ivec3 standardSize = {1280, 720, 1};
+
+  size_t resourceID = 0;
+  std::unordered_map<size_t, TextureResource> textureResources;
+  std::unordered_map<size_t, BufferResource> bufferResources;
+
+  auto generateBufferBarriers() noexcept -> void;
+  auto generateTextureBarriers() noexcept -> void;
+
+  auto decodeAlias(std::string& pass, std::string& resource) noexcept -> void;
+};
+
+struct SIByL_API Pipeline {
+  /** default ctor and dctor. */
+  Pipeline() = default;
+  virtual ~Pipeline() = default;
+  /** build the render pipeline. */
+  virtual auto build() noexcept -> void = 0;
+  /** execute the pipeline on the command encoder. */
+  virtual auto execute(rhi::CommandEncoder* encoder) noexcept -> void = 0;
+  /** readback after the execution of the pipeline */
+  virtual auto readback() noexcept -> void {}
+  /** render pipeline ui. */
+  virtual auto renderUI() noexcept -> void {}
+  /** get all active graphs now within the pipeline. */
+  virtual auto getActiveGraphs() noexcept -> std::vector<Graph*> = 0;
+  /** get all active graphs now within the pipeline. */
+  virtual auto getAllGraphs() noexcept -> std::vector<Graph*> = 0;
+  /** get the output of the pipeline. */
+  virtual auto getOutput() noexcept -> gfx::TextureHandle = 0;
+  /** set the standard size for all the graphs. */
+  auto setStandardSize(se::ivec3 size) noexcept -> void;
+  /** bind a scene to the pipeline.  */
+  auto bindScene(gfx::SceneHandle scene) noexcept -> void;
+  /** get the pointer of the pipeline. */
+  auto pipeline() noexcept -> Pipeline* { return this; }
+};
+
+struct SIByL_API SingleGraphPipeline : public Pipeline {
+  SingleGraphPipeline() = default;
+  virtual ~SingleGraphPipeline() = default;
+
+  virtual auto execute(rhi::CommandEncoder* encoder) noexcept -> void { pGraph->execute(encoder); }
+
+  virtual auto getActiveGraphs() noexcept -> std::vector<Graph*> { return {pGraph}; }
+
+  virtual auto getAllGraphs() noexcept -> std::vector<Graph*> { return { pGraph }; }
+
+  virtual auto getOutput() noexcept -> gfx::TextureHandle { return pGraph->getOutput(); }
+
+  virtual auto readback() noexcept -> void { pGraph->readback(); }
+
+  virtual auto build() noexcept -> void override { pGraph->build(); }
+
+  auto setGraph(Graph* graph) noexcept -> void { pGraph = graph; }
+
+  Graph* pGraph;
+};
 
 }

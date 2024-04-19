@@ -866,7 +866,7 @@ auto Vector3<T>::operator!=(Vector3<T> const& v) const -> bool {
 
 template <class T>
 struct Vector4 {
-  // __declspec(align(16))
+   __declspec(align(16))
   union {
     T data[4];
     struct {
@@ -1342,7 +1342,7 @@ struct Matrix4x4 {
 
   operator Matrix3x3<T>() const;
 
-  T data[4][4] = {
+  alignas(16) T data[4][4] = {
       {1, 0, 0, 0},
       {0, 1, 0, 0},
       {0, 0, 1, 0},
@@ -2449,7 +2449,7 @@ inline auto sphericalPhi(vec3 const& v) noexcept -> float {
     return (p < 0) ? (p + 2 * float_Pi) : p;
 }
 
-struct Quaternion {
+struct SIByL_API Quaternion {
     Quaternion() : v(0), s(1.f) {}
     Quaternion(float x, float y, float z, float w) : v(x, y, z), s(w) {}
     Quaternion(vec3 const& v, float s) : v(v), s(s) {}
@@ -2608,12 +2608,6 @@ inline auto perspective(float fov, float n, float f) noexcept
 inline auto perspective(float fov, float aspect, float n,
                                float f) noexcept -> Transform;
 
-/** Decompose an affine transformation into Translation x Rotation x Scaling */
-inline auto decompose(mat4 const& m, vec3* t, Quaternion* rquat,
-                             mat4* s) noexcept -> void;
-inline auto decompose(mat4 const& m, vec3* t, vec3* r, vec3* s) noexcept
-    -> void;
-
 inline auto inverse(Transform const& t) noexcept -> Transform {
     return Transform(t.mInv, t.m);
 }
@@ -2761,51 +2755,46 @@ inline auto perspective(float fov, float aspect, float n, float f) noexcept
     return scale(invTanAng / aspect, invTanAng, 1) * Transform(persp);
 }
 
-inline auto decompose(mat4 const& m, vec3* t, Quaternion* rquat,
-                      mat4* s) noexcept -> void {
-    // Extract translation T from transformation matrix
-    // which could be found directly from matrix
-    t->x = m.data[0][3];
-    t->y = m.data[1][3];
-    t->z = m.data[2][3];
 
-    // Compute new transformation matrix M without translation
-    mat4 M = m;
-    for (int i = 0; i < 3; i++) M.data[i][3] = M.data[3][i] = 0.f;
-    M.data[3][3] = 1.f;
+auto SIByL_API eulerAngleToRotationMatrix(se::vec3 e) noexcept -> se::mat3;
+auto SIByL_API eulerAngleToQuaternion(se::vec3 e) noexcept -> se::Quaternion;
+auto SIByL_API rotationMatrixToEulerAngles(se::mat3 R) noexcept -> se::vec3;
 
-    // Extract rotation R from transformation matrix
-    // use polar decomposition, decompose into R&S by averaging M with its
-    // inverse transpose until convergence to get R (because pure rotation
-    // matrix has similar inverse and transpose)
-    float norm;
-    int count = 0;
-    mat4 R = M;
-    do {
-    // Compute next matrix Rnext in series
-    mat4 rNext;
-    mat4 rInvTrans = inverse(transpose(R));
-    for (int i = 0; i < 4; ++i)
-      for (int j = 0; j < 4; ++j)
-        rNext.data[i][j] = 0.5f * (R.data[i][j] + rInvTrans.data[i][j]);
-    // Compute norm of difference between R and Rnext
-    norm = 0.f;
-    for (int i = 0; i < 3; ++i) {
-      float n = std::abs(R.data[i][0] = rNext.data[i][0]) +
-                std::abs(R.data[i][1] = rNext.data[i][1]) +
-                std::abs(R.data[i][2] = rNext.data[i][2]);
-      norm = std::max(norm, n);
-    }
-    R = rNext;
-    } while (++count < 100 && norm > .0001);
-    *rquat = Quaternion(R);
-    // Compute scale S using rotationand original matrix
-    *s = mul(inverse(R), M);
-}
+auto SIByL_API decompose(se::mat4 const& m, se::vec3* t, se::Quaternion* quat, se::vec3* s) noexcept -> void;
+auto SIByL_API decompose(se::mat4 const& m, se::vec3* t, se::vec3* r, se::vec3* s) noexcept -> void;
 
-vec3 RotationMatrixToEulerAngles(mat3 R);
+// Spline Curves
+// ===============================
 
-void Decompose(mat4 const& m, vec3* t, vec3* r, vec3* s);
+enum struct WrapMode {
+  CLAMP,
+  REPEAT,
+  PINGPOMG,
+};
+
+struct KeyFrame {
+  float time;
+  float value;
+  float inTangent;
+  float outTangent;
+};
+
+struct SIByL_API AnimationCurve {
+  AnimationCurve() = default;
+  AnimationCurve(std::initializer_list<KeyFrame> const& initializer_list)
+    : keyFrames(initializer_list) { sortAllKeyFrames(); }
+
+  WrapMode preWrapMode = WrapMode::CLAMP;
+  WrapMode postWrapMode = WrapMode::CLAMP;
+  float errorTolerence = 0.00001f;
+  std::vector<KeyFrame> keyFrames;
+  struct Point { float time; float value; };
+
+  auto evaluate(float time) noexcept -> float;
+  auto sortAllKeyFrames() noexcept -> void;
+  auto evaluate(KeyFrame const& keyframe0, KeyFrame const& keyframe1,
+    float t) noexcept -> Point;
+};
 }
 
 #endif

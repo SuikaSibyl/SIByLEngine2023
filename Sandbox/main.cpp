@@ -6,16 +6,26 @@
 #include <se.rdg.hpp>
 #include "extension/py.reparam.cpp"
 #include <iostream>
+#include <se.editor.hpp>
+#include <imgui.h>
+#define SIByL_API __declspec(dllimport)
+#include <seditor.hpp>
+#include <seditor-base.hpp>
+#include "source/geometry_inspector.hpp"
+#include "source/nerf_fwd.hpp"
+#include <cnpy.h>
+#include "source/neumat_fwd.hpp"
+#include <passes/se.pass.editor.hpp>
+#include <passes/se.pass.rasterizer.hpp>
 
 int main() {
-  //std::unique_ptr<se::window> window = se::window::create(se::window::WindowOptions{
-  //  se::window::Vendor::GLFW, L"SIByL 2024",
-  //  1280, 720, se::window::Properties::VULKAN_CONTEX});
-  
+  // initialize vulkan context
+  std::unique_ptr<se::window> window = se::window::create(se::window::WindowOptions{
+    se::window::Vendor::GLFW, L"SIByL 2024",
+    1280, 720, se::window::Properties::VULKAN_CONTEX});
   std::unique_ptr<se::rhi::Context> context = 
 	se::rhi::Context::create(se::rhi::Context::Backend::Vulkan);
-  //context->init(window.get(), se::rhi::ContextExtensions(
-  context->init(nullptr, se::rhi::ContextExtensions(
+  context->init(window.get(), se::rhi::ContextExtensions(
     se::rhi::ContextExtensionBit::RAY_TRACING |
     se::rhi::ContextExtensionBit::BINDLESS_INDEXING |
     se::rhi::ContextExtensionBit::FRAGMENT_BARYCENTRIC |
@@ -23,84 +33,114 @@ int main() {
     se::rhi::ContextExtensionBit::COOPERATIVE_MATRIX |
     se::rhi::ContextExtensionBit::CUDA_INTEROPERABILITY |
     se::rhi::ContextExtensionBit::ATOMIC_FLOAT));
-
   std::unique_ptr<se::rhi::Adapter> adapter = context->requestAdapter({});
+
   std::unique_ptr<se::rhi::Device> device = adapter->requestDevice();
   se::rhi::CUDAContext::initialize(device.get());
   se::gfx::GFXContext::initialize(device.get());
+  se::gfx::GFXContext::createFlights(MULTIFRAME_FLIGHTS_COUNT, nullptr);
+  se::editor::ImGuiContext::initialize(device.get());
+  se::editor::EditorContext::initialize();
+  ImGui::SetCurrentContext(se::editor::ImGuiContext::getRawCtx());
 
-  std::unique_ptr<se::rhi::Buffer> prim_buffer = device->createBuffer(se::rhi::BufferDescriptor{
-    512*512 * sizeof(float), (uint32_t)se::rhi::BufferUsageBit::STORAGE,
-    se::rhi::BufferShareMode::EXCLUSIVE, 
-    (uint32_t)se::rhi::MemoryPropertyBit::DEVICE_LOCAL_BIT,});
-  std::unique_ptr<se::rhi::Buffer> tans_buffer = device->createBuffer(se::rhi::BufferDescriptor{
-    3 * sizeof(float), (uint32_t)se::rhi::BufferUsageBit::STORAGE,
-    se::rhi::BufferShareMode::EXCLUSIVE, 
-    (uint32_t)se::rhi::MemoryPropertyBit::DEVICE_LOCAL_BIT,});
-  std::unique_ptr<se::rhi::Buffer> grad_buffer = device->createBuffer(se::rhi::BufferDescriptor{
-    512 * 512 * sizeof(float), (uint32_t)se::rhi::BufferUsageBit::STORAGE,
-    se::rhi::BufferShareMode::EXCLUSIVE, 
-    (uint32_t)se::rhi::MemoryPropertyBit::DEVICE_LOCAL_BIT,});
+  //se::gfx::SceneHandle scene = se::gfx::GFXContext::load_scene_gltf("C:\\Users\\suika\\Downloads\\KhronosGroup glTF-Sample-Models main 2.0-DamagedHelmet\\glTF\\DamagedHelmet.gltf");
+  se::gfx::SceneHandle scene = se::gfx::GFXContext::load_scene_gltf("C:\\Users\\suika\\Downloads\\skull\\skull_downloadable\\scene.gltf");
+  //se::gfx::SceneHandle scene = se::gfx::GFXContext::load_scene_gltf("D:/Art/Scenes/3d_material_ball/scene.gltf");
+  //se::gfx::SceneHandle scene = se::gfx::GFXContext::load_scene_gltf("S:/SIByL2024/Sandbox/neumat/scene.gltf");
+  //se::gfx::SceneHandle scene = se::gfx::GFXContext::load_scene_gltf("S:/SIByL2024/Sandbox/neumat/scene.gltf");
+  //se::gfx::SceneHandle scene = se::gfx::GFXContext::create_scene("Default Scene");
+  //se::gfx::SceneHandle scene = se::gfx::GFXContext::load_scene_gltf("test2.gltf");
+  // initialize the window and gui context
+  //std::unique_ptr<se::rhi::SwapChain> swapChain = device->createSwapChain({});
+  se::rhi::MultiFrameFlights* multiFrameFlights = se::gfx::GFXContext::getFlights();
 
-  BackwardPass bwdpass;
 
-  std::unique_ptr<se::rhi::CUDABuffer> prim_cu = se::rhi::CUDAContext::toCUDABuffer(prim_buffer.get());
-  std::unique_ptr<se::rhi::CUDABuffer> grad_cu = se::rhi::CUDAContext::toCUDABuffer(grad_buffer.get());
-  std::unique_ptr<se::rhi::CUDABuffer> trans_cu = se::rhi::CUDAContext::toCUDABuffer(tans_buffer.get());
-  
-  torch::Tensor prim_tensor = se::rhi::toTensor(prim_cu.get(), { 512, 512 });
-  torch::Tensor grad_tensor = se::rhi::toTensor(grad_cu.get(), { 512, 512 });
-  torch::Tensor trans_tensor = se::rhi::toTensor(trans_cu.get(), { 512, 512 });
-  
-  ForwardPass pass;
-  pass.image_buffer = prim_buffer.get();
-  pass.tran_buffer = tans_buffer.get();
-  se::rdg::RenderContext renderContext;
-  se::rdg::RenderData renderData;
+  se::timer timer;
 
-  for (int i = 0; i < 10; ++i) {
-    std::unique_ptr<se::rhi::CommandEncoder> commandEncoder = device->createCommandEncoder({ nullptr });
-    renderContext.cmdEncoder = commandEncoder.get();
-    renderContext.flightIdx = 0;
-    pass.execute(&renderContext, renderData);
+  se::editor::EditorBase::bindScene(scene);
+  se::editor::EditorBase::bindInput(window->getInput());
+  se::editor::EditorBase::bindTimer(&timer);
+
+  scene->updateTransform();
+  scene->createTexcoord(se::gfx::Scene::TexcoordKind::CopyCoord0);
+  scene->updateGPUScene();
+  //scene->serialize("test2.gltf");
+
+  //auto pass = std::make_unique<se::GeometryInspectorPass>();
+  //auto pass = std::make_unique<se::NeumatFwdPass>();
+  //pass->scene = scene;
+  std::unique_ptr<se::NeumatFwdPipeline> pipeline = std::make_unique<se::NeumatFwdPipeline>();
+  pipeline->setStandardSize({ 1024,1024,1 });
+  pipeline->build();
+
+
+  se::editor::EditorBase::bindPipeline(pipeline.get());
+
+  bool should_exit = false;
+  // run the main loop
+  while (!should_exit) {
+    //  fetch main window events
+    window->fetchEvents();
+    window->endFrame();
     
-    device->getGraphicsQueue()->submit({ commandEncoder->finish() });
+    se::editor::ImGuiContext::startNewFrame();
+
+    multiFrameFlights->frameStart();
+
+    std::unique_ptr<se::rhi::CommandEncoder> commandEncoder = device->createCommandEncoder({ multiFrameFlights->getCommandBuffer() });
+
+    pipeline->bindScene(scene);
+    pipeline->execute(commandEncoder.get());
+
+    device->getGraphicsQueue()->submit(
+      { commandEncoder->finish() },
+      multiFrameFlights->getImageAvailableSeamaphore(),
+      multiFrameFlights->getRenderFinishedSeamaphore(),
+      multiFrameFlights->getFence());
+
+    //std::unique_ptr<se::rhi::CommandEncoder> commandEncoder = device->createCommandEncoder({ nullptr });
+    //se::editor::ImGuiContext::imguiBackend->render(multiFrameFlights->getRenderFinishedSeamaphore());
+    se::editor::ImGuiContext::startGuiRecording();
+    se::editor::EditorBase::onImGuiDraw();
+    se::editor::EditorBase::onUpdate();
+
+
+    //{
+    //  se::Line3DPass* line3dpss =
+    //    static_cast<se::Line3DPass*>(
+    //    pipeline->getActiveGraphs()[0]->getPass("Line3D Pass"));
+    //  line3dpss->clear();
+    //  line3dpss->addAABB(se::bounds3{ se::vec3{0}, se::vec3{1} }, se::vec3{ 1,0,1 }, 1);
+    //}
+
+    timer.update();
+    ImGui::Begin("Hello");
+    ImGui::End();
+
+    bool show_demo_window = true;
+    ImGui::ShowDemoWindow(&show_demo_window);
+
+    se::editor::ImGuiContext::render(multiFrameFlights->getRenderFinishedSeamaphore());
+    //device->getGraphicsQueue()->submit({ commandEncoder->finish() });
+    //device->waitIdle();
+
+    multiFrameFlights->frameEnd();
+    // Update window status, to check whether should exit
+    should_exit |= !window->isRunning();
+
+    device->waitIdle();
+    scene->updateGPUScene();
     device->waitIdle();
   }
 
-  torch::Tensor prim_cpu = prim_tensor.cpu();
-  std::cout << prim_cpu << std::endl;
+  //pass->save_output();
 
-
+  device->waitIdle();
+  pipeline = nullptr;
+  se::editor::EditorBase::finalize();
+  se::editor::ImGuiContext::finalize();
   se::gfx::GFXContext::finalize();
-
-  //se::gfx::GFXContext::shaders.load(ex::id_type(0), se::gfx::ShaderModuleLoader::from_spirv_tag{}, nullptr, se::rhi::ShaderStageBit::COMPUTE);
-
-  //ex::resource<se::gfx::ShaderModule> a = se::gfx::GFXContext::shaders[ex::id_type(0)];
-
-
-
-  //using my_cache = entt::resource_cache<my_resource, my_loader>;
-  //my_cache cache{};
-
-  //{
-  //    cache.load(0,0);
-  //}
-
-  //float ssa = 0;
-  //ex::resource<my_resource> load0 = cache[0];
-  //my_resource* raw = load0.handle().get();
-
-  //bool should_exit = false;
-  //// run the main loop
-  //while (!should_exit) {
-  //  //  fetch main window events
-  //  window->fetchEvents();
-  //  window->endFrame();
-  //  // Update window status, to check whether should exit
-  //  should_exit |= !window->isRunning();
-  //}
-  //window->destroy();
+  window->destroy();
 
   return 0;
 }

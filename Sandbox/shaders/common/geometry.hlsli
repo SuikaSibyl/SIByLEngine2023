@@ -75,6 +75,10 @@ AABB aabbUnion(in AABB a, in AABB b) {
     return result;
 }
 
+bool PointInAABB(in float3 p, in AABB aabb) {
+    return all(aabb.min < p) && all(p < aabb.max);
+}
+
 /************************************************************************
 *                            Rotation Utils                             *
 ************************************************************************/

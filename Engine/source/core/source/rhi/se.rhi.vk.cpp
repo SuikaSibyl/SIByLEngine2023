@@ -846,6 +846,10 @@ auto Adapter_VK::requestAdapterInfo() const noexcept -> AdapterInfo {
   return adapterInfo;
 }
 
+auto Adapter_VK::fromContext() noexcept -> Context* {
+  return context;
+}
+
 auto Adapter_VK::findMemoryType(uint32_t typeFilter,
     VkMemoryPropertyFlags properties) noexcept -> uint32_t {
   VkPhysicalDeviceMemoryProperties memProperties;
@@ -944,6 +948,10 @@ auto Device_VK::waitIdle() noexcept -> void {
     //}
     root::print::error("VULKAN :: Device WaitIdle not Success! Error code: "+ error_str);
   }
+}
+
+auto Device_VK::fromAdapter() noexcept -> Adapter* {
+  return adapter;
 }
 
 auto Device_VK::init() noexcept -> void {
@@ -1499,6 +1507,15 @@ Texture_VK::Texture_VK(Device_VK* device, TextureDescriptor const& desc)
   imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
   imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
   imageInfo.flags = getVkImageCreateFlags(desc.flags);  // Optional
+  
+  VkExternalMemoryImageCreateInfo external_info;
+  if (static_cast<Context_VK*>(device->getAdapterVk()->getContext())->getContextExtensionsFlags()
+    & (uint32_t)ContextExtensionBit::CUDA_INTEROPERABILITY) {
+    external_info.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
+    external_info.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
+    external_info.pNext = nullptr;
+    imageInfo.pNext = &external_info;
+  }
 
 #ifdef USE_VMA
   VmaAllocationCreateInfo allocInfo = {};
@@ -1538,9 +1555,9 @@ Texture_VK::Texture_VK(Device_VK* device, TextureDescriptor const& desc)
 
 Texture_VK::Texture_VK(Device_VK* device, VkImage image,
                        TextureDescriptor const& desc)
-  : device(device), image(image), descriptor{desc} {}
+  : device(device), image(image), descriptor{desc}, external(true) {}
 
-Texture_VK::~Texture_VK() { destroy(); }
+Texture_VK::~Texture_VK() { if(!external) destroy(); }
 
 auto Texture_VK::createView(TextureViewDescriptor const& desc) noexcept
     -> std::unique_ptr<TextureView> {
@@ -1795,7 +1812,7 @@ TextureView_VK::TextureView_VK(Device_VK* device, Texture_VK* texture,
   }
 }
 
-TextureView_VK::TextureView_VK(TextureView_VK&& view)
+TextureView_VK::TextureView_VK(TextureView_VK&& view) noexcept
     : imageView(view.imageView),
       descriptor(view.descriptor),
       texture(view.texture),
@@ -1920,150 +1937,231 @@ auto Device_VK::createSampler(SamplerDescriptor const& desc) noexcept
 // Samplers Interface
 // ===========================================================================
 // SwapChain Interface
-//
-//inline auto chooseSwapSurfaceFormat(
-//    std::vector<VkSurfaceFormatKHR> const& availableFormats) noexcept
-//    -> VkSurfaceFormatKHR {
-//  for (auto const& availableFormat : availableFormats) {
-//    if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB &&
-//        availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-//      return availableFormat;
-//    }
-//  }
-//  return availableFormats[0];
-//}
-//
-//inline auto chooseSwapPresentMode(
-//    const std::vector<VkPresentModeKHR>& availablePresentModes) noexcept
-//    -> VkPresentModeKHR {
-//  for (const auto& availablePresentMode : availablePresentModes) {
-//    if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
-//      return availablePresentMode;
-//    }
-//  }
-//  return VK_PRESENT_MODE_FIFO_KHR;
-//}
-//
-//inline auto chooseSwapExtent(VkSurfaceCapabilitiesKHR const& capabilities,
-//                             se::window* bindedWindow) noexcept
-//    -> VkExtent2D {
-//  if (capabilities.currentExtent.width != std::numeric_limits<std::uint32_t>::max())
-//    return capabilities.currentExtent;
-//  else {
-//    int width, height;
-//    bindedWindow->getFramebufferSize(&width, &height);
-//    VkExtent2D actualExtent = {static_cast<uint32_t>(width),
-//                               static_cast<uint32_t>(height)};
-//    actualExtent.width =
-//        std::clamp(actualExtent.width, capabilities.minImageExtent.width,
-//                   capabilities.maxImageExtent.width);
-//    actualExtent.height =
-//        std::clamp(actualExtent.height, capabilities.minImageExtent.height,
-//                   capabilities.maxImageExtent.height);
-//    return actualExtent;
-//  }
-//}
-//
-//void createSwapChain(Device_VK* device, SwapChain_VK* swapchain) {
-//  Adapter_VK* adapater = device->getAdapterVk();
-//  SwapChainSupportDetails swapChainSupport = querySwapChainSupport(
-//      adapater->getContext(), adapater->getVkPhysicalDevice());
-//  VkSurfaceFormatKHR surfaceFormat =
-//      chooseSwapSurfaceFormat(swapChainSupport.formats);
-//  VkPresentModeKHR presentMode =
-//      chooseSwapPresentMode(swapChainSupport.presentModes);
-//  VkExtent2D extent = chooseSwapExtent(
-//      swapChainSupport.capabilities, adapater->getContext()->getBindedWindow());
-//  swapchain->swapChainExtend = extent;
-//  swapchain->swapChainImageFormat = surfaceFormat.format;
-//  uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
-//  if (swapChainSupport.capabilities.maxImageCount > 0 &&
-//      imageCount > swapChainSupport.capabilities.maxImageCount) {
-//    imageCount = swapChainSupport.capabilities.maxImageCount;
-//  }
-//  VkSwapchainCreateInfoKHR createInfo{};
-//  createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-//  createInfo.surface = adapater->getContext()->getVkSurfaceKHR();
-//  createInfo.minImageCount = imageCount;
-//  createInfo.imageFormat = surfaceFormat.format;
-//  createInfo.imageColorSpace = surfaceFormat.colorSpace;
-//  createInfo.imageExtent = extent;
-//  createInfo.imageArrayLayers = 1;
-//  createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-//  QueueFamilyIndices_VK const& indices = adapater->getQueueFamilyIndices();
-//  uint32_t queueFamilyIndices[] = {indices.graphicsFamily.value(),
-//                                   indices.presentFamily.value()};
-//  if (indices.graphicsFamily != indices.presentFamily) {
-//    createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-//    createInfo.queueFamilyIndexCount = 2;
-//    createInfo.pQueueFamilyIndices = queueFamilyIndices;
-//  } else {
-//    createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-//    createInfo.queueFamilyIndexCount = 0;      // Optional
-//    createInfo.pQueueFamilyIndices = nullptr;  // Optional
-//  }
-//  createInfo.preTransform = swapChainSupport.capabilities.currentTransform;
-//  createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-//  createInfo.presentMode = presentMode;
-//  createInfo.clipped = VK_TRUE;
-//  createInfo.oldSwapchain = VK_NULL_HANDLE;
-//  if (vkCreateSwapchainKHR(device->getVkDevice(), &createInfo, nullptr,
-//                           &swapchain->swapChain) != VK_SUCCESS) {
-//    root::print::error("VULKAN :: failed to create swap chain!");
-//  }
-//}
-//
-//SwapChain_VK::~SwapChain_VK() {
-//  if (swapChain)
-//    vkDestroySwapchainKHR(device->getVkDevice(), swapChain, nullptr);
-//}
-//
-//auto SwapChain_VK::init(Device_VK* device,
-//                        SwapChainDescriptor const& desc) noexcept -> void {
-//  this->device = device;
-//  recreate();
-//}
-//
-//auto SwapChain_VK::recreate() noexcept -> void {
-//  device->waitIdle();
-//  // clean up swap chain
-//  swapChainTextures.clear();
-//  textureViews.clear();
-//  if (swapChain)
-//    vkDestroySwapchainKHR(device->getVkDevice(), swapChain, nullptr);
-//  // recreate swap chain
-//  createSwapChain(device, this);
-//  // retrieving the swap chian image
-//  uint32_t imageCount = 0;
-//  vkGetSwapchainImagesKHR(device->getVkDevice(), swapChain, &imageCount,
-//                          nullptr);
-//  std::vector<VkImage> swapChainImages;
-//  swapChainImages.resize(imageCount);
-//  vkGetSwapchainImagesKHR(device->getVkDevice(), swapChain, &imageCount,
-//                          swapChainImages.data());
-//  // create Image views for images
-//  TextureDescriptor textureDesc;
-//  textureDesc.dimension = TextureDimension::TEX2D;
-//  textureDesc.format = getTextureFormat(swapChainImageFormat);
-//  textureDesc.size = {swapChainExtend.width, swapChainExtend.height};
-//  textureDesc.usage = 0;
-//  TextureViewDescriptor viewDesc;
-//  viewDesc.format = getTextureFormat(swapChainImageFormat);
-//  viewDesc.aspect = (uint32_t)TextureAspectBit::COLOR_BIT;
-//  for (size_t i = 0; i < swapChainImages.size(); i++)
-//    swapChainTextures.push_back(
-//        Texture_VK{device, swapChainImages[i], textureDesc});
-//  for (size_t i = 0; i < swapChainImages.size(); i++)
-//    textureViews.push_back(
-//        TextureView_VK{device, &swapChainTextures[i], viewDesc});
-//}
+
+inline auto chooseSwapSurfaceFormat(
+    std::vector<VkSurfaceFormatKHR> const& availableFormats) noexcept
+    -> VkSurfaceFormatKHR {
+  for (auto const& availableFormat : availableFormats) {
+    if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB &&
+        availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+      return availableFormat;
+    }
+  }
+  return availableFormats[0];
+}
+
+inline auto chooseSwapPresentMode(
+    const std::vector<VkPresentModeKHR>& availablePresentModes) noexcept
+    -> VkPresentModeKHR {
+  for (const auto& availablePresentMode : availablePresentModes) {
+    if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
+      return availablePresentMode;
+    }
+  }
+  return VK_PRESENT_MODE_FIFO_KHR;
+}
+
+inline auto chooseSwapExtent(VkSurfaceCapabilitiesKHR const& capabilities,
+                             se::window* bindedWindow) noexcept
+    -> VkExtent2D {
+  if (capabilities.currentExtent.width != std::numeric_limits<std::uint32_t>::max())
+    return capabilities.currentExtent;
+  else {
+    int width, height;
+    bindedWindow->getFramebufferSize(&width, &height);
+    VkExtent2D actualExtent = {static_cast<uint32_t>(width),
+                               static_cast<uint32_t>(height)};
+    actualExtent.width =
+        std::clamp(actualExtent.width, capabilities.minImageExtent.width,
+                   capabilities.maxImageExtent.width);
+    actualExtent.height =
+        std::clamp(actualExtent.height, capabilities.minImageExtent.height,
+                   capabilities.maxImageExtent.height);
+    return actualExtent;
+  }
+}
+
+void createSwapChain(Device_VK* device, SwapChain_VK* swapchain) {
+  Adapter_VK* adapater = device->getAdapterVk();
+  SwapChainSupportDetails swapChainSupport = querySwapChainSupport(
+      adapater->getContext(), adapater->getVkPhysicalDevice());
+  VkSurfaceFormatKHR surfaceFormat =
+      chooseSwapSurfaceFormat(swapChainSupport.formats);
+  VkPresentModeKHR presentMode =
+      chooseSwapPresentMode(swapChainSupport.presentModes);
+  VkExtent2D extent = chooseSwapExtent(
+      swapChainSupport.capabilities, adapater->getContext()->getBindedWindow());
+  swapchain->swapChainExtend = extent;
+  swapchain->swapChainImageFormat = surfaceFormat.format;
+  uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
+  if (swapChainSupport.capabilities.maxImageCount > 0 &&
+      imageCount > swapChainSupport.capabilities.maxImageCount) {
+    imageCount = swapChainSupport.capabilities.maxImageCount;
+  }
+  VkSwapchainCreateInfoKHR createInfo{};
+  createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+  createInfo.surface = adapater->getContext()->getVkSurfaceKHR();
+  createInfo.minImageCount = imageCount;
+  createInfo.imageFormat = surfaceFormat.format;
+  createInfo.imageColorSpace = surfaceFormat.colorSpace;
+  createInfo.imageExtent = extent;
+  createInfo.imageArrayLayers = 1;
+  createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+  QueueFamilyIndices_VK const& indices = adapater->getQueueFamilyIndices();
+  uint32_t queueFamilyIndices[] = {indices.graphicsFamily.value(),
+                                   indices.presentFamily.value()};
+  if (indices.graphicsFamily != indices.presentFamily) {
+    createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+    createInfo.queueFamilyIndexCount = 2;
+    createInfo.pQueueFamilyIndices = queueFamilyIndices;
+  } else {
+    createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    createInfo.queueFamilyIndexCount = 0;      // Optional
+    createInfo.pQueueFamilyIndices = nullptr;  // Optional
+  }
+  createInfo.preTransform = swapChainSupport.capabilities.currentTransform;
+  createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+  createInfo.presentMode = presentMode;
+  createInfo.clipped = VK_TRUE;
+  createInfo.oldSwapchain = VK_NULL_HANDLE;
+  if (vkCreateSwapchainKHR(device->getVkDevice(), &createInfo, nullptr,
+                           &swapchain->swapChain) != VK_SUCCESS) {
+    root::print::error("VULKAN :: failed to create swap chain!");
+  }
+}
+
+SwapChain_VK::~SwapChain_VK() {
+  if (swapChain)
+    vkDestroySwapchainKHR(device->getVkDevice(), swapChain, nullptr);
+}
+
+auto SwapChain_VK::init(Device_VK* device,
+                        SwapChainDescriptor const& desc) noexcept -> void {
+  this->device = device;
+  recreate();
+}
+
+auto SwapChain_VK::recreate() noexcept -> void {
+  device->waitIdle();
+  // clean up swap chain
+  swapChainTextures.clear();
+  textureViews.clear();
+  if (swapChain)
+    vkDestroySwapchainKHR(device->getVkDevice(), swapChain, nullptr);
+  // recreate swap chain
+  createSwapChain(device, this);
+  // retrieving the swap chian image
+  uint32_t imageCount = 0;
+  vkGetSwapchainImagesKHR(device->getVkDevice(), swapChain, &imageCount,
+                          nullptr);
+  std::vector<VkImage> swapChainImages;
+  swapChainImages.resize(imageCount);
+  vkGetSwapchainImagesKHR(device->getVkDevice(), swapChain, &imageCount,
+                          swapChainImages.data());
+  // create Image views for images
+  TextureDescriptor textureDesc;
+  textureDesc.dimension = TextureDimension::TEX2D;
+  textureDesc.format = getTextureFormat(swapChainImageFormat);
+  textureDesc.size = {swapChainExtend.width, swapChainExtend.height};
+  textureDesc.usage = 0;
+  TextureViewDescriptor viewDesc;
+  viewDesc.format = getTextureFormat(swapChainImageFormat);
+  viewDesc.aspect = (uint32_t)TextureAspectBit::COLOR_BIT;
+  for (size_t i = 0; i < swapChainImages.size(); i++)
+    swapChainTextures.emplace_back(device, swapChainImages[i], textureDesc);
+  for (size_t i = 0; i < swapChainImages.size(); i++)
+    textureViews.emplace_back(device, &swapChainTextures[i], viewDesc);
+}
 
 auto Device_VK::createSwapChain(SwapChainDescriptor const& desc) noexcept
     -> std::unique_ptr<SwapChain> {
-  //std::unique_ptr<SwapChain_VK> swapChain = std::make_unique<SwapChain_VK>();
-  //swapChain->init(this, desc);
-  //return std::move(swapChain);
-  return nullptr;
+  std::unique_ptr<SwapChain_VK> swapChain = std::make_unique<SwapChain_VK>();
+  swapChain->init(this, desc);
+  return swapChain;
+}
+
+MultiFrameFlights_VK::MultiFrameFlights_VK(Device_VK* device, int maxFlightNum,
+                                           SwapChain* swapchain)
+    : device(device),
+      maxFlightNum(maxFlightNum),
+      swapChain(static_cast<SwapChain_VK*>(swapchain)) {
+  commandBuffers.resize(maxFlightNum);
+  for (size_t i = 0; i < maxFlightNum; ++i) {
+    commandBuffers[i] = device->allocateCommandBuffer();
+  }
+  // createSyncObjects
+  imageAvailableSemaphores.resize(maxFlightNum);
+  renderFinishedSemaphores.resize(maxFlightNum);
+  inFlightFences.resize(maxFlightNum);
+  VkSemaphoreCreateInfo semaphoreInfo{};
+  semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+  VkFenceCreateInfo fenceInfo{};
+  fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+  fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+  for (size_t i = 0; i < maxFlightNum; ++i) {
+    if (vkCreateSemaphore(device->getVkDevice(), &semaphoreInfo, nullptr,
+                          &imageAvailableSemaphores[i].semaphore) !=
+            VK_SUCCESS ||
+        vkCreateSemaphore(device->getVkDevice(), &semaphoreInfo, nullptr,
+                          &renderFinishedSemaphores[i].semaphore) !=
+            VK_SUCCESS ||
+        vkCreateFence(device->getVkDevice(), &fenceInfo, nullptr,
+                      &inFlightFences[i].fence) != VK_SUCCESS) {
+      root::print::error(
+          "VULKAN :: failed to create synchronization objects for a frame!");
+    } else {
+      imageAvailableSemaphores[i].device = device;
+      renderFinishedSemaphores[i].device = device;
+      inFlightFences[i].device = device;
+    }
+  }
+}
+
+auto MultiFrameFlights_VK::frameStart() noexcept -> void {
+  VkResult result = vkWaitForFences(device->getVkDevice(), 1,
+                          &inFlightFences[currentFrame].fence,
+                  VK_TRUE, UINT64_MAX);
+  if (result != VK_SUCCESS) {
+    root::print::error(
+        "Vulkan::MultiFrameFlight::frameStart()::WaitForFenceFailed!");
+  }
+  vkResetFences(device->getVkDevice(), 1, &inFlightFences[currentFrame].fence);
+  if (swapChain)
+    vkAcquireNextImageKHR(device->getVkDevice(), swapChain->swapChain,
+                          UINT64_MAX,
+                          imageAvailableSemaphores[currentFrame].semaphore,
+                          VK_NULL_HANDLE, &imageIndex);
+  vkResetCommandBuffer(commandBuffers[currentFrame]->commandBuffer, 0);
+}
+
+auto MultiFrameFlights_VK::frameEnd() noexcept -> void {
+  if (swapChain)
+    device->getPresentQueue()->presentSwapChain(
+        swapChain, imageIndex, &renderFinishedSemaphores[currentFrame]);
+  currentFrame = (currentFrame + 1) % maxFlightNum;
+}
+
+auto MultiFrameFlights_VK::getCommandBuffer() noexcept -> CommandBuffer* {
+  return commandBuffers[currentFrame].get();
+}
+
+auto MultiFrameFlights_VK::getImageAvailableSeamaphore() noexcept -> Semaphore* {
+  return swapChain ? &imageAvailableSemaphores[currentFrame] : nullptr;
+}
+/** get current Render Finished Semaphore */
+auto MultiFrameFlights_VK::getRenderFinishedSeamaphore() noexcept -> Semaphore* {
+  return &renderFinishedSemaphores[currentFrame];
+}
+
+auto MultiFrameFlights_VK::getFence() noexcept -> Fence* {
+    return &inFlightFences[currentFrame];
+}
+
+auto Device_VK::createMultiFrameFlights(
+    MultiFrameFlightsDescriptor const& desc) noexcept
+    -> std::unique_ptr<MultiFrameFlights> {
+  return std::make_unique<MultiFrameFlights_VK>(this, desc.maxFlightNum,
+                                                desc.swapchain);
 }
 
 // SwapChain Interface
@@ -3778,13 +3876,6 @@ auto CommandEncoder_VK::endDebugUtilsLabelEXT() noexcept -> void {
       ->vkCmdEndDebugUtilsLabelEXT(commandBuffer->commandBuffer);
 }
 
-auto Device_VK::createMultiFrameFlights(
-  MultiFrameFlightsDescriptor const& desc) noexcept
-    -> std::unique_ptr<MultiFrameFlights> {
-    root::print::error("rhi::createMultiFrameFlights:: not impl");
-    return nullptr;
-}
-
 auto Device_VK::createCommandEncoder(
     CommandEncoderDescriptor const& desc) noexcept
     -> std::unique_ptr<CommandEncoder> {
@@ -4305,19 +4396,18 @@ Semaphore_VK::~Semaphore_VK() {
 
 auto Queue_VK::presentSwapChain(SwapChain* swapchain, uint32_t imageIndex,
                                 Semaphore* semaphore) noexcept -> void {
-  //VkPresentInfoKHR presentInfo{};
-  //presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-  //presentInfo.waitSemaphoreCount = 1;
-  //presentInfo.pWaitSemaphores =
-  //    &static_cast<Semaphore_VK*>(semaphore)->semaphore;
-  //VkSwapchainKHR swapChains[] = {
-  //    static_cast<SwapChain_VK*>(swapchain)->swapChain};
-  //presentInfo.swapchainCount = 1;
-  //presentInfo.pSwapchains = swapChains;
-  //presentInfo.pImageIndices = &imageIndex;
-  //presentInfo.pResults = nullptr;
-  //vkQueuePresentKHR(queue, &presentInfo);
-  root::print::error("Queue_VK::presentSwapChain :: not implemented!");
+  VkPresentInfoKHR presentInfo{};
+  presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+  presentInfo.waitSemaphoreCount = 1;
+  presentInfo.pWaitSemaphores =
+      &static_cast<Semaphore_VK*>(semaphore)->semaphore;
+  VkSwapchainKHR swapChains[] = {
+      static_cast<SwapChain_VK*>(swapchain)->swapChain };
+  presentInfo.swapchainCount = 1;
+  presentInfo.pSwapchains = swapChains;
+  presentInfo.pImageIndices = &imageIndex;
+  presentInfo.pResults = nullptr;
+  vkQueuePresentKHR(queue, &presentInfo);
 }
 
 // Synchronization Interface
@@ -4607,6 +4697,14 @@ auto RayTracingPipeline_VK::setName(std::string const& name) -> void {
       device->getVkDevice(), &objectNameInfo);
 }
 
+auto getVertexFormat(BLASTriangleGeometry::VertexFormat format) -> VkFormat {
+  switch (format) {
+  case se::rhi::BLASTriangleGeometry::VertexFormat::RGB32: return VK_FORMAT_R32G32B32_SFLOAT;
+  case se::rhi::BLASTriangleGeometry::VertexFormat::RG32: return VK_FORMAT_R32G32_SFLOAT;
+  default: return VK_FORMAT_R32G32B32_SFLOAT;
+  }
+}
+
 BLAS_VK::BLAS_VK(Device_VK* device, BLASDescriptor const& descriptor)
     : device(device), descriptor(descriptor) {
   // 1. Declare BLAS geometry infos
@@ -4639,11 +4737,10 @@ BLAS_VK::BLAS_VK(Device_VK* device, BLASDescriptor const& descriptor)
         getBufferVkDeviceAddress(device, triangleDesc.indexBuffer);
     // 1.2. Describe the instance��s geometry
     VkAccelerationStructureGeometryTrianglesDataKHR triangles = {};
-    triangles.sType =
-        VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
-    triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
-    triangles.vertexData.deviceAddress = vertexBufferAddress;
-    triangles.vertexStride = 3 * sizeof(float);
+    triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+    triangles.vertexFormat = getVertexFormat(triangleDesc.vertexFormat);
+    triangles.vertexData.deviceAddress = vertexBufferAddress + triangleDesc.vertexByteOffset;
+    triangles.vertexStride = triangleDesc.vertexStride;
     triangles.indexType = triangleDesc.indexFormat == IndexFormat::UINT16_t
                               ? VK_INDEX_TYPE_UINT16
                               : VK_INDEX_TYPE_UINT32;

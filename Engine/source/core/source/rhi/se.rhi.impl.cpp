@@ -208,7 +208,7 @@ auto Device::writebackDeviceLocalBuffer(Buffer* buffer, void* data,
   getGraphicsQueue()->waitIdle();
 }
 
-auto Device::createDeviceLocalBuffer(void* data, uint32_t size, BufferUsages usage) noexcept
+auto Device::createDeviceLocalBuffer(void const* data, uint32_t size, BufferUsages usage) noexcept
     -> std::unique_ptr<Buffer> {
   std::unique_ptr<Buffer> buffer = nullptr;
   // create vertex buffer
@@ -294,4 +294,29 @@ auto Device::readbackDeviceLocalBuffer(Buffer* buffer, void* data,
     stagingBuffer->unmap();
   }
 }
+
+auto Device::trainsitionTextureLayout(Texture* texture, TextureLayout oldLayout,
+    TextureLayout newLayout) noexcept -> void {
+  std::unique_ptr<CommandEncoder> commandEncoder = createCommandEncoder({ nullptr });
+  commandEncoder->pipelineBarrier(se::rhi::BarrierDescriptor{
+  (uint32_t)se::rhi::PipelineStageBit::TOP_OF_PIPE_BIT,
+  (uint32_t)se::rhi::PipelineStageBit::ALL_COMMANDS_BIT, 0,
+  {}, {},
+  std::vector<se::rhi::TextureMemoryBarrierDescriptor>{
+    se::rhi::TextureMemoryBarrierDescriptor{
+      texture,
+      se::rhi::ImageSubresourceRange {
+        (uint32_t)se::rhi::TextureAspectBit::COLOR_BIT, 0, 1, 0, 1},
+        // memory barrier mask
+        (uint32_t)se::rhi::AccessFlagBits::NONE,
+        (uint32_t)se::rhi::AccessFlagBits::NONE,
+        // only if layout transition is need
+        oldLayout, newLayout
+      }
+  }
+  });
+  getGraphicsQueue()->submit({ commandEncoder->finish() });
+  waitIdle();
+}
+
 }

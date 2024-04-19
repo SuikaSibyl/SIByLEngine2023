@@ -3,6 +3,7 @@
 
 #include <se.utils.hpp>
 #include <span>
+#include <chrono>
 #include <vector>
 #include <string>
 #include <type_traits>
@@ -290,6 +291,35 @@ struct SIByL_API window {
   virtual auto openFile(const char* filter) noexcept -> std::string = 0;
   /** save a local file using browser */
   virtual auto saveFile(const char* filter, std::string const& name = {}) noexcept -> std::string = 0;
+};
+
+struct SIByL_API timer {
+  timer();
+  /** update the timer */
+  auto update() noexcept -> void;
+  /** get the delta time */
+  auto deltaTime() noexcept -> double;
+  /** get the total time */
+  auto totalTime() noexcept -> double;
+  /** start time point record */
+  std::chrono::steady_clock::time_point startTimePoint;
+  /** previous time point record */
+  std::chrono::steady_clock::time_point prevTimePoint;
+  /** delta time between this and prev tick */
+  double _deltaTime = 0.f;
+};
+
+/** A world time point record. */
+struct SIByL_API worldtime {
+  /** get current world time point */
+  static inline auto get() noexcept -> worldtime;
+  /** output the current time point to a string */
+  inline auto to_string() noexcept -> std::string;
+  std::chrono::years y;
+  std::chrono::days d;
+  std::chrono::hours h;
+  std::chrono::minutes m;
+  std::chrono::seconds s;
 };
 }
 

@@ -152,6 +152,30 @@ enum struct ShaderStageBit {
   MESH = 1 << 11,
 };
 
+enum struct TextureLayout : uint32_t {
+  UNDEFINED,
+  GENERAL,
+  COLOR_ATTACHMENT_OPTIMAL,
+  DEPTH_STENCIL_ATTACHMENT_OPTIMA,
+  DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+  SHADER_READ_ONLY_OPTIMAL,
+  TRANSFER_SRC_OPTIMAL,
+  TRANSFER_DST_OPTIMAL,
+  PREINITIALIZED,
+  DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL,
+  DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL,
+  DEPTH_ATTACHMENT_OPTIMAL,
+  DEPTH_READ_ONLY_OPTIMAL,
+  STENCIL_ATTACHMENT_OPTIMAL,
+  STENCIL_READ_ONLY_OPTIMAL,
+  PRESENT_SRC,
+  SHARED_PRESENT,
+  FRAGMENT_DENSITY_MAP_OPTIMAL,
+  FRAGMENT_SHADING_RATE_ATTACHMENT_OPTIMAL,
+  READ_ONLY_OPTIMAL,
+  ATTACHMENT_OPTIMAL,
+};
+
 // Forward definition
 // ===========================================================================
 // Initialization Interface
@@ -198,6 +222,8 @@ struct SIByL_API Adapter {
   virtual auto requestDevice() noexcept -> std::unique_ptr<Device> = 0;
   /** Requests the AdapterInfo for this Adapter. */
   virtual auto requestAdapterInfo() const noexcept -> AdapterInfo = 0;
+  /** get the context the context created from */
+  virtual auto fromContext() noexcept -> Context* = 0;
 };
 
 /** Device is a logical instantiation of an adapter, through which internal
@@ -209,6 +235,8 @@ struct SIByL_API Device {
   virtual auto destroy() noexcept -> void = 0;
   /** wait until idle */
   virtual auto waitIdle() noexcept -> void = 0;
+  /** get the adapter the device created from */
+  virtual auto fromAdapter() noexcept -> Adapter* = 0;
   // Read-only fields
   // ---------------------------
   /** the graphics queue for this device */
@@ -293,7 +321,7 @@ struct SIByL_API Device {
   // Create utilities
   // ---------------------------
   /** create a device local buffer with initialzie value */
-  auto createDeviceLocalBuffer(void* data, uint32_t size,
+  auto createDeviceLocalBuffer(void const* data, uint32_t size,
     BufferUsages usage) noexcept -> std::unique_ptr<Buffer>;
   /** read back device local buffer */
   auto readbackDeviceLocalBuffer(Buffer* buffer, void* data,
@@ -304,6 +332,9 @@ struct SIByL_API Device {
   /** read back device local texture */
   auto readbackDeviceLocalTexture(Texture* texture, void* data,
                                   uint32_t size) noexcept -> void;
+  /** transition the layout of an texture */
+  auto trainsitionTextureLayout(Texture* texture, TextureLayout oldLayout,
+      TextureLayout newLayout) noexcept -> void;
   // Other extensions methods
   // ---------------------------
   /** create CUDA context extension */
@@ -509,34 +540,12 @@ struct SIByL_API Extend3D {
   uint32_t depthOrArrayLayers;
 };
 
-enum struct TextureLayout : uint32_t {
-  UNDEFINED,
-  GENERAL,
-  COLOR_ATTACHMENT_OPTIMAL,
-  DEPTH_STENCIL_ATTACHMENT_OPTIMA,
-  DEPTH_STENCIL_READ_ONLY_OPTIMAL,
-  SHADER_READ_ONLY_OPTIMAL,
-  TRANSFER_SRC_OPTIMAL,
-  TRANSFER_DST_OPTIMAL,
-  PREINITIALIZED,
-  DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL,
-  DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL,
-  DEPTH_ATTACHMENT_OPTIMAL,
-  DEPTH_READ_ONLY_OPTIMAL,
-  STENCIL_ATTACHMENT_OPTIMAL,
-  STENCIL_READ_ONLY_OPTIMAL,
-  PRESENT_SRC,
-  SHARED_PRESENT,
-  FRAGMENT_DENSITY_MAP_OPTIMAL,
-  FRAGMENT_SHADING_RATE_ATTACHMENT_OPTIMAL,
-  READ_ONLY_OPTIMAL,
-  ATTACHMENT_OPTIMAL,
-};
-
 struct SIByL_API Texture {
   // Texture Behaviors
   // ---------------------------
   /** virtual descructor */
+  Texture() noexcept = default;
+  Texture(Texture&&) noexcept = default;
   virtual ~Texture() = default;
   /** create texture view of this texture */
   virtual auto createView(TextureViewDescriptor const& desc) noexcept
@@ -627,6 +636,8 @@ auto SIByL_API getTextureAspect(TextureFormat format) noexcept -> TextureAspects
 
 struct SIByL_API TextureView {
   /** virtual destructor */
+  TextureView() noexcept = default;
+  TextureView(TextureView&&) noexcept = default;
   virtual ~TextureView() = default;
   /** get binded texture */
   virtual auto getTexture() noexcept -> Texture* = 0;
@@ -716,6 +727,8 @@ struct SIByL_API SamplerDescriptor {
 struct SIByL_API SwapChain {
   /** virtual destructor */
   virtual ~SwapChain() = default;
+  /** get texture */
+  virtual auto getTexture(int i) noexcept -> Texture* = 0;
   /** get texture view */
   virtual auto getTextureView(int i) noexcept -> TextureView* = 0;
   /** invalid swapchain */
@@ -724,31 +737,31 @@ struct SIByL_API SwapChain {
 
 struct SIByL_API SwapChainDescriptor {};
 
-//struct SIByL_API MultiFrameFlights {
-//  /** virtual destructor */
-//  virtual ~MultiFrameFlights() = default;
-//  /** start frame */
-//  virtual auto frameStart() noexcept -> void = 0;
-//  /** end frame */
-//  virtual auto frameEnd() noexcept -> void = 0;
-//  /** get current flight id */
-//  virtual auto getFlightIndex() noexcept -> uint32_t = 0;
-//  /** get current swapchain id */
-//  virtual auto getSwapchainIndex() noexcept -> uint32_t = 0;
-//  /** get current command buffer */
-//  virtual auto getCommandBuffer() noexcept -> CommandBuffer* = 0;
-//  /** get current Image Available Semaphore */
-//  virtual auto getImageAvailableSeamaphore() noexcept -> Semaphore* = 0;
-//  /** get current Render Finished Semaphore */
-//  virtual auto getRenderFinishedSeamaphore() noexcept -> Semaphore* = 0;
-//  /** get current fence */
-//  virtual auto getFence() noexcept -> Fence* = 0;
-//};
-//
-//struct SIByL_API MultiFrameFlightsDescriptor {
-//  int maxFlightNum = 1;
-//  SwapChain* swapchain = nullptr;
-//};
+struct SIByL_API MultiFrameFlights {
+  /** virtual destructor */
+  virtual ~MultiFrameFlights() = default;
+  /** start frame */
+  virtual auto frameStart() noexcept -> void = 0;
+  /** end frame */
+  virtual auto frameEnd() noexcept -> void = 0;
+  /** get current flight id */
+  virtual auto getFlightIndex() noexcept -> uint32_t = 0;
+  /** get current swapchain id */
+  virtual auto getSwapchainIndex() noexcept -> uint32_t = 0;
+  /** get current command buffer */
+  virtual auto getCommandBuffer() noexcept -> CommandBuffer* = 0;
+  /** get current Image Available Semaphore */
+  virtual auto getImageAvailableSeamaphore() noexcept -> Semaphore* = 0;
+  /** get current Render Finished Semaphore */
+  virtual auto getRenderFinishedSeamaphore() noexcept -> Semaphore* = 0;
+  /** get current fence */
+  virtual auto getFence() noexcept -> Fence* = 0;
+};
+
+struct SIByL_API MultiFrameFlightsDescriptor {
+  int maxFlightNum = 1;
+  SwapChain* swapchain = nullptr;
+};
 
 // SwapChain Interface
 // ===========================================================================
@@ -1821,7 +1834,6 @@ struct SIByL_API AffineTransformMatrix {
 struct SIByL_API BLASTriangleGeometry {
   Buffer* positionBuffer = nullptr;
   Buffer* indexBuffer = nullptr;
-  Buffer* vertexBuffer = nullptr;
   IndexFormat indexFormat = IndexFormat::UINT16_t;
   uint32_t maxVertex = 0;
   uint32_t firstVertex = 0;
@@ -1830,6 +1842,12 @@ struct SIByL_API BLASTriangleGeometry {
   AffineTransformMatrix transform;
   BLASGeometryFlags geometryFlags = 0;
   uint32_t materialID = 0;
+  uint32_t vertexStride = 3 * sizeof(float);
+  uint32_t vertexByteOffset = 0;
+  enum struct VertexFormat {
+    RGB32,
+    RG32
+  } vertexFormat = VertexFormat::RGB32;
 };
 
 struct SIByL_API BLASCustomGeometry {

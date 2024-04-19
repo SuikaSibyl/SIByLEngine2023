@@ -270,6 +270,8 @@ struct SIByL_API Adapter_VK final : public Adapter {
   virtual auto requestDevice() noexcept -> std::unique_ptr<Device> override;
   /** Requests the AdapterInfo for this Adapter. */
   virtual auto requestAdapterInfo() const noexcept -> AdapterInfo override;
+  /** get the context the context created from */
+  virtual auto fromContext() noexcept -> Context* override;
  public:
   /** get context the adapter is on */
   auto getContext() noexcept -> Context_VK* { return context; }
@@ -311,6 +313,8 @@ struct SIByL_API Device_VK final : public Device {
   virtual auto destroy() noexcept -> void override;
   /** wait until idle */
   virtual auto waitIdle() noexcept -> void override;
+  /** get the adapter the device created from */
+  virtual auto fromAdapter() noexcept -> Adapter* override;
   // Read-only fields
   // ---------------------------
   /** the graphics queue for this device */
@@ -436,8 +440,6 @@ struct SIByL_API Device_VK final : public Device {
   VmaAllocator allocator = nullptr;
   /** bind group pool */
   std::unique_ptr<BindGroupPool_VK> bindGroupPool = nullptr;
-  ///** multiframe flights */
-  //std::unique_ptr<MultiFrameFlights_VK> multiFrameFlights = nullptr;
   /** vulkan ray tracing extension initialziation */
   auto initRayTracingExt() noexcept -> void;
   /** vulkan ray tracing extension properties */
@@ -538,8 +540,13 @@ struct SIByL_API Texture_VK : public Texture {
   // Texture Behaviors
   // ---------------------------
   /** constructor */
+  Texture_VK() noexcept = default;
+  Texture_VK(Texture_VK&&) noexcept = default;
+  Texture_VK(Texture_VK const&) noexcept = delete;
   Texture_VK(Device_VK* device, TextureDescriptor const& desc);
   Texture_VK(Device_VK* device, VkImage image, TextureDescriptor const& desc);
+  auto operator=(Texture_VK&& texture)->Texture_VK & = default;
+  auto operator=(Texture_VK const& texture)->Texture_VK & = delete;
   /** virtual descructor */
   virtual ~Texture_VK();
   /** create texture view of this texture */
@@ -609,17 +616,20 @@ struct SIByL_API Texture_VK : public Texture {
   Device_VK* device = nullptr;
   /** name */
   std::string name = "Unnamed Texture";
+  /** the VKImage is reference to an external resource */
+  bool external = false;
 };
 
 struct SIByL_API TextureView_VK : public TextureView {
   /** create textureviw */
+  TextureView_VK() noexcept = default;
+  TextureView_VK(TextureView_VK&& view) noexcept;
+  TextureView_VK(TextureView_VK const& view) = delete;
   TextureView_VK(Device_VK* device, Texture_VK* texture,
                  TextureViewDescriptor const& descriptor);
   /* copy functions */
-  TextureView_VK(TextureView_VK const& view) = delete;
-  TextureView_VK(TextureView_VK&& view);
   auto operator=(TextureView_VK const& view) -> TextureView_VK& = delete;
-  auto operator=(TextureView_VK&& view) -> TextureView_VK&;
+  auto operator=(TextureView_VK && view) -> TextureView_VK&;
   /** virtual destructor */
   virtual ~TextureView_VK();
   /** get binded texture */
@@ -668,31 +678,39 @@ struct SIByL_API Sampler_VK : public Sampler {
 // Samplers Interface
 // ===========================================================================
 // SwapChain Interface
-//
-//struct SIByL_API SwapChain_VK : public SwapChain {
-//  /** virtual destructor */
-//  virtual ~SwapChain_VK();
-//  /** intialize the swapchin */
-//  auto init(Device_VK* device, SwapChainDescriptor const& desc) noexcept -> void;
-//  /** get texture view */
-//  virtual auto getTextureView(int i) noexcept -> TextureView* override {
-//    return &textureViews[i];
-//  }
-//  /** invalid swapchain */
-//  virtual auto recreate() noexcept -> void override;
-//  /** vulkan SwapChain */
-//  VkSwapchainKHR swapChain;
-//  /** vulkan SwapChain Extent */
-//  VkExtent2D swapChainExtend;
-//  /** vulkan SwapChain format */
-//  VkFormat swapChainImageFormat;
-//  /** vulkan SwapChain fetched images */
-//  std::vector<Texture_VK> swapChainTextures;
-//  /** vulkan SwapChain fetched images views */
-//  std::vector<TextureView_VK> textureViews;
-//  /** the device this sampler is created on */
-//  Device_VK* device = nullptr;
-//};
+
+struct SIByL_API SwapChain_VK : public SwapChain {
+  /** virtual destructor */
+  virtual ~SwapChain_VK();
+  SwapChain_VK() = default;
+  SwapChain_VK(SwapChain_VK&&) = default;
+  SwapChain_VK(SwapChain_VK const&) = delete;
+  SwapChain_VK& operator= (SwapChain_VK &&) = default;
+  SwapChain_VK& operator= (SwapChain_VK const&) = delete;
+  /** intialize the swapchin */
+  auto init(Device_VK* device, SwapChainDescriptor const& desc) noexcept -> void;
+  /** get texture view */
+  virtual auto getTexture(int i) noexcept -> Texture* override {
+    return &swapChainTextures[i];
+  }
+  virtual auto getTextureView(int i) noexcept -> TextureView* override {
+    return &textureViews[i];
+  }
+  /** invalid swapchain */
+  virtual auto recreate() noexcept -> void override;
+  /** vulkan SwapChain */
+  VkSwapchainKHR swapChain;
+  /** vulkan SwapChain Extent */
+  VkExtent2D swapChainExtend;
+  /** vulkan SwapChain format */
+  VkFormat swapChainImageFormat;
+  /** vulkan SwapChain fetched images */
+  std::vector<Texture_VK> swapChainTextures;
+  /** vulkan SwapChain fetched images views */
+  std::vector<TextureView_VK> textureViews;
+  /** the device this sampler is created on */
+  Device_VK* device = nullptr;
+};
 
 // SwapChain Interface
 // ===========================================================================
@@ -1191,6 +1209,43 @@ struct SIByL_API Semaphore_VK : public Semaphore {
   VkSemaphore semaphore;
   /** the device this semaphore is created on */
   Device_VK* device = nullptr;
+};
+
+struct SIByL_API MultiFrameFlights_VK : public MultiFrameFlights {
+  MultiFrameFlights_VK() = default;
+  MultiFrameFlights_VK(MultiFrameFlights_VK&&) = default;
+  MultiFrameFlights_VK(MultiFrameFlights_VK const&) = delete;
+  MultiFrameFlights_VK& operator= (MultiFrameFlights_VK&&) = default;
+  MultiFrameFlights_VK& operator= (MultiFrameFlights_VK const&) = delete;
+  /** initialize */
+  MultiFrameFlights_VK(Device_VK* device, int maxFlightNum = 2, SwapChain* swapchain = nullptr);
+  /** virtual destructor */
+  ~MultiFrameFlights_VK() = default;
+  /** start frame */
+  virtual auto frameStart() noexcept -> void override;
+  /** end frame */
+  virtual auto frameEnd() noexcept -> void override;
+  /** get current flight id */
+  virtual auto getFlightIndex() noexcept -> uint32_t { return currentFrame; }
+  /** get current swapchain id */
+  virtual auto getSwapchainIndex() noexcept -> uint32_t { return imageIndex; }
+  /** get current command buffer */
+  virtual auto getCommandBuffer() noexcept -> CommandBuffer* override;
+  /** get current Image Available Semaphore */
+  virtual auto getImageAvailableSeamaphore() noexcept -> Semaphore* override;
+  /** get current Render Finished Semaphore */
+  virtual auto getRenderFinishedSeamaphore() noexcept -> Semaphore* override;
+  /** get current fence */
+  virtual auto getFence() noexcept -> Fence* override;
+  std::vector<std::unique_ptr<CommandBuffer_VK>> commandBuffers;
+  std::vector<Semaphore_VK> imageAvailableSemaphores;
+  std::vector<Semaphore_VK> renderFinishedSemaphores;
+  std::vector<Fence_VK> inFlightFences;
+  SwapChain_VK* swapChain = nullptr;
+  uint32_t currentFrame = 0;
+  int maxFlightNum = 0;
+  Device_VK* device = nullptr;
+  uint32_t imageIndex;
 };
 
 // Synchronization Interface
