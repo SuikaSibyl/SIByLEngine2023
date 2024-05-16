@@ -2,6 +2,7 @@
 set(PROJECT_NAME cnpy)
 add_library(${PROJECT_NAME} STATIC)
 target_include_directories(${PROJECT_NAME} PUBLIC include
+  "${PROJECT_SOURCE_DIR}/Engine/extern/cnpy/includes"
   "${PROJECT_SOURCE_DIR}/Engine/extern/cnpy/includes")
 target_link_libraries(${PROJECT_NAME} PUBLIC 
   "${PROJECT_SOURCE_DIR}/Engine/extern/zlib/zlib.lib"
