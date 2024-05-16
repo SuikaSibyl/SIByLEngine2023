@@ -1,7 +1,12 @@
+# ignore visual studio files
 .vs
+# ignore build files
 *.ilk
 *.pdb
+# ignore intermediate shader files
 *.comp
 *.spv
+# ignore python cache
 __pycache__
-Sandbox
+# ignore the sandbox directory
+Sandbox/*
