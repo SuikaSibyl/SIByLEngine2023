@@ -8,6 +8,6 @@
 *.spv
 # ignore python cache
 __pycache__
-# ignore the sandbox directory
-/Sandbox
-!/Sandbox/.gitkeep
+
+# Sandbox/*
+# !Sandbox/shaders/

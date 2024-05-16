@@ -1,0 +1,18 @@
+#ifndef _SRENDERER_SUBGROUP_GLSLI_HEADER_
+#define _SRENDERER_SUBGROUP_GLSLI_HEADER_
+
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_KHR_shader_subgroup_basic : enable
+#extension GL_KHR_shader_subgroup_clustered : enable
+#extension GL_KHR_shader_subgroup_shuffle: enable
+#extension GL_KHR_shader_subgroup_ballot: enable
+
+float glsl_subgroupClusteredAdd2(float value) {
+    return subgroupClusteredAdd(value, 2);
+}
+
+float glsl_subgroupShuffle(float value, uint index) {
+    return subgroupShuffle(value, index);
+}
+
+#endif // _SRENDERER_SUBGROUP_GLSLI_HEADER_
