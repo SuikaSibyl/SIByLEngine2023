@@ -28,7 +28,7 @@ struct SIByL_API BufferInfo {
   ResourceFlags flags = 0;
   gfx::BufferHandle reference;
 
-  struct ConsumeEntry {
+  struct SIByL_API ConsumeEntry {
     rhi::AccessFlags access;
     rhi::PipelineStages stages;
     uint64_t offset = 0;

@@ -283,6 +283,13 @@ ShaderModuleLoader::result_type ShaderModuleLoader::operator()(
   for (int i = 2; i < argv.size(); ++i) {
     cmdLine += " " + std::string(argv[i]);
   }
+
+  auto const& engine_shader_path = RuntimeConfig::get()->string_array_property("shader_path");
+  for (auto& shader_path : engine_shader_path) {
+    cmdLine += " -I" + std::filesystem::absolute(std::filesystem::path(shader_path)).string();
+  }
+  se::root::print::debug(cmdLine);
+
   system(cmdLine.c_str());
   // load the compiled spir-v
   se::buffer spirv_code;
@@ -647,6 +654,14 @@ auto Buffer::getHost() noexcept -> std::vector<unsigned char>& {
   return host;
 }
 
+auto Buffer::getDevice() noexcept -> rhi::Buffer* {
+  return buffer.get();
+}
+
+auto Buffer::getBindingResource() noexcept -> rhi::BindingResource {
+  return rhi::BindingResource{ rhi::BufferBinding{ buffer.get(), 0, buffer->size() } };
+}
+
 auto Buffer::getName() const noexcept -> char const* {
   return buffer->getName().c_str();
 }
@@ -962,6 +977,10 @@ auto GFXContext::getFlights() -> rhi::MultiFrameFlights* {
   return flights.get();
 }
 
+auto GFXContext::getDevice() noexcept -> rhi::Device* {
+  return device;
+}
+
 auto GFXContext::finalize() noexcept -> void {
   buffers.clear();
   meshs.clear();
@@ -1003,9 +1022,11 @@ auto GFXContext::create_texture_desc(rhi::TextureDescriptor const& desc) noexcep
   return TextureHandle{ ret.first->second };
 }
 
-auto GFXContext::create_texture_file(std::filesystem::path const& path) noexcept -> TextureHandle {
+auto GFXContext::create_texture_file(std::string const& path) noexcept -> TextureHandle {
   RUID const ruid = root::resource::queryRUID();
   auto ret = textures.load(ruid, TextureLoader::from_file_tag{}, path);
+  gfx::GFXContext::device->trainsitionTextureLayout(ret.first->second->texture.get(),
+    se::rhi::TextureLayout::UNDEFINED, se::rhi::TextureLayout::GENERAL);
   return TextureHandle{ ret.first->second };
 }
 
@@ -1067,7 +1088,14 @@ auto GFXContext::load_shader_slang(
 }
 
 auto captureImage(TextureHandle src) noexcept -> void {
-  se::window* mainWindow = gfx::GFXContext::device->fromAdapter()->fromContext()->getBindedWindow();
+  se::window* mainWindow = gfx::GFXContext::device->fromAdapter()
+    ->fromContext()->getBindedWindow();
+  std::string filepath = mainWindow->saveFile(
+    "", se::worldtime::get().to_string() + ".exr");
+  captureImage(src, filepath);
+}
+
+auto captureImage(TextureHandle src, std::string path) noexcept -> void {
   gfx::Texture* tex = src.get();
   size_t width = tex->texture->width();
   size_t height = tex->texture->height();
@@ -1161,9 +1189,7 @@ auto captureImage(TextureHandle src) noexcept -> void {
   if (mapped.get()) {
     void* data = copyDst->texture->getMappedRange(0, width * height * pixelSize);
     if (tex->texture->format() == rhi::TextureFormat::RGBA32_FLOAT) {
-      std::string filepath = mainWindow->saveFile(
-        "", se::worldtime::get().to_string() + ".exr");
-      image::EXR::writeEXR(filepath, width, height, 4,
+      image::EXR::writeEXR(path, width, height, 4,
         reinterpret_cast<float*>(data));
     }
     else if (tex->texture->format() == rhi::TextureFormat::RGBA8_UNORM) {

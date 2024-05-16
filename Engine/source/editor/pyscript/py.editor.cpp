@@ -5,6 +5,7 @@
 #include <se.rdg.hpp>
 #include <pybind11/pybind11.h>
 #include <pybind11/pybind11.h>
+#include <pybind11/functional.h>
 //#include <c10/cuda/CUDAException.h>
 #include <torch/extension.h>
 //#include "include.hpp"
@@ -69,7 +70,6 @@ bool DragFloat(const char* label, CPPType<float>& v, float v_speed, float v_min,
 }
 
 bool Button(const char* label, se::vec2 size) {
-  root::print::debug("hello");
   return Button(label, ImVec2(size.x, size.y));
 }
 
@@ -79,6 +79,22 @@ bool Combo(const char* label, CPPType<int32_t>& current_item,
   for (size_t i = 0; i < items.size(); ++i)
     items_char[i] = items[i].c_str();
   return Combo(label, &current_item.get(), items_char.data(), items_char.size(), popup_max_height_in_items);
+}
+
+void Text(std::string const& text) {
+  ImGui::Text(text.c_str());
+}
+
+vec2 GetCursorPos_se() {
+  ImVec2 cursor_pos = ImGui::GetCursorPos();
+  return vec2{ cursor_pos.x, cursor_pos.y };
+}
+
+void SetCursorPos_se(vec2 v) {
+  ImGui::SetCursorPos(ImVec2{ float(v.x),float(v.y)});
+}
+void TextColored_se(vec4 v, std::string const& text) {
+  ImGui::TextColored(ImVec4{ v.x, v.y, v.z, v.w }, text.c_str());
 }
 }
 
@@ -110,9 +126,19 @@ PYBIND11_MODULE(pyeditor, m) {
       .def_static("SetCurrentContext", &ImGui::SetCurrentContext)
       .def_static("Begin", &ImGui::Begin)
       .def_static("End", &ImGui::End)
+      .def_static("SetCursorPos", &ImGui::SetCursorPos_se)
+      .def_static("GetCursorPos", &ImGui::GetCursorPos_se)
+      .def_static("TextColored", &ImGui::TextColored_se)
+      .def_static("SetWindowFontScale", &ImGui::SetWindowFontScale)
+      .def_static("Text", 
+       static_cast<void(*)(std::string const&)>(&ImGui::Text),
+       py::arg("text"))
+      .def_static("SameLine", 
+       static_cast<void(*)(float, float)>(&ImGui::SameLine),
+       py::arg("offset_from_start_x") = 0.0f, py::arg("spacing") = -1.0f)
       .def_static("Button",
        static_cast<bool(*)(const char*, vec2)>(&ImGui::Button),
-       py::arg("label"), py::arg("size"))
+       py::arg("label"), py::arg("size")=se::vec2(0.f,0.f))
       .def_static("DragInt",
        static_cast<bool(*)(const char*, CPPType<int32_t>&, float, int, int, const char*, ImGuiSliderFlags)>(&ImGui::DragInt),
        py::arg("label"), py::arg("v"), py::arg("v_speed") = 1.0f, py::arg("v_min") = 0, py::arg("v_max") = 0,
@@ -134,9 +160,15 @@ PYBIND11_MODULE(pyeditor, m) {
     py::class_<editor::ViewportWidget> class_ViewportWidget(m, "ViewportWidget");
     class_ViewportWidget.def("bindInput", &editor::ViewportWidget::bindInput);
     class_ViewportWidget.def("bindTimer", &editor::ViewportWidget::bindTimer);
+    class_ViewportWidget.def("setCameraIndex", &editor::ViewportWidget::setCameraIndex);
+    class_ViewportWidget.def("use2DCamera", &editor::ViewportWidget::use2DCamera);
+    class_ViewportWidget.def("use3DCamera", &editor::ViewportWidget::use3DCamera);
+    class_ViewportWidget.def("addCustomDrawFn", &editor::ViewportWidget::addCustomDrawFn);
+    class_ViewportWidget.def("claerCustomDrawFn", &editor::ViewportWidget::claerCustomDrawFn);
 
     py::class_<editor::RDGViewerWidget> class_RDGViewerWidget(m, "RDGViewerWidget");
     py::class_<editor::StatusWidget> class_StatusWidget(m, "StatusWidget");
+    class_StatusWidget.def("getBindedTimer", &editor::StatusWidget::getBindedTimer, py::return_value_policy::reference);
 
     // Export EditorBase struct
     // ------------------------------------------------------------------------
@@ -161,8 +193,6 @@ PYBIND11_MODULE(pyeditor, m) {
     //  .def_static("warning", &root::print::warning)
     //  .def_static("error", &root::print::error)
     //  .def_static("correct", &root::print::correct);
-
-
 
     //// Export root struct
     //// ------------------------------------------------------------------------

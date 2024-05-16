@@ -31,6 +31,7 @@ namespace se::editor {
   
   auto EditorBase::onUpdate() noexcept -> void {
     viewportWidget.onUpdate();
+    if (se::editor::EditorBase::sceneWidget.scene.get() != nullptr)
     se::editor::EditorBase::sceneWidget.scene->editorInfo.active_camera_index 
       = se::editor::EditorBase::viewportWidget.camera_index;
   }

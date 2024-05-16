@@ -389,6 +389,7 @@ auto RenderData::getTexture(std::string const& name) const noexcept -> gfx::Text
           .devirtualizeID]
           .texture;
   }
+  return gfx::TextureHandle{};
 }
 
 auto RenderData::getBuffer(std::string const& name) const noexcept -> gfx::BufferHandle {

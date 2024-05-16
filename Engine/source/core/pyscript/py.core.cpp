@@ -6,10 +6,7 @@
 #include <se.editor.hpp>
 #include <pybind11/pybind11.h>
 #include <pybind11/pybind11.h>
-//#include <c10/cuda/CUDAException.h>
 #include <torch/extension.h>
-//#include "include.hpp"
-//#include <cuda_runtime.h>
 namespace py = pybind11;
 using namespace se;
 #pragma once
@@ -18,56 +15,17 @@ using namespace se;
 #include <passes/se.pass.postprocess.hpp>
 #include <passes/se.pass.editor.hpp>
 #include <passes/se.pass.rasterizer.hpp>
+#include <passes/se.pass.cbt.hpp>
 #include "py.define.hpp"
-//
-//void torch_launch_add2(
-//    torch::Tensor& c,
-//    const torch::Tensor& a,
-//    const torch::Tensor& b,
-//    int n) {
-//    launch_add2((float*)c.data_ptr(),
-//        (const float*)a.data_ptr(),
-//        (const float*)b.data_ptr(),
-//        n);
-//}
-//
-////#include "se.test.cuh"
-////
-//////void torch_launch_add2(torch::Tensor& c,
-//////    const torch::Tensor& a,
-//////    const torch::Tensor& b,
-//////    int64_t n) {
-//////    //launch_add2((float*)c.data_ptr(),
-//////    //    (const float*)a.data_ptr(),
-//////    //    (const float*)b.data_ptr(),
-//////    //    n);
-//////}
-//////
-////
-////void test() {
-////
-////}
-////
-////at::Tensor add_one_fn(const at::Tensor& input) {
-////    auto output = torch::zeros_like(input);
-////    return output;
-////}
-//
-//int a() {
-//	return 2;
-//}
-//
-//torch::Tensor trilinear_interpolation(
-//	torch::Tensor feats,
-//	torch::Tensor points
-//) {
-//	return feats;
-//}
+
+#include <bxdfs/se.bxdf.epflbrdf.hpp>
 
 struct rhi_namescope {};
 struct gfx_namescope {};
 struct rdg_namescope {};
 struct pass_namescope {};
+struct bxdf_namescope {};
+struct cbt_namescope {};
 
 namespace se::rdg {
 template <class PassBase = se::rdg::Pass>
@@ -90,8 +48,8 @@ struct PyPass : PassBase {
 template <class DummyPassBase = se::rdg::DummyPass>
 struct PyDummyPass : PyPass<DummyPassBase> {
   using PyPass<DummyPassBase>::PyPass; // Inherit constructors
-  virtual auto reflect() noexcept -> PassReflection 
-  { PYBIND11_OVERRIDE_PURE(PassReflection, DummyPassBase, execute, context, renderData); };
+  virtual auto execute(RenderContext* context, RenderData const& renderData) noexcept -> void 
+  { PYBIND11_OVERRIDE_PURE(void, DummyPassBase, execute, context, renderData); };
 };
 
 template <class PipelinePassBase = se::rdg::PipelinePass>
@@ -165,6 +123,13 @@ struct PySingleGraphPipeline : SingleGraphPipelineBase {
 };
 }
 
+namespace se::gfx {  
+template <class BxDFBase = se::gfx::IBxDF>
+struct PyBxDF : BxDFBase {
+  using BxDFBase::BxDFBase; // Inherit constructors
+};
+}
+
 void set_null(void* ptr) {
   ptr = nullptr;
 }
@@ -172,13 +137,6 @@ void set_null(void* ptr) {
 py::capsule create_capsule_from_address(uintptr_t address) {
     void* ptr = reinterpret_cast<void*>(address);
     return py::capsule(ptr, PyCapsule_Destructor(nullptr));
-}
-
-void DBGPushConstants(rhi::RenderPassEncoder* encoder, void* data, rhi::ShaderStages stages,
-    uint32_t offset,
-    uint32_t size) noexcept {
-    root::print::error("hello");
-    encoder->pushConstants(data, stages, offset, size);
 }
 
 PYBIND11_MODULE(pycore, m) {
@@ -225,7 +183,9 @@ PYBIND11_MODULE(pycore, m) {
   // ------------------------------------------------------------------------
   py::class_<se::timer> class_timer(m, "timer");
   class_timer.def(py::init<>())
-    .def("update", &se::timer::update);
+    .def("update", &se::timer::update)
+    .def("deltaTime", &se::timer::deltaTime)
+    .def("totalTime", &se::timer::totalTime);
 
   // Export window struct
   // ------------------------------------------------------------------------
@@ -254,15 +214,37 @@ PYBIND11_MODULE(pycore, m) {
 
   // Export math namespace
   // ------------------------------------------------------------------------
+  py::class_<ivec2>(m, "ivec2")
+    .def(py::init<int, int>())
+    .def_readwrite("x", &ivec2::x)
+    .def_readwrite("y", &ivec2::y);
   py::class_<ivec3>(m, "ivec3")
-    .def(py::init<int, int, int>());
+    .def(py::init<int, int, int>())
+    .def_readwrite("x", &ivec3::x)
+    .def_readwrite("y", &ivec3::y)
+    .def_readwrite("z", &ivec3::z);
   py::class_<ivec4>(m, "ivec4")
-    .def(py::init<int, int, int, int>());
+    .def(py::init<int, int, int, int>())
+    .def_readwrite("x", &ivec4::x)
+    .def_readwrite("y", &ivec4::y)
+    .def_readwrite("z", &ivec4::z)
+    .def_readwrite("w", &ivec4::w);
 
+  py::class_<vec2>(m, "vec2")
+    .def(py::init<float, float>())
+    .def_readwrite("x", &vec2::x)
+    .def_readwrite("y", &vec2::y);
   py::class_<vec3>(m, "vec3")
-    .def(py::init<float, float, float>());
+    .def(py::init<float, float, float>())
+    .def_readwrite("x", &vec3::x)
+    .def_readwrite("y", &vec3::y)
+    .def_readwrite("z", &vec3::z);
   py::class_<vec4>(m, "vec4")
-    .def(py::init<float, float, float, float>());
+    .def(py::init<float, float, float, float>())
+    .def_readwrite("x", &vec4::x)
+    .def_readwrite("y", &vec4::y)
+    .def_readwrite("z", &vec4::z)
+    .def_readwrite("w", &vec4::w);
   
   py::class_<point3>(m, "point3")
     .def(py::init<float, float, float>())
@@ -437,7 +419,9 @@ PYBIND11_MODULE(pycore, m) {
   class_rhi_device.def("createBuffer", &se::rhi::Device::createBuffer);
   class_rhi_device.def("waitIdle", &se::rhi::Device::waitIdle);
   class_rhi_device.def("createSwapChain", &se::rhi::Device::createSwapChain);
+  class_rhi_device.def("copyBufferToBuffer", &se::rhi::Device::copyBufferToBuffer);
   class_rhi_device.def("createMultiFrameFlights", &se::rhi::Device::createMultiFrameFlights);
+  class_rhi_device.def("trainsitionTextureLayout", &se::rhi::Device::trainsitionTextureLayout);
   class_rhi_device.def("getGraphicsQueue", &se::rhi::Device::getGraphicsQueue, py::return_value_policy::reference);
 
   // Export rhi::buffer structures
@@ -489,6 +473,7 @@ PYBIND11_MODULE(pycore, m) {
     namespace_rhi, "RenderPassEncoder");
   class_RenderPassEncoder
     .def("setIndexBuffer", &se::rhi::RenderPassEncoder::setIndexBuffer)
+    .def("draw", &se::rhi::RenderPassEncoder::draw)
     .def("drawIndexed", &se::rhi::RenderPassEncoder::drawIndexed)
     .def("end", &se::rhi::RenderPassEncoder::end);
 
@@ -496,6 +481,7 @@ PYBIND11_MODULE(pycore, m) {
     namespace_rhi, "ComputePassEncoder");
   class_ComputePassEncoder
     .def("dispatchWorkgroups", &se::rhi::ComputePassEncoder::dispatchWorkgroups)
+    .def("dispatchWorkgroupsIndirect", &se::rhi::ComputePassEncoder::dispatchWorkgroupsIndirect)
     .def("end", &se::rhi::ComputePassEncoder::end);
 
   py::class_<se::rhi::BufferBinding> class_BufferBinding(namespace_rhi, "BufferBinding");
@@ -662,7 +648,6 @@ PYBIND11_MODULE(pycore, m) {
     se::rhi::DependencyTypeFlags, std::vector<se::rhi::MemoryBarrier*>,
     std::vector<se::rhi::BufferMemoryBarrierDescriptor>, std::vector<se::rhi::TextureMemoryBarrierDescriptor>>());
 
-
   py::class_<se::rhi::CommandEncoder> class_CommandEncoder(namespace_rhi, "CommandEncoder");
   class_rhi_device.def("createCommandEncoder", &se::rhi::Device::createCommandEncoder);
   class_CommandEncoder.def("finish", &se::rhi::CommandEncoder::finish, py::return_value_policy::reference);
@@ -693,16 +678,19 @@ PYBIND11_MODULE(pycore, m) {
   namespace_rhi.def_static("toTensor", &se::rhi::toTensor,
     py::arg("cudaBuffer"), py::arg("dimension"), py::arg("type") = se::rhi::DataType::Float32);
 
-
   // Export gfx:: structures
   // ------------------------------------------------------------------------
   py::class_<gfx_namescope> namespace_gfx(m, "gfx");
   py::class_<se::gfx::GFXContext> class_gfx_context(namespace_gfx, "Context");
   class_gfx_context.def_static("initialize", py::overload_cast<se::rhi::Device*>(&se::gfx::GFXContext::initialize));
+  class_gfx_context.def_static("captureImage", static_cast<void(*)(se::gfx::TextureHandle)>(&se::gfx::captureImage));
+  class_gfx_context.def_static("captureImage", static_cast<void(*)(se::gfx::TextureHandle src, std::string path)>(&se::gfx::captureImage));
   class_gfx_context.def_static("finalize", &se::gfx::GFXContext::finalize);
   class_gfx_context.def_static("load_scene_gltf", &se::gfx::GFXContext::load_scene_gltf);
+  class_gfx_context.def_static("create_texture_file", &se::gfx::GFXContext::create_texture_file);
   class_gfx_context.def_static("createFlights", &se::gfx::GFXContext::createFlights);
   class_gfx_context.def_static("getFlights", &se::gfx::GFXContext::getFlights, py::return_value_policy::reference);
+  class_gfx_context.def_static("getDevice", &se::gfx::GFXContext::getDevice, py::return_value_policy::reference);
   class_gfx_context.def_static("create_scene", &se::gfx::GFXContext::create_scene);
   class_gfx_context.def_static("load_shader_slang", 
     static_cast<std::vector<se::gfx::ShaderHandle>(*)(std::string const&,
@@ -714,7 +702,9 @@ PYBIND11_MODULE(pycore, m) {
     py::return_value_policy::reference);
 
   py::class_<se::gfx::Buffer> class_gfx_buffer(namespace_gfx, "Buffer");
-  //class_gfx_buffer
+  class_gfx_buffer
+    .def("getBindingResource", &se::gfx::Buffer::getBindingResource)
+    .def("getDevice", &se::gfx::Buffer::getDevice, py::return_value_policy::reference);
 
   py::class_<se::gfx::Texture> class_gfx_texture(namespace_gfx, "Texture");
   class_gfx_texture
@@ -725,6 +715,9 @@ PYBIND11_MODULE(pycore, m) {
     .def("getWidth", &se::gfx::Texture::getWidth)
     .def("getHeight", &se::gfx::Texture::getHeight);
 
+  py::class_<se::gfx::BufferHandle> class_gfx_bufferHandle(namespace_gfx, "BufferHandle");
+  class_gfx_bufferHandle.def("get", &se::gfx::BufferHandle::get, py::return_value_policy::reference);
+  
   py::class_<se::gfx::TextureHandle> class_gfx_textureHandle(namespace_gfx, "TextureHandle");
   class_gfx_textureHandle.def("get", &se::gfx::TextureHandle::get, py::return_value_policy::reference);
   
@@ -750,7 +743,9 @@ PYBIND11_MODULE(pycore, m) {
     .def("bindingResourceGeometry", &se::gfx::Scene::GPUScene::bindingResourceGeometry)
     .def("bindingResourceTLAS", &se::gfx::Scene::GPUScene::bindingResourceTLAS)
     .def("bindingResourceTLASPrev", &se::gfx::Scene::GPUScene::bindingResourceTLASPrev)
-    .def("bindingResourceUvTLAS", &se::gfx::Scene::GPUScene::bindingResourceUvTLAS);
+    .def("bindingResourceUvTLAS", &se::gfx::Scene::GPUScene::bindingResourceUvTLAS)
+    .def("getPositionBuffer", &se::gfx::Scene::GPUScene::getPositionBuffer)
+    .def("getIndexBuffer", &se::gfx::Scene::GPUScene::getIndexBuffer);
 
   py::class_<se::gfx::SceneHandle> class_gfx_sceneHandle(namespace_gfx, "SceneHandle");
   class_gfx_sceneHandle.def("get", &se::gfx::SceneHandle::get, py::return_value_policy::reference);
@@ -777,6 +772,20 @@ PYBIND11_MODULE(pycore, m) {
     .def("isBuffer", &se::rdg::ResourceInfo::isBuffer, py::return_value_policy::reference)
     .def("isTexture", &se::rdg::ResourceInfo::isTexture, py::return_value_policy::reference);
   
+  py::class_<se::rdg::BufferInfo> class_BufferInfo(namespace_rdg, "BufferInfo");
+  class_BufferInfo
+    .def("withSize", &se::rdg::BufferInfo::withSize, py::return_value_policy::reference)
+    .def("withUsages", &se::rdg::BufferInfo::withUsages, py::return_value_policy::reference)
+    .def("withFlags", &se::rdg::BufferInfo::withFlags, py::return_value_policy::reference)
+    .def("consume", &se::rdg::BufferInfo::consume, py::return_value_policy::reference);
+
+  py::class_<se::rdg::BufferInfo::ConsumeEntry> class_BufferConsumeEntry(class_BufferInfo, "ConsumeEntry");
+  class_BufferConsumeEntry
+    .def(py::init<>())
+    .def("addStage", &se::rdg::BufferInfo::ConsumeEntry::addStage, py::return_value_policy::reference)
+    .def("setAccess", &se::rdg::BufferInfo::ConsumeEntry::setAccess, py::return_value_policy::reference)
+    .def("setSubresource", &se::rdg::BufferInfo::ConsumeEntry::setSubresource, py::return_value_policy::reference);
+
   py::class_<se::rdg::TextureInfo> class_TextureInfo(namespace_rdg, "TextureInfo");
   class_TextureInfo
     .def("consume", &se::rdg::TextureInfo::consume, py::return_value_policy::reference)
@@ -830,14 +839,19 @@ PYBIND11_MODULE(pycore, m) {
   py::class_<se::rdg::RenderData> class_render_data(namespace_rdg, "RenderData");
   class_render_data.def(py::init<>())
     .def("getTexture", &se::rdg::RenderData::getTexture)
+    .def("getBuffer", &se::rdg::RenderData::getBuffer)
     .def("getScene", &se::rdg::RenderData::getScene);
 
   py::class_<se::rdg::Pass, se::rdg::PyPass<>>(namespace_rdg, "Pass")
     .def("pass", &se::rdg::Pass::pass)
     .def("renderUI", &se::rdg::Pass::renderUI);
-    
-  py::class_<se::rdg::PipelinePass, se::rdg::Pass, se::rdg::PyPipelinePass<>> class_PipelinePass(namespace_rdg, "PipelinePass");
+  
+  py::class_<se::rdg::DummyPass, se::rdg::Pass, se::rdg::PyDummyPass<>>(namespace_rdg, "DummyPass")
+    .def(py::init<>())
+    .def("execute", &se::rdg::RenderPass::execute);
 
+  py::class_<se::rdg::PipelinePass, se::rdg::Pass, se::rdg::PyPipelinePass<>>(namespace_rdg, "PipelinePass");
+    
   py::class_<se::rdg::RenderPass, se::rdg::PipelinePass, se::rdg::PyRenderPass<>>(namespace_rdg, "RenderPass")
     .def(py::init<>())
     .def("reflect", &se::rdg::RenderPass::reflect)
@@ -908,6 +922,16 @@ PYBIND11_MODULE(pycore, m) {
     .def("build", &se::rdg::SingleGraphPipeline::build)
     .def("setGraph", &se::rdg::SingleGraphPipeline::setGraph);
 
+  // Export :: predefined bxdfs
+  // ------------------------------------------------------------------------
+  py::class_<bxdf_namescope> namespace_bxdf(m, "bxdfs");
+  py::class_<se::gfx::IBxDF, se::gfx::PyBxDF<>>(namespace_bxdf, "IBxDF");
+  py::class_<se::EPFLBrdf, se::gfx::IBxDF>(namespace_bxdf, "EPFLBrdf")
+    .def(py::init<std::string>())
+    .def_static("updateGPUResource", &se::EPFLBrdf::updateGPUResource)
+    .def_static("bindingResourceBuffer", &se::EPFLBrdf::bindingResourceBuffer)
+    .def_static("bindingResourceBRDFs", &se::EPFLBrdf::bindingResourceBRDFs);
+  
   // Export :: predefined passes
   // ------------------------------------------------------------------------
   py::class_<pass_namescope> namespace_pass(m, "passes");
@@ -926,5 +950,24 @@ PYBIND11_MODULE(pycore, m) {
     .def("addLine", &se::Line3DPass::addLine)
     .def("addAABB", &se::Line3DPass::addAABB)
     .def("setExternalBuffer", &se::Line3DPass::setExternalBuffer);
+  // postprocss passes
+  py::class_<se::AccumulatePass, se::rdg::ComputePass>(namespace_pass, "AccumulatePass")
+    .def(py::init<se::ivec3>());
 
+  // cbt passes
+  py::class_<cbt_namescope> namespace_cbt(namespace_pass, "cbt");
+  py::class_<se::cbt::CreateCBTPass, se::rdg::DummyPass>(namespace_cbt, "CreateCBTPass")
+    .def(py::init<int, int>())
+    .def("reflect", &se::cbt::CreateCBTPass::reflect)
+    .def("execute", &se::cbt::CreateCBTPass::execute);
+  py::class_<se::cbt::SumReductionFusedPass, se::rdg::ComputePass>(namespace_cbt, "SumReductionFusedPass")
+    .def(py::init<int>())
+    .def("reflect", &se::cbt::CreateCBTPass::reflect)
+    .def("execute", &se::cbt::CreateCBTPass::execute);
+  py::class_<se::cbt::SumReductionOneLayerPass, se::rdg::ComputePass>(namespace_cbt, "SumReductionOneLayerPass")
+    .def(py::init<int>())
+    .def("reflect", &se::cbt::CreateCBTPass::reflect)
+    .def("execute", &se::cbt::CreateCBTPass::execute);
+  py::class_<se::cbt::CBTSpatialTreeVisualizePass, se::rdg::RenderPass>(
+    namespace_cbt, "CBTSpatialTreeVisualizePass").def(py::init<size_t>());
 }

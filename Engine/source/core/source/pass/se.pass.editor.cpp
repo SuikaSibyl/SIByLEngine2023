@@ -242,7 +242,7 @@ auto Line3DPass::execute(
   }
   else {
     lines_binding = rhi::BindingResource{ {external_lines, 0, external_lines->size()} };
-    size = external_lines->size() / sizeof(Line3DData);
+    size = external_count;
   }
 
   renderPassDescriptor = {
@@ -303,7 +303,8 @@ auto Line3DPass::addAABB(se::bounds3 aabb, se::vec3 color, float width) noexcept
   addLine(aabb.corner(1), aabb.corner(3), color, width);
 }
 
-auto Line3DPass::setExternalBuffer(rhi::Buffer* buffer) noexcept -> void {
+auto Line3DPass::setExternalBuffer(rhi::Buffer* buffer, size_t line_count) noexcept -> void {
   external_lines = buffer;
+  external_count = line_count;
 }
 }

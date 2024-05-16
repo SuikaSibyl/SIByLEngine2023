@@ -295,6 +295,14 @@ auto Device::readbackDeviceLocalBuffer(Buffer* buffer, void* data,
   }
 }
 
+auto Device::copyBufferToBuffer(Buffer* src_buffer, size_t src_offset,
+    Buffer* tgt_buffer, size_t tgt_offset, size_t size) noexcept -> void {
+  std::unique_ptr<CommandEncoder> commandEncoder = createCommandEncoder({ nullptr });
+  commandEncoder->copyBufferToBuffer(src_buffer, src_offset, tgt_buffer, tgt_offset, size);
+  getGraphicsQueue()->submit({ commandEncoder->finish() });
+  waitIdle();
+}
+
 auto Device::trainsitionTextureLayout(Texture* texture, TextureLayout oldLayout,
     TextureLayout newLayout) noexcept -> void {
   std::unique_ptr<CommandEncoder> commandEncoder = createCommandEncoder({ nullptr });

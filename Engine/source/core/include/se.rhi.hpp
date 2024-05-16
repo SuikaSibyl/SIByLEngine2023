@@ -332,9 +332,12 @@ struct SIByL_API Device {
   /** read back device local texture */
   auto readbackDeviceLocalTexture(Texture* texture, void* data,
                                   uint32_t size) noexcept -> void;
+  /** copy a buffer to another buffer */
+  auto copyBufferToBuffer(Buffer* src_buffer, size_t src_offset,
+    Buffer* tgt_buffer, size_t tgt_offset, size_t size) noexcept -> void;
   /** transition the layout of an texture */
   auto trainsitionTextureLayout(Texture* texture, TextureLayout oldLayout,
-      TextureLayout newLayout) noexcept -> void;
+    TextureLayout newLayout) noexcept -> void;
   // Other extensions methods
   // ---------------------------
   /** create CUDA context extension */

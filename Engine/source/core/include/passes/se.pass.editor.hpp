@@ -28,7 +28,7 @@ namespace se {
 	auto clear() noexcept -> void;
 	auto addLine(se::vec3 a, se::vec3 b, se::vec3 color, float width) noexcept -> void;
 	auto addAABB(se::bounds3 aabb, se::vec3 color, float width) noexcept -> void;
-	auto setExternalBuffer(rhi::Buffer* buffer) noexcept -> void;
-	rhi::Buffer* external_lines = nullptr;
+	auto setExternalBuffer(rhi::Buffer* buffer, size_t line_count = 0) noexcept -> void;
+	rhi::Buffer* external_lines = nullptr; size_t external_count = 0;
   };
 }

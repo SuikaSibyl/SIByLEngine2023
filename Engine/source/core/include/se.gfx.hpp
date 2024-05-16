@@ -152,6 +152,10 @@ struct SIByL_API Buffer : public Resource {
   auto deviceToHost() noexcept -> void;
   /** get the host buffer, if not exists fetch from newest device */
   auto getHost() noexcept -> std::vector<unsigned char>&;
+  /** get the device buffer, if not exists fetch from newest host */
+  auto getDevice() noexcept -> rhi::Buffer*;
+  /** get the resource binding of the entire buffer */
+  auto getBindingResource() noexcept -> rhi::BindingResource;
   template<class T>
   auto getHostAsStructuredArray() noexcept -> std::span<T> {
     return std::span<T>{reinterpret_cast<T*>(getHost().data()), getHost().size() / sizeof(T)};
@@ -283,6 +287,10 @@ struct SIByL_API MaterialLoader {
   struct from_gltf_tag {};
 
   result_type operator()(from_empty_tag);
+};
+
+struct SIByL_API IBxDF {
+  virtual ~IBxDF() = default;
 };
 
 struct SIByL_API Mesh : public Resource {
@@ -570,6 +578,8 @@ struct SIByL_API Scene : public Resource {
     auto bindingResourceTLASPrev() noexcept -> rhi::BindingResource;
     auto bindingResourceUvTLAS() noexcept -> rhi::BindingResource;
 
+    auto getPositionBuffer() noexcept -> BufferHandle;
+    auto getIndexBuffer() noexcept -> BufferHandle;
   } gpuScene;
 
   auto getGPUScene() noexcept -> GPUScene*;
@@ -619,11 +629,13 @@ struct SIByL_API SceneLoader {
 // GFX Context definition
 
 auto SIByL_API captureImage(TextureHandle src) noexcept -> void;
+auto SIByL_API captureImage(TextureHandle src, std::string path) noexcept -> void;
 
 struct SIByL_API GFXContext {
   static auto initialize(rhi::Device* device) noexcept -> void;
   static auto createFlights(int maxFlightNum, rhi::SwapChain* swapchain = nullptr) -> void;
   static auto getFlights() -> rhi::MultiFrameFlights*;
+  static auto getDevice() noexcept -> rhi::Device*;
   static auto finalize() noexcept -> void;
   static rhi::Device* device;
   static std::unique_ptr<rhi::MultiFrameFlights> flights;
@@ -655,7 +667,7 @@ struct SIByL_API GFXContext {
     rhi::TextureDescriptor const& desc
   ) noexcept -> TextureHandle;
   static auto create_texture_file(
-    std::filesystem::path const& path
+    std::string const& path
   ) noexcept -> TextureHandle;
 
   static auto create_sampler_desc(

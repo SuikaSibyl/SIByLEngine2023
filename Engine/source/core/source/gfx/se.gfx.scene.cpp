@@ -611,6 +611,14 @@ auto Scene::GPUScene::bindingResourceUvTLAS() noexcept -> rhi::BindingResource {
   return rhi::BindingResource{ tlas.uvprim.get() };
 }
 
+auto Scene::GPUScene::getPositionBuffer() noexcept -> BufferHandle {
+  return position_buffer;
+}
+
+auto Scene::GPUScene::getIndexBuffer() noexcept -> BufferHandle {
+  return index_buffer;
+}
+
 struct glTFLoaderEnv {
   std::string directory;
   std::unordered_map<tinygltf::Texture const*, TextureHandle> textures;
@@ -796,28 +804,12 @@ static inline auto loadGLTFMesh(tinygltf::Mesh const& gltfmesh,
                       // 3D vector of float
                       ArrayAdapter<se::vec3> positions(dataPtr, count,
                                                          byte_stride);
-                      for (size_t i{0}; i < indexArray_uint.size() / 3; ++i) {
-                        // get the i'th triange's indexes
-                        auto f0 = indexArray_uint[3 * i + 0];
-                        auto f1 = indexArray_uint[3 * i + 1];
-                        auto f2 = indexArray_uint[3 * i + 2];
-                        // get the 3 normal vectors for that face
-                        se::vec3 p0, p1, p2;
-                        p0 = positions[f0];
-                        p1 = positions[f1];
-                        p2 = positions[f2];
+                      for (size_t i = 0; i < count; ++i) {
+                        se::vec3 p0 = positions[i];
                         // Put them in the array in the correct order
                         vertexBuffer_positionOnly.push_back(p0.x);
                         vertexBuffer_positionOnly.push_back(p0.y);
                         vertexBuffer_positionOnly.push_back(p0.z);
-
-                        vertexBuffer_positionOnly.push_back(p1.x);
-                        vertexBuffer_positionOnly.push_back(p1.y);
-                        vertexBuffer_positionOnly.push_back(p1.z);
-
-                        vertexBuffer_positionOnly.push_back(p2.x);
-                        vertexBuffer_positionOnly.push_back(p2.y);
-                        vertexBuffer_positionOnly.push_back(p2.z);
                       }
                   }
                   break;
@@ -826,28 +818,12 @@ static inline auto loadGLTFMesh(tinygltf::Mesh const& gltfmesh,
                       case TINYGLTF_TYPE_VEC3: {
                         ArrayAdapter<se::dvec3> positions(dataPtr, count,
                                                             byte_stride);
-                        for (size_t i{0}; i < indexArray_uint.size() / 3; ++i) {
-                          // get the i'th triange's indexes
-                          auto f0 = indexArray_uint[3 * i + 0];
-                          auto f1 = indexArray_uint[3 * i + 1];
-                          auto f2 = indexArray_uint[3 * i + 2];
-                          // get the 3 normal vectors for that face
-                          se::dvec3 p0, p1, p2;
-                          p0 = positions[f0];
-                          p1 = positions[f1];
-                          p2 = positions[f2];
-                          // Put them in the array in the correct order
-                          vertexBuffer_positionOnly.push_back(p0.x);
-                          vertexBuffer_positionOnly.push_back(p0.y);
-                          vertexBuffer_positionOnly.push_back(p0.z);
-
-                          vertexBuffer_positionOnly.push_back(p1.x);
-                          vertexBuffer_positionOnly.push_back(p1.y);
-                          vertexBuffer_positionOnly.push_back(p1.z);
-
-                          vertexBuffer_positionOnly.push_back(p2.x);
-                          vertexBuffer_positionOnly.push_back(p2.y);
-                          vertexBuffer_positionOnly.push_back(p2.z);
+                        for (size_t i = 0; i < count; ++i) {
+                            se::dvec3 p0 = positions[i];
+                            // Put them in the array in the correct order
+                            vertexBuffer_positionOnly.push_back(p0.x);
+                            vertexBuffer_positionOnly.push_back(p0.y);
+                            vertexBuffer_positionOnly.push_back(p0.z);
                         }
                       } break;
                       default:
@@ -868,59 +844,23 @@ static inline auto loadGLTFMesh(tinygltf::Mesh const& gltfmesh,
                     case TINYGLTF_COMPONENT_TYPE_FLOAT: {
                       ArrayAdapter<se::vec3> normals(dataPtr, count,
                                                        byte_stride);
-                      // For each triangle :
-                      for (size_t i{0}; i < indexArray_uint.size() / 3; ++i) {
-                        // get the i'th triange's indexes
-                        auto f0 = indexArray_uint[3 * i + 0];
-                        auto f1 = indexArray_uint[3 * i + 1];
-                        auto f2 = indexArray_uint[3 * i + 2];
-                        // get the 3 normal vectors for that face
-                        se::vec3 n0, n1, n2;
-                        n0 = normals[f0];
-                        n1 = normals[f1];
-                        n2 = normals[f2];
+                      for (size_t i = 0; i < count; ++i) {
+                        se::vec3 n0 = normals[i];
                         // Put them in the array in the correct order
                         vertexBuffer_normalOnly.push_back(n0.x);
                         vertexBuffer_normalOnly.push_back(n0.y);
                         vertexBuffer_normalOnly.push_back(n0.z);
-
-                        vertexBuffer_normalOnly.push_back(n1.x);
-                        vertexBuffer_normalOnly.push_back(n1.y);
-                        vertexBuffer_normalOnly.push_back(n1.z);
-
-                        vertexBuffer_normalOnly.push_back(n2.x);
-                        vertexBuffer_normalOnly.push_back(n2.y);
-                        vertexBuffer_normalOnly.push_back(n2.z);
                       }
                     } break;
                     case TINYGLTF_COMPONENT_TYPE_DOUBLE: {
                       ArrayAdapter<se::dvec3> normals(dataPtr, count,
                                                         byte_stride);
-                      // IMPORTANT: We need to reorder normals (and texture
-                      // coordinates into "facevarying" order) for each face
-                      // For each triangle :
-                      for (size_t i{0}; i < indexArray_uint.size() / 3; ++i) {
-                        // get the i'th triange's indexes
-                        auto f0 = indexArray_uint[3 * i + 0];
-                        auto f1 = indexArray_uint[3 * i + 1];
-                        auto f2 = indexArray_uint[3 * i + 2];
-                        // get the 3 normal vectors for that face
-                        se::dvec3 n0, n1, n2;
-                        n0 = normals[f0];
-                        n1 = normals[f1];
-                        n2 = normals[f2];
+                      for (size_t i = 0; i < count; ++i) {
+                        se::dvec3 n0 = normals[i];
                         // Put them in the array in the correct order
                         vertexBuffer_normalOnly.push_back(n0.x);
                         vertexBuffer_normalOnly.push_back(n0.y);
                         vertexBuffer_normalOnly.push_back(n0.z);
-
-                        vertexBuffer_normalOnly.push_back(n1.x);
-                        vertexBuffer_normalOnly.push_back(n1.y);
-                        vertexBuffer_normalOnly.push_back(n1.z);
-
-                        vertexBuffer_normalOnly.push_back(n2.x);
-                        vertexBuffer_normalOnly.push_back(n2.y);
-                        vertexBuffer_normalOnly.push_back(n2.z);
                       }
                     } break;
                   }
@@ -933,51 +873,21 @@ static inline auto loadGLTFMesh(tinygltf::Mesh const& gltfmesh,
                   switch (attribAccessor.componentType) {
                     case TINYGLTF_COMPONENT_TYPE_FLOAT: {
                       ArrayAdapter<se::vec2> uvs(dataPtr, count, byte_stride);
-                      for (size_t i{0}; i < indexArray_uint.size() / 3; ++i) {
-                        // get the i'th triange's indexes
-                        auto f0 = indexArray_uint[3 * i + 0];
-                        auto f1 = indexArray_uint[3 * i + 1];
-                        auto f2 = indexArray_uint[3 * i + 2];
-                        // get the texture coordinates for each triangle's
-                        // vertices
-                        se::vec2 uv0, uv1, uv2;
-                        uv0 = uvs[f0];
-                        uv1 = uvs[f1];
-                        uv2 = uvs[f2];
-                        // push them in order into the mesh data
+                      for (size_t i = 0; i < count; ++i) {
+                        se::vec2 uv0 = uvs[i];
+                        // Put them in the array in the correct order
                         vertexBuffer_uvOnly.push_back(uv0.x);
                         vertexBuffer_uvOnly.push_back(uv0.y);
-
-                        vertexBuffer_uvOnly.push_back(uv1.x);
-                        vertexBuffer_uvOnly.push_back(uv1.y);
-
-                        vertexBuffer_uvOnly.push_back(uv2.x);
-                        vertexBuffer_uvOnly.push_back(uv2.y);
                       }
-
                     } break;
                     case TINYGLTF_COMPONENT_TYPE_DOUBLE: {
                       ArrayAdapter<se::dvec2> uvs(dataPtr, count,
                                                     byte_stride);
-                      for (size_t i{0}; i < indexArray_uint.size() / 3; ++i) {
-                        // get the i'th triange's indexes
-                        auto f0 = indexArray_uint[3 * i + 0];
-                        auto f1 = indexArray_uint[3 * i + 1];
-                        auto f2 = indexArray_uint[3 * i + 2];
-
-                        se::dvec2 uv0, uv1, uv2;
-                        uv0 = uvs[f0];
-                        uv1 = uvs[f1];
-                        uv2 = uvs[f2];
-
+                      for (size_t i = 0; i < count; ++i) {
+                        se::dvec2 uv0 = uvs[i];
+                        // Put them in the array in the correct order
                         vertexBuffer_uvOnly.push_back(uv0.x);
                         vertexBuffer_uvOnly.push_back(uv0.y);
-
-                        vertexBuffer_uvOnly.push_back(uv1.x);
-                        vertexBuffer_uvOnly.push_back(uv1.y);
-
-                        vertexBuffer_uvOnly.push_back(uv2.x);
-                        vertexBuffer_uvOnly.push_back(uv2.y);
                       }
                     } break;
                     default:
@@ -997,29 +907,12 @@ static inline auto loadGLTFMesh(tinygltf::Mesh const& gltfmesh,
                     case TINYGLTF_COMPONENT_TYPE_FLOAT: {
                       ArrayAdapter<se::vec3> tangents(dataPtr, count,
                                                        byte_stride);
-                      // For each triangle :
-                      for (size_t i{0}; i < indexArray_uint.size() / 3; ++i) {
-                        // get the i'th triange's indexes
-                        auto f0 = indexArray_uint[3 * i + 0];
-                        auto f1 = indexArray_uint[3 * i + 1];
-                        auto f2 = indexArray_uint[3 * i + 2];
-                        // get the 3 normal vectors for that face
-                        se::vec3 n0, n1, n2;
-                        n0 = tangents[f0];
-                        n1 = tangents[f1];
-                        n2 = tangents[f2];
+                      for (size_t i = 0; i < count; ++i) {
+                        se::vec3 t0 = tangents[i];
                         // Put them in the array in the correct order
-                        vertexBuffer_tangentOnly.push_back(n0.x);
-                        vertexBuffer_tangentOnly.push_back(n0.y);
-                        vertexBuffer_tangentOnly.push_back(n0.z);
-
-                        vertexBuffer_tangentOnly.push_back(n1.x);
-                        vertexBuffer_tangentOnly.push_back(n1.y);
-                        vertexBuffer_tangentOnly.push_back(n1.z);
-
-                        vertexBuffer_tangentOnly.push_back(n2.x);
-                        vertexBuffer_tangentOnly.push_back(n2.y);
-                        vertexBuffer_tangentOnly.push_back(n2.z);
+                        vertexBuffer_tangentOnly.push_back(t0.x);
+                        vertexBuffer_tangentOnly.push_back(t0.y);
+                        vertexBuffer_tangentOnly.push_back(t0.z);
                       }
                     } break;
                     case TINYGLTF_COMPONENT_TYPE_DOUBLE: {
@@ -1028,28 +921,12 @@ static inline auto loadGLTFMesh(tinygltf::Mesh const& gltfmesh,
                       // IMPORTANT: We need to reorder normals (and texture
                       // coordinates into "facevarying" order) for each face
                       // For each triangle :
-                      for (size_t i{0}; i < indexArray_uint.size() / 3; ++i) {
-                        // get the i'th triange's indexes
-                        auto f0 = indexArray_uint[3 * i + 0];
-                        auto f1 = indexArray_uint[3 * i + 1];
-                        auto f2 = indexArray_uint[3 * i + 2];
-                        // get the 3 normal vectors for that face
-                        se::dvec3 n0, n1, n2;
-                        n0 = tangents[f0];
-                        n1 = tangents[f1];
-                        n2 = tangents[f2];
+                      for (size_t i = 0; i < count; ++i) {
+                        se::dvec3 t0 = tangents[i];
                         // Put them in the array in the correct order
-                        vertexBuffer_tangentOnly.push_back(n0.x);
-                        vertexBuffer_tangentOnly.push_back(n0.y);
-                        vertexBuffer_tangentOnly.push_back(n0.z);
-
-                        vertexBuffer_tangentOnly.push_back(n1.x);
-                        vertexBuffer_tangentOnly.push_back(n1.y);
-                        vertexBuffer_tangentOnly.push_back(n1.z);
-
-                        vertexBuffer_tangentOnly.push_back(n2.x);
-                        vertexBuffer_tangentOnly.push_back(n2.y);
-                        vertexBuffer_tangentOnly.push_back(n2.z);
+                        vertexBuffer_tangentOnly.push_back(t0.x);
+                        vertexBuffer_tangentOnly.push_back(t0.y);
+                        vertexBuffer_tangentOnly.push_back(t0.z);
                       }
                     } break;
                   }
@@ -1062,32 +939,13 @@ static inline auto loadGLTFMesh(tinygltf::Mesh const& gltfmesh,
                   switch (attribAccessor.componentType) {
                     case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: {
                       ArrayAdapter<se::Vector4<uint16_t>> joints(dataPtr, count, byte_stride);
-                      // For each triangle :
-                      for (size_t i{0}; i < indexArray_uint.size() / 3; ++i) {
-                        // get the i'th triange's indexes
-                        auto f0 = indexArray_uint[3 * i + 0];
-                        auto f1 = indexArray_uint[3 * i + 1];
-                        auto f2 = indexArray_uint[3 * i + 2];
-                        // get the 3 normal vectors for that face
-                        se::Vector4<uint16_t> j0, j1, j2;
-                        j0 = joints[f0];
-                        j1 = joints[f1];
-                        j2 = joints[f2];
+                      for (size_t i = 0; i < count; ++i) {
+                        se::Vector4<uint16_t> j0= joints[i];
                         // Put them in the array in the correct order
                         vertexBuffer_joints.push_back(j0.x);
                         vertexBuffer_joints.push_back(j0.y);
                         vertexBuffer_joints.push_back(j0.z);
                         vertexBuffer_joints.push_back(j0.w);
-
-                        vertexBuffer_joints.push_back(j1.x);
-                        vertexBuffer_joints.push_back(j1.y);
-                        vertexBuffer_joints.push_back(j1.z);
-                        vertexBuffer_joints.push_back(j1.w);
-
-                        vertexBuffer_joints.push_back(j2.x);
-                        vertexBuffer_joints.push_back(j2.y);
-                        vertexBuffer_joints.push_back(j2.z);
-                        vertexBuffer_joints.push_back(j2.w);
                       }
                     } break;
                   }
@@ -1101,63 +959,27 @@ static inline auto loadGLTFMesh(tinygltf::Mesh const& gltfmesh,
                     case TINYGLTF_COMPONENT_TYPE_FLOAT: {
                       ArrayAdapter<se::vec4> weights(dataPtr, count, byte_stride);
                       // For each triangle :
-                      for (size_t i{0}; i < indexArray_uint.size() / 3; ++i) {
-                        // get the i'th triange's indexes
-                        auto f0 = indexArray_uint[3 * i + 0];
-                        auto f1 = indexArray_uint[3 * i + 1];
-                        auto f2 = indexArray_uint[3 * i + 2];
-                        // get the 3 normal vectors for that face
-                        se::vec4 w0, w1, w2;
-                        w0 = weights[f0];
-                        w1 = weights[f1];
-                        w2 = weights[f2];
+                      for (size_t i = 0; i < count; ++i) {
+                        se::vec4 w0 = weights[i];
                         // Put them in the array in the correct order
                         vertexBuffer_weights.push_back(w0.x);
                         vertexBuffer_weights.push_back(w0.y);
                         vertexBuffer_weights.push_back(w0.z);
                         vertexBuffer_weights.push_back(w0.w);
-
-                        vertexBuffer_weights.push_back(w1.x);
-                        vertexBuffer_weights.push_back(w1.y);
-                        vertexBuffer_weights.push_back(w1.z);
-                        vertexBuffer_weights.push_back(w1.w);
-
-                        vertexBuffer_weights.push_back(w2.x);
-                        vertexBuffer_weights.push_back(w2.y);
-                        vertexBuffer_weights.push_back(w2.z);
-                        vertexBuffer_weights.push_back(w2.w);
                       }
                     } break;
                     case TINYGLTF_COMPONENT_TYPE_DOUBLE: {
-                      ArrayAdapter<se::dvec4> tangents(dataPtr, count, byte_stride);
+                      ArrayAdapter<se::dvec4> weights(dataPtr, count, byte_stride);
                       // IMPORTANT: We need to reorder normals (and texture
                       // coordinates into "facevarying" order) for each face
                       // For each triangle :
-                      for (size_t i{0}; i < indexArray_uint.size() / 3; ++i) {
-                        // get the i'th triange's indexes
-                        auto f0 = indexArray_uint[3 * i + 0];
-                        auto f1 = indexArray_uint[3 * i + 1];
-                        auto f2 = indexArray_uint[3 * i + 2];
-                        // get the 3 normal vectors for that face
-                        se::dvec4 w0, w1, w2;
-                        w0 = tangents[f0];
-                        w1 = tangents[f1];
-                        w2 = tangents[f2];
+                      for (size_t i = 0; i < count; ++i) {
+                        se::dvec4 w0 = weights[i];
                         // Put them in the array in the correct order
                         vertexBuffer_weights.push_back(w0.x);
                         vertexBuffer_weights.push_back(w0.y);
                         vertexBuffer_weights.push_back(w0.z);
                         vertexBuffer_weights.push_back(w0.w);
-
-                        vertexBuffer_weights.push_back(w1.x);
-                        vertexBuffer_weights.push_back(w1.y);
-                        vertexBuffer_weights.push_back(w1.z);
-                        vertexBuffer_weights.push_back(w1.w);
-
-                        vertexBuffer_weights.push_back(w2.x);
-                        vertexBuffer_weights.push_back(w2.y);
-                        vertexBuffer_weights.push_back(w2.z);
-                        vertexBuffer_weights.push_back(w2.w);
                       }
                     } break;
                   }
@@ -1173,75 +995,58 @@ static inline auto loadGLTFMesh(tinygltf::Mesh const& gltfmesh,
     }
     // Compute the tangent vector if no provided
     if (vertexBuffer_tangentOnly.size() == 0) {
-      for (size_t i = 0; i < indexArray_uint.size(); i += 3) {
-        if (vertexBuffer_uvOnly.size() == 0) {
-            // if has no uv
-            for (int i = 0; i < 3; ++i) {
-              vertexBuffer_tangentOnly.push_back(0);
-              vertexBuffer_tangentOnly.push_back(0);
-              vertexBuffer_tangentOnly.push_back(0);
-            }
-        } else {
-            size_t i0 = i + 0; size_t i1 = i + 1; size_t i2 = i + 2;
-            se::vec3 pos1 = {vertexBuffer_positionOnly[i0 * 3 + 0],
-                               vertexBuffer_positionOnly[i0 * 3 + 1],
-                               vertexBuffer_positionOnly[i0 * 3 + 2]};
-            se::vec3 pos2 = {vertexBuffer_positionOnly[i1 * 3 + 0],
-                               vertexBuffer_positionOnly[i1 * 3 + 1],
-                               vertexBuffer_positionOnly[i1 * 3 + 2]};
-            se::vec3 pos3 = {vertexBuffer_positionOnly[i2 * 3 + 0],
-                               vertexBuffer_positionOnly[i2 * 3 + 1],
-                               vertexBuffer_positionOnly[i2 * 3 + 2]};
-            se::vec2 uv1  = {vertexBuffer_uvOnly[i0 * 2 + 0] - int(vertexBuffer_uvOnly[i0 * 2 + 0]),
-                               vertexBuffer_uvOnly[i0 * 2 + 1] - int(vertexBuffer_uvOnly[i0 * 2 + 1]) };
-            se::vec2 uv2  = {vertexBuffer_uvOnly[i1 * 2 + 0] - int(vertexBuffer_uvOnly[i1 * 2 + 0]),
-                               vertexBuffer_uvOnly[i1 * 2 + 1] - int(vertexBuffer_uvOnly[i1 * 2 + 1]) };
-            se::vec2 uv3  = {vertexBuffer_uvOnly[i2 * 2 + 0] - int(vertexBuffer_uvOnly[i2 * 2 + 0]),
-                               vertexBuffer_uvOnly[i2 * 2 + 1] - int(vertexBuffer_uvOnly[i2 * 2 + 1]) };
+      //for (size_t i = 0; i < indexArray_uint.size(); i += 3) {
+      //  if (vertexBuffer_uvOnly.size() == 0) {
+      //      // if has no uv
+      //      for (int i = 0; i < 3; ++i) {
+      //        vertexBuffer_tangentOnly.push_back(0);
+      //        vertexBuffer_tangentOnly.push_back(0);
+      //        vertexBuffer_tangentOnly.push_back(0);
+      //      }
+      //  } else {
+      //      size_t i0 = i + 0; size_t i1 = i + 1; size_t i2 = i + 2;
+      //      se::vec3 pos1 = {vertexBuffer_positionOnly[i0 * 3 + 0],
+      //                         vertexBuffer_positionOnly[i0 * 3 + 1],
+      //                         vertexBuffer_positionOnly[i0 * 3 + 2]};
+      //      se::vec3 pos2 = {vertexBuffer_positionOnly[i1 * 3 + 0],
+      //                         vertexBuffer_positionOnly[i1 * 3 + 1],
+      //                         vertexBuffer_positionOnly[i1 * 3 + 2]};
+      //      se::vec3 pos3 = {vertexBuffer_positionOnly[i2 * 3 + 0],
+      //                         vertexBuffer_positionOnly[i2 * 3 + 1],
+      //                         vertexBuffer_positionOnly[i2 * 3 + 2]};
+      //      se::vec2 uv1  = {vertexBuffer_uvOnly[i0 * 2 + 0] - int(vertexBuffer_uvOnly[i0 * 2 + 0]),
+      //                         vertexBuffer_uvOnly[i0 * 2 + 1] - int(vertexBuffer_uvOnly[i0 * 2 + 1]) };
+      //      se::vec2 uv2  = {vertexBuffer_uvOnly[i1 * 2 + 0] - int(vertexBuffer_uvOnly[i1 * 2 + 0]),
+      //                         vertexBuffer_uvOnly[i1 * 2 + 1] - int(vertexBuffer_uvOnly[i1 * 2 + 1]) };
+      //      se::vec2 uv3  = {vertexBuffer_uvOnly[i2 * 2 + 0] - int(vertexBuffer_uvOnly[i2 * 2 + 0]),
+      //                         vertexBuffer_uvOnly[i2 * 2 + 1] - int(vertexBuffer_uvOnly[i2 * 2 + 1]) };
 
-            se::vec3 tangent;
-            se::vec3 edge1 = pos2 - pos1;
-            se::vec3 edge2 = pos3 - pos1;
-            se::vec2 deltaUV1 = uv2 - uv1;
-            se::vec2 deltaUV2 = uv3 - uv1;
-            float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
-            tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
-            tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
-            tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
-            tangent = se::normalize(tangent);
-            for (int i = 0; i < 3; ++i) {
-              vertexBuffer_tangentOnly.push_back(tangent.x);
-              vertexBuffer_tangentOnly.push_back(tangent.y);
-              vertexBuffer_tangentOnly.push_back(tangent.z);
-            }
-        }
-      }
+      //      se::vec3 tangent;
+      //      se::vec3 edge1 = pos2 - pos1;
+      //      se::vec3 edge2 = pos3 - pos1;
+      //      se::vec2 deltaUV1 = uv2 - uv1;
+      //      se::vec2 deltaUV2 = uv3 - uv1;
+      //      float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+      //      tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+      //      tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+      //      tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+      //      tangent = se::normalize(tangent);
+      //      for (int i = 0; i < 3; ++i) {
+      //        vertexBuffer_tangentOnly.push_back(tangent.x);
+      //        vertexBuffer_tangentOnly.push_back(tangent.y);
+      //        vertexBuffer_tangentOnly.push_back(tangent.z);
+      //      }
+      //  }
+      //}
     }
     // Assemble vertex buffer
-    for (size_t i = 0; i < indexArray_uint.size(); ++i) {
+    PositionBuffer.insert(PositionBuffer.end(), vertexBuffer_positionOnly.begin(), vertexBuffer_positionOnly.end());
+    indexBuffer_uint.insert(indexBuffer_uint.end(), indexArray_uint.begin(), indexArray_uint.end());
+    size_t submehsVertexNumber = vertexBuffer_positionOnly.size() / 3;
+    for (size_t i = 0; i < submehsVertexNumber; ++i) {
       for (auto const& entry : defaultMeshLoadConfig.layout.layout) {
-        // vertex position
-        if (entry.info == MeshDataLayout::VertexInfo::POSITION) {
-            if (entry.format == rhi::VertexFormat::FLOAT32X3) {
-              //vertexBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 0]);
-              //vertexBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 1]);
-              //vertexBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 2]);
-              if (defaultMeshLoadConfig.usePositionBuffer) {
-                if (vertexBuffer_positionOnly.size() != 0) {
-                    PositionBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 0]);
-                    PositionBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 1]);
-                    PositionBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 2]);
-                } else {
-                
-                }
-              }
-            } else {
-              root::print::error(
-                  "GFX :: SceneNodeLoader_assimp :: unwanted vertex format for "
-                  "POSITION attributes.");
-              return {};
-            }
-        } else if (entry.info == MeshDataLayout::VertexInfo::NORMAL) {
+        if (entry.info == MeshDataLayout::VertexInfo::POSITION) {} 
+        else if (entry.info == MeshDataLayout::VertexInfo::NORMAL) {
             if (vertexBuffer_normalOnly.size() == 0) { // if normal is not provided
               vertexBuffer.push_back(0.f);
               vertexBuffer.push_back(0.f);
@@ -1260,20 +1065,78 @@ static inline auto loadGLTFMesh(tinygltf::Mesh const& gltfmesh,
               vertexBuffer.push_back(vertexBuffer_uvOnly[i * 2 + 1] - int(vertexBuffer_uvOnly[i * 2 + 1]));
             }
         } else if (entry.info == MeshDataLayout::VertexInfo::TANGENT) {
-            vertexBuffer.push_back(vertexBuffer_tangentOnly[i * 3 + 0]);
-            vertexBuffer.push_back(vertexBuffer_tangentOnly[i * 3 + 1]);
-            vertexBuffer.push_back(vertexBuffer_tangentOnly[i * 3 + 2]);
+            vertexBuffer.push_back(0.f);
+            vertexBuffer.push_back(0.f);
+            vertexBuffer.push_back(0.f);
+            //vertexBuffer.push_back(vertexBuffer_tangentOnly[i * 3 + 0]);
+            //vertexBuffer.push_back(vertexBuffer_tangentOnly[i * 3 + 1]);
+            //vertexBuffer.push_back(vertexBuffer_tangentOnly[i * 3 + 2]);
         } else if (entry.info == MeshDataLayout::VertexInfo::COLOR) {
             // Optional: vertex colors
             vertexBuffer.push_back(0);
             vertexBuffer.push_back(0);
             vertexBuffer.push_back(0);
-        } else if (entry.info == MeshDataLayout::VertexInfo::CUSTOM) {
-        }
+        } else if (entry.info == MeshDataLayout::VertexInfo::CUSTOM) {}
       }
-
-      indexBuffer_uint.push_back(i);
     }
+
+    //for (size_t i = 0; i < indexArray_uint.size(); ++i) {
+    //  for (auto const& entry : defaultMeshLoadConfig.layout.layout) {
+    //    // vertex position
+    //    if (entry.info == MeshDataLayout::VertexInfo::POSITION) {
+    //        if (entry.format == rhi::VertexFormat::FLOAT32X3) {
+    //          //vertexBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 0]);
+    //          //vertexBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 1]);
+    //          //vertexBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 2]);
+    //          if (defaultMeshLoadConfig.usePositionBuffer) {
+    //            if (vertexBuffer_positionOnly.size() != 0) {
+    //                PositionBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 0]);
+    //                PositionBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 1]);
+    //                PositionBuffer.push_back(vertexBuffer_positionOnly[i * 3 + 2]);
+    //            } else {
+    //            
+    //            }
+    //          }
+    //        } else {
+    //          root::print::error(
+    //              "GFX :: SceneNodeLoader_assimp :: unwanted vertex format for "
+    //              "POSITION attributes.");
+    //          return {};
+    //        }
+    //    } 
+    //    else if (entry.info == MeshDataLayout::VertexInfo::NORMAL) {
+    //        if (vertexBuffer_normalOnly.size() == 0) { // if normal is not provided
+    //          vertexBuffer.push_back(0.f);
+    //          vertexBuffer.push_back(0.f);
+    //          vertexBuffer.push_back(0.f);            
+    //        } else {
+    //          vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 0]);
+    //          vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 1]);
+    //          vertexBuffer.push_back(vertexBuffer_normalOnly[i * 3 + 2]);            
+    //        }
+    //    } else if (entry.info == MeshDataLayout::VertexInfo::UV) {
+    //        if (vertexBuffer_uvOnly.size() == 0) { // if uv is not provided
+    //          vertexBuffer.push_back(0.f);
+    //          vertexBuffer.push_back(0.f);
+    //        } else {
+    //          vertexBuffer.push_back(vertexBuffer_uvOnly[i * 2 + 0] - int(vertexBuffer_uvOnly[i * 2 + 0]));
+    //          vertexBuffer.push_back(vertexBuffer_uvOnly[i * 2 + 1] - int(vertexBuffer_uvOnly[i * 2 + 1]));
+    //        }
+    //    } else if (entry.info == MeshDataLayout::VertexInfo::TANGENT) {
+    //        vertexBuffer.push_back(vertexBuffer_tangentOnly[i * 3 + 0]);
+    //        vertexBuffer.push_back(vertexBuffer_tangentOnly[i * 3 + 1]);
+    //        vertexBuffer.push_back(vertexBuffer_tangentOnly[i * 3 + 2]);
+    //    } else if (entry.info == MeshDataLayout::VertexInfo::COLOR) {
+    //        // Optional: vertex colors
+    //        vertexBuffer.push_back(0);
+    //        vertexBuffer.push_back(0);
+    //        vertexBuffer.push_back(0);
+    //    } else if (entry.info == MeshDataLayout::VertexInfo::CUSTOM) {
+    //    }
+    //  }
+
+    //  indexBuffer_uint.push_back(i);
+    //}
     // Assemble skin buffer
     if (vertexBuffer_joints.size() != 0) {
       JointIndexBuffer.insert(JointIndexBuffer.end(), vertexBuffer_joints.begin(), vertexBuffer_joints.end());

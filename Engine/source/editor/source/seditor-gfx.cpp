@@ -34,6 +34,26 @@ auto ViewportWidget::onUpdate() noexcept -> void {
   controller.onUpdate();
 }
 
+auto ViewportWidget::setCameraIndex(int index) noexcept -> void {
+  camera_index = index;
+}
+
+auto ViewportWidget::use2DCamera() noexcept -> void {
+  controller.use2dmode = true;
+}
+
+auto ViewportWidget::use3DCamera() noexcept -> void {
+  controller.use2dmode = false;
+}
+
+auto ViewportWidget::addCustomDrawFn(std::function<void()>& fn) noexcept -> void {
+  custom_imgui_draws.push_back(fn);
+}
+
+auto ViewportWidget::claerCustomDrawFn() noexcept -> void {
+  custom_imgui_draws.clear();
+}
+
 /** draw gui*/
 auto ViewportWidget::onDrawGui() noexcept -> void {
    ImGui::Begin("Viewport", 0, ImGuiWindowFlags_MenuBar);
@@ -102,6 +122,8 @@ auto ViewportWidget::onDrawGui() noexcept -> void {
         se::editor::ImGuiContext::getImGuiTexture(texture)->getTextureID(),
         {(float)texture->texture->width(), (float)texture->texture->height()},
         {0, 0}, {1, 1});
+
+      for (auto& fn : custom_imgui_draws) (fn)();
    } else {
     ImGui::End();
     return;
@@ -262,6 +284,10 @@ auto StatusWidget::onDrawGui() noexcept -> void {
   ImGui::Text(("fps:\t" + std::to_string(1. / timer->deltaTime())).c_str());
   ImGui::Text(("time:\t" + std::to_string(timer->deltaTime())).c_str());
   ImGui::End();
+}
+
+auto StatusWidget::getBindedTimer() noexcept -> se::timer* {
+  return timer;
 }
 
 SceneWidget::SceneWidget() {
@@ -627,9 +653,6 @@ auto SimpleCameraController::onUpdate() noexcept -> void {
    // translation
    se::vec3 translation = getInputTranslationDirection();
    translation *= timer->deltaTime() * 0.1;
-   if (translation.x != 0 && translation.y != 0 && translation.z != 0) {
-     isDirty = true;
-   }
 
    // speed up movement when shift key held
    if (input->isKeyPressed(se::input::key_left_shift)) {
@@ -669,6 +692,12 @@ auto SimpleCameraController::onUpdate() noexcept -> void {
        1.f - expf(log(1.f - 0.99f) / rotationLerpTime * timer->deltaTime());
    interpolatingCameraState.lerpTowards(targetCameraState, positionLerpPct,
                                         rotationLerpPct);
+
+   if (interpolatingCameraState.x != transform->translation.x ||
+       interpolatingCameraState.y != transform->translation.y ||
+       interpolatingCameraState.z != transform->translation.z) {
+       isDirty = true;
+   }
 
    if (isDirty) {
     EditorBase::getSceneWidget()->scene->dirtyFlags = 

@@ -73,6 +73,7 @@ struct SIByL_API SimpleCameraController {
   se::input* input;
   se::timer* timer;
   gfx::Transform* transform = nullptr;
+  bool use2dmode = false;
 };
 
 struct SIByL_API ViewportWidget : public Widget {
@@ -80,6 +81,12 @@ struct SIByL_API ViewportWidget : public Widget {
   auto bindTimer(se::timer* timer) noexcept -> void;
   auto setTarget(std::string const& name, gfx::TextureHandle tex) noexcept -> void;
   auto onUpdate() -> void;
+  auto setCameraIndex(int index) noexcept -> void;
+  auto use2DCamera() noexcept -> void;
+  auto use3DCamera() noexcept -> void;
+
+  auto addCustomDrawFn(std::function<void()>& fn) noexcept -> void;
+  auto claerCustomDrawFn() noexcept -> void;
 
   /** draw gui*/
   virtual auto onDrawGui() noexcept -> void override;
@@ -95,12 +102,15 @@ struct SIByL_API ViewportWidget : public Widget {
   gfx::Camera editor_camera = {};
   gfx::Transform editor_camera_transform = {};
   se::editor::SimpleCameraController controller;
+  std::vector<std::function<void()>> custom_imgui_draws = {};
 };
 
 struct SIByL_API StatusWidget : public Widget {
   se::timer* timer;
   /** draw gui*/
   virtual auto onDrawGui() noexcept -> void override;
+
+  auto getBindedTimer() noexcept -> se::timer*;
 };
 
 SIByL_API auto drawCustomColume(const std::string& label, float columeWidth,
