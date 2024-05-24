@@ -321,6 +321,23 @@ auto drawCustomColume(const std::string& label, float columeWidth,
   ImGui::PopID();
 }
 
+auto drawTextureViewer(gfx::TextureHandle texture) noexcept -> void {
+  static bool draw_gizmo = true;
+  ImGui::PushItemWidth(ImGui::GetFontSize() * -12);
+  if (ImGui::Button("capture")) {
+    if (texture.get()) {
+      gfx::captureImage(texture);
+    }
+  }
+  
+  if (texture.get()) {
+    ImGui::Image(
+      se::editor::ImGuiContext::getImGuiTexture(texture)->getTextureID(),
+      {(float)texture->texture->width(), (float)texture->texture->height()},
+      {0, 0}, {1, 1});
+  }
+}
+
 void drawNodeInspector(gfx::Node& node) {
   gfx::NodeProperty* nodeprop = node.getComponent<gfx::NodeProperty>();
   if (nodeprop) {

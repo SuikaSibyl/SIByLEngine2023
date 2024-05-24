@@ -44,4 +44,40 @@ float3x3 rotation_from_axis_cosangle(float3 axis, float cosangle) {
     return identity3x3() * cosangle + ux + rcp(1 + cosangle) * uu;
 }
 
+float4x4 rotate_x(float x) {
+    float sinx; float cosx;
+    sincos(x, sinx, cosx);
+    return float4x4(
+        cosx, 0.f, sinx, 0.f,
+        0.f, 1.f, 0.f, 0.f,
+        -sinx, 0.f, cosx, 0.f,
+        0.f, 0.f, 0.f, 1.f);
+}
+
+float4x4 rotate_y(float y) {
+    float siny; float cosy;
+    sincos(y, siny, cosy);
+    return float4x4(
+        1.f, 0.f, 0.f, 0.f,
+        0.f, cosy, -siny, 0.f,
+        0.f, siny, cosy, 0.f,
+        0.f, 0.f, 0.f, 1.f);
+}
+
+float4x4 rotate_z(float z) {
+    float sinz; float cosz;
+    sincos(z, sinz, cosz);
+    return float4x4(
+        cosz, -sinz, 0.f, 0.f,
+        sinz, cosz, 0.f, 0.f,
+        0.f, 0.f, 1.f, 0.f,
+        0.f, 0.f, 0.f, 1.f);
+}
+
+float4x4 rotate_euler(float3 euler_angles) {
+    return mul(rotate_z(euler_angles.z), 
+        mul(rotate_y(euler_angles.y), 
+        rotate_x(euler_angles.x)));
+}
+
 #endif // SRENDERER_COMMON_ROTATION_HEADER

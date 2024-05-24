@@ -1,0 +1,158 @@
+{
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 4,
+      "max": [
+        1.0,
+        0.0,
+        1.0
+      ],
+      "min": [
+        -1.0,
+        0.0,
+        -1.0
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5125,
+      "count": 6,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 4,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 12,
+      "componentType": 5126,
+      "count": 4,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 24,
+      "componentType": 5126,
+      "count": 4,
+      "type": "VEC2"
+    }
+  ],
+  "asset": {
+    "version": "2.0"
+  },
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteLength": 48,
+      "target": 34962
+    },
+    {
+      "buffer": 1,
+      "byteLength": 24,
+      "target": 34963
+    },
+    {
+      "buffer": 2,
+      "byteLength": 128,
+      "byteStride": 32,
+      "target": 34962
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 48,
+      "uri": "data:application/octet-stream;base64,AACAvwAAAAAAAIA/AACAPwAAAAAAAIA/AACAvwAAAAAAAIC/AACAPwAAAAAAAIC/"
+    },
+    {
+      "byteLength": 24,
+      "uri": "data:application/octet-stream;base64,AAAAAAEAAAADAAAAAAAAAAMAAAACAAAA"
+    },
+    {
+      "byteLength": 128,
+      "uri": "data:application/octet-stream;base64,AAAAAAAAgD8AAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAACAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    }
+  ],
+  "cameras": [
+    {
+      "perspective": {
+        "aspectRatio": 1.0,
+        "yfov": 45.0,
+        "zfar": 100.0,
+        "znear": 0.10000000149011612
+      },
+      "type": "perspective"
+    }
+  ],
+  "meshes": [
+    {
+      "primitives": [
+        {
+          "attributes": {
+            "NORMAL": 2,
+            "POSITION": 0,
+            "TANGENT": 3,
+            "TEXCOORD_0": 4
+          },
+          "indices": 1,
+          "mode": 4
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "camera": 0,
+      "name": "new camera",
+      "rotation": [
+        -0.1560099571943283,
+        0.17484749853610992,
+        0.028070908039808273,
+        0.9717516303062439
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        6.879110336303711,
+        7.394279956817627,
+        16.857826232910156
+      ]
+    },
+    {
+      "mesh": 0,
+      "name": "Plane",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        7.757795810699463,
+        1.0,
+        7.757795810699463
+      ],
+      "translation": [
+        0.10304579138755798,
+        0.5546072721481323,
+        0.8452438712120056
+      ]
+    }
+  ],
+  "scenes": [
+    {
+      "nodes": [
+        1,
+        0
+      ]
+    }
+  ]
+}

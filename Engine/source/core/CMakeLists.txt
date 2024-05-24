@@ -43,7 +43,7 @@ target_sources(${PROJECT_NAME} PRIVATE
   "source/pass/se.pass.editor.cpp"
   "source/pass/se.pass.rasterizer.cpp" 
   "source/pass/se.pass.cbt.cpp" 
-  "source/bxdf/se.bxdf.epflbrdf.cpp")
+  "source/bxdf/se.bxdf.epflbrdf.cpp" )
 set_target_properties(
     ${PROJECT_NAME}
     PROPERTIES

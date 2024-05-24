@@ -130,6 +130,7 @@ PYBIND11_MODULE(pyeditor, m) {
       .def_static("GetCursorPos", &ImGui::GetCursorPos_se)
       .def_static("TextColored", &ImGui::TextColored_se)
       .def_static("SetWindowFontScale", &ImGui::SetWindowFontScale)
+      .def_static("ShowTexture", &se::editor::drawTextureViewer)
       .def_static("Text", 
        static_cast<void(*)(std::string const&)>(&ImGui::Text),
        py::arg("text"))

@@ -252,6 +252,7 @@ auto Scene::serialize() noexcept -> tinygltf::Model {
 
   std::unordered_map<Material*, int32_t> material_map;
   auto add_material = [&](Material* material) -> int {
+    if (material == nullptr) return -1;
     auto iter = material_map.find(material);
     if (iter != material_map.end()) {
       return iter->second;

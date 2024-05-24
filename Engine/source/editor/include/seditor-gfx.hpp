@@ -113,6 +113,8 @@ struct SIByL_API StatusWidget : public Widget {
   auto getBindedTimer() noexcept -> se::timer*;
 };
 
+SIByL_API auto drawTextureViewer(gfx::TextureHandle texture) noexcept -> void;
+
 SIByL_API auto drawCustomColume(const std::string& label, float columeWidth,
   std::function<void()> const& func) noexcept -> void;
 

@@ -39,7 +39,8 @@ int main() {
  // se::editor::EditorContext::initialize();
  // ImGui::SetCurrentContext(se::editor::ImGuiContext::getRawCtx());
 
- // //se::gfx::SceneHandle scene = se::gfx::GFXContext::load_scene_gltf("C:\\Users\\suika\\Downloads\\KhronosGroup glTF-Sample-Models main 2.0-DamagedHelmet\\glTF\\DamagedHelmet.gltf");
+ //se::gfx::SceneHandle scene = se::gfx::GFXContext::load_scene_gltf("C:\\Users\\suika\\Downloads\\KhronosGroup glTF-Sample-Models main 2.0-DamagedHelmet\\glTF\\DamagedHelmet.gltf");
+ se::gfx::SceneHandle scene = se::gfx::GFXContext::load_scene_gltf("S:\\SIByL2024\\Sandbox\\examples\\nee\\_data\\scene.gltf");
  // //se::gfx::SceneHandle scene = se::gfx::GFXContext::load_scene_gltf("C:\\Users\\suika\\Downloads\\skull\\skull_downloadable\\scene.gltf");
  // //se::gfx::SceneHandle scene = se::gfx::GFXContext::load_scene_gltf("S:/SIByL2024/Sandbox/examples/rasterdiff/_data/sphere.gltf");
  // //se::gfx::SceneHandle scene = se::gfx::GFXContext::load_scene_gltf("D:/Art/Scenes/3d_material_ball/scene.gltf");
@@ -50,7 +51,7 @@ int main() {
  // // initialize the window and gui context
  // //std::unique_ptr<se::rhi::SwapChain> swapChain = device->createSwapChain({});
  // se::rhi::MultiFrameFlights* multiFrameFlights = se::gfx::GFXContext::getFlights();
-
+ scene->serialize("S:\\SIByL2024\\Sandbox\\examples\\nee\\_data\\scene-1.gltf");
  // se::timer timer;
 
  // //std::unique_ptr<se::EPFLBrdf> test = std::make_unique<se::EPFLBrdf>("C:/Users/suika/Downloads/cc_ibiza_sunset_rgb.bsdf");
