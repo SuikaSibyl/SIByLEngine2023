@@ -514,7 +514,7 @@ auto MatrixSanityCheck::initialize_primal(
   for (int i = 0; i < 33*33*14; ++i) {
     primal[offset + i] = feature_grid.data<float>()[i];
   }*/
-
+  
   uint32_t size_mlp = mlp.get_buffer_param_count();
   uint32_t size_grid = feature_grid.get_buffer_param_count();
   mlp.initialize_primal(primal.subspan(0, size_mlp), initializer);

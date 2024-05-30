@@ -27,10 +27,13 @@ struct GeometryInfo {
     float surfaceArea;
     uint lightID;
     uint primitiveType;
-    float oddNegativeScaling;
+    uint bitfield3;
     float4 transform[3];
     float4 transformInverse[3];
 };
+
+float GetOddNegativeScaling(in GeometryInfo info) { return (info.bitfield3 & 0x1) == 1 ? 1.f : -1.f; }
+uint GetGameobjectIndex(in GeometryInfo info) { return info.bitfield3 >> 0x1; }
 
 struct MaterialInfo {
     float3 baseOrDiffuseColor;
@@ -174,7 +177,7 @@ ShadingSurface fetchShadingSurfaceTrimesh(
     tangents[1] = fetchVertexTangent(index[1] + int(geometry.vertexOffset));
     tangents[2] = fetchVertexTangent(index[2] + int(geometry.vertexOffset));
     float3 tangentOS = interpolate(tangents, bary);
-    float4 tangentWS = float4(normalize(mul(float4(tangentOS, 0), o2w).xyz), geometry.oddNegativeScaling);
+    float4 tangentWS = float4(normalize(mul(float4(tangentOS, 0), o2w).xyz), GetOddNegativeScaling(geometry));
 
     float3 shadingNormal = geometryNormalWS;
     float3 bitangent = cross(geometryNormalWS, tangentWS.xyz) * tangentWS.w;

@@ -104,7 +104,10 @@ SE_EXPORT struct SRenderer {
     float surfaceArea;
     uint32_t lightID;
     uint32_t primitiveType;
-    float oddNegativeScaling;
+    struct BitField3 {
+      uint32_t oddNegativeScaling : 1;
+      uint32_t gameObjectID : 31;
+    } bitfeild3;
     RHI::AffineTransformMatrix geometryTransform = {};
     RHI::AffineTransformMatrix geometryTransformInverse = {};
   };

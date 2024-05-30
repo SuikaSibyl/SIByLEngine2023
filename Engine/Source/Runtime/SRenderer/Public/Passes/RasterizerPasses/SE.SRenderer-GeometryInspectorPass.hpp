@@ -49,8 +49,8 @@ SE_EXPORT struct GeometryInspectorPass : public RDG::RenderPass {
     uint32_t use_wireframe = false;
     float wireframe_smoothing = 1.f;
     float wireframe_thickness = 1.f;
-    float padding_0 = 1.f;
-    float padding_1 = 1.f;
+    uint32_t mouse_state = 0;
+    int selected_object = -1;
   } geo_vis;
   GFX::StructuredUniformBufferView<GeoVisUniform> geo_vis_buffer;
 
@@ -58,6 +58,7 @@ SE_EXPORT struct GeometryInspectorPass : public RDG::RenderPass {
   virtual auto renderUI() noexcept -> void override;
   virtual auto execute(RDG::RenderContext* context,
                        RDG::RenderData const& renderData) noexcept -> void;
+  virtual auto readback(RDG::RenderData const& renderData) noexcept -> void override;
 
  private:
   Core::GUID matcapGuid;

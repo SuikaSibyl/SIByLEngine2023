@@ -115,7 +115,7 @@ void ComputeMain(int3 DTid: SV_DispatchThreadID) {
         tangents[1] = fetchVertexTangent(index[1] + int(geometry.vertexOffset));
         tangents[2] = fetchVertexTangent(index[2] + int(geometry.vertexOffset));
         float3 tangentOS = interpolate(tangents, bary);
-        float4 tangentWS = float4(normalize(mul(float4(tangentOS, 0), o2w).xyz), geometry.oddNegativeScaling);
+        float4 tangentWS = float4(normalize(mul(float4(tangentOS, 0), o2w).xyz), GetOddNegativeScaling(geometry));
 
         // Grab material infomation
         const float3 texAlbedo = textures[material.baseOrDiffuseTextureIndex]

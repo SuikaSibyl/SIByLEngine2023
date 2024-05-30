@@ -202,7 +202,7 @@ auto SRenderer::init(GFX::Scene& scene) noexcept -> void {
             0,                             // padding0;
             0,                             // padding1;
             0,                             // padding2;
-            1.f,                           // oddNegativeScaling;
+            {1, 0},                        // oddNegativeScaling;
             RHI::AffineTransformMatrix{},  // geometryTransform
             RHI::AffineTransformMatrix{},  // geometryTransformInverse
         });
@@ -494,7 +494,8 @@ auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
                 GeometryDrawData geometrydata = iter;
                 geometrydata.geometryTransform = transform->transform;
                 geometrydata.geometryTransformInverse = Math::inverse(transform->transform);
-                geometrydata.oddNegativeScaling = transform->oddScaling;
+                geometrydata.bitfeild3.oddNegativeScaling = transform->oddScaling > 0 ? 1 : 0;
+                geometrydata.bitfeild3.gameObjectID = go_handle.first;
                 geometrydata.materialID = findMat->second;
                 geometrydata.primitiveType = primitiveWithFlag;
                 geometrydata.lightID = lightComponenet ? 0 : 4294967295;
@@ -550,7 +551,8 @@ auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
               for (auto idx : lod_geoms) {
                 sceneDataPack.geometry_buffer.buffer_host[idx].geometryTransform = transform->transform;
                 sceneDataPack.geometry_buffer.buffer_host[idx].geometryTransformInverse = Math::inverse(transform->transform);
-                sceneDataPack.geometry_buffer.buffer_host[idx].oddNegativeScaling = transform->oddScaling;
+                sceneDataPack.geometry_buffer.buffer_host[idx].bitfeild3.oddNegativeScaling = transform->oddScaling > 0 ? 1 : 0;
+                sceneDataPack.geometry_buffer.buffer_host[idx].bitfeild3.gameObjectID = go_handle.first;
               }
             }
             sceneDataPack.geometry_buffer.stamp++;

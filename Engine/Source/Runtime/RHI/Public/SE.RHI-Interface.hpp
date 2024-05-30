@@ -905,6 +905,7 @@ SE_EXPORT enum struct BindingResourceType {
   BUFFER_BINDING,
   EXTERNAL_TEXTURE,
   BINDLESS_TEXTURE,
+  TLAS,
 };
 
 SE_EXPORT enum struct BufferBindingType { UNIFORM, STORAGE, READ_ONLY_STORAGE };
@@ -1067,7 +1068,7 @@ SE_EXPORT struct BindingResource {
       : type(BindingResourceType::TEXTURE_VIEW),
         storageArray(storageTextures) {}
   // Binding a tlas resource
-  BindingResource(TLAS* tlas) : tlas(tlas) {}
+  BindingResource(TLAS* tlas) : type(BindingResourceType::TLAS), tlas(tlas) {}
   BindingResourceType type;
   Sampler* sampler = nullptr;
   TextureView* textureView = nullptr;

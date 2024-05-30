@@ -73,14 +73,13 @@ auto GeometryInspectorPass::renderUI() noexcept -> void {
     ImGui::DragFloat("- Wireframe Smoothing X", &geo_vis.wireframe_smoothing, 0.01);
     ImGui::DragFloat("- Wireframe Thickness", &geo_vis.wireframe_thickness, 0.01);    
   }
-  ImGui::DragFloat("- CustomData-0", &geo_vis.padding_0, 0.01);    
-  ImGui::DragFloat("- CustomData-1", &geo_vis.padding_1, 0.01);    
+  //ImGui::DragFloat("- CustomData-0", &geo_vis.padding_0, 0.01);    
+  ImGui::DragInt("Shown Object", &geo_vis.selected_object);    
 
 }
 
 auto GeometryInspectorPass::execute(
-    RDG::RenderContext* context,
-                     RDG::RenderData const& renderData) noexcept -> void {
+  RDG::RenderContext* context, RDG::RenderData const& renderData) noexcept -> void {
   GFX::Texture* color = renderData.getTexture("Color");
   GFX::Texture* depth = renderData.getTexture("Depth");
 
@@ -123,5 +122,10 @@ auto GeometryInspectorPass::execute(
       prepareDelegateData(context, renderData));
 
   encoder->end();
+}
+
+auto GeometryInspectorPass::readback(RDG::RenderData const& renderData) noexcept
+-> void {
+  
 }
 }

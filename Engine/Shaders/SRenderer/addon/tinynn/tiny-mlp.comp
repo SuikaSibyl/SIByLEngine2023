@@ -8398,24 +8398,20 @@ void main()
 #line 54
     vec3 target_color_0 = (texelFetch((target_texture_0), ((_S986)).xy, ((_S986)).z)).xyz;
 
-#line 66
-    const vec4 _S987 = vec4(0.0, 0.0, 0.0, 1.0);
+#line 76
+    uvec2 _S987 = uvec2(pixel_0);
 
+#line 76
+    vec2 _S988 = feature_index_0.weights_0;
 
-    const vec4 _S988 = vec4(1.0, 0.0, 1.0, 1.0);
-
-
-    const vec4 _S989 = vec4(0.0, 1.0, 1.0, 1.0);
-
-
-
-    uvec2 _S990 = uvec2(pixel_0);
+#line 76
+    vec4 _S989 = vec4(_S988, _S988);
 
 #line 58
-    vec3 _S991 = vec3(0.0);
+    vec3 _S990 = vec3(0.0);
 
 #line 81
-    s_diff_HalfFeature_0 _S992 = HalfFeature_x24_syn_dzero_0();
+    s_diff_HalfFeature_0 _S991 = HalfFeature_x24_syn_dzero_0();
 
 #line 81
     int i_0 = 0;
@@ -8473,7 +8469,7 @@ void main()
     color_pair_0.primal_0 = color_0;
 
 #line 58
-    color_pair_0.differential_0 = _S991;
+    color_pair_0.differential_0 = _S990;
     float loss_0 = L2Loss_0(color_0, target_color_0);
     s_bwd_L2Loss_0(color_pair_0, target_color_0, 1.0);
     float gradient_scalar_0 = PushConstants_0.gradient_scale_0 / 786432.0;
@@ -8481,86 +8477,11 @@ void main()
     output_grad_0.vals_0[1] = float16_t(color_pair_0.differential_0.y * gradient_scalar_0);
     output_grad_0.vals_0[2] = float16_t(color_pair_0.differential_0.z * gradient_scalar_0);
 
-#line 79
-    vec4 _S993 = vec4(color_0, 1.0);
-
-#line 79
-    vec4 debug_color_0 = _S987;
-
-#line 79
-    i_0 = 0;
-
-#line 79
-    for(;;)
-    {
-
-#line 79
-        int _S994 = i_0;
-
-#line 68
-        if(isnan(output_0.vals_1[i_0]))
-        {
-
-#line 68
-            debug_color_0 = _S988;
-
-#line 68
-        }
-        else
-        {
-
-#line 68
-            vec4 debug_color_1;
-
-
-            if(isinf(output_0.vals_1[_S994]))
-            {
-
-#line 71
-                debug_color_1 = _S989;
-
-#line 71
-            }
-            else
-            {
-
-#line 71
-                debug_color_1 = debug_color_0;
-
-#line 71
-            }
-
-#line 71
-            debug_color_0 = debug_color_1;
-
-#line 71
-        }
-
-#line 67
-        int i_2 = i_0 + 1;
-
-#line 67
-        if(i_2 < 32)
-        {
-        }
-        else
-        {
-
-#line 67
-            break;
-        }
-
-#line 67
-        i_0 = i_2;
-
-#line 67
-    }
-
 #line 76
-    imageStore((debug_texture_0), ivec2((_S990)), debug_color_0);
+    imageStore((debug_texture_0), ivec2((_S987)), _S989);
 
-    imageStore((error_texture_0), ivec2((_S990)), vec4(loss_0 / 786432.0, float(0), float(0), float(0)));
-    imageStore((output_texture_0), ivec2((_S990)), _S993);
+    imageStore((error_texture_0), ivec2((_S987)), vec4(loss_0 / 786432.0, float(0), float(0), float(0)));
+    imageStore((output_texture_0), ivec2((_S987)), vec4(color_0, 1.0));
 
     DiffPair_HalfFeature_0 input_feature_pair_0;
 
@@ -8568,7 +8489,7 @@ void main()
     input_feature_pair_0.primal_0 = feature_1;
 
 #line 81
-    input_feature_pair_0.differential_0 = _S992;
+    input_feature_pair_0.differential_0 = _S991;
 
     s_bwd_MLPHalf32X32_forward_0(mlp_3, input_feature_pair_0, output_grad_0);
     s_bwd_computeInterpolatedFeature_0(featureGrid_3, feature_index_0, input_feature_pair_0.differential_0);

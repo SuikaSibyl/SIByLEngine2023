@@ -10,7 +10,7 @@ cbuffer PushConstants {
 RWByteAddressBuffer u_buffer;
 
 [shader("compute")]
-[numthreads(32, 1, 1)]
+[numthreads(16, 1, 1)]
 void ComputeMain(int3 dtid: SV_DispatchThreadID) {
     if (dtid.x == 0) {
         if (initialize) {

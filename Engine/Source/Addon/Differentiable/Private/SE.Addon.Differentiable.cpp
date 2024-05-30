@@ -437,6 +437,16 @@ AutoDiffGraph::AutoDiffGraph(DifferentiableDevice* configure) {
   addEdge("GradientClear Pass", "ParamGradient", "MatrixSanity Pass", "ParamGradient");
   addModule(reinterpret_cast<Addon::Differentiable::MatrixSanityCheck*>(getPass("MatrixSanity Pass")));
 
+  addPass(std::make_unique<Addon::Differentiable::GradientDescentPrimPass>(configure), "GradientDescent-Prim Pass");
+  addEdge("GradientClear Pass", "ParamGradient", "GradientDescent-Prim Pass", "ParamGradient");
+  addEdge("GradientClear Pass", "ParamGradientAuxiliary", "GradientDescent-Prim Pass", "ParamGradientAuxiliary");
+  // Loss readback to get the total loss summation
+  addPass(std::make_unique<Addon::Differentiable::LossReadbackTexPass>(configure), "LossReadback Pass");
+  addEdge("GradientClear Pass", "LossSummation", "LossReadback Pass", "LossSummation");
+  addEdge("MatrixSanity Pass", "Error", "LossReadback Pass", "LossTexture");
+
+  markOutput("MatrixSanity Pass", "Output");
+
   ////// Radiative backgropagation pass
   ////addPass(std::make_unique<Addon::Differentiable::ForwardReferencePass>(), "ForwardRef Pass");
   ////addPass(std::make_unique<Addon::Differentiable::AdjointRenderPass>(configure), "AdjointRender Pass");
@@ -457,29 +467,26 @@ AutoDiffGraph::AutoDiffGraph(DifferentiableDevice* configure) {
   ////}
 
   //addPass(std::make_unique<Addon::Differentiable::ReparamInit>(), "Init Pass");
-  ////addPass(std::make_unique<Addon::Differentiable::ReparamSimple>(), "Reparam Pass");
-  ////addEdge("Init Pass", "ParamGradient", "Reparam Pass", "ParamGradient");
-  //addPass(std::make_unique<Addon::Differentiable::WasSimple>(), "Reparam Pass");
+  //addPass(std::make_unique<Addon::Differentiable::ReparamSimple>(), "Reparam Pass");
   //addEdge("Init Pass", "ParamGradient", "Reparam Pass", "ParamGradient");
+  ////addPass(std::make_unique<Addon::Differentiable::WasSimple>(), "Reparam Pass");
+  ////addEdge("Init Pass", "ParamGradient", "Reparam Pass", "ParamGradient");
+  //addEdge("GradientClear Pass", "ParamGradient", "Reparam Pass", "ParamGradient");
+  ////setting.buffer_size = 1024;
+  ////addPass(std::make_unique<Addon::Differentiable::GradientClearPass>(&setting), "GradientClear Pass");
+  ////addPass(std::make_unique<Addon::Differentiable::RadiativeBackprop>(&setting), "RadiativeBackprop Pass");
+  ////addEdge("GradientClear Pass", "ParamGradient", "RadiativeBackprop Pass", "ParamGradient");
+  //addPass(std::make_unique<Addon::Differentiable::GradientDescentPrimPass>(configure), "GradientDescent-Prim Pass");
+  //addEdge("Reparam Pass", "ParamGradient", "GradientDescent-Prim Pass", "ParamGradient");
+  //addEdge("GradientClear Pass", "ParamGradientAuxiliary", "GradientDescent-Prim Pass", "ParamGradientAuxiliary");
+  //// Loss readback to get the total loss summation
+  //addPass(std::make_unique<Addon::Differentiable::LossReadbackTexPass>(configure), "LossReadback Pass");
+  //addEdge("GradientClear Pass", "LossSummation", "LossReadback Pass", "LossSummation");
+  //addEdge("MatrixSanity Pass", "Error", "LossReadback Pass", "LossTexture");
 
-  addPass(std::make_unique<Addon::Differentiable::GradientDescentPrimPass>(configure), "GradientDescent-Prim Pass");
-  addEdge("GradientClear Pass", "ParamGradient", "GradientDescent-Prim Pass", "ParamGradient");
-  addEdge("GradientClear Pass", "ParamGradientAuxiliary", "GradientDescent-Prim Pass", "ParamGradientAuxiliary");
-  // Loss readback to get the total loss summation
-  addPass(std::make_unique<Addon::Differentiable::LossReadbackTexPass>(configure), "LossReadback Pass");
-  addEdge("GradientClear Pass", "LossSummation", "LossReadback Pass", "LossSummation");
-  addEdge("MatrixSanity Pass", "Error", "LossReadback Pass", "LossTexture");
-
-  ////addEdge("GradientClear Pass", "ParamGradient", "Reparam Pass", "ParamGradient");
-  //////setting.buffer_size = 1024;
-  //////addPass(std::make_unique<Addon::Differentiable::GradientClearPass>(&setting), "GradientClear Pass");
-  //////addPass(std::make_unique<Addon::Differentiable::RadiativeBackprop>(&setting), "RadiativeBackprop Pass");
-  //////addEdge("GradientClear Pass", "ParamGradient", "RadiativeBackprop Pass", "ParamGradient");
-  ////
   //////addPass(std::make_unique<Addon::Differentiable::TestADPass>(), "TestAD Pass");
   //markOutput("Reparam Pass", "Color");
   ////markOutput("RadiativeBackprop Pass", "Color");
-  markOutput("MatrixSanity Pass", "Output");
 }
 
 auto FusedADPipeline::execute(RHI::CommandEncoder* encoder) noexcept -> void {

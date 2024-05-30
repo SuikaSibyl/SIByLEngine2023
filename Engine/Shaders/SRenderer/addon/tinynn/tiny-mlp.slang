@@ -63,7 +63,7 @@ void ComputeMain(
     output_grad.vals[1] = float16_t(color_pair.d.y * gradient_scalar);
     output_grad.vals[2] = float16_t(color_pair.d.z * gradient_scalar);
 
-    float4 debug_color = float4(0.0f, 0.0f, 0.0f, 1.0f);
+    float4 debug_color = float4(feature_index.weights, feature_index.cellId);
     for (int i = 0; i < 32; i++) {
         if (isnan(output.vals[i])) {
             debug_color = float4(1.0f, 0.0f, 1.0f, 1.0f);
@@ -73,7 +73,7 @@ void ComputeMain(
         }
     }
 
-    debug_texture[dtid.xy] = debug_color;
+    debug_texture[dtid.xy] = float4(feature_index.weights, feature_index.weights);
 
     error_texture[dtid.xy] = loss / (512 * 512 * 3);
     output_texture[dtid.xy] = float4(color, 1.0f);

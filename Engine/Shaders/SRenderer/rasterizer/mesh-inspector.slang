@@ -43,8 +43,8 @@ struct GeoVisUniform {
     // wireframe setting + custom info
     float wireframe_smoothing;
     float wireframe_thickness;
-    float padding0;
-    float padding1;
+    uint32_t mouse_state;
+    int shown_gameobject;
 };
 
 [[vk::binding(0, 1)]]
@@ -112,6 +112,12 @@ float4 fragmentMain(
     const GeometryInfo geometry = geometries[coarseVertex.geoID];
     const int3 index = int3(fetchTriangleIndices(geometry, primitiveID));
 
+    bool is_shown_gameobject = false;
+    const uint32_t go_index = GetGameobjectIndex(geometry);
+    if (int(go_index) == uni.shown_gameobject) {
+        is_shown_gameobject = true;
+    }
+
     MaterialInfo material = materials[geometry.materialID];
 
     float3 vertexPositions[3];
@@ -152,7 +158,7 @@ float4 fragmentMain(
     tangents[1] = fetchVertexTangent(index[1] + int(geometry.vertexOffset));
     tangents[2] = fetchVertexTangent(index[2] + int(geometry.vertexOffset));
     float3 tangentOS = interpolate(tangents, bary);
-    float4 tangentWS = float4(normalize(mul(float4(tangentOS, 0), o2w).xyz), geometry.oddNegativeScaling);
+    float4 tangentWS = float4(normalize(mul(float4(tangentOS, 0), o2w).xyz), GetOddNegativeScaling(geometry));
 
     float3 shadingNormal = geometryNormalWS;
     float3 bitangent = cross(geometryNormalWS, tangentWS.xyz) * tangentWS.w;
@@ -191,9 +197,9 @@ float4 fragmentMain(
         // const float3 frag = diffuse;
     }
     else if (uni.showEnum == ShowEnum::Emission) {
-        uint2 vhash = positional_directional_hashing_no_jitter(positionWS, geometryNormalWS, globalUniform.cameraData.posW, uni.padding0);
-        const uint colorPacked = murmur3(vhash.y);
-        color = UNPACK_FLOAT3_UINT(colorPacked);
+        // uint2 vhash = positional_directional_hashing_no_jitter(positionWS, geometryNormalWS, globalUniform.cameraData.posW, uni.padding0);
+        // const uint colorPacked = murmur3(vhash.y);
+        // color = UNPACK_FLOAT3_UINT(colorPacked);
     }
     else {
         uint colorPacked = Hash_murmur(primitiveID);
@@ -204,5 +210,8 @@ float4 fragmentMain(
         color = GetAlbedoWithWireframe(color, bary);
     }
 
+    if (is_shown_gameobject) {
+        color = color * 0.5 + float3(1, 1, 0);
+    }
     return float4(color, 1.0);
 }
