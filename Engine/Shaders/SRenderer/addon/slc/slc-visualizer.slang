@@ -118,7 +118,7 @@ VertexStageOutput vertexMain(
         degenerate_output.sv_position = float4(0.0f, 0.0f, 0.0f, 0.0f);
         return degenerate_output;
     }
-
+    
     const float3 center = 0.5 * (node.boundMin + node.boundMax);
     const float3 extend = node.boundMax - node.boundMin;
 

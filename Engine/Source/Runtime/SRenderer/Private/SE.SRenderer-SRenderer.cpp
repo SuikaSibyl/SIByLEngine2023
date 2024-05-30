@@ -272,8 +272,8 @@ auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
     // update the mesh component
     if (meshref && meshrenderer) {
       // insert the aabb
-      Math::bounds3 bounds = Math::Transform(transform->transform) * meshref->mesh->aabb;
       if (transform->flag & (uint32_t)GFX::TransformComponent::FlagBit::IS_STATIC) {
+        Math::bounds3 bounds = Math::Transform(transform->transform) * meshref->mesh->aabb;
         statisticsData.aabb = Math::unionBounds(statisticsData.aabb, bounds);
       }
 

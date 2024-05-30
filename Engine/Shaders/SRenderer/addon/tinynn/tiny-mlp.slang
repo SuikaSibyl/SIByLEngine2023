@@ -47,7 +47,7 @@ void ComputeMain(
     MLPModule mlp = MLPModule(param_offset, grad_offset, thread_info);
     TensorView featureGrid = TensorView(param_offset, grad_offset, 14, 14 * 33);
 
-    FeatureGrid2DIndex feature_index = FeatureGrid2DIndex(resolution, pixel.x, feature_grid);
+    FeatureGrid2DIndex feature_index = FeatureGrid2DIndex(resolution, pixel.xy, feature_grid);
     HalfFeature<32> feature = computeInterpolatedFeature(featureGrid, feature_index);
     HalfFeature<32> output = MLPModule.forward(mlp, feature);
     

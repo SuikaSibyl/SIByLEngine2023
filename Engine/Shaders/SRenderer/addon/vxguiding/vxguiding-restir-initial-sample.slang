@@ -279,7 +279,7 @@ void RgenMain() {
                 float bottom_pdf = float(pdf);
                 pdf *= double(top_pdf);
                 int vxFlatten = u_pCompactIndex[selectedID];
-
+                
                 // Semi NEE - voxel2sphere
                 AABB aabb;
                 float sph_pdf;
@@ -337,7 +337,7 @@ void RgenMain() {
         radiance = float3(1000, 0, 1000);
     }
     u_Color[pixel] = float4(radiance, 1);
-
+    
     // if (reservoir.M != 0)
     reservoir.M = 1;
     const float normalizationNumerator = 1.0;

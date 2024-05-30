@@ -78,16 +78,15 @@ struct SandBoxApplication : public Application::ApplicationBase {
 
     GFX::GFXManager::get()->config.meshLoaderConfig = SRenderer::meshLoadConfig;
 
-    scene.deserialize(
-        "P:/GitProjects/SIByLEngine2022/Sandbox/content/test_scene.scene");
+    scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/test_scene.scene");
     // scene.deserialize("C:/Users/suika/Desktop/testscene/bedroom_mask.scene");
 
     InvalidScene();
     device->waitIdle();
 
-    //pipeline1 = std::make_unique<Addon::Differentiable::AutoDiffPipeline>();
+    pipeline1 = std::make_unique<Addon::Differentiable::AutoDiffPipeline>();
     //pipeline1 = std::make_unique<SRP::GeoInspectPipeline>();
-    pipeline1 = std::make_unique<GTPipeline>();
+    //pipeline1 = std::make_unique<GTPipeline>();
     ////pipeline2 = std::make_unique<Addon::Lightmap::LightmapVisualizePipeline>();
     ////rtgi_pipeline = std::make_unique<Addon::Differentiable::NeuralRadiosityPipeline>();
     ////// pipeline1 = std::make_unique<CustomPipeline>();
@@ -107,8 +106,8 @@ struct SandBoxApplication : public Application::ApplicationBase {
 
     // //geoinsp_pipeline = std::make_unique<SSPGP_GMM_Pipeline>();
     ////geoinsp_pipeline = std::make_unique<GTPipeline>();
-    //geoinsp_pipeline = std::make_unique<SRP::GeoInspectPipeline>();
-    geoinsp_pipeline = std::make_unique<CustomPipeline>();
+    geoinsp_pipeline = std::make_unique<SRP::GeoInspectPipeline>();
+    //geoinsp_pipeline = std::make_unique<CustomPipeline>();
     ////vxgi_pipeline = std::make_unique<SSPGPipeline>();
     //////vxdi_pipeline = std::make_unique<VXPGPipeline>();
     vxgi_pipeline = std::make_unique<VXPGASVGFPipeline>();
@@ -118,11 +117,12 @@ struct SandBoxApplication : public Application::ApplicationBase {
     //vxdi_pipeline = std::make_unique<Addon::VXGuiding::GeometryPrebakePipeline>();
     //vxdi_pipeline = std::make_unique<Addon::GBufferInspectorPass>();
     pipeline1->build();
-    pipeline2->build();
-    rtgi_pipeline->build();
+    //pipeline2->build();
+    //rtgi_pipeline->build();
     geoinsp_pipeline->build();
     vxgi_pipeline->build();
     vxdi_pipeline->build();
+
 
     pipeline = pipeline1.get();
 
@@ -334,7 +334,7 @@ struct SandBoxApplication : public Application::ApplicationBase {
         should_capture_next = false;
         device->waitIdle();
         GFX::CaptureImage(pipeline->getOutput(),
-            "D:/Art/Objects/hip_hop_dancing_women_gltf/pipeline-" +
+            "D:/Art/Objects/hip_hop_dancing_women_gltf/pipeline-new-" +
             //"D:/Art/Scenes/BrainStem-gltf/glTF/dynamic_capture/pipeline-" +
             //"D:/Art/Scenes/BrainStem-gltf/glTF/zeroday/pipeline-" +
             std::to_string(pipeline_id));

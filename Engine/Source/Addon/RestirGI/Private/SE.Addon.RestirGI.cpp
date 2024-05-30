@@ -141,7 +141,8 @@ auto TemporalResampling::execute(RDG::RenderContext* context,
                 renderData.getBindingResource("PrevSceneBVH").value());
   std::vector<RHI::BindGroupEntry>* set_1_entries =
       renderData.getBindGroupEntries("CommonRT");
-  getBindGroup(context, 1)->updateBinding(*set_1_entries);
+  updateBinding(context, "SceneBVH", (*set_1_entries)[0].resource);
+  //getBindGroup(context, 1)->updateBinding(*set_1_entries);
 
   uint32_t frameID = renderData.getUInt("FrameIdx");
   struct PushConstant {

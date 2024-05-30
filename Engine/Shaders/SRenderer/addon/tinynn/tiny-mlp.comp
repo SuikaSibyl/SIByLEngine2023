@@ -8389,7 +8389,7 @@ void main()
     s_diff_HalfFeature_0 output_grad_0;
 
 #line 50
-    FeatureGrid2DIndex_0 feature_index_0 = FeatureGrid2DIndex_x24init_0(uvec2(ivec2(512, 512)), ivec2(pixel_0.x), ivec2(32, 32));
+    FeatureGrid2DIndex_0 feature_index_0 = FeatureGrid2DIndex_x24init_0(uvec2(ivec2(512, 512)), pixel_0.xy, ivec2(32, 32));
 
 
 
