@@ -39,7 +39,7 @@ class EditorApplication(SEApplication):
         self.timer.update()
         self.onDrawGui()
         sed.ImGuiContext.render(self.flights.getRenderFinishedSeamaphore())
-
+        
         self.flights.frameEnd()
 
     def onInit(self):

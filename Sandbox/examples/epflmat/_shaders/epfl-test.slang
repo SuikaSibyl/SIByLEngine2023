@@ -1,4 +1,4 @@
-#include "srenderer/materials/epflbrdf.hlsli"
+#include "srenderer/materials/rglbrdf.hlsli"
 
 RWTexture2D<float3> output;
 
@@ -10,7 +10,7 @@ void ComputeMain(
     int3 gid: SV_GroupID,
     int gi: SV_GroupIndex
 ) {
-    EpflBRDF bsdf = EpflBRDF(0);
+    RGLBRDF bsdf = RGLBRDF(0);
     ibsdf::sample_in sample_in;
     sample_in.wi = normalize(float3(1, 1, 1));
     sample_in.u = float2(0.99334f, 0.231f);

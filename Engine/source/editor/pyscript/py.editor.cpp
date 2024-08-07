@@ -85,6 +85,10 @@ void Text(std::string const& text) {
   ImGui::Text(text.c_str());
 }
 
+bool Checkbox_se(const char* label, CPPType<bool>& item) {
+  return ImGui::Checkbox(label, &item.get());
+}
+
 vec2 GetCursorPos_se() {
   ImVec2 cursor_pos = ImGui::GetCursorPos();
   return vec2{ cursor_pos.x, cursor_pos.y };
@@ -95,6 +99,10 @@ void SetCursorPos_se(vec2 v) {
 }
 void TextColored_se(vec4 v, std::string const& text) {
   ImGui::TextColored(ImVec4{ v.x, v.y, v.z, v.w }, text.c_str());
+}
+
+bool TreeNode_se(const char* label) {
+  return ImGui::TreeNode(label);
 }
 }
 
@@ -128,8 +136,13 @@ PYBIND11_MODULE(pyeditor, m) {
       .def_static("End", &ImGui::End)
       .def_static("SetCursorPos", &ImGui::SetCursorPos_se)
       .def_static("GetCursorPos", &ImGui::GetCursorPos_se)
+      .def_static("Checkbox", &ImGui::Checkbox_se)
       .def_static("TextColored", &ImGui::TextColored_se)
       .def_static("SetWindowFontScale", &ImGui::SetWindowFontScale)
+      .def_static("PushItemWidth", &ImGui::PushItemWidth)
+      .def_static("PopItemWidth", &ImGui::PopItemWidth)
+      .def_static("TreeNode", &ImGui::TreeNode_se)
+      .def_static("TreePop", &ImGui::TreePop)
       .def_static("ShowTexture", &se::editor::drawTextureViewer)
       .def_static("Text", 
        static_cast<void(*)(std::string const&)>(&ImGui::Text),

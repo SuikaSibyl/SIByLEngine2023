@@ -47,6 +47,6 @@ void ComputeMain(
     }
 
     // gamma correction
-    outputColor = pow(outputColor, 1.0f / 2.2f);
+    // outputColor = pow(outputColor, 1.0f / 2.2f);
     u_output[pixel] = outputColor;
 }

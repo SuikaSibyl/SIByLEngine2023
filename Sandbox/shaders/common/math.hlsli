@@ -16,6 +16,8 @@ static const float k_numeric_limits_float_max = 3.402823466e+38;
 static const float k_one_minus_epsilon = 0.999999940395355225f;
 static const float k_float_epsilon = 1.192092896e-07f;
 
+static const float k_sqrt2 = 1.41421356237309504880f;
+
 /** Returns the smallest component of the vector. */
 float minComponent(in const float3 v) {
     return min(v.x, min(v.y, v.z)); }
@@ -106,5 +108,21 @@ float hprod<let Dim : int>(vector<float, Dim> v) {
         result = result * v[i];
     return result;
 }
+
+void swap(inout float a, inout float b) {
+    float temp = a; a = b; b = temp; }
+void swap(inout float2 a, inout float2 b) {
+    float2 temp = a; a = b; b = temp; }
+void swap(inout float3 a, inout float3 b) {
+    float3 temp = a; a = b; b = temp; }
+void swap(inout float4 a, inout float4 b) {
+    float4 temp = a; a = b; b = temp; }
+
+float hypot(float2 v) { return length(v); }
+float hypot(float3 v) { return length(v); }
+float hypot(float4 v) { return length(v); }
+float hypot(float x, float y) { return length(float2(x, y)); }
+float hypot(float x, float y, float z) { return length(float3(x, y, z)); }
+float hypot(float x, float y, float z, float w) { return length(float4(x, y, z, w)); }
 
 #endif // !_SRENDERER_COMMMON_MATH_HEADER_

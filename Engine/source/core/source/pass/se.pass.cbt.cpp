@@ -450,7 +450,7 @@ CBTSpatialTreeVisualizePass::CBTSpatialTreeVisualizePass(size_t indirect_offset)
 
 auto CBTSpatialTreeVisualizePass::reflect() noexcept -> rdg::PassReflection {
   rdg::PassReflection reflector;
-  reflector.addOutput("Color").isTexture()
+  reflector.addInputOutput("Color").isTexture()
     .withSize(vec3{ 1.f,1.f,1.f })
     .withFormat(rhi::TextureFormat::RGBA32_FLOAT)
     .withUsages((uint32_t)rhi::TextureUsageBit::COLOR_ATTACHMENT)
@@ -489,9 +489,9 @@ auto CBTSpatialTreeVisualizePass::execute(
 
   setRenderPassDescriptor(rhi::RenderPassDescriptor{
     { rhi::RenderPassColorAttachment{color->getRTV(0, 0, 1),
-      nullptr, {0, 0, 0, 1}, rhi::LoadOp::CLEAR, rhi::StoreOp::STORE},},
+      nullptr, {0, 0, 0, 1}, rhi::LoadOp::LOAD, rhi::StoreOp::STORE},},
       rhi::RenderPassDepthStencilAttachment{
-        depth->getDSV(0, 0, 1), 1, rhi::LoadOp::CLEAR, rhi::StoreOp::STORE, false,
+        depth->getDSV(0, 0, 1), 1, rhi::LoadOp::LOAD, rhi::StoreOp::STORE, false,
         0, rhi::LoadOp::DONT_CARE, rhi::StoreOp::DONT_CARE, false},
       });
   

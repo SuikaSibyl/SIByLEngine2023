@@ -161,6 +161,11 @@ PYBIND11_MODULE(pycore, m) {
     .def(py::init<float>())
     .def("set", &CPPType<float>::set)
     .def("get", &CPPType<float>::get, py::return_value_policy::reference);
+  py::class_<CPPType<bool>>(m, "Bool")
+    .def(py::init<>())
+    .def(py::init<bool>())
+    .def("set", &CPPType<bool>::set)
+    .def("get", &CPPType<bool>::get, py::return_value_policy::reference);
 
   // Export root struct
   // ------------------------------------------------------------------------
@@ -897,6 +902,8 @@ PYBIND11_MODULE(pycore, m) {
       std::string const&)>(&se::rdg::Graph::addEdge))
     .def("markOutput", &se::rdg::Graph::markOutput)
     .def("getOutput", &se::rdg::Graph::getOutput)
+    .def("getBufferResource", &se::rdg::Graph::getBufferResource)
+    .def("getTextureResource", &se::rdg::Graph::getTextureResource)
     .def("getPass", static_cast<se::rdg::Pass*(se::rdg::Graph::*)(size_t)>(&se::rdg::Graph::getPass), py::return_value_policy::reference)
     .def("getPass", static_cast<se::rdg::Pass*(se::rdg::Graph::*)(std::string const&)>(&se::rdg::Graph::getPass), py::return_value_policy::reference)
     .def("addPass", static_cast<void(se::rdg::Graph::*)(se::rdg::Pass*, std::string const&)>(&se::rdg::Graph::addPass));

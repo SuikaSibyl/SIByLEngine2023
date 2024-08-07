@@ -109,7 +109,79 @@ class NEEPass(core.rdg.ComputePass):
             "Bilinear Solid Angle Sample",
         ])
 
+class NEEStratifiedPass(core.rdg.ComputePass):
+    def __init__(self):
+        core.rdg.ComputePass.__init__(self)
+        [self.comp] = core.gfx.Context.load_shader_slang(
+            "nee/_shader/stratified.slang",
+            [("ComputeMain", core.rhi.EnumShaderStage.COMPUTE)], [], False)
+        self.init(self.comp.get())
+        self.render_mode = se.Int32(0)
+    
+    def reflect(self) -> core.rdg.PassReflection:
+        reflector = core.rdg.PassReflection()
+        reflector.addOutput("Color")\
+            .isTexture().withSize(se.vec3(1, 1, 1))\
+            .withFormat(se.rhi.TextureFormat.RGBA32_FLOAT)\
+            .withUsages(se.rhi.TextureUsageBit.STORAGE_BINDING)\
+            .consume(se.rdg.TextureInfo.ConsumeEntry(se.rdg.TextureInfo.ConsumeType.StorageBinding)\
+                .addStage(se.rhi.PipelineStageBit.COMPUTE_SHADER_BIT))
+        reflector.addOutput("GuidingInfo-1")\
+            .isTexture().withSize(se.ivec3(512, 512, 1))\
+            .withFormat(se.rhi.TextureFormat.RGBA32_FLOAT)\
+            .withUsages(se.rhi.TextureUsageBit.STORAGE_BINDING)\
+            .consume(se.rdg.TextureInfo.ConsumeEntry(se.rdg.TextureInfo.ConsumeType.StorageBinding)\
+                .addStage(se.rhi.PipelineStageBit.COMPUTE_SHADER_BIT))
+        reflector.addOutput("GuidingInfo-2")\
+            .isTexture().withSize(se.ivec3(512, 512, 1))\
+            .withFormat(se.rhi.TextureFormat.RGBA32_FLOAT)\
+            .withUsages(se.rhi.TextureUsageBit.STORAGE_BINDING)\
+            .consume(se.rdg.TextureInfo.ConsumeEntry(se.rdg.TextureInfo.ConsumeType.StorageBinding)\
+                .addStage(se.rhi.PipelineStageBit.COMPUTE_SHADER_BIT))
+        return reflector
+    
+    def execute(self, rdrCtx:core.rdg.RenderContext, rdrDat:core.rdg.RenderData):
+        color = rdrDat.getTexture("Color")
+        info1 = rdrDat.getTexture("GuidingInfo-1")
+        info2 = rdrDat.getTexture("GuidingInfo-2")
+        scene = rdrDat.getScene()
+        
+        self.updateBindings(rdrCtx, [
+            ["GPUScene_camera", scene.get().getGPUScene().bindingResourceCamera()],
+            ["GPUScene_index", scene.get().getGPUScene().bindingResourceIndex()],
+            ["GPUScene_vertex", scene.get().getGPUScene().bindingResourceVertex()],
+            ["GPUScene_geometry", scene.get().getGPUScene().bindingResourceGeometry()],
+            ["GPUScene_position", scene.get().getGPUScene().bindingResourcePosition()],
+            ["GPUScene_tlas", scene.get().getGPUScene().bindingResourceTLAS()],
+            ["u_image", core.rhi.BindingResource(color.get().getUAV(0,0,1))],
+            # ["u_guiding_info_1", core.rhi.BindingResource(info1.get().getUAV(0,0,1))],
+            # ["u_guiding_info_2", core.rhi.BindingResource(info2.get().getUAV(0,0,1))],
+        ])
+        
+        class PushConstant(ctypes.Structure):
+          _fields_ = [
+            ("random_seed", ctypes.c_int),
+            ("camera_index", ctypes.c_int),
+            ("render_mode", ctypes.c_int),
+        ]
+        pConst = PushConstant(
+            random_seed=np.random.randint(0, 1000000),
+            camera_index=scene.get().getEditorActiveCameraIndex(),
+            render_mode = self.render_mode.get(),)
+        # execute the pass with the cmd encoder
+        encoder = self.beginPass(rdrCtx)
+        encoder.pushConstants(get_ptr(pConst), int(core.rhi.EnumShaderStage.COMPUTE), 0, ctypes.sizeof(pConst))
+        encoder.dispatchWorkgroups(int(1024 / 32), int(1024 / 4), 1)
+        encoder.end()
 
+    def renderUI(self):
+        sed.ImGui.Combo("Render Mode", self.render_mode, [
+            "Cosine Hemisphere Sample", 
+            "Uniform Area Sample",
+            "Uniform Solid Angle Sample",
+            "Bilinear Solid Angle Sample",
+        ])
+        
 class ReducePass(core.rdg.ComputePass):
     def __init__(self):
         core.rdg.ComputePass.__init__(self)
@@ -274,11 +346,34 @@ class NEEGraph(core.rdg.Graph):
 
         self.markOutput("Accum Pass", "Output")
 
+class NEEStratifiedGraph(core.rdg.Graph):
+    def __init__(self):
+        core.rdg.Graph.__init__(self)
+        # self.fwd_pass = NeuralGGXPass()
+        self.fwd_pass = NEEStratifiedPass()
+        self.accum_pass = se.passes.AccumulatePass(se.ivec3(1024, 1024, 1))
+        self.addPass(self.fwd_pass, "Render Pass")
+        self.addPass(self.accum_pass, "Accum Pass")
+        self.addEdge("Render Pass", "Color", "Accum Pass", "Input")
+        self.markOutput("Accum Pass", "Output")
+
 
 class NEEPipeline(core.rdg.SingleGraphPipeline):
     def __init__(self):
         core.rdg.SingleGraphPipeline.__init__(self)
         self.graph = NEEGraph()
+        self.setGraph(self.graph)
+    
+    def onUpdate(self, ctx:SEContext):
+        pass
+    
+    def renderUI(self):
+        pass
+
+class NEEStratifiedPipeline(core.rdg.SingleGraphPipeline):
+    def __init__(self):
+        core.rdg.SingleGraphPipeline.__init__(self)
+        self.graph = NEEStratifiedGraph()
         self.setGraph(self.graph)
     
     def onUpdate(self, ctx:SEContext):

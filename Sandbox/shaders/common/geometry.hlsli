@@ -419,4 +419,52 @@ struct Frame {
     }
 };
 
+///////////////////////////////////////////////////////////////////////////////////////////
+// Theta-Phi Coordinate Conversion Functions
+// ----------------------------------------------------------------------------------------
+// A set of utility functions to convert between theta-phi and xyz coordinates.
+// The theta-phi coordinate system is a spherical coordinate system where theta is the
+// angle from the z-axis and phi is the angle from the x-axis in the x-y plane.
+///////////////////////////////////////////////////////////////////////////////////////////
+
+namespace theta_phi_coord {
+[Differentiable] float CosTheta(float3 w) { return w.z; }
+[Differentiable] float Cos2Theta(float3 w) { return w.z * w.z; }
+[Differentiable] float AbsCosTheta(float3 w) { return abs(w.z); }
+[Differentiable] float Sin2Theta(float3 w) { return max(0.0, 1.0 - Cos2Theta(w)); }
+[Differentiable] float SinTheta(float3 w) { return sqrt(Sin2Theta(w)); }
+[Differentiable] float TanTheta(float3 w) { return SinTheta(w) / CosTheta(w); }
+[Differentiable] float Tan2Theta(float3 w) { return Sin2Theta(w) / Cos2Theta(w); }
+
+[Differentiable] float CosPhi(float3 w) {
+    float sinTheta = SinTheta(w);
+    return (sinTheta == 0) ? 1 : clamp(w.x / sinTheta, -1, 1); }
+[Differentiable] float SinPhi(float3 w) {
+    float sinTheta = SinTheta(w);
+    return (sinTheta == 0) ? 0 : clamp(w.y / sinTheta, -1, 1); }
+[Differentiable] float Cos2Phi(float3 w) { return CosPhi(w) * CosPhi(w); }
+[Differentiable] float Sin2Phi(float3 w) { return SinPhi(w) * SinPhi(w); }
+
+/* Gives the cosine of the phi angle between two directions. */
+[Differentiable] float CosDPhi(float3 wa, float3 wb) {
+    return clamp((wa.x * wb.x + wa.y * wb.y) /
+        sqrt((wa.x * wa.x + wa.y * wa.y) *
+        (wb.x * wb.x + wb.y * wb.y)), -1, 1); }
+
+[Differentiable] float3 SphericalDirection(
+    float sinTheta, float cosTheta, float phi) {
+    return float3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
+}
+
+[Differentiable] float3 SphericalDirection(
+    float sinTheta, float cosTheta, float phi,
+    float3 x, float3 y, float3 z) {
+    return sinTheta * cos(phi) * x + sinTheta * sin(phi) * y + cosTheta * z;
+}
+
+[Differentiable] bool SameHemisphere(float3 w, float3 wp) {
+    return w.z * wp.z > 0;
+}
+}
+
 #endif

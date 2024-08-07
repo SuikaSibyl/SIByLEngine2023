@@ -19,7 +19,8 @@ class NEEDemoApp(EditorApplication):
         super().__init__()
     
     def onInit(self):
-        self.pipeline = NEEPipeline()
+        # self.pipeline = NEEPipeline()
+        self.pipeline = NEEStratifiedPipeline()
         self.pipeline.setStandardSize(se.ivec3(1024,1024,1))
         self.pipeline.build()
         sed.EditorBase.bindPipeline(self.pipeline.pipeline())

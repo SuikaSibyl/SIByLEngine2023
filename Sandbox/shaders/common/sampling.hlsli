@@ -51,6 +51,7 @@ float3 randomPointInSphere(inout_ref(RandomSamplerState) rngState) {
     return float3(r * cos(theta), r * sin(theta), u);
 }
 
+[Differentiable]
 float3 randomPointInSphere(in_ref(float2) rvec) {
     const float theta = 2 * k_pi * rvec.x; // Random in [0, 2pi]
     const float u = 2.0 * rvec.y - 1.0;    // Random in [-1, 1]
@@ -122,8 +123,14 @@ float3 CosineWeightedHemisphereSample(in_ref(float3) N, in_ref(float2) rnd) {
     return normalize(N + randOffset);
 }
 
+[Differentiable]
 float3 sample_cos_hemisphere(float2 u) {
     return normalize(float3(0, 0, 1) + randomPointInSphere(u));
+}
+
+[Differentiable]
+float pdf_cos_hemisphere(float3 d) {
+    return max(d[2], 0.f) * k_inv_pi;
 }
 
 #endif // !_SRENDERER_COMMMON_SAMPLING_HEADER_

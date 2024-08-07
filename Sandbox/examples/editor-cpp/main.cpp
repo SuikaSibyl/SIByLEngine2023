@@ -11,7 +11,7 @@
 #include <seditor-base.hpp>
 #include <passes/se.pass.editor.hpp>
 #include <passes/se.pass.rasterizer.hpp>
-#include <bxdfs/se.bxdf.epflbrdf.hpp>
+#include <bxdfs/se.bxdf.rglbrdf.hpp>
 #include "source/geometry_inspector.hpp"
 
 int main() {
