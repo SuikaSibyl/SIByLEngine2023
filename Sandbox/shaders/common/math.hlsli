@@ -77,9 +77,8 @@ float4 interpolate(float4 vertices[3], float3 bary) {
     return vertices[0] * bary[0] + vertices[1] * bary[1] + vertices[2] * bary[2];
 }
 
-float length_square(in float3 v) {
-    return dot(v, v);
-}
+[Differentiable] float length_squared(in float2 v) { return dot(v, v); }
+[Differentiable] float length_squared(in float3 v) { return dot(v, v); }
 
 float distance_squared(in float3 v0, in float3 v1) {
     return dot(v0 - v1, v0 - v1);
@@ -89,7 +88,8 @@ float square(in float v) {
     return v * v;
 }
 
-float sqr(float v) { return v * v; }
+[Differentiable] float sqr(float v) { return v * v; }
+[Differentiable] float safe_sqrt(float v) { return sqrt(max(v, 0.f)); }
 
 float elevation(float3 d) {
     return 2.f * asin(.5f * sqrt(sqr(d.x) + sqr(d.y) + sqr(d.z - 1.f)));
@@ -124,5 +124,46 @@ float hypot(float4 v) { return length(v); }
 float hypot(float x, float y) { return length(float2(x, y)); }
 float hypot(float x, float y, float z) { return length(float3(x, y, z)); }
 float hypot(float x, float y, float z, float w) { return length(float4(x, y, z, w)); }
+
+float copysign(float mag, float sign) { return (sign >= 0) ? abs(mag) : -abs(mag); }
+
+/**
+ * floating-point complex structure based on pbrt-v4.
+ */
+struct complex {
+    float re;
+    float im;
+
+    __init(float re) { this.re = re; this.im = 0; }
+    __init(float re, float im) { this.re = re; this.im = im; }
+};
+[Differentiable] complex operator+(complex a, complex b) { return complex(a.re + b.re, a.im + b.im); }
+[Differentiable] complex operator+(float value, complex z) { return complex(value) + z; }
+[Differentiable] complex operator-(complex a, complex b) { return complex(a.re - b.re, a.im - b.im); }
+[Differentiable] complex operator-(float value, complex z) { return complex(value) - z; }
+[Differentiable] complex operator*(complex a, complex b) { 
+    return complex(a.re * b.re - a.im * b.im, a.re * b.im + a.im * b.re); }
+[Differentiable] complex operator*(float value, complex z) { return complex(value) * z; }
+[Differentiable] complex operator*(complex z, float value) { return complex(value) * z; }
+[Differentiable] complex operator/(complex a, complex b) {
+    float scale = 1 / (b.re * b.re + b.im * b.im);
+    return complex(scale * (a.re * b.re + a.im * b.im),
+                   scale * (a.im * b.re - a.re * b.im)); }
+complex operator /(float value, complex z) { return complex(value) / z; }
+[Differentiable] float real(complex z) { return z.re; }
+[Differentiable] float imag(complex z) { return z.im; }
+[Differentiable] float norm(complex z) { return z.re * z.re + z.im * z.im; }
+[Differentiable] float abs(complex z) { return sqrt(norm(z)); }
+[Differentiable] complex sqr(complex x) { return x * x; }
+[Differentiable] complex sqrt(complex z) {
+    const float n = abs(z);
+    const float t1 = sqrt(.5 * (n + abs(z.re)));
+    const float t2 = .5 * z.im / t1;
+
+    if (n == 0) return complex(0);
+    if (z.re >= 0) return { t1, t2 };
+    else return complex(abs(t2), copysign(t1, z.im));
+}
+
 
 #endif // !_SRENDERER_COMMMON_MATH_HEADER_

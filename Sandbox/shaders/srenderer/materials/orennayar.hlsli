@@ -84,7 +84,7 @@ struct OrenNayarBRDF : IBxDF {
         // Flip the shading frame if it is
         // inconsistent with the geometry normal.
         Frame frame = i.shading_frame;
-        o.wo = frame.to_world(sample_cos_hemisphere(i.u));
+        o.wo = frame.to_world(sample_cos_hemisphere(i.u.xy));
         o.pdf = max(dot(frame.n, o.wo), 0.f) * k_inv_pi;
 
         // evaluate the BSDF

@@ -649,6 +649,19 @@ PYBIND11_MODULE(pycore, m) {
     .value("FRAGMENT_SHADING_RATE_ATTACHMENT_BIT", se::rhi::PipelineStageBit::FRAGMENT_SHADING_RATE_ATTACHMENT_BIT)
     .value("COMMAND_PREPROCESS_BIT", se::rhi::PipelineStageBit::COMMAND_PREPROCESS_BIT);
 
+  py::enum_<se::rhi::AddressMode>(namespace_rhi, "EnumAddressMode")
+    .value("CLAMP_TO_EDGE", se::rhi::AddressMode::CLAMP_TO_EDGE)
+    .value("REPEAT", se::rhi::AddressMode::REPEAT)
+    .value("MIRROR_REPEAT", se::rhi::AddressMode::MIRROR_REPEAT);
+  
+  py::enum_<se::rhi::FilterMode>(namespace_rhi, "EnumFilterMode")
+    .value("NEAREST", se::rhi::FilterMode::NEAREST)
+    .value("LINEAR", se::rhi::FilterMode::LINEAR);
+  
+  py::enum_<se::rhi::MipmapFilterMode>(namespace_rhi, "EnumMipmapFilterMode")
+    .value("NEAREST", se::rhi::MipmapFilterMode::NEAREST)
+    .value("LINEAR", se::rhi::MipmapFilterMode::LINEAR);
+
   class_BarrierDescriptor.def(py::init<se::rhi::PipelineStages, se::rhi::PipelineStages,
     se::rhi::DependencyTypeFlags, std::vector<se::rhi::MemoryBarrier*>,
     std::vector<se::rhi::BufferMemoryBarrierDescriptor>, std::vector<se::rhi::TextureMemoryBarrierDescriptor>>());
@@ -693,6 +706,11 @@ PYBIND11_MODULE(pycore, m) {
   class_gfx_context.def_static("finalize", &se::gfx::GFXContext::finalize);
   class_gfx_context.def_static("load_scene_gltf", &se::gfx::GFXContext::load_scene_gltf);
   class_gfx_context.def_static("create_texture_file", &se::gfx::GFXContext::create_texture_file);
+  class_gfx_context.def_static("create_sampler_desc", static_cast<se::gfx::SamplerHandle(*)
+      (rhi::AddressMode, rhi::FilterMode, rhi::MipmapFilterMode)>
+      (&se::gfx::GFXContext::create_sampler_desc), 
+      py::arg("address"), py::arg("filter"), py::arg("mipmap"),
+      py::return_value_policy::reference);
   class_gfx_context.def_static("createFlights", &se::gfx::GFXContext::createFlights);
   class_gfx_context.def_static("getFlights", &se::gfx::GFXContext::getFlights, py::return_value_policy::reference);
   class_gfx_context.def_static("getDevice", &se::gfx::GFXContext::getDevice, py::return_value_policy::reference);
@@ -758,6 +776,10 @@ PYBIND11_MODULE(pycore, m) {
   py::class_<se::gfx::ShaderModule> class_gfx_shaderModule(namespace_gfx, "ShaderModule");
   py::class_<se::gfx::ShaderHandle> class_gfx_shaderHandle(namespace_gfx, "ShaderHandle");
   class_gfx_shaderHandle.def("get", &se::gfx::ShaderHandle::get, py::return_value_policy::reference);
+
+  py::class_<se::gfx::SamplerHandle> class_gfx_samplerHandle(namespace_gfx, "SamplerHandle");
+  class_gfx_samplerHandle.def("get", &se::gfx::SamplerHandle::get, py::return_value_policy::reference);
+
 
   // Export rdg:: structures
   // ------------------------------------------------------------------------

@@ -1,8 +1,9 @@
 #ifndef _SRENDERER_SHAPE_RECTANGLE_HEADER_
 #define _SRENDERER_SHAPE_RECTANGLE_HEADER_
 
-#include "shape.hlsli"
+#include "common/rotation.hlsli"
 #include "sampling/warps.hlsli"
+#include "shape.hlsli"
 
 struct SphericalRectangle {
     float3 o, x, y, z;     // local reference system 'R'
@@ -96,6 +97,17 @@ struct Rectangle : IShape {
         this.v = v;
     }
 
+    __init(float3 position, float3 euler,
+           float width, float height) {
+        float4x4 rot = rotate_euler(euler);
+        float3 u = mul(transpose(rot), float4(1, 0, 0, 0)).xyz * width;
+        float3 v = mul(transpose(rot), float4(0, 1, 0, 0)).xyz * height;
+        float3 n = mul(transpose(rot), float4(0, 0, 1, 0)).xyz;
+        return Rectangle(
+            position - 0.5 * u - 0.5 * v,
+            n, u, v);
+    }
+
     bool intersect(Ray ray, inout PrimaryPayload payload) {
         SetHit(payload.hit, false);
         const float3 pro = ray.origin - p;
@@ -170,6 +182,15 @@ struct Rectangle : IShape {
             }
         }
         return o;
+    }
+
+    float3[4] corners() {
+        float3 positions[4];
+        positions[0] = p;
+        positions[1] = p + u;
+        positions[2] = p + u + v;
+        positions[3] = p + v;
+        return positions;
     }
 };
 

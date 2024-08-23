@@ -16,7 +16,7 @@ struct eval_in {
 };
 
 struct sample_in {
-    float2 u;
+    float3 u;
     float3 wi;
     float3 geometric_normal;
     Frame shading_frame;
@@ -161,12 +161,13 @@ float3 eval<
     if (wh.x == 0 && wh.y == 0 && wh.z == 0) return float3(0.);
     
     float3 F = fresnel.eval(dot(wi, wh));
-    // float3 specular = R * TMicrofacetDistribution::D(wh, parameter)
-    //      * F * TMicrofacetDistribution::G(wo, wi, parameter) /
-    //                   (4 * cosThetaI * cosThetaO) * max(wo.z, 0.f);
     // float3 diffuse = R * k_inv_pi * (1 - F);
     // return specular + diffuse;
-    return TMicrofacetDistribution::D(wh, parameter);
+    // float3 specular = TMicrofacetDistribution::D(wh, parameter)
+    //                 * TMicrofacetDistribution::G(wo, wi, parameter)
+    //                 * F / (4 * cosThetaI);
+    float3 specular = TMicrofacetDistribution::D(wh, parameter) / (4 * cosThetaI);
+    return specular;
 }
 
 TMicrofacetDistribution.TParam.Differential bwd_eval<
@@ -223,18 +224,9 @@ ibsdf::sample_out sample_vnormal<TMicrofacetDistribution : IMicrofacetDistributi
     ibsdf::sample_in i,
     TMicrofacetDistribution.TParam parameter) {
     ibsdf::sample_out o;
-    // For Lambertian, we importance sample the cosine hemisphere domain.
-    if (dot(i.geometric_normal, i.wi) < 0) {
-        // Incoming direction is below the surface.
-        o.bsdf = float3(0);
-        o.wo = float3(0);
-        o.pdf = 0;
-        return o;
-    }
-
     // Sample microfacet orientation wh and reflected direction wi
     const float3 wi = i.shading_frame.to_local(i.wi);
-    const float3 wh = TMicrofacetDistribution::sample_wh_vnormal(wi, i.u, parameter);
+    const float3 wh = TMicrofacetDistribution::sample_wh_vnormal(wi, i.u.xy, parameter);
     // const float3 wh = sample_cos_hemisphere(i.u);
     const float3 wo = reflect(-wi, wh);
     o.wh = i.shading_frame.to_world(wh);
@@ -271,7 +263,7 @@ ibsdf::sample_out sample_normal<TMicrofacetDistribution : IMicrofacetDistributio
 
     // Sample microfacet orientation wh and reflected direction wi
     const float3 wi = i.shading_frame.to_local(i.wi);
-    const float3 wh = TMicrofacetDistribution::sample_wh_normal(wi, i.u, parameter);
+    const float3 wh = TMicrofacetDistribution::sample_wh_normal(wi, i.u.xy, parameter);
     // const float3 wh = sample_cos_hemisphere(i.u);
     const float3 wo = reflect(-wi, wh);
     o.wh = i.shading_frame.to_world(wh);
@@ -329,7 +321,7 @@ float4 sample_pos<TMicrofacetDerivative : IMicrofacetDerivative>(
 
     // Sample microfacet orientation wh and reflected direction wi
     const float3 wi = i.shading_frame.to_local(i.wi);
-    const float3 wh = TMicrofacetDerivative::sample_pos_wh(wi, i.u, parameter);
+    const float3 wh = TMicrofacetDerivative::sample_pos_wh(wi, i.u.xy, parameter);
     const float3 wo = reflect(-wi, wh);
     o.rgb = i.shading_frame.to_world(wo);
     // Compute PDF of wi for microfacet reflection
@@ -359,7 +351,7 @@ float4 sample_neg<TMicrofacetDerivative : IMicrofacetDerivative>(
 
     // Sample microfacet orientation wh and reflected direction wi
     const float3 wi = i.shading_frame.to_local(i.wi);
-    const float3 wh = TMicrofacetDerivative::sample_neg_wh(wi, i.u, parameter);
+    const float3 wh = TMicrofacetDerivative::sample_neg_wh(wi, i.u.xy, parameter);
     const float3 wo = reflect(-wi, wh);
     o.rgb = i.shading_frame.to_world(wo);
     // Compute PDF of wi for microfacet reflection

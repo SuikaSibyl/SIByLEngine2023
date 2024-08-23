@@ -5,6 +5,7 @@
 #include "geometry.hlsli"
 #include "math.hlsli"
 #include "sampling.hlsli"
+#include "mapping.hlsli"
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 // A Header for utilities and functions related to microfacet models.
@@ -315,16 +316,9 @@ interface IMicrofacetDerivative {
 //     }
 // };
 
-struct IsotropicTrowbridgeReitzParameter : 
-IMicrofacetParameter {
-    // Alpha parameter, related to roughness
-    // see "RoughnessToAlpha" function
-    float alpha;
+struct IsotropicTrowbridgeReitzParameter : IMicrofacetParameter {
+    float alpha; // closely related to roughness
     __init(float _alpha) { alpha = _alpha; }
-    // static This.Differential create_zero_diff() {
-    //     This.Differential instance;
-    //     return instance;
-    // }
 };
 
 struct IsotropicTrowbridgeReitzDistribution : IMicrofacetDistribution {
@@ -390,8 +384,25 @@ struct IsotropicTrowbridgeReitzDistribution : IMicrofacetDistribution {
      */
     [Differentiable]
     static float3 sample_wh_vnormal(no_diff const float3 wo, no_diff const float2 u,
-                            IsotropicTrowbridgeReitzParameter param) {
-        return TrowbridgeReitzSample(wo, param.alpha, u[0], u[1]);
+                                    IsotropicTrowbridgeReitzParameter param) {
+        // Transform w to hemispherical configuration
+        float3 wh = normalize(float3(param.alpha * wo.x, param.alpha * wo.y, wo.z));
+        if (wh.z < 0) wh = -wh;
+        // Find orthonormal basis for visible normal sampling
+        float3 T1 = (wh.z < 0.99999f) ? normalize(cross(float3(0, 0, 1), wh))
+                                      : float3(1, 0, 0);
+        float3 T2 = cross(wh, T1);
+        // Generate uniformly distributed points on the unit disk
+        float2 p = mapping::square_to_disk_polar(u);
+        // Warp hemispherical projection for visible normal sampling
+        float h = sqrt(1 - sqr(p.x));
+        p.y = lerp(h, p.y, (1 + wh.z) / 2);
+        // Reproject to hemisphere and transform normal to ellipsoid configuration
+        float pz = sqrt(max(0, 1 - length_squared(float2(p))));
+        float3 nh = p.x * T1 + p.y * T2 + pz * wh;
+        return normalize(float3(param.alpha * nh.x, param.alpha * nh.y, max(1e-6f, nh.z)));
+
+        // return TrowbridgeReitzSample(wo, param.alpha, u[0], u[1]);
     }
 
     /**
@@ -504,6 +515,10 @@ struct IsotropicTrowbridgeReitzDistribution : IMicrofacetDistribution {
         // 5. compute normal
         return normalize(float3(-slope_x, -slope_y, 1.));
     }
+
+    static bool effectively_smooth(float alpha) {
+        return alpha < 1e-3f;
+    }
 };
 
 struct IsotropicTrowbridgeReitzDerivative : IMicrofacetDerivative {
@@ -589,142 +604,145 @@ struct IsotropicTrowbridgeReitzDerivative : IMicrofacetDerivative {
     }
 }
 
-// struct AnisotropicTrowbridgeReitzDistribution : IMicrofacetDistribution {
-//     // Alpha parameter, related to roughness
-//     // see "RoughnessToAlpha" function
-//     float alpha_x; // alpha in x direction
-//     float alpha_y; // alpha in y direction
+struct AnisotropicTrowbridgeReitzParameter : IMicrofacetParameter {
+    float alpha_x; // closely related to roughness, x direction
+    float alpha_y; // closely related to roughness, y direction
+    __init(float _alpha_x, float _alpha_y) { 
+        alpha_x = _alpha_x;
+        alpha_y = _alpha_y;
+    }
+};
 
-//     __init(float _alpha_x, float _alpha_y) {
-//         alpha_x = _alpha_x;
-//         alpha_y = _alpha_y;
-//     }
+struct AnisotropicTrowbridgeReitzDistribution : IMicrofacetDistribution {
+    // Specify that the associated `TParam` type is `AnisotropicTrowbridgeReitzParameter`.
+    typedef AnisotropicTrowbridgeReitzParameter TParam;
+
+    /**
+     * D() describes the differential area of microfacets
+     * oriented with the given normal vector wh
+     * @param wh: the half vector of the microfacet
+     */
+    [Differentiable]
+    static float D(no_diff const float3 wh, AnisotropicTrowbridgeReitzParameter param) {
+        float tan2Theta = theta_phi_coord::Tan2Theta(wh);
+        if (isinf(tan2Theta)) return 0;
+        float cos4Theta = sqr(theta_phi_coord::Cos2Theta(wh));
+        float e = tan2Theta * (sqr(theta_phi_coord::CosPhi(wh) / param.alpha_x) +
+                               sqr(theta_phi_coord::SinPhi(wh) / param.alpha_y));
+        return 1 / (k_pi * param.alpha_x * param.alpha_y * cos4Theta * sqr(1 + e));
+    }
+
+    /** G(w) gives the fraction of microfacets in a differential area
+     * that are visible from the direction w.
+     * @param w: the direction vector given
+     */
+    [Differentiable]
+    static float G1(no_diff const float3 w, AnisotropicTrowbridgeReitzParameter param) {
+        return 1. / (1. + Lambda(w, param));
+    }
+
+    /**
+     * G(wo, wi) gives the fraction of microfacets in a differential area
+     * that are visible from both directions wo and wi.
+     * @param wo: the outgoing direction vector
+     * @param wi: the incoming direction vector
+     */
+    [Differentiable]
+    static float G(no_diff const float3 wo, no_diff const float3 wi,
+                   AnisotropicTrowbridgeReitzParameter param) {
+        return 1. / (1. + Lambda(wo, param) + Lambda(wi, param));
+    }
+
+    /**
+     * Lambda(w) for Anisotropic Trowbridge-Reitz microfacet.
+     * Lambda(w) gives the invisible masked microfacet area
+     * per visible microfacet area
+     * @param w: the direction vector given
+     */
+    [Differentiable]
+    static float Lambda(no_diff const float3 w, AnisotropicTrowbridgeReitzParameter param) {
+        float tan2Theta = theta_phi_coord::Tan2Theta(w);
+        if (isinf(tan2Theta)) return 0;
+        float alpha2 = sqr(theta_phi_coord::CosPhi(w) * param.alpha_x) 
+                     + sqr(theta_phi_coord::SinPhi(w) * param.alpha_y);
+        return (sqrt(1 + alpha2 * tan2Theta) - 1) / 2;
+    }
+
+    /**
+     * Sampling a microfacet orientation by sampling from
+     * the normal distribution D(wh) directly.
+     * @param wo: the outgoing direction vector
+     * @param u: a pair of random number
+     */
+    [Differentiable]
+    static float3 sample_wh_vnormal(no_diff const float3 wo, no_diff const float2 u,
+                                    AnisotropicTrowbridgeReitzParameter param) {
+        // Transform w to hemispherical configuration
+        float3 wh = normalize(float3(param.alpha_x * wo.x, param.alpha_y * wo.y, wo.z));
+        if (wh.z < 0) wh = -wh;
+        // Find orthonormal basis for visible normal sampling
+        float3 T1 = (wh.z < 0.99999f) ? normalize(cross(float3(0, 0, 1), wh))
+                                      : float3(1, 0, 0);
+        float3 T2 = cross(wh, T1);
+        // Generate uniformly distributed points on the unit disk
+        float2 p = mapping::square_to_disk_polar(u);
+        // Warp hemispherical projection for visible normal sampling
+        float h = sqrt(1 - sqr(p.x));
+        p.y = lerp(h, p.y, (1 + wh.z) / 2);
+        // Reproject to hemisphere and transform normal to ellipsoid configuration
+        float pz = sqrt(max(0, 1 - length_squared(float2(p))));
+        float3 nh = p.x * T1 + p.y * T2 + pz * wh;
+        return normalize(float3(param.alpha_x * nh.x, param.alpha_y * nh.y, max(1e-6f, nh.z)));
+    }
+
+    /**
+     * PDF of sampling a microfacet orientation by sampling from
+     * the (visible) normal distribution D(wh) directly.
+     * @param wo: the outgoing direction vector
+     * @param wh: the half vector of the microfacet
+     */
+    [Differentiable]
+    static float pdf_vnormal(no_diff const float3 wo, no_diff const float3 wh,
+                             AnisotropicTrowbridgeReitzParameter param) {
+        return D(wh, param) * G1(wo, param) * abs(dot(wo, wh)) /
+               theta_phi_coord::AbsCosTheta(wo);
+    }
+
+    /**
+     * Sampling a microfacet orientation by sampling from
+     * the normal distribution D(wh) directly.
+     * @param wo: the outgoing direction vector
+     * @param u: a pair of random number
+     */
+    [Differentiable]
+    static float3 sample_wh_normal(no_diff const float3 wo, no_diff const float2 u,
+                                   AnisotropicTrowbridgeReitzParameter param) {
+        float phi = (2 * k_pi) * u[1];
+        float tanTheta2 = param.alpha_x * param.alpha_y * u[0] / (1.0f - u[0]);
+        float cosTheta = 1 / sqrt(1 + tanTheta2);
+        float sinTheta = sqrt(max(0.f, 1.f - cosTheta * cosTheta));
+        float3 wh = theta_phi_coord::SphericalDirection(sinTheta, cosTheta, phi);
+        if (!theta_phi_coord::SameHemisphere(wo, wh)) wh = -wh;
+        return wh;
+    }
+
+    /**
+     * PDF of sampling a microfacet orientation by sampling from
+     * the (visible) normal distribution D(wh) directly.
+     * @param wo: the outgoing direction vector
+     * @param wh: the half vector of the microfacet
+     */
+    [Differentiable]
+    static float pdf_normal(no_diff const float3 wo, no_diff const float3 wh,
+                            AnisotropicTrowbridgeReitzParameter param) {
+        return D(wh, param) * theta_phi_coord::AbsCosTheta(wh);
+    }
     
-//     float D(float3 wh) {
-//         float tan2Theta = theta_phi_coord::Tan2Theta(wh);
-//         if (isinf(tan2Theta)) return 0.;
-//         float cos4Theta = theta_phi_coord::Cos2Theta(wh) 
-//                         * theta_phi_coord::Cos2Theta(wh);
-//         float e = (theta_phi_coord::Cos2Phi(wh) / (alpha_x * alpha_x) +
-//                    theta_phi_coord::Sin2Phi(wh) / (alpha_y * alpha_y)) * tan2Theta;
-//         return 1 / (k_pi * alpha_x * alpha_y * cos4Theta * (1 + e) * (1 + e));
-//     }
+    static bool effectively_smooth(AnisotropicTrowbridgeReitzParameter params) {
+        return max(params.alpha_x, params.alpha_y) < 1e-3f;
+    }
+};
 
-//     /**
-//      * G(w) gives the fraction of microfacets in a differential area
-//      * that are visible from the direction w.
-//      * @param w: the direction vector given
-//      */
-//     float G1(float3 w) { return 1. / (1. + Lambda(w)); }
-
-//     /**
-//      * G(wo, wi) gives the fraction of microfacets in a differential area
-//      * that are visible from both directions wo and wi.
-//      * @param wo: the outgoing direction vector
-//      * @param wi: the incoming direction vector
-//      */
-//     float G(float3 wo, float3 wi) {
-//         return 1. / (1. + Lambda(wo) + Lambda(wi));
-//     }
-
-//     /**
-//      * Lambda(w) for Anisotropic Trowbridge-Reitz microfacet.
-//      * Lambda(w) gives the invisible masked microfacet area
-//      * per visible microfacet area
-//      * @param w: the direction vector given
-//      */
-//     float Lambda(float3 w) {
-//         float absTanTheta = abs(theta_phi_coord::TanTheta(w));
-//         if (isinf(absTanTheta)) return 0.;
-//         // Compute _alpha_ for direction _w_
-//         float alpha = sqrt(theta_phi_coord::Cos2Phi(w) * alpha_x * alpha_x
-//                          + theta_phi_coord::Sin2Phi(w) * alpha_y * alpha_y);
-//         float alpha2Tan2Theta = (alpha * absTanTheta) * (alpha * absTanTheta);
-//         return (-1 + sqrt(1.f + alpha2Tan2Theta)) / 2;
-//     }
-
-//     /**
-//      * Sampling a visible microfacet orientation by sampling from
-//      * the normal distribution D(wh) directly.
-//      * @param wo: the outgoing direction vector
-//      * @param u: a pair of random number
-//      */
-//     float3 sample_wh(float3 wo, float2 u) {
-//         return TrowbridgeReitzSample(wo, alpha_x, alpha_y, u[0], u[1]);
-//     }
-
-//     float pdf(float3 wo, float3 wh) {
-//         return D(wh) * G1(wo) * abs(dot(wo, wh)) / theta_phi_coord::AbsCosTheta(wo);
-//     }
-    
-//     /**
-//      * Sample the Trowbridge-Reitz microfacet normal distribution function.
-//      * @url: https://github.com/mmp/pbrt-v3/blob/master/src/core/microfacet.cpp#L284
-//      */
-//     static void TrowbridgeReitzSample11(
-//         float cosTheta, float U1, float U2,
-//         inout float slope_x, inout float slope_y) {
-//         // special case (normal incidence)
-//         if (cosTheta > .9999) {
-//             float r = sqrt(U1 / (1 - U1));
-//             float phi = k_2pi * U2;
-//             slope_x = r * cos(phi);
-//             slope_y = r * sin(phi);
-//             return;
-//         }
-//         float sinTheta = sqrt(max(0., 1. - cosTheta * cosTheta));
-//         float tanTheta = sinTheta / cosTheta;
-//         float a = 1 / tanTheta;
-//         float G1 = 2 / (1 + sqrt(1.f + 1.f / (a * a)));
-//         // sample slope_x
-//         float A = 2 * U1 / G1 - 1;
-//         float tmp = 1.f / (A * A - 1.f);
-//         if (tmp > 1e10) tmp = 1e10;
-//         float B = tanTheta;
-//         float D = sqrt(max(B * B * tmp * tmp - (A * A - B * B) * tmp, 0.));
-//         float slope_x_1 = B * tmp - D;
-//         float slope_x_2 = B * tmp + D;
-//         slope_x = (A < 0 || slope_x_2 > 1.f / tanTheta) ? slope_x_1 : slope_x_2;
-//         // sample slope_y
-//         float S;
-//         if (U2 > 0.5f) {
-//             S = 1.f;
-//             U2 = 2.f * (U2 - .5f);
-//         } else {
-//             S = -1.f;
-//             U2 = 2.f * (.5f - U2);
-//         }
-//         float z = (U2 * (U2 * (U2 * 0.27385f - 0.73369f) + 0.46341f)) /
-//             (U2 * (U2 * (U2 * 0.093073f + 0.309420f) - 1.000000f) + 0.597999f);
-//         slope_y = S * z * sqrt(1.f + slope_x * slope_x);
-//     }
-
-//     /**
-//      * Sample the Trowbridge-Reitz microfacet normal distribution function.
-//      * @url: github.com/mmp/pbrt-v3/blob/master/src/core/microfacet.cpp#L284
-//      */
-//     static float3 TrowbridgeReitzSample(
-//         float3 wi, float alpha_x,
-//         float alpha_y, float U1, float U2) {
-//         // 1. stretch wi
-//         float3 wiStretched =
-//             normalize(float3(alpha_x * wi.x, alpha_y * wi.y, wi.z));
-//         // 2. simulate P22_{wi}(x_slope, y_slope, 1, 1)
-//         float slope_x, slope_y;
-//         TrowbridgeReitzSample11(theta_phi_coord::CosTheta(wiStretched), U1, U2, slope_x, slope_y);
-//         // 3. rotate
-//         float tmp = theta_phi_coord::CosPhi(wiStretched) * slope_x 
-//                   - theta_phi_coord::SinPhi(wiStretched) * slope_y;
-//         slope_y = theta_phi_coord::SinPhi(wiStretched) * slope_x 
-//                 + theta_phi_coord::CosPhi(wiStretched) * slope_y;
-//         slope_x = tmp;
-//         // 4. unstretch
-//         slope_x = alpha_x * slope_x;
-//         slope_y = alpha_y * slope_y;
-//         // 5. compute normal
-//         return normalize(float3(-slope_x, -slope_y, 1.));
-//     }
-// };
 
 /**
  * Generalized Trowbridge and Reitz (GTR) Normal Distribution Function.
@@ -822,42 +840,6 @@ float AnisotropicGGX_Masking(in_ref(float3) v_local, float ax, float ay) {
 }
 
 /**
- * Fresnel equation of a dielectric interface.
- * (Not Schlick Fresnel approximation)
- * @url: https://seblagarde.wordpress.com/2013/04/29/memo-on-fresnel-equations/
- * @param n_dot_i: abs(cos(incident angle))
- * @param n_dot_t: abs(cos(transmission angle))
- * @param eta: eta_transmission / eta_incident
- */
-[Differentiable]
-float FresnelDielectric(float n_dot_i, float n_dot_t, float eta) {
-    const float rs = (n_dot_i - eta * n_dot_t) / (n_dot_i + eta * n_dot_t);
-    const float rp = (eta * n_dot_i - n_dot_t) / (eta * n_dot_i + n_dot_t);
-    const float F = (rs * rs + rp * rp) / 2;
-    return F;
-}
-
-/**
- * Fresnel equation of a dielectric interface.
- * This is a specialized version for the code above, only using the incident angle.
- * The transmission angle is derived from n_dot_i
- * (Not Schlick Fresnel approximation)
- * @url: https://seblagarde.wordpress.com/2013/04/29/memo-on-fresnel-equations/
- * @param n_dot_i: abs(cos(incident angle))
- * @param eta: eta_transmission / eta_incident
- */
-[Differentiable]
-float FresnelDielectric(float n_dot_i, float eta) {
-    const float n_dot_t_sq = 1 - (1 - n_dot_i * n_dot_i) / (eta * eta);
-    if (n_dot_t_sq < 0) {
-        // total internal reflection
-        return 1.f;
-    }
-    float n_dot_t = sqrt(n_dot_t_sq);
-    return FresnelDielectric(abs(n_dot_i), n_dot_t, eta);
-}
-
-/**
  * Sample the GGX distribution of visible normals.
  * See "Sampling the GGX Distribution of Visible Normals", Heitz, 2018.
  * @url: https://jcgt.org/published/0007/04/01/
@@ -913,6 +895,64 @@ float3 SampleVisibleNormals(
 // @url: https://www.pbr-book.org/3ed-2018/Reflection_Models/Fresnel_Incidence_Effects
 ///////////////////////////////////////////////////////////////////////////////////////////
 
+[Differentiable]
+float FresnelDielectric(no_diff float cosTheta_i, float eta) {
+    cosTheta_i = clamp(cosTheta_i, -1, 1);
+    // Potentially flip interface orientation for Fresnel equations
+    if (cosTheta_i < 0) {
+        eta = 1 / eta;
+        cosTheta_i = -cosTheta_i;
+    }
+    // Compute cosTheta_t for Fresnel equations using Snell’s law
+    float sin2Theta_i = 1 - sqr(cosTheta_i);
+    float sin2Theta_t = sin2Theta_i / sqr(eta);
+    if (sin2Theta_t >= 1) return 1.f;
+    float cosTheta_t = safe_sqrt(1 - sin2Theta_t);
+    float r_parl = (eta * cosTheta_i - cosTheta_t) /
+                   (eta * cosTheta_i + cosTheta_t);
+    float r_perp = (cosTheta_i - eta * cosTheta_t) /
+                   (cosTheta_i + eta * cosTheta_t);
+    return (sqr(r_parl) + sqr(r_perp)) / 2;
+}
+
+[Differentiable]
+float FresnelComplex(float cosTheta_i, complex eta) {
+    cosTheta_i = clamp(cosTheta_i, 0, 1);
+    // Compute complex cosθt for Fresnel equations using Snell's law
+    float sin2Theta_i = 1 - sqr(cosTheta_i);
+    complex sin2Theta_t = sin2Theta_i / sqr(eta);
+    complex cosTheta_t = sqrt(1 - sin2Theta_t);
+    complex r_parl = (eta * cosTheta_i - cosTheta_t) /
+                     (eta * cosTheta_i + cosTheta_t);
+    complex r_perp = (cosTheta_i - eta * cosTheta_t) /
+                     (cosTheta_i + eta * cosTheta_t);
+    return (norm(r_parl) + norm(r_perp)) / 2;
+}
+
+/**
+ * @param n: The surface normal.
+ * @param eta: The relative index of refraction;
+ *  it specifies the IOR ratio of the object interior relative to the outside,
+ *  as indicated by the surface normal n.
+ */
+float3 safe_refract(float3 wi, float3 n, inout float eta) {
+    float cosTheta_i = dot(n, wi);
+    // Potentially flip interface orientation for Snell's law
+    if (cosTheta_i < 0) {
+        eta = 1 / eta;
+        cosTheta_i = -cosTheta_i;
+        n = -n;
+    }
+    // Compute cosθ_t using Snell's law
+    float sin2Theta_i = max(0, 1 - sqr(cosTheta_i));
+    float sin2Theta_t = sin2Theta_i / sqr(eta);
+    // Handle total internal reflection case
+    if (sin2Theta_t >= 1) return float3(0);
+    float cosTheta_t = safe_sqrt(1 - sin2Theta_t);
+    // return refracted direction
+    return -wi / eta + (cosTheta_i / eta - cosTheta_t) * n;
+}
+
 interface IFresnel {
     float3 eval(float cosThetaI);
 }
@@ -939,6 +979,8 @@ struct DielectricFresnel : IFresnel {
         float sinThetaI = sqrt(max(0.0, 1 - cosThetaI * cosThetaI));
         float sinThetaT = etaI / etaT * sinThetaI;
         // Handle total internal reflection
+        if (sinThetaT >= 1)
+            return 1;
         float cosThetaT = sqrt(max(0.0, 1 - sinThetaT * sinThetaT));
         float Rparl = ((etaT * cosThetaI) - (etaI * cosThetaT)) /
                       ((etaT * cosThetaI) + (etaI * cosThetaT));

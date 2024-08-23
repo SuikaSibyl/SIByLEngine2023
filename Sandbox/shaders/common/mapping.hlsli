@@ -51,6 +51,26 @@ float2 disk_to_square_stretching(float2 p) {
 }
 
 /**
+ * Disk Polar
+ * ✘ equal-area
+ * ✘ conformal
+ */
+[Differentiable]
+float2 square_to_disk_polar(float2 p) {
+    const float r = sqrt(p.x);
+    const float theta = k_2pi * p.y;
+    float sin_theta; float cos_theta;
+    sincos(theta, sin_theta, cos_theta);
+    return float2(r * cos(theta), r * sin(theta));
+}
+
+float2 disk_to_square_polar(float2 p) {
+    float phi = atan2(p.y, p.x);
+    if (phi < 0) phi += k_2pi;
+    return float2(sqr(p.x) + sqr(p.y), phi / k_2pi);
+}
+
+/**
  * Shirley's equal-area mapping [Shirley and Chiu 1997].
  * ✔ equal-area
  * ✘ conformal: suffers from strong angular distortions, especially
@@ -111,7 +131,7 @@ float2 disk_to_square_shirley(float2 p) {
         x = (4. / k_pi) * r * (phi - 3 * k_pi_over_2);
         y = -r;
     }
-    return float2(x, y);
+    return float2(x, y) * 0.5 + 0.5;
 }
 
 /**
