@@ -1055,7 +1055,7 @@ struct TextureResourceVirtualMachine {
     uint32_t mip_beg;
     uint32_t mip_end;
 
-    auto operator==(TextureSubresourceRange const& x) noexcept -> bool {
+    auto operator==(TextureSubresourceRange const& x) const noexcept -> bool {
       return level_beg == x.level_beg && level_end == x.level_end &&
              mip_beg == x.mip_beg && mip_end == x.mip_end;
     }
@@ -1066,7 +1066,7 @@ struct TextureResourceVirtualMachine {
     RHI::AccessFlags access;
     RHI::TextureLayout layout;
 
-    auto operator==(TextureSubresourceState const& x) noexcept -> bool {
+    auto operator==(TextureSubresourceState const& x) const noexcept -> bool {
       return stageMask == x.stageMask && access == x.access &&
              layout == x.layout;
     }

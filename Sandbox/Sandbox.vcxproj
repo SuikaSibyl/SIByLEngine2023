@@ -130,7 +130,10 @@
     </Link>
     <PostBuildEvent>
       <Command>xcopy /y /d  "$(SolutionDir)Engine\Binaries\ThirdParty\assimp\*.dll" $(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\
-xcopy /y /d  "$(SolutionDir)Engine\Binaries\ThirdParty\slang\*.dll" $(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</Command>
+xcopy /y /d  "$(SolutionDir)Engine\Binaries\ThirdParty\slang\*.dll" $(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\
+xcopy /y /d  "$(SolutionDir)Engine\Binaries\ThirdParty\ffmpeg\dll\*.dll" $(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\
+xcopy /y /d  "$(SolutionDir)Engine\Binaries\ThirdParty\aftermath\*.dll" $(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\
+xcopy /y /d  "$(SolutionDir)Engine\Binaries\ThirdParty\vulkan\*.dll" $(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -152,7 +155,10 @@ xcopy /y /d  "$(SolutionDir)Engine\Binaries\ThirdParty\slang\*.dll" $(SolutionDi
     </Link>
     <PostBuildEvent>
       <Command>xcopy /y /d  "$(SolutionDir)Engine\Binaries\ThirdParty\assimp\*.dll" $(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\
-xcopy /y /d  "$(SolutionDir)Engine\Binaries\ThirdParty\slang\*.dll" $(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</Command>
+xcopy /y /d  "$(SolutionDir)Engine\Binaries\ThirdParty\slang\*.dll" $(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\
+xcopy /y /d  "$(SolutionDir)Engine\Binaries\ThirdParty\ffmpeg\dll\*.dll" $(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\
+xcopy /y /d  "$(SolutionDir)Engine\Binaries\ThirdParty\aftermath\*.dll" $(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\
+xcopy /y /d  "$(SolutionDir)Engine\Binaries\ThirdParty\vulkan\*.dll" $(SolutionDir)Engine\Binaries\Source\$(Platform)\$(Configuration)\</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

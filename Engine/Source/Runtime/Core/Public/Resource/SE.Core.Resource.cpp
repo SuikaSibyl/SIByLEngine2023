@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <thread>
 #include <unordered_map>
 #include <yaml-cpp/yaml.h>
 #include <yaml-cpp/node/node.h>

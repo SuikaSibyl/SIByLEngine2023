@@ -1,5 +1,6 @@
 #include <string>
 #include <chrono>
+#include <thread>
 #include "../Public/SE.Core.Profiler.hpp"
 #include <Config/SE.Core.Config.hpp>
 
