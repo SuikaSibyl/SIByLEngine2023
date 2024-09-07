@@ -626,11 +626,11 @@ SLCTestGraph::SLCTestGraph() {
   addPass(std::make_unique<Postprocess::AccumulatePass>(), "Accumulation Pass");
   addEdge("SLC GI Pass", "Color", "Accumulation Pass", "Input");
   
-  addPass(std::make_unique<Addon::Postprocess::ToneMapperPass>(), "ToneMapper Pass");
-  addEdge("Accumulation Pass", "Output", "ToneMapper Pass", "Input");
+  //addPass(std::make_unique<Addon::Postprocess::ToneMapperPass>(), "ToneMapper Pass");
+  //addEdge("Accumulation Pass", "Output", "ToneMapper Pass", "Input");
 
-  
-  markOutput("ToneMapper Pass", "Output");
+  markOutput("Accumulation Pass", "Output");
+  //markOutput("ToneMapper Pass", "Output");
   //markOutput("TestVBuffer Pass", "Color");
 }
 }

@@ -1315,7 +1315,7 @@ SE_EXPORT struct VXGuidingGraph : public RDG::Graph {
     else addEdge("VXClusterFindAssociate2 Pass", "AssociateBuffer", "VXGuiderGI Pass", "AssociateBuffer");
 
     // visualize the VXPG distribution via accumulation
-    bool accumPdf = true;
+    bool accumPdf = false;
     if (accumPdf) {
       addPass(std::make_unique<Addon::SSGuiding::PdfAccum_ClearPass>(), "PdfAccumClear Pass");
       addPass(std::make_unique<Addon::VXGuiding::VXGuiderAccumPass>(&setting), "VXGuiderGIAccum Pass");

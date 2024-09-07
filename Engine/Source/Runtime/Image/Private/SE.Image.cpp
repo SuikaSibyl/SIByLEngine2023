@@ -556,6 +556,7 @@ auto DDS::fromDDS(std::filesystem::path const& path) noexcept
 namespace SIByL {
 auto ImageLoader::load_rgba8(std::filesystem::path const& path) noexcept
     -> std::unique_ptr<Image::Image<Image::COLOR_R8G8B8A8_UINT>> {
+  Core::LogManager::Log(path.string());
   if (path.extension() == ".jpg" || path.extension() == ".JPG" ||
       path.extension() == ".JPEG")
     return Image::JPEG::fromJPEG(path);
@@ -574,6 +575,7 @@ auto ImageLoader::load_rgba8(std::filesystem::path const& path) noexcept
 
 auto ImageLoader::load_rgba32(std::filesystem::path const& path) noexcept
     -> std::unique_ptr<Image::Image<Image::COLOR_R32G32B32A32_FLOAT>> {
+  Core::LogManager::Log(path.string());
   if (path.extension() == ".exr")
     return Image::EXR::fromEXR(path);
   else {

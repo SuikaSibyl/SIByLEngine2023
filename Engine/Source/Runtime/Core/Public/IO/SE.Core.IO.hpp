@@ -12,6 +12,7 @@
 namespace SIByL::Core {
 SE_EXPORT inline auto syncReadFile(char const* path, Buffer& buffer) noexcept
     -> bool {
+  LogManager::Log(std::string(path));
   std::ifstream ifs(path, std::ifstream::binary);
   if (ifs.is_open()) {
     ifs.seekg(0, std::ios::end);

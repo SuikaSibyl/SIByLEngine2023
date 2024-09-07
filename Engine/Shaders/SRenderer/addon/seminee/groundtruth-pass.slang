@@ -41,13 +41,14 @@ float3 unidirectional_path_tracing(in_ref(Ray) primaryRay, inout_ref(RandomSampl
 
     float3 bsdfRadiance = float3(0);
     float3 first_gi = float3(0);
-    float bsdf_pdf;
-    Ray bsdfRay = SpawnBsdfRay(hit, -primaryRay.direction, RNG, bsdf_pdf);
-    float3 first_bsdf = EvalBsdf(hit, -primaryRay.direction, bsdfRay.direction);
-    float3 throughput = first_bsdf / bsdf_pdf;
-    float3 vpl_position = float3(0);
 
     for (int i = 0; i < pConst.spp; ++i) {
+        float3 throughput = float3(1); float bsdf_pdf;
+        Ray bsdfRay = SpawnBsdfRay(hit, -primaryRay.direction, RNG, bsdf_pdf);
+        float3 first_bsdf = EvalBsdf(hit, -primaryRay.direction, bsdfRay.direction);
+        throughput = first_bsdf / bsdf_pdf;
+        float3 vpl_position = float3(0);
+
         float3 extra_gi = float3(0);
         const float3 bsdf_dir = bsdfRay.direction;
         if (bsdf_pdf != 0) {
@@ -61,7 +62,8 @@ float3 unidirectional_path_tracing(in_ref(Ray) primaryRay, inout_ref(RandomSampl
         }
     }
     for (int i = 0; i < pConst.one_bounce_spp; ++i) {
-        const float3 bsdf_dir = bsdfRay.direction;
+        float3 throughput = float3(1); float bsdf_pdf;
+        Ray bsdfRay = SpawnBsdfRay(hit, -primaryRay.direction, RNG, bsdf_pdf);
         if (bsdf_pdf != 0) {
             Intersection(bsdfRay, SceneBVH, payload, RNG);
             if (HasHit(payload.hit)) {

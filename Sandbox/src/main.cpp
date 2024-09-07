@@ -78,27 +78,28 @@ struct SandBoxApplication : public Application::ApplicationBase {
 
     GFX::GFXManager::get()->config.meshLoaderConfig = SRenderer::meshLoadConfig;
 
-    scene.deserialize("P:/GitProjects/SIByLEngine2022/Sandbox/content/test_scene.scene");
-    // scene.deserialize("C:/Users/suika/Desktop/testscene/bedroom_mask.scene");
-
+    //scene.deserialize("../Sandbox/scenes/ajar.scene");
+    //scene.deserialize("../Sandbox/scenes/fireplace.scene");
+    scene.deserialize("../Sandbox/scenes/staircase.scene");
+    
     InvalidScene();
     device->waitIdle();
 
-    pipeline1 = std::make_unique<Addon::Differentiable::AutoDiffPipeline>();
+    pipeline1 = std::make_unique<GTPipeline>();
     //pipeline1 = std::make_unique<SRP::GeoInspectPipeline>();
     //pipeline1 = std::make_unique<GTPipeline>();
     ////pipeline2 = std::make_unique<Addon::Lightmap::LightmapVisualizePipeline>();
     ////rtgi_pipeline = std::make_unique<Addon::Differentiable::NeuralRadiosityPipeline>();
     ////// pipeline1 = std::make_unique<CustomPipeline>();
     ////// pipeline2 = std::make_unique<VXPGReSTIRPipeline>();
-    ////// pipeline1 = std::make_unique<Addon::SLC::SLCTestPipeline>();
     ////// pipeline2 = std::make_unique<SSPGReSTIRPipeline>();
-    ////pipeline2 = std::make_unique<Addon::SSPM::SSPMGPipeline>();
+    //pipeline2 = std::make_unique<Addon::SSPM::SSPMGPipeline>();
     ////pipeline2 = std::make_unique<Addon::Fluid::LBMPipeline>();
-    ////pipeline2 = std::make_unique<Addon::SLC::SLCTestPipeline>();
-    pipeline2 = std::make_unique<RestirGIPipeline>();
+    //pipeline2 = std::make_unique<Addon::SLC::SLCTestPipeline>();
+    //pipeline2 = std::make_unique<RestirGIPipeline>();
+    //pipeline2 = std::make_unique<Addon::SLC::SLCTestPipeline>();
+    pipeline2 = std::make_unique<SSPGP_GMM_Pipeline>();
     //////rtgi_pipeline = std::make_unique<Addon::VXGuiding::GeometryPrebakePipeline>();
-    rtgi_pipeline = std::make_unique<VXPGReSTIRPipeline>();
     ////rtgi_pipeline = std::make_unique<Addon::SST::SSTTestPipeline>();
     //////rtgi_pipeline = std::make_unique<VXPGASVGFPipeline>();
     ////////      rtgi_pipeline = std::make_unique<RestirGIPipeline>();
@@ -108,18 +109,16 @@ struct SandBoxApplication : public Application::ApplicationBase {
     ////geoinsp_pipeline = std::make_unique<GTPipeline>();
     geoinsp_pipeline = std::make_unique<SRP::GeoInspectPipeline>();
     //geoinsp_pipeline = std::make_unique<CustomPipeline>();
-    ////vxgi_pipeline = std::make_unique<SSPGPipeline>();
+    //vxgi_pipeline = std::make_unique<SSPGPipeline>();
     //////vxdi_pipeline = std::make_unique<VXPGPipeline>();
+    rtgi_pipeline = std::make_unique<VXPGReSTIRPipeline>();
     vxgi_pipeline = std::make_unique<VXPGASVGFPipeline>();
-    ////vxdi_pipeline = std::make_unique<SSPGP_GMM_Pipeline>();
-    //vxdi_pipeline = std::make_unique<VXPGASVGFPipeline>();
     vxdi_pipeline = std::make_unique<VXPGPipeline>();
-    //vxdi_pipeline = std::make_unique<Addon::VXGuiding::GeometryPrebakePipeline>();
-    //vxdi_pipeline = std::make_unique<Addon::GBufferInspectorPass>();
+
     pipeline1->build();
-    //pipeline2->build();
-    //rtgi_pipeline->build();
+    pipeline2->build();
     geoinsp_pipeline->build();
+    rtgi_pipeline->build();
     vxgi_pipeline->build();
     vxdi_pipeline->build();
 
@@ -255,9 +254,9 @@ struct SandBoxApplication : public Application::ApplicationBase {
     static int pipeline_id = 0;
     ImGui::Begin("Pipeline Choose");
     {  // Select an item type
-      const char* item_names[] = {"Auto Diff",      "Forward",
-                                  "RTGI Pipeline",  "Geo Inspector",
-                                  "VXGI Inspector", "VXDI Inspector"};
+      const char* item_names[] = {"Path Tracing",   "ReSTIR GI",
+                                  "Geo Inspector",  "VXPG + ReSTIR",
+                                  "VXPG + ASVGF",   "Vanilla VXPG"};
       bool reselect = ImGui::Combo("Mode", &pipeline_id, item_names, IM_ARRAYSIZE(item_names),
                    IM_ARRAYSIZE(item_names));
       if (reselect) {
@@ -270,10 +269,10 @@ struct SandBoxApplication : public Application::ApplicationBase {
         pipeline = pipeline2.get();
         editorLayer->getWidget<Editor::RDGViewerWidget>()->pipeline = pipeline;
       } else if (pipeline_id == 2) {
-        pipeline = rtgi_pipeline.get();
+        pipeline = geoinsp_pipeline.get();
         editorLayer->getWidget<Editor::RDGViewerWidget>()->pipeline = pipeline;
       } else if (pipeline_id == 3) {
-        pipeline = geoinsp_pipeline.get();
+        pipeline = rtgi_pipeline.get();
         editorLayer->getWidget<Editor::RDGViewerWidget>()->pipeline = pipeline;
       } else if (pipeline_id == 4) {
         pipeline = vxgi_pipeline.get();
@@ -389,8 +388,8 @@ struct SandBoxApplication : public Application::ApplicationBase {
   RDG::Pipeline* pipeline = nullptr;
   std::unique_ptr<RDG::Pipeline> pipeline1 = nullptr;
   std::unique_ptr<RDG::Pipeline> pipeline2 = nullptr;
-  std::unique_ptr<RDG::Pipeline> rtgi_pipeline = nullptr;
   std::unique_ptr<RDG::Pipeline> geoinsp_pipeline = nullptr;
+  std::unique_ptr<RDG::Pipeline> rtgi_pipeline = nullptr;
   std::unique_ptr<RDG::Pipeline> vxgi_pipeline = nullptr;
   std::unique_ptr<RDG::Pipeline> vxdi_pipeline = nullptr;
 
