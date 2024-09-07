@@ -415,7 +415,7 @@ auto SRenderer::invalidScene(GFX::Scene& scene) noexcept -> void {
               !Core::ResourceManager::get()->getResource<GFX::Texture>(
                   baseTexGUID)) {
             baseTexGUID = GFX::GFXManager::get()->registerTextureResource(
-                "content/textures/white.png");
+                "../Engine/Binaries/Runtime/textures/white.png");
           }
           matData.baseOrDiffuseTextureIndex =
               getTexID(baseTexGUID, mat->textures["base_color"].sampler);

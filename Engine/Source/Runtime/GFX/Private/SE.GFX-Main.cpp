@@ -1931,7 +1931,7 @@ auto GFXManager::registerTextureResource(char const* filepath) noexcept
     -> Core::GUID {
   std::filesystem::path path(filepath);
   if (!std::filesystem::exists(path)) {
-    path = "content/textures/lost.png";
+    path = "../Engine/Binaries/Runtime/textures/lost.png";
   }
   if (path.extension() == ".dds") {
     std::filesystem::path current_path = std::filesystem::current_path();

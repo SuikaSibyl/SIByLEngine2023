@@ -10,9 +10,20 @@ Previous version could be find in: [SibylEngine2021](https://github.com/SuikaSib
 
 Only support Windows platform and MSVC compiler for now.
 
-Either directly open `SIByLEngine.sln` with `VisualStudio 2022` on Windows, or use any CMake tools to open the CMake project (Visual Studio open Folder / vscode / CLion etc.).
 
-By default, Nvidia GPU with Turing or higher architecture is required to correctly run the engine, as vulkan hardware raytracing is defaultly used. In the future, better compatibility with CPU raytracing fallback might be supported. If no corresponding GPU exists, compilation should still be successful, but you should manually turn off ray-tracing-related features to run it without fatal error.
+By default, Nvidia GPU with Turing or higher architecture is required to correctly run the examples, as vulkan hardware raytracing is defaultly used. If no corresponding GPU exists, compilation should still be successful, but you should manually turn off ray-tracing-related features to run it without fatal error.
+
+
+### Compiliation Instruction
+
+The compilation is tested on Windows 11 machine with Visual Studio 2022 (11.17.2, older version should also work).
+
+1) Download Vulkan SDK from [LunarG](https://vulkan.lunarg.com/sdk/home#windows), and install it. This is mandatory to enable Validation layer, which is helpful for potential error detection. Test compilation uses VulkanSDK-1.3.290.0 (latest release), but moderately older version should also work.
+2) Open the SIByLEngine.sln solution with VisualStudio 2022.
+Select "Sandbox" project as target and hit compilation. It will take some time, but ideally you should eventually be able to compile everything without getting error. You should be able to compile with any GPU, but to run the default example you will need a NV GPU supporting hardware ray tracing.
+3) Download scene binaries from [google drive link](https://drive.google.com/file/d/1_tCI2eo3ASknxz26kWvQJBKBTgsoL9Eh/view?usp=drive_link), uncompress it in root folder so that its "Sandbox" folder overlaps with the "Sandbox" folder already exists.
+4) You should be able to run the example hopefully.
+
 
 ## Design Decisions
 - `NOT Use C++ 20 Module` for the all the modules. Although I had previously used it extensively and found it to be a great feature. Despite MSVC's support for the feature, compilation is not always stable, sometimes resulting in weird 'internal error' messages that force the process to be abandoned. Moreover, as the project grows, both IntelliSense and ReSharper struggle to provide proper code highlighting and intelligent code completions, which makes coding extremely painful. Also, analysising the project eat up all the memory quickly and get the IDE and compiler super slow... Given these challenges, I have opted to deprecate the feature.
