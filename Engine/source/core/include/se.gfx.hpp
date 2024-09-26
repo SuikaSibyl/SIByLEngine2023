@@ -263,8 +263,19 @@ struct SIByL_API TextureLoader {
 struct SIByL_API Material : public Resource {
   /* cast material to gltf material structure. */
   operator tinygltf::Material() const;
+  struct MaterialPacket {
+    int32_t bxdf_type = 0;
+    int32_t bitfield  = 0;
+    float floatscal_0 = 0;
+    float floatscal_1 = 0;
+    vec4 floatvec_0 = vec4{ 0 };
+    vec4 floatvec_1 = vec4{ 0 };
+    vec4 floatvec_2 = vec4{ 0 };
+  };
+  /** virtual destructor */
+  virtual ~Material() = default;
   virtual auto getName() const noexcept -> char const* override;
-
+  virtual auto getDataPacket() const noexcept -> MaterialPacket;
 
   vec3 baseOrDiffuseColor = vec3(1.f);
   float roughnessFactor = 1.f;
@@ -275,7 +286,7 @@ struct SIByL_API Material : public Resource {
 };
 
 struct MaterialHandle {
-  ex::resource<Material> handle;
+  ex::resource<Material> handle; RUID ruid = 0;
   auto get() noexcept -> Material* { return handle.handle().get(); }
   Material* operator->() { return get(); }
 };
@@ -574,12 +585,17 @@ struct SIByL_API Scene : public Resource {
     auto bindingResourceVertex() noexcept -> rhi::BindingResource;
     auto bindingResourceGeometry() noexcept -> rhi::BindingResource;
     auto bindingResourceCamera() noexcept -> rhi::BindingResource;
+    auto bindingResourceMaterial() noexcept -> rhi::BindingResource;
     auto bindingResourceTLAS() noexcept -> rhi::BindingResource;
     auto bindingResourceTLASPrev() noexcept -> rhi::BindingResource;
     auto bindingResourceUvTLAS() noexcept -> rhi::BindingResource;
 
     auto getPositionBuffer() noexcept -> BufferHandle;
     auto getIndexBuffer() noexcept -> BufferHandle;
+
+    // private
+    std::unordered_map<RUID, int> material_loc_index;
+    auto try_fetch_material_index(MaterialHandle& handle) noexcept -> int;
   } gpuScene;
 
   auto getGPUScene() noexcept -> GPUScene*;
@@ -604,6 +620,7 @@ struct SIByL_API Scene : public Resource {
     NodeDirty = 0 << 0,
     Camera = 1 << 0,
     Geometry = 1 << 1,
+    Material = 1 << 2,
   };
   uint64_t dirtyFlags = 0;
 };
@@ -680,6 +697,8 @@ struct SIByL_API GFXContext {
   // load mesh resource
   // -------------------------------------------
   static auto load_mesh_empty() noexcept -> MeshHandle;
+  // load material resource
+  // -------------------------------------------
   static auto load_material_empty() noexcept -> MaterialHandle;
 
   // load shader module resource
@@ -715,5 +734,38 @@ struct SIByL_API GFXContext {
 
   static auto load_scene_gltf(std::string const& path) noexcept -> SceneHandle;
   static auto create_scene(std::string const& name) noexcept -> SceneHandle;
+};
+
+struct SIByL_API PMFDataPack {
+  PMFDataPack();
+  gfx::Buffer buffer;
+};
+
+struct SIByL_API PMFConstructor {
+  struct SIByL_API PiecewiseConstant1D{
+    uint32_t offset;
+    uint32_t size;
+    float min; 
+    float max;
+    float func_int;
+    float sample(float u, float& pdf, int& offset);
+  };
+
+  struct PiecewiseConstant2D {
+    uint32_t condition_offset;
+    uint32_t condition_size;
+    uint32_t marginal_offset;
+    uint32_t marginal_size;
+    vec2 min;
+    vec2 max;
+    float func_int;
+  };
+
+  static PMFDataPack datapack;
+  static PiecewiseConstant1D build_piecewise_constant_1d(std::span<float> f, float min, float max);
+  static PiecewiseConstant2D build_piecewise_constant_2d(std::span<float> f, int nu, int nv, vec2 min, vec2 max);
+  static auto upload_datapack() noexcept -> void;
+  static auto clear_datapack() noexcept -> void;
+  static auto binding_resource_buffer() noexcept -> rhi::BindingResource;
 };
 }

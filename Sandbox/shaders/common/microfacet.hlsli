@@ -401,8 +401,6 @@ struct IsotropicTrowbridgeReitzDistribution : IMicrofacetDistribution {
         float pz = sqrt(max(0, 1 - length_squared(float2(p))));
         float3 nh = p.x * T1 + p.y * T2 + pz * wh;
         return normalize(float3(param.alpha * nh.x, param.alpha * nh.y, max(1e-6f, nh.z)));
-
-        // return TrowbridgeReitzSample(wo, param.alpha, u[0], u[1]);
     }
 
     /**
@@ -1064,5 +1062,140 @@ float3 SchlickFresnel(in_ref(float3) F0, float VdotH) {
     return F0 + (1 - F0) * SchlickWeight(VdotH); }
 float4 SchlickFresnel(in_ref(float4) F0, float VdotH) {
     return F0 + (1 - F0) * SchlickWeight(VdotH); }
+
+// This function is meant to be differentiated only w.r.t x for Newton-Rhapson
+[Differentiable]
+float base_dx_phi_cdf(float x, 
+    no_diff float u, no_diff float a, no_diff float b, 
+    no_diff float k1, no_diff float k2, no_diff float k3) {
+    float t1 = -u;
+    float t2 = k1 * atan(k2 * tan(x)) / k3;
+    float t3 = k1 * sin(2.0 * x) / ((a + 1.0) * (a + b + 2.0 + (a - b) * cos(2.0 * x)));
+    return t1 + t2 + t3;
+}
+
+// This function is meant to be differentiated only w.r.t x for Newton-Rhapson
+[Differentiable]
+float base_dy_phi_cdf(float x, no_diff float u, no_diff float a, no_diff float b) {
+    float c = 4.0 * safe_sqrt(a + 1.0) * pow(b + 1.0, 1.5) * k_inv_pi;
+    float t1 = -u;
+    float t2 = c * 0.5 * atan(safe_sqrt((b + 1.0) / (a + 1.0)) * tan(x)) / (safe_sqrt(a + 1) * pow(b + 1.0, 1.5));
+    float t3 = -c * 0.5 * sin(2.0 * x) / ((b + 1.0) * (a + b + 2.0 + (a - b) * cos(2.0 * x)));
+    return t1 + t2 + t3;
+}
+
+// This uses Cem Yuksels hybrid Newton + Bisection method outlined here (same for theta) sampling
+// http://www.cemyuksel.com/research/polynomials/polynomial_roots_hpg2022.pdf
+inline float base_dxy_phi_bisection_search(float x_s, float x_e, float u, float a, float b, bool deriv_nu) {
+    const int BISECTION_SEARCH_MAX_DEPTH = 64;
+    const float CDF_INV_TOL = 1e-6;
+    float x_r = (x_s.x + x_e.x) / 2.0;
+    float f_x_s = 0, f_x_e = 0;
+    const float k1 = 2.0 * safe_sqrt(b + 1.0) * pow(a + 1.0, 1.5) * k_inv_pi;
+    const float k2 = safe_sqrt((b + 1.0) / (a + 1.0));
+    const float k3 = (safe_sqrt(b + 1) * pow(a + 1.0, 1.5));
+    f_x_s = deriv_nu ? base_dx_phi_cdf(x_s, u, a, b, k1, k2, k3) : base_dy_phi_cdf(x_s, u, a, b);
+    f_x_e = deriv_nu ? base_dx_phi_cdf(x_e, u, a, b, k1, k2, k3) : base_dy_phi_cdf(x_e, u, a, b);
+    for (int i = 0; i < BISECTION_SEARCH_MAX_DEPTH; i++) {
+        DifferentialPair<float> x_r_pair = diffPair(x_r);
+        DifferentialPair<float >f_x_r = deriv_nu 
+            ? fwd_diff(base_dx_phi_cdf)(x_r_pair, u, a, b, k1, k2, k3)
+            : fwd_diff(base_dy_phi_cdf)(x_r_pair, u, a, b);
+        if (abs(f_x_r.p) < CDF_INV_TOL) return x_r.x;
+        if (f_x_s.x * f_x_r.p > 0) {
+            x_s.x = x_r.x;
+            f_x_s = f_x_r.p;
+        } else {
+            x_e.x = x_r.x;
+            f_x_e = f_x_r.p;
+        }
+        const float x_n = x_r.x - f_x_r.p / f_x_r.d;
+        x_r.x = x_s.x < x_n && x_n < x_e.x ? x_n : (x_s.x + x_e.x) / 2.0;
+    }
+    return x_r.x;
+}
+
+// returns: phi ~ p(phi) \in [0, pi/2]
+float base_dxy_sample_phi(float u, float a, float b, bool deriv_nu) {
+    float EPS_CLIP = 1e-4;
+    u = max(min(u, 1.0 - EPS_CLIP), EPS_CLIP); // restrict absolute edge cases
+    return base_dxy_phi_bisection_search(0.0, k_pi_over_2, u, a, b, deriv_nu);
+}
+
+float a_phi(float cos2phi, float a, float b) {
+    float sin2phi = float(1) - cos2phi;
+    return a * cos2phi + b * sin2phi;
+}
+
+// Note: This is only defined on [0, pi/2]
+// p(phi) for the derivative w.r.t nu
+float base_dx_pdf_phi(float cos2phi, float a, float b, bool is_ggx_or_beckmann) {
+    if (is_ggx_or_beckmann) { a = a - 1.0; b = b - 1.0;}
+    const float sin2phi = float(1) - cos2phi;
+    const float C = 4.0 * safe_sqrt(b + float(1)) * pow(a + float(1), float(1.5)) * k_inv_pi;
+    return C * cos2phi / pow(float(1) + a_phi(cos2phi, a, b), float(2));
+}
+
+// Note: This is only defined on [0, pi/2]
+// p(phi) for the derivative w.r.t nv
+float base_dy_pdf_phi(float cos2phi, float a, float b, bool is_ggx_or_beckmann) {
+    if (is_ggx_or_beckmann) { a = a - 1.0; b = b - 1.0;}
+    float sin2phi = float(1) - cos2phi;
+    float C = 4.0 * safe_sqrt(a + float(1)) * pow(b + float(1), float(1.5)) * k_inv_pi;
+    return C * sin2phi / pow(float(1) + a_phi(cos2phi, a, b), float(2));
+}
+
+float sample_all_dxy_base_phi(
+    float a, float b, float u,
+    bool deriv_nu,
+    bool is_ggx_or_beckmann) {
+    if (is_ggx_or_beckmann) { a = a - 1.0; b = b - 1.0;}
+    // First sample phi
+    float phi = 0.0; float u_phi = u;
+    // phi is in [0, pi/2], convert to [0, 2pi]
+    if (u_phi < 0.25) {
+        u_phi = 1.0 - 4.0 * (0.25 - u_phi);
+        phi = base_dxy_sample_phi(u_phi, a, b, deriv_nu);
+        phi = phi;
+    } else if (u_phi < 0.5) {
+        u_phi = 1.0 - 4.0 * (0.5 - u_phi);
+        phi = base_dxy_sample_phi(u_phi, a, b, deriv_nu);
+        // Mirror Flip about pi/2
+        phi = k_pi_over_2 + (k_pi_over_2 - phi);
+    } else if (u_phi < 0.75) {
+        u_phi = 1.0 - 4.0 * (0.75 - u_phi);
+        phi = base_dxy_sample_phi(u_phi, a, b, deriv_nu);
+        // periodic with period pi
+        phi = phi + k_pi;
+    } else {
+        u_phi = 1.0 - 4.0 * (1.0 - u_phi);
+        phi = base_dxy_sample_phi(u_phi, a, b, deriv_nu);
+        // periodic with period pi
+        phi = k_pi + k_pi_over_2 + (k_pi_over_2 - phi);
+    }
+    return phi;
+}
+
+float pdf_all_dxy_base_phi(
+    float a, float b,
+    float cos_phi,
+    bool xy_deriv,
+    bool is_ggx_or_beckmann
+) {
+    // floatd cos_theta_h = CosTheta(H);
+    // Note: Our p(phi) is only defined on [0,pi/2]. p(phi) is symmetric about pi
+    // p(phi) is mirror symmetric about pi/2.
+    // But cos2phi and sin2phi is also symmetric about pi and mirror symmetric about pi/2,
+    // so we do not need to explicitly convert phi from [0,pi*2] to [0,2*pi]
+    // floatd cos_phi_h = CosPhi(H);
+    const float cos2phi_h = cos_phi * cos_phi;
+    const float aphi = a_phi(cos2phi_h, a, b);
+    float p_phi = xy_deriv 
+        ? base_dx_pdf_phi(cos2phi_h, a, b, is_ggx_or_beckmann) 
+        : base_dy_pdf_phi(cos2phi_h, a, b, is_ggx_or_beckmann);
+    // There is a change of variables from phi \in [0,pi/2] to [0,2pi] because of which we need to account for the jacobian
+    p_phi = p_phi / 4.0;
+    return p_phi;
+}
 
 #endif // !_SRENDERER_COMMON_MICROFACET_HEADER_

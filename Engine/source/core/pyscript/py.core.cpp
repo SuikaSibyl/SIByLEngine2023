@@ -19,12 +19,14 @@ using namespace se;
 #include "py.define.hpp"
 
 #include <bxdfs/se.bxdf.epflbrdf.hpp>
+#include <lights/se.lights.envmap.hpp>
 
 struct rhi_namescope {};
 struct gfx_namescope {};
 struct rdg_namescope {};
 struct pass_namescope {};
 struct bxdf_namescope {};
+struct light_namescope {};
 struct cbt_namescope {};
 
 namespace se::rdg {
@@ -761,6 +763,7 @@ PYBIND11_MODULE(pycore, m) {
   py::class_<se::gfx::Scene::GPUScene> class_gfx_gpuscene(class_gfx_scene, "GPUScene");
   class_gfx_gpuscene.def("bindingResourceCamera", &se::gfx::Scene::GPUScene::bindingResourceCamera)
     .def("bindingResourcePosition", &se::gfx::Scene::GPUScene::bindingResourcePosition)
+    .def("bindingResourceMaterial", &se::gfx::Scene::GPUScene::bindingResourceMaterial)
     .def("bindingResourceIndex", &se::gfx::Scene::GPUScene::bindingResourceIndex)
     .def("bindingResourceVertex", &se::gfx::Scene::GPUScene::bindingResourceVertex)
     .def("bindingResourceGeometry", &se::gfx::Scene::GPUScene::bindingResourceGeometry)
@@ -780,6 +783,10 @@ PYBIND11_MODULE(pycore, m) {
   py::class_<se::gfx::SamplerHandle> class_gfx_samplerHandle(namespace_gfx, "SamplerHandle");
   class_gfx_samplerHandle.def("get", &se::gfx::SamplerHandle::get, py::return_value_policy::reference);
 
+  py::class_<se::gfx::PMFConstructor> class_gfx_PMFConstructor(namespace_gfx, "PMFConstructor");
+  class_gfx_PMFConstructor.def("upload_datapack", &se::gfx::PMFConstructor::upload_datapack);
+  class_gfx_PMFConstructor.def("clear_datapack", &se::gfx::PMFConstructor::clear_datapack);
+  class_gfx_PMFConstructor.def("binding_resource_buffer", &se::gfx::PMFConstructor::binding_resource_buffer);
 
   // Export rdg:: structures
   // ------------------------------------------------------------------------
@@ -961,6 +968,19 @@ PYBIND11_MODULE(pycore, m) {
     .def_static("bindingResourceBuffer", &se::EPFLBrdf::bindingResourceBuffer)
     .def_static("bindingResourceBRDFs", &se::EPFLBrdf::bindingResourceBRDFs);
   
+  py::class_<light_namescope> namespace_lights(m, "lights");
+  py::class_<se::EnvmapLight> class_EnvmapLight(namespace_lights, "EnvmapLight");
+  py::enum_<se::EnvmapLight::ImportanceType>(class_EnvmapLight, "ImportanceType")
+      .value("Luminance", se::EnvmapLight::ImportanceType::Luminance)
+      .value("Length", se::EnvmapLight::ImportanceType::Length);
+  class_EnvmapLight.def(py::init<std::string, se::EnvmapLight::ImportanceType>());
+  class_EnvmapLight.def("width", &se::EnvmapLight::width);
+  class_EnvmapLight.def("height", &se::EnvmapLight::height);
+  class_EnvmapLight.def("rgb_integrated", &se::EnvmapLight::rgb_integrated);
+  class_EnvmapLight.def("condition_offset", &se::EnvmapLight::condition_offset);
+  class_EnvmapLight.def("marginal_offset", &se::EnvmapLight::marginal_offset);
+  class_EnvmapLight.def("get_texture", &se::EnvmapLight::get_texture, py::return_value_policy::reference);
+
   // Export :: predefined passes
   // ------------------------------------------------------------------------
   py::class_<pass_namescope> namespace_pass(m, "passes");

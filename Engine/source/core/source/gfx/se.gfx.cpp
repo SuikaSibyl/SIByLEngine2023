@@ -894,6 +894,13 @@ Material::operator tinygltf::Material() const {
 
 auto Material::getName() const noexcept -> char const* { return name.c_str(); }
 
+auto Material::getDataPacket() const noexcept -> MaterialPacket {
+  MaterialPacket packet;
+  packet.bxdf_type = bxdf;
+  packet.floatvec_0 = { baseOrDiffuseColor, 1. };
+  return packet;
+}
+
 MaterialLoader::result_type MaterialLoader::operator()(from_empty_tag) {
   MaterialLoader::result_type mat = std::make_shared<Material>();
   return mat;
@@ -1062,7 +1069,7 @@ auto GFXContext::load_mesh_empty() noexcept -> MeshHandle {
 auto GFXContext::load_material_empty() noexcept -> MaterialHandle {
   RUID const ruid = root::resource::queryRUID();
   auto ret = materials.load(ruid, MaterialLoader::from_empty_tag{});
-  return MaterialHandle{ ret.first->second };
+  return MaterialHandle{ ret.first->second, ruid };
 }
 
 auto GFXContext::load_shader_spirv(se::buffer* buffer, rhi::ShaderStageBit stage) noexcept -> ShaderHandle {

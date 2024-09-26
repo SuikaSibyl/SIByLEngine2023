@@ -33,6 +33,7 @@ target_sources(${PROJECT_NAME} PRIVATE
   "source/gfx/ex.spirv_reflect.cpp"
   "source/gfx/se.gfx.cpp"
   "source/gfx/se.gfx.scene.cpp"
+  "source/gfx/se.gfx.pmf.cpp"
   "source/base/se.resource.cpp"
   "source/rdg/se.rdg.cpp"
   "source/editor/se.editor.cpp"
@@ -43,7 +44,8 @@ target_sources(${PROJECT_NAME} PRIVATE
   "source/pass/se.pass.editor.cpp"
   "source/pass/se.pass.rasterizer.cpp" 
   "source/pass/se.pass.cbt.cpp" 
-  "source/bxdf/se.bxdf.epflbrdf.cpp" )
+  "source/bxdf/se.bxdf.epflbrdf.cpp" 
+   "source/lights/se.lights.envmap.cpp")
 set_target_properties(
     ${PROJECT_NAME}
     PROPERTIES

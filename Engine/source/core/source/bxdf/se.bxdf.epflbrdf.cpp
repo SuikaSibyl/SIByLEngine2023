@@ -202,8 +202,9 @@ EPFLBrdf::EPFLBrdf(std::string const& filepath) {
     { { (const float*)phi_i.data.get(),
        (const float*)theta_i.data.get(),
        (const float*)channels } },
-    false, false
+      false, false, true
   );
+
   data.rgb_shape_0 = rgb.shape[4];
   data.rgb_shape_1 = rgb.shape[3];
   data.rgb_offset = push_back_data(
@@ -224,6 +225,11 @@ EPFLBrdf::EPFLBrdf(std::string const& filepath) {
   data.rgb_param_offset_2 = push_back_data(
     m_data->rgb.m_param_values[2].data(),
     m_data->rgb.m_param_values[2].size() * sizeof(float));
+  data.normalizer_offset = push_back_data(
+    m_data->rgb.m_normalizer.data(),
+    m_data->rgb.m_normalizer.size() * sizeof(float));
+  se::root::print::debug("base size:" + std::to_string(data.normalizer_offset / 4));
+  se::root::print::debug("additional size:" + std::to_string(m_data->rgb.m_normalizer.size()));
 
   size_t mat_idx = datapack.brdfs.host.size();
   datapack.maps[name] = mat_idx / sizeof(EPFLBRDFData);

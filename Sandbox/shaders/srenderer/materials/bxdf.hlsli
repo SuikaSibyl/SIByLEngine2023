@@ -60,7 +60,7 @@ interface IBxDF {
     // importance sample the BSDF
     static ibsdf::sample_out sample(ibsdf::sample_in i, TParam param);
     // Evaluate the PDF of the BSDF sampling
-    float pdf(ibsdf::pdf_in i);
+    static float pdf(ibsdf::pdf_in i, TParam param);
 };
 
 interface IBxDFDerivative {
@@ -237,13 +237,6 @@ ibsdf::sample_out sample_vnormal<TMicrofacetDistribution : IMicrofacetDistributi
     // const float pdf = pdf_cos_hemisphere(wh);
     o.pdf = pdf / (4 * abs(VdotH));
     o.pdf_wh = pdf;
-    
-    // // reject samples below the surface
-    // if (wo.z < 0.f) {
-    //     o.bsdf = float3(0);
-    //     o.pdf = 0.f;
-    // }
-
     return o;
 }
 
@@ -252,17 +245,12 @@ ibsdf::sample_out sample_normal<TMicrofacetDistribution : IMicrofacetDistributio
     ibsdf::sample_in i,
     TMicrofacetDistribution.TParam parameter) {
     ibsdf::sample_out o;
-    // For Lambertian, we importance sample the cosine hemisphere domain.
-    if (dot(i.geometric_normal, i.wi) < 0) {
-        // Incoming direction is below the surface.
-        o.bsdf = float3(0);
-        o.wo = float3(0);
-        o.pdf = 0;
-        return o;
-    }
-
     // Sample microfacet orientation wh and reflected direction wi
-    const float3 wi = i.shading_frame.to_local(i.wi);
+    float3 wi = i.shading_frame.to_local(i.wi);
+    if (wi.z < 0) {
+        wi.z = -wi.z;
+        i.wi = i.shading_frame.to_world(wi);
+    }
     const float3 wh = TMicrofacetDistribution::sample_wh_normal(wi, i.u.xy, parameter);
     // const float3 wh = sample_cos_hemisphere(i.u);
     const float3 wo = reflect(-wi, wh);
@@ -274,13 +262,6 @@ ibsdf::sample_out sample_normal<TMicrofacetDistribution : IMicrofacetDistributio
     // const float pdf = pdf_cos_hemisphere(wh);
     o.pdf = pdf / (4 * abs(VdotH));
     o.pdf_wh = pdf;
-
-    // // reject samples below the surface
-    // if (wo.z < 0.f) {
-    //     o.bsdf = float3(0);
-    //     o.pdf = 0.f;
-    // }
-
     return o;
 }
 // Evaluate the PDF of the BSDF sampling

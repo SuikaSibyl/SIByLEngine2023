@@ -213,7 +213,7 @@ public:
     Marginal2D(const Vector2u& size, const float* data,
         std::array<uint32_t, Dimension> param_res = { },
         std::array<const float*, Dimension> param_values = { },
-        bool normalize = true, bool build_cdf = true)
+        bool normalize = true, bool build_cdf = true, bool store_normalizer = false)
         : m_size(size), m_patch_size(Vector2f(1.f) / Vector2f(m_size - 1u)),
         m_inv_patch_size(m_size - 1u) {
 
@@ -284,10 +284,10 @@ public:
         }
         else {
             float* data_out = m_data.data();
-
+            if (store_normalizer) m_normalizer.resize(slices);
             for (uint32_t slice = 0; slice < slices; ++slice) {
                 float normalization = 1.f / hprod(m_inv_patch_size);
-                if (normalize) {
+                if (normalize || store_normalizer) {
                     double sum = 0.0;
                     for (uint32_t y = 0; y < m_size.y() - 1; ++y) {
                         size_t i = y * size.x();
@@ -300,7 +300,8 @@ public:
                             sum += (double)avg;
                         }
                     }
-                    normalization = float(1.0 / sum);
+                    if(store_normalizer) m_normalizer[slice] = float(1.0 / sum / normalization);
+                    if(normalize) normalization = float(1.0 / sum);
                 }
 
                 for (uint32_t k = 0; k < n_values; ++k)
@@ -623,6 +624,7 @@ private:
     /// Marginal and conditional PDFs
     FloatStorage m_marginal_cdf;
     FloatStorage m_conditional_cdf;
+    std::vector<float> m_normalizer;
 };
 
 using Warp2D0 = Marginal2D<0>;

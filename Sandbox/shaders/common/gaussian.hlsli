@@ -37,6 +37,14 @@ float2 BoxMuller(in_ref(float2) uv, in_ref(float2) mean, in_ref(float2) std) {
     return BoxMuller(uv) * std + mean;
 }
 
+float definite_integral_0_a(float a, float std) {
+    return 0.5f * erf(a / (std * k_sqrt2));
+}
+
+float definiet_integral_a_inf(float a, float std) {
+    return 0.5f * (1.0f - erf(a / (std * k_sqrt2)));
+}
+
 struct MultivariateGaussian2D {
     float2x2 precision;  // precision matrix (inverse of the covariance matrix)
     float2 mean;         // mean of the distribution

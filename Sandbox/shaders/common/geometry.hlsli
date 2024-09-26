@@ -435,6 +435,7 @@ namespace theta_phi_coord {
 [Differentiable] float SinTheta(float3 w) { return sqrt(Sin2Theta(w)); }
 [Differentiable] float TanTheta(float3 w) { return SinTheta(w) / CosTheta(w); }
 [Differentiable] float Tan2Theta(float3 w) { return Sin2Theta(w) / Cos2Theta(w); }
+[Differentiable] float Theta(float3 w) { return acos(CosTheta(w)); }
 
 [Differentiable] float CosPhi(float3 w) {
     float sinTheta = SinTheta(w);
@@ -444,6 +445,10 @@ namespace theta_phi_coord {
     return (sinTheta == 0) ? 0 : clamp(w.y / sinTheta, -1, 1); }
 [Differentiable] float Cos2Phi(float3 w) { return CosPhi(w) * CosPhi(w); }
 [Differentiable] float Sin2Phi(float3 w) { return SinPhi(w) * SinPhi(w); }
+[Differentiable] float Phi(float3 w) {
+    const float res = atan2(w.y, w.x);
+    return (res < 0) ? (res + 2 * k_pi) : res;
+}
 
 /* Gives the cosine of the phi angle between two directions. */
 [Differentiable] float CosDPhi(float3 wa, float3 wb) {
@@ -453,7 +458,18 @@ namespace theta_phi_coord {
 
 [Differentiable] float3 SphericalDirection(
     float sinTheta, float cosTheta, float phi) {
-    return float3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
+    float sin_phi; float cos_phi;
+    sincos(phi, sin_phi, cos_phi);
+    return float3(sinTheta * cos_phi, sinTheta * sin_phi, cosTheta);
+}
+
+[Differentiable] float3 SphericalDirection(
+    float theta, float phi) {
+    float sin_theta; float cos_theta;
+    float sin_phi; float cos_phi;
+    sincos(theta, sin_theta, cos_theta);
+    sincos(phi, sin_phi, cos_phi);
+    return float3(sin_theta * cos_phi, sin_theta * sin_phi, cos_theta);
 }
 
 [Differentiable] float3 SphericalDirection(

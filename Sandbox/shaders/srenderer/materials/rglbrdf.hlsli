@@ -52,7 +52,7 @@ struct RGLBRDFData {
     // other parameters
     bool isotropic;
     bool jacobian; // --- 6
-    uint padding_0;
+    uint normalizer_offset;
     uint padding_1;
 };
 
@@ -96,6 +96,7 @@ struct Marginal2D<let Dimension : int> {
     /// Marginal and conditional PDFs
     FloatStorage m_marginal_cdf;
     FloatStorage m_conditional_cdf;
+    FloatStorage m_normalizer;
 
     bool pred_1(int dim, int idx, in vector<float, Dimension> param) {
         return m_param_values[dim].load(idx) <= param[dim];
@@ -201,7 +202,7 @@ struct Marginal2D<let Dimension : int> {
         float v10 = lookup0(m_data, index + 1, size);
         float v01 = lookup0(m_data, index + m_size.x, size);
         float v11 = lookup0(m_data, index + m_size.x + 1, size);
-
+        
         return fma(w0.y, fma(w0.x, v00, w1.x * v10),
                    w1.y * fma(w0.x, v01, w1.x * v11)) *
                hprod(m_inv_patch_size);
@@ -466,6 +467,95 @@ struct Marginal2D<let Dimension : int> {
         FloatStorage data,
         uint32_t i0, uint32_t size
     ) { return data.load(i0); }
+    
+    // Evaluate the density at position @pos, both normalized and unnormalized
+    // only intended for use with 3D marginals RGB eval
+    float2 eval_dual(float2 pos, inout vector<float, Dimension> param) {
+        /// Look up parameter-related indices and weights (if Dimension != 0)
+        float param_weight[2 * ArraySize(Dimension)];
+        uint32_t slice_offset = 0u;
+
+        for (int dim = 0; dim < Dimension; ++dim) {
+            if (m_param_size[dim] == 1) {
+                param_weight[2 * dim] = 1.f;
+                param_weight[2 * dim + 1] = 0.f;
+                continue;
+            }
+
+            uint32_t param_index = find_interval(
+                m_param_size[dim], dim, param);
+
+            float p0 = m_param_values[dim].load(param_index);
+            float p1 = m_param_values[dim].load(param_index + 1);
+
+            param_weight[2 * dim + 1] =
+                clamp((param[dim] - p0) / (p1 - p0), 0.f, 1.f);
+            param_weight[2 * dim] = 1.f - param_weight[2 * dim + 1];
+            slice_offset += m_param_strides[dim] * param_index;
+        }
+
+        /* Compute linear interpolation weights */
+        pos *= m_inv_patch_size;
+        uint2 offset = min(uint2(pos), m_size - 2u);
+
+        float2 w1 = pos - float2(int2(offset));
+        float2 w0 = float2(1.f) - w1;
+
+        uint32_t index = offset.x + offset.y * m_size.x;
+
+        uint32_t size = hprod(m_size);
+        if (Dimension != 0)
+            index += slice_offset * size;
+
+        float2 v00 = lookup_dual<Dimension>(m_data, index, size, param_weight);
+        float2 v10 = lookup_dual<Dimension>(m_data, index + 1, size, param_weight);
+        float2 v01 = lookup_dual<Dimension>(m_data, index + m_size.x, size, param_weight);
+        float2 v11 = lookup_dual<Dimension>(m_data, index + m_size.x + 1, size, param_weight);
+
+        return float2(fma(w0.y, float2(fma(w0.x, v00, w1.x * v10)),
+                   w1.y * float2(fma(w0.x, v01, w1.x * v11)))) *
+               hprod(m_inv_patch_size);
+    }
+
+    float2 lookup_dual<let Dim : int>(
+        FloatStorage data,
+        uint32_t i0, uint32_t size,
+        float param_weight[2 * ArraySize(Dimension)]) {
+        if (Dim == 3) return lookup3_dual(data, i0, size, param_weight);
+        else if (Dim == 2) return lookup2_dual(data, i0, size, param_weight);
+        else return float2(0.);
+    }
+
+    // lookup both normalized and unnormalized values
+    float2 lookup3_dual(
+        FloatStorage data,
+        uint32_t i0, uint32_t size,
+        float param_weight[2 * ArraySize(Dimension)]) {
+        uint32_t i1 = i0 + m_param_strides[3 - 1] * size;
+        float w0 = param_weight[2 * 3 - 2];
+        float w1 = param_weight[2 * 3 - 1];
+        float2 v0 = lookup2_dual(data, i0, size, param_weight);
+        float2 v1 = lookup2_dual(data, i1, size, param_weight);
+        return float2(fma(v0, w0, v1 * w1));
+    }
+
+    // lookup both normalized and unnormalized values
+    float2 lookup2_dual(
+        FloatStorage data,
+        uint32_t i0, uint32_t size,
+        float param_weight[2 * ArraySize(Dimension)]) {
+        uint32_t i1 = i0 + m_param_strides[2 - 1] * size;
+        float w0 = param_weight[2 * 2 - 2];
+        float w1 = param_weight[2 * 2 - 1];
+        float n0 = m_normalizer.load(int(i0 / size));
+        float n1 = m_normalizer.load(int(i1 / size));
+        float v0 = lookup1(data, i0, size, param_weight);
+        float v1 = lookup1(data, i1, size, param_weight);
+        float2 v0_dual = float2(v0, v0 * n0);
+        float2 v1_dual = float2(v1, v1 * n1);
+        // float n0
+        return float2(fma(v0_dual, w0, v1_dual * w1));
+    }
 #undef ArraySize
 }
 
@@ -509,7 +599,7 @@ void initializeMarginal2D3(
     inout Marginal2D<3> marginal,
     uint2 size, uint offset,
     uint3 param_size, uint3 param_stride,
-    uint3 param_offset
+    uint3 param_offset, uint normalizer_offset
 ) {
     marginal.m_size = size;
     marginal.m_patch_size = float2(1.f) / float2(size - 1u);
@@ -527,18 +617,20 @@ void initializeMarginal2D3(
     marginal.m_param_values[0] = FloatStorage(param_offset.x);
     marginal.m_param_values[1] = FloatStorage(param_offset.y);
     marginal.m_param_values[2] = FloatStorage(param_offset.z);
+
+    marginal.m_normalizer = FloatStorage(normalizer_offset);
 }
 
-struct RGLBRDF : IBxDF {
+struct RGLMaterial : IBxDFParameter {
     // EPFL RGL BRDF data
-    Marginal2D<0> ndf;
-    Marginal2D<0> sigma;
-    Marginal2D<2> vndf;
-    Marginal2D<2> luminance;
-    Marginal2D<3> rgb;
-    bool isotropic;
-    bool jacobian;
-
+    no_diff Marginal2D<0> ndf;
+    no_diff Marginal2D<0> sigma;
+    no_diff Marginal2D<2> vndf;
+    no_diff Marginal2D<2> luminance;
+    no_diff Marginal2D<3> rgb;
+    no_diff bool isotropic;
+    no_diff bool jacobian;
+    
     __init(int index) {
         RGLBRDFData data = epfl_materials[index];
         isotropic = data.isotropic;
@@ -563,18 +655,21 @@ struct RGLBRDF : IBxDF {
         data.rgb_shape_1), data.rgb_offset,
         uint3(data.rgb_param_size_0, data.rgb_param_size_1, data.rgb_param_size_2),
         uint3(data.rgb_param_stride_0, data.rgb_param_stride_1, data.rgb_param_stride_2),
-        uint3(data.rgb_param_offset_0, data.rgb_param_offset_1, data.rgb_param_offset_2));
+        uint3(data.rgb_param_offset_0, data.rgb_param_offset_1, data.rgb_param_offset_2),
+        data.normalizer_offset);
     }
-    
+};
+
+struct RGLBRDF : IBxDF {
+    typedef RGLMaterial TParam;
+
     // Evaluate the BSDF
-    float3 eval(ibsdf::eval_in i) {
-        const float3 wi = i.shading_frame.to_local(i.wi);
+    static float3 eval(ibsdf::eval_in i, RGLMaterial material) {
         const float3 wo = i.shading_frame.to_local(i.wo);
-        if (dot(i.geometric_normal, i.wi) < 0 ||
-            dot(i.geometric_normal, i.wo) < 0) {
-            // No light below the surface
-            return float3(0);
-        }
+        float3 wi = i.shading_frame.to_local(i.wi);
+        if (wi.z < 0) { wi = float3(wi.x, wi.y, -wi.z);
+            i.wi = i.shading_frame.to_world(wi); }
+        if (wo.z < 0) { return float3(0); }
         
         float3 wm = normalize(wi + wo);
         
@@ -587,43 +682,38 @@ struct RGLBRDF : IBxDF {
         // Spherical coordinates -> unit coordinate system
         float2 u_wi = float2(ibsdf::theta2u(theta_i), ibsdf::phi2u(phi_i));
         float2 u_wm = float2(ibsdf::theta2u(theta_m),
-            ibsdf::phi2u(isotropic ? (phi_m - phi_i) : phi_m));
+            ibsdf::phi2u(material.isotropic ? (phi_m - phi_i) : phi_m));
         u_wm.y = u_wm.y - floor(u_wm.y);
-        
+
         float2 params = float2(phi_i, theta_i);
-        marginal2d::invert_out invert_o = vndf.invert(u_wm, params);
+        marginal2d::invert_out invert_o = material.vndf.invert(u_wm, params);
         float2 sample = invert_o.sample;
         float vndf_pdf = invert_o.pdf;
         
         float3 fr = float3(0.f);
         for (int i = 0; i < 3; ++i) {
             float3 params_fr = float3(phi_i, theta_i, float(i));
-            fr[i] = rgb.eval(sample, params_fr);
+            fr[i] = material.rgb.eval(sample, params_fr);
             // clamp the value to zero 
             // (negative values occur when the original
             // spectral data goes out of gamut)
             fr[i] = max(0.f, fr[i]);
         }
-        
-        fr = fr * ndf.eval(u_wm) / (4 * sigma.eval(u_wi));
+
+        fr = fr * material.ndf.eval(u_wm) / (4 * material.sigma.eval(u_wi));
 
         return fr;
     }
 
     // importance sample the BSDF
-    ibsdf::sample_out sample(ibsdf::sample_in i) {
-        ibsdf::sample_out o;
-        if (dot(i.geometric_normal, i.wi) < 0) {
-            // Incoming direction is below the surface.
-            o.bsdf = float3(0);
-            o.wo = float3(0);
-            o.pdf = 0;
-            return o;
+    static ibsdf::sample_out sample(ibsdf::sample_in i, RGLMaterial material) {
+        float3 wi = i.shading_frame.to_local(i.wi);
+        if (wi.z < 0) { 
+            wi = float3(wi.x, wi.y, -wi.z); 
+            i.wi = i.shading_frame.to_world(wi); 
         }
 
-        const float3 wi = i.shading_frame.to_local(i.wi);
-        const float2 u = i.u;
-
+        const float2 u = i.u.xy;
         float theta_i = elevation(wi);
         float phi_i = atan2(wi.y, wi.x);
         
@@ -632,18 +722,18 @@ struct RGLBRDF : IBxDF {
         float2 sample = float2(u.y, u.x);
         float lum_pdf = 1.f;
 
-        marginal2d::sample_out lum_o = luminance.sample(sample, params);
+        marginal2d::sample_out lum_o = material.luminance.sample(sample, params);
         sample = lum_o.sample;
         lum_pdf = lum_o.pdf;
 
-        marginal2d::sample_out vndf_o = vndf.sample(sample, params);
+        marginal2d::sample_out vndf_o = material.vndf.sample(sample, params);
         float2 u_wm = vndf_o.sample;
         float ndf_pdf = vndf_o.pdf;
 
         float phi_m = ibsdf::u2phi(u_wm.y);
         float theta_m = ibsdf::u2theta(u_wm.x);
-        
-        if (isotropic)
+
+        if (material.isotropic)
             phi_m += phi_i;
         
         /* Spherical -> Cartesian coordinates */
@@ -656,43 +746,29 @@ struct RGLBRDF : IBxDF {
             cos_phi_m * sin_theta_m,
             sin_phi_m * sin_theta_m,
             cos_theta_m);
-
+        
         float3 wo = wm * 2.f * dot(wm, wi) - wi;
+        
+        ibsdf::sample_out o;
         o.wo = i.shading_frame.to_world(wo);
-        if (wo.z <= 0 || dot(i.shading_frame.n, o.wo) < 0.f) {
-            o.wo = float3(0.f);
-            o.bsdf = float3(0.f);
-            o.pdf = 0.f;
-            return o;
-        }
 
         ibsdf::eval_in i_eval;
         i_eval.wi = i.wi;
         i_eval.wo = o.wo;
         i_eval.geometric_normal = i.geometric_normal;
         i_eval.shading_frame = i.shading_frame;
-        // float3 fr = this.eval(i_eval);
         
         float3 fr = float3(0.f);
         for (int i = 0; i < 3; ++i) {
             float3 params_fr = float3(phi_i, theta_i, float(i));
-            fr[i] = rgb.eval(sample, params_fr);
+            fr[i] = material.rgb.eval(sample, params_fr);
             /* clamp the value to zero (negative values occur when the original
                spectral data goes out of gamut) */
             fr[i] = max(0.f, fr[i]);
         }
 
-        if (dot(i.geometric_normal, i.wi) < 0 ||
-            dot(i.geometric_normal, o.wo) < 0) {
-            // No light below the surface
-            o.wo = float3(0.f);
-            o.bsdf = float3(0.f);
-            o.pdf = 0.f;
-            return o;
-        }
-
-        fr = fr * ndf.eval(u_wm) /
-             (4 * sigma.eval(u_wi));
+        fr = fr * material.ndf.eval(u_wm) /
+             (4 * material.sigma.eval(u_wi));
 
         float jacobian = max(2.f * sqr(k_pi) * u_wm.x *
             sin_theta_m, 1e-6f) * 4.f * dot(wi, wm);
@@ -701,18 +777,19 @@ struct RGLBRDF : IBxDF {
         
         o.pdf = pdf;
         o.bsdf = fr / pdf;
-
+        if (wo.z <= 0) o.bsdf = float3(0.f);
         return o;
     }
+
     // Evaluate the PDF of the BSDF sampling
-    float pdf(ibsdf::pdf_in i) {
-        const float3 wi = i.shading_frame.to_local(i.wi);
+    static float pdf(ibsdf::pdf_in i, RGLMaterial material) {
         const float3 wo = i.shading_frame.to_local(i.wo);
-        if (dot(i.geometric_normal, i.wi) < 0 ||
-            dot(i.geometric_normal, i.wo) < 0) {
-            // No light below the surface
-            return float(0);
+        float3 wi = i.shading_frame.to_local(i.wi);
+        if (wi.z < 0) {
+            wi = float3(wi.x, wi.y, -wi.z);
+            i.wi = i.shading_frame.to_world(wi);
         }
+        
         float3 wm = normalize(wi + wo);
 
         // Cartesian -> spherical coordinates
@@ -724,16 +801,144 @@ struct RGLBRDF : IBxDF {
         // Spherical coordinates -> unit coordinate system
         float2 u_wm = float2(
             ibsdf::theta2u(theta_m),
-            ibsdf::phi2u(isotropic ? (phi_m - phi_i) : phi_m));
+            ibsdf::phi2u(material.isotropic ? (phi_m - phi_i) : phi_m));
 
         u_wm.y = u_wm.y - floor(u_wm.y);
 
         float2 params = float2(phi_i, theta_i);
-        marginal2d::invert_out invert_o = vndf.invert(u_wm, params);
+        marginal2d::invert_out invert_o = material.vndf.invert(u_wm, params);
         float2 sample = invert_o.sample;
         float vndf_pdf = invert_o.pdf;
+
+        float pdf = material.luminance.eval(sample, params);
         
-        float pdf = luminance.eval(sample, params);
+        float sin_theta_m = sqrt(sqr(wm.x) + sqr(wm.y));
+        float jacobian = max(2.f * sqr(k_pi) * u_wm.x *
+            sin_theta_m, 1e-6f) * 4.f * dot(wi, wm);
+        
+        return vndf_pdf * pdf / jacobian;
+    }
+
+    // importance sample the BSDF
+    static ibsdf::sample_out sample_with_perchannel_cv(
+        ibsdf::sample_in i, RGLMaterial material,
+        out float3 per_channel_pdf) {
+        
+        float3 wi = i.shading_frame.to_local(i.wi);
+        if (wi.z < 0) {
+            wi = float3(wi.x, wi.y, -wi.z);
+            i.wi = i.shading_frame.to_world(wi);
+        }
+        
+        const float2 u = i.u.xy;
+        float theta_i = elevation(wi);
+        float phi_i = atan2(wi.y, wi.x);
+
+        float2 params = float2(phi_i, theta_i);
+        float2 u_wi = float2(ibsdf::theta2u(theta_i), ibsdf::phi2u(phi_i));
+        float2 sample = float2(u.y, u.x);
+        float lum_pdf = 1.f;
+
+        marginal2d::sample_out lum_o = material.luminance.sample(sample, params);
+        sample = lum_o.sample;
+        lum_pdf = lum_o.pdf;
+
+        marginal2d::sample_out vndf_o = material.vndf.sample(sample, params);
+        float2 u_wm = vndf_o.sample;
+        float ndf_pdf = vndf_o.pdf;
+
+        float phi_m = ibsdf::u2phi(u_wm.y);
+        float theta_m = ibsdf::u2theta(u_wm.x);
+
+        if (material.isotropic)
+            phi_m += phi_i;
+
+        /* Spherical -> Cartesian coordinates */
+        float sin_phi_m = sin(phi_m);
+        float cos_phi_m = cos(phi_m);
+        float sin_theta_m = sin(theta_m);
+        float cos_theta_m = cos(theta_m);
+
+        float3 wm = float3(
+            cos_phi_m * sin_theta_m,
+            sin_phi_m * sin_theta_m,
+            cos_theta_m);
+
+        float3 wo = wm * 2.f * dot(wm, wi) - wi;
+
+        ibsdf::sample_out o;
+        o.wo = i.shading_frame.to_world(wo);
+
+        ibsdf::eval_in i_eval;
+        i_eval.wi = i.wi;
+        i_eval.wo = o.wo;
+        i_eval.geometric_normal = i.geometric_normal;
+        i_eval.shading_frame = i.shading_frame;
+
+        float3 rgb = float3(0.f);
+        float3 rgb_normalized = float3(0.f);
+        for (int i = 0; i < 3; ++i) {
+            float3 params_fr = float3(phi_i, theta_i, float(i));
+            float2 rgb_dual = material.rgb.eval_dual(sample, params_fr);
+            rgb[i] = rgb_dual.x; rgb_normalized[i] = rgb_dual.y;
+            /* clamp the value to zero (negative values occur when the original
+               spectral data goes out of gamut) */
+            rgb[i] = max(0.f, rgb[i]);
+            rgb_normalized[i] = max(0.f, rgb_normalized[i]);
+        }
+
+        float3 fr = rgb * material.ndf.eval(u_wm) /
+             (4 * material.sigma.eval(u_wi));
+
+        float jacobian = max(2.f * sqr(k_pi) * u_wm.x *
+                                 sin_theta_m, 1e-6f) * 4.f * dot(wi, wm);
+
+        float pdf = ndf_pdf * lum_pdf / jacobian;
+        per_channel_pdf = ndf_pdf * rgb_normalized / jacobian;
+        
+        o.pdf = pdf;
+        o.bsdf = fr / pdf;
+        if (wo.z <= 0) o.bsdf = float3(0.f);
+        return o;
+    }
+
+    // Evaluate the PDF of the BSDF sampling
+    static float3 rgb_per_channel_pdf(ibsdf::pdf_in i, RGLMaterial material) {
+        const float3 wo = i.shading_frame.to_local(i.wo);
+        float3 wi = i.shading_frame.to_local(i.wi);
+        if (wi.z < 0) {
+            wi = float3(wi.x, wi.y, -wi.z);
+            i.wi = i.shading_frame.to_world(wi);
+        }
+
+        float3 wm = normalize(wi + wo);
+
+        // Cartesian -> spherical coordinates
+        float theta_i = elevation(wi);
+        float phi_i = atan2(wi.y, wi.x);
+        float theta_m = elevation(wm);
+        float phi_m = atan2(wm.y, wm.x);
+
+        // Spherical coordinates -> unit coordinate system
+        float2 u_wm = float2(
+            ibsdf::theta2u(theta_m),
+            ibsdf::phi2u(material.isotropic ? (phi_m - phi_i) : phi_m));
+
+        u_wm.y = u_wm.y - floor(u_wm.y);
+
+        float2 params = float2(phi_i, theta_i);
+        marginal2d::invert_out invert_o = material.vndf.invert(u_wm, params);
+        float2 sample = invert_o.sample;
+        float vndf_pdf = invert_o.pdf;
+
+        float3 pdf = float3(0.f);
+        for (int i = 0; i < 3; ++i) {
+            float3 params_fr = float3(phi_i, theta_i, float(i));
+            pdf[i] = material.rgb.eval(sample, params_fr);
+            /* clamp the value to zero (negative values occur when the original
+               spectral data goes out of gamut) */
+            pdf[i] = max(0.f, pdf[i]);
+        }
         
         float sin_theta_m = sqrt(sqr(wm.x) + sqr(wm.y));
         float jacobian = max(2.f * sqr(k_pi) * u_wm.x *

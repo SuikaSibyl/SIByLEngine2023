@@ -480,7 +480,7 @@ auto Scene::updateGPUScene() noexcept -> void {
         geometry.geometryTransform = transform.global;
         geometry.geometryTransformInverse = se::inverse(transform.global);
         geometry.oddNegativeScaling = transform.oddScaling;
-        geometry.materialID = 0;
+        geometry.materialID = gpuScene.try_fetch_material_index(primitive.material);
         geometry.primitiveType = 0;
         geometry.lightID = 0;
         if (gpuScene.geometry_buffer->host.size() < (geometry_index + 1) * sizeof(GeometryDrawData)) {
@@ -491,15 +491,17 @@ auto Scene::updateGPUScene() noexcept -> void {
       }
     }
   }
-
+  
   gpuScene.position_buffer->hostToDevice();
   gpuScene.index_buffer->hostToDevice();
   gpuScene.vertex_buffer->hostToDevice();
   gpuScene.geometry_buffer->hostToDevice();
   gpuScene.camera_buffer->hostToDevice();
   gpuScene.texcoord_buffer->hostToDevice();
+  gpuScene.material_buffer->hostToDevice();
+  
+  // also update the ray tracing data structures
   gpuScene.tlas.desc = {};
-
   if ((dirtyFlags & (uint64_t)DirtyFlagBit::Geometry) != 0) {
     for (auto entity : node_mesh_view) {
       auto [transform, mesh_renderer] = node_mesh_view.get<Transform, MeshRenderer>(entity);
@@ -559,7 +561,6 @@ auto Scene::updateGPUScene() noexcept -> void {
     gpuScene.tlas.prim = GFXContext::device->createTLAS(gpuScene.tlas.desc);
     gpuScene.tlas.uvprim = GFXContext::device->createTLAS(gpuScene.tlas.uvdesc);
   }
-  
   // set the dirty flag to 0
   dirtyFlags = 0;
 }
@@ -600,6 +601,10 @@ auto Scene::GPUScene::bindingResourceCamera() noexcept -> rhi::BindingResource {
   return rhi::BindingResource{ {camera_buffer->buffer.get(), 0, camera_buffer->buffer->size()} };
 }
 
+auto Scene::GPUScene::bindingResourceMaterial() noexcept -> rhi::BindingResource {
+  return rhi::BindingResource{ {material_buffer->buffer.get(), 0, material_buffer->buffer->size()} };
+}
+
 auto Scene::GPUScene::bindingResourceTLAS() noexcept -> rhi::BindingResource {
   return rhi::BindingResource{ tlas.prim.get() };
 }
@@ -618,6 +623,20 @@ auto Scene::GPUScene::getPositionBuffer() noexcept -> BufferHandle {
 
 auto Scene::GPUScene::getIndexBuffer() noexcept -> BufferHandle {
   return index_buffer;
+}
+
+auto Scene::GPUScene::try_fetch_material_index(MaterialHandle& handle) noexcept -> int {
+  auto iter = material_loc_index.find(handle.ruid);
+  if (iter == material_loc_index.end()) {
+    int index = material_loc_index.size();
+    material_loc_index[handle.ruid] = index;
+    material_buffer->host.resize(sizeof(Material::MaterialPacket) * (index + 1));
+    Material::MaterialPacket pack = handle->getDataPacket();
+    memcpy((float*)&(material_buffer->host[sizeof(Material::MaterialPacket) * index]), &pack, sizeof(pack));
+    material_buffer->host_stamp++;
+    return index;
+  }
+  return iter->second;
 }
 
 struct glTFLoaderEnv {
@@ -1144,7 +1163,7 @@ static inline auto loadGLTFMesh(tinygltf::Mesh const& gltfmesh,
       JointweightsBuffer.insert(JointweightsBuffer.end(), vertexBuffer_weights.begin(), vertexBuffer_weights.end());
     }
 
-    //loadGLTFMaterial()
+    // load Material
     Mesh::MeshPrimitive sePrimitive; 
     sePrimitive.offset = submesh_index_offset;
     sePrimitive.size = indexArray_uint.size();
@@ -1247,7 +1266,8 @@ SceneLoader::result_type SceneLoader::operator()(SceneLoader::from_gltf_tag, std
   std::filesystem::path filepath = path;
   std::string const directory = filepath.parent_path().string();
   glTFLoaderEnv env;
-  env.directory = directory;    
+  env.directory = directory;
+
   // load tag, transform, mesh
   for (size_t i = 0; i < model.nodes.size(); ++i) {
     auto const& gltfNode = model.nodes[i];
@@ -1282,7 +1302,8 @@ SceneLoader::result_type SceneLoader::operator()(SceneLoader::from_gltf_tag, std
     }
     // process the mesh
     if (gltfNode.mesh != -1) {
-      MeshHandle mesh = loadGLTFMesh(model.meshes[gltfNode.mesh], seNode, *scene.get(), i, &model, env);
+      tinygltf::Mesh& mesh_gltf = model.meshes[gltfNode.mesh];
+      MeshHandle mesh = loadGLTFMesh(mesh_gltf, seNode, *scene.get(), i, &model, env);
       scene->gpuScene.position_buffer->host_stamp++;
       scene->gpuScene.index_buffer->host_stamp++;
       scene->gpuScene.vertex_buffer->host_stamp++;

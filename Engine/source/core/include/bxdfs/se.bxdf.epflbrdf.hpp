@@ -52,7 +52,7 @@ struct EPFLBRDFData {
   // other parameters
   uint32_t isotropic;
   uint32_t jacobian; // --- 6
-  uint32_t padding_0;
+  uint32_t normalizer_offset;
   uint32_t padding_1;
 };
 
