@@ -57,7 +57,6 @@ int main() {
  // //std::unique_ptr<se::EPFLBrdf> test = std::make_unique<se::EPFLBrdf>("C:/Users/suika/Downloads/cc_ibiza_sunset_rgb.bsdf");
  // //test = nullptr;
 
-
  // se::editor::EditorBase::bindScene(scene);
  // se::editor::EditorBase::bindInput(window->getInput());
  // se::editor::EditorBase::bindTimer(&timer);

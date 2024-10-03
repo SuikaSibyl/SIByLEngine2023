@@ -106,6 +106,30 @@ float3 rotate(
     return mul(rotationMatrix(axis, angle), float4(v, 0.0)).xyz;
 }
 
+float3x3 rotate(float sinTheta, float cosTheta, float3 axis) {
+    float3 a = normalize(axis);
+    float3x3 m;
+    // Compute rotation of first basis vector
+    m[0][0] = a.x * a.x + (1 - a.x * a.x) * cosTheta;
+    m[0][1] = a.x * a.y * (1 - cosTheta) - a.z * sinTheta;
+    m[0][2] = a.x * a.z * (1 - cosTheta) + a.y * sinTheta;
+    // Compute rotations of second and third basis vectors
+    m[1][0] = a.x * a.y * (1 - cosTheta) + a.z * sinTheta;
+    m[1][1] = a.y * a.y + (1 - a.y * a.y) * cosTheta;
+    m[1][2] = a.y * a.z * (1 - cosTheta) - a.x * sinTheta;
+    m[2][0] = a.x * a.z * (1 - cosTheta) - a.y * sinTheta;
+    m[2][1] = a.y * a.z * (1 - cosTheta) + a.x * sinTheta;
+    m[2][2] = a.z * a.z + (1 - a.z * a.z) * cosTheta;
+    return m;
+}
+
+float3x3 rotate(float theta, float3 axis) {
+    float theta_rad = radians(theta);
+    float sinTheta; float cosTheta;
+    sincos(theta_rad, sinTheta, cosTheta);
+    return rotate(sinTheta, cosTheta, axis);
+}
+
 float3x3 getRotationMatrixFromAToB(in const float3 A, in const float3 B) {
     const float3 v = cross(A, B);
     const float c = dot(A, B);
@@ -481,6 +505,41 @@ namespace theta_phi_coord {
 [Differentiable] bool SameHemisphere(float3 w, float3 wp) {
     return w.z * wp.z > 0;
 }
+}
+
+float max(float a, float b, float c) {
+    return max(max(a, b), c);
+}
+
+struct bounds3 {
+    float3 pMin;
+    float3 pMax;
+
+    __init() { pMin = float3(k_inf); pMax = float3(-k_inf); }
+    __init(float3 pmin, float3 pmax) { pMin = pmin; pMax = pmax; }
+    float3 diagonal() { return pMax - pMin; }
+    void bounding_sphere(out float3 center, out float radius) {
+        center = (pMin + pMax) / 2;
+        radius = inside(center, this) ? distance(center, pMax) : 0;
+    }
+};
+
+bool inside(float3 p, bounds3 b) {
+    return (p.x >= b.pMin.x && p.x <= b.pMax.x &&
+            p.y >= b.pMin.y && p.y <= b.pMax.y &&
+            p.z >= b.pMin.z && p.z <= b.pMax.z);
+}
+
+float distance_squared(float3 p, bounds3 b) {
+    float dx = max(0, b.pMin.x - p.x, p.x - b.pMax.x);
+    float dy = max(0, b.pMin.y - p.y, p.y - b.pMax.y);
+    float dz = max(0, b.pMin.z - p.z, p.z - b.pMax.z);
+    return sqr(dx) + sqr(dy) + sqr(dz);
+}
+
+float distance(float3 p, bounds3 b) {
+    float dist2 = distance_squared(p, b);
+    return sqrt(dist2);
 }
 
 #endif

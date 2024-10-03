@@ -3,7 +3,12 @@
 
 #include "../common/camera.hlsli"
 #include "../common/raycast.hlsli"
+#include "lights/lightbvh.hlsli"
 #include "spt.hlsli"
+
+/**********************************************************************
+****                   Common Scene Data Structures                ****
+**********************************************************************/
 
 // geometry info
 struct GeometryData {
@@ -12,11 +17,50 @@ struct GeometryData {
     uint materialID;
     uint indexSize;
     float surfaceArea;
-    uint lightID;
+    int lightID;
     uint primitiveType;
     float oddNegativeScaling;
     float4 transform[3];
     float4 transformInverse[3];
+};
+
+struct MaterialData {
+    int bxdf_type;
+    int bitfield;
+    float floatscalar_0;
+    float floatscalar_1;
+    float4 floatvec_0;
+    float4 floatvec_1;
+    float4 floatvec_2;
+};
+
+enum LightType {
+    DIRECTIONAL,
+    POINT,
+    SPOT,
+    TRIANGLE,
+    RECTANGLE,
+    MESH_PRIMITIVE,
+    ENVIRONMENT,
+    VPL,
+    MAX_ENUM,
+};
+
+struct LightPacket {
+    LightType light_type;
+    int bitfield;
+    uint uintscalar_0;
+    uint uintscalar_1;
+    float4 floatvec_0;
+    float4 floatvec_1;
+    float4 floatvec_2;
+};
+
+struct SceneDescription {
+    float3 light_bound_min;
+    int max_light_count;
+    float3 light_bound_max;
+    int active_camera_index;
 };
 
 ByteAddressBuffer GPUScene_position;
@@ -24,7 +68,12 @@ ByteAddressBuffer GPUScene_vertex;
 RWStructuredBuffer<uint32_t> GPUScene_index;
 RWStructuredBuffer<GeometryData> GPUScene_geometry;
 RWStructuredBuffer<CameraData> GPUScene_camera;
+RWStructuredBuffer<MaterialData> GPUScene_material;
+RWStructuredBuffer<LightPacket> GPUScene_light;
 RaytracingAccelerationStructure GPUScene_tlas;
+RWStructuredBuffer<LightBVHNode> GPUScene_light_bvh;
+RWStructuredBuffer<uint32_t> GPUScene_light_trail;
+RWStructuredBuffer<SceneDescription> GPUScene_description;
 
 float3 fetchVertexPosition(int vertexIndex) { return GPUScene_position.Load<float3>(vertexIndex * 12); }
 float3 fetchVertexNormal(int vertexIndex) { return GPUScene_vertex.Load<float3>(vertexIndex * 32 + 0); }
@@ -34,6 +83,16 @@ uint3 fetchTriangleIndices(in const GeometryData geoInfo, int triangleIndex) { r
     GPUScene_index[geoInfo.indexOffset + triangleIndex * 3 + 0],
     GPUScene_index[geoInfo.indexOffset + triangleIndex * 3 + 1],
     GPUScene_index[geoInfo.indexOffset + triangleIndex * 3 + 2]);
+}
+
+int fetchActiveCameraID() { return GPUScene_description[0].active_camera_index; }
+CameraData fetchActiveCamera() { return GPUScene_camera[fetchActiveCameraID()]; }
+
+bounds3 fetchAllLightBounds() {
+    bounds3 allb;
+    allb.pMin = GPUScene_description[0].light_bound_min;
+    allb.pMax = GPUScene_description[0].light_bound_max;
+    return allb;
 }
 
 float4x4 ObjectToWorld(in const GeometryData geometry) {
@@ -139,6 +198,11 @@ GeometryHit fetchTrimeshGeometryHit(
     hit.shadingNormal *= frontFace;
     hit.geometryNormal *= frontFace;
     return hit;
+}
+
+MaterialData fetchMaterialData(GeometryHit hit) {
+    const int matID = GPUScene_geometry[hit.geometryID].materialID;
+    return GPUScene_material[matID];
 }
 
 #endif // _SRENDERER_SCENE_BINDING_

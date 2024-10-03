@@ -133,4 +133,25 @@ float pdf_cos_hemisphere(float3 d) {
     return max(d[2], 0.f) * k_inv_pi;
 }
 
+int sample_discrete<let N : int>(Array<float, N> weights, inout float u, inout float pmf) {
+    // Compute sum of weights
+    float sum_weights = 0;
+    for (int i = 0; i < N; ++i)
+        sum_weights += weights[i];
+    // Compute rescaled u' sample
+    float up = u * sum_weights;
+    if (up == sum_weights)
+        up = next_float_down(up);
+    // Find offset in weights corresponding to u'
+    int offset = 0;
+    float sum = 0;
+    while (sum + weights[offset] <= up) {
+        sum += weights[offset++];
+    }
+    // Compute PMF and remapped u value, if necessary
+    pmf = weights[offset] / sum_weights;
+    u = min((up - sum) / weights[offset], k_one_minus_epsilon);
+    return offset;
+}
+
 #endif // !_SRENDERER_COMMMON_SAMPLING_HEADER_

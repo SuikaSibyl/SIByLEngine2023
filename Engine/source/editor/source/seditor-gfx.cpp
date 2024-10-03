@@ -338,6 +338,46 @@ auto drawTextureViewer(gfx::TextureHandle texture) noexcept -> void {
   }
 }
 
+auto drawMaterialEditor(gfx::MaterialHandle material) {
+    gfx::SceneHandle& scene = se::editor::EditorBase::sceneWidget.scene;
+    if (ImGui::BeginTable("table2", 2, ImGuiTableFlags_SizingFixedFit)) {
+        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+
+        { // basecolor
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          ImGui::Text("Albedo");
+          ImGui::TableNextColumn();
+          float basecolor[3] = {
+            material->baseOrDiffuseColor.r,
+            material->baseOrDiffuseColor.g,
+            material->baseOrDiffuseColor.b, };
+          if (ImGui::DragFloat3("##Albedo", basecolor, 0.05, 0, 1)) {
+            material->isDirty = true;
+            material->baseOrDiffuseColor = { basecolor[0], basecolor[1], basecolor[2] };
+            if (scene.get()) scene->dirtyFlags |= (uint32_t)gfx::Scene::DirtyFlagBit::Material;
+          }
+        }
+        { // emission
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          ImGui::Text("Emission");
+          ImGui::TableNextColumn();
+          float emission[3] = {
+            material->emissiveColor.r,
+            material->emissiveColor.g,
+            material->emissiveColor.b, };
+          if (ImGui::DragFloat3("##Emission", emission, 0.05, 0)) {
+            material->isDirty = true;
+            material->emissiveColor = { emission[0], emission[1], emission[2] };
+            if (scene.get()) scene->dirtyFlags |= (uint32_t)gfx::Scene::DirtyFlagBit::Material;
+          }
+        }
+        ImGui::EndTable();
+    }
+}
+
 void drawNodeInspector(gfx::Node& node) {
   gfx::NodeProperty* nodeprop = node.getComponent<gfx::NodeProperty>();
   if (nodeprop) {
@@ -346,6 +386,49 @@ void drawNodeInspector(gfx::Node& node) {
     strcpy_s(buffer, nodeprop->name.c_str());
     if (ImGui::InputText(" ", buffer, sizeof(buffer)))
       nodeprop->name = std::string(buffer);
+  }
+
+  gfx::Transform* transformComp = node.getComponent<gfx::Transform>();
+  if (transformComp) {
+    drawComponent<gfx::Transform>(node, "Transform Component", [](gfx::Transform* component) {
+      bool isDirty = false;
+      gfx::SceneHandle& scene = se::editor::EditorBase::sceneWidget.scene;
+      if (ImGui::BeginTable("table2", 2, ImGuiTableFlags_SizingFixedFit)) {
+        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+        { // position
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          ImGui::Text("Position");
+          ImGui::TableNextColumn();
+          float translation[3] = {
+            component->translation.r,
+            component->translation.g,
+            component->translation.b, };
+          if (ImGui::DragFloat3("##Trans", translation, 0.05, 0, 1)) {
+            //material->isDirty = true;
+            component->translation = { translation[0], translation[1], translation[2] };
+            if (scene.get()) scene->dirtyFlags |= (uint32_t)gfx::Scene::DirtyFlagBit::Camera;
+          }
+        }
+        { // scale
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          ImGui::Text("Scale");
+          ImGui::TableNextColumn();
+          float scale[3] = {
+            component->scale.r,
+            component->scale.g,
+            component->scale.b, };
+          if (ImGui::DragFloat3("##Scale", scale, 0.05, 0, 1)) {
+            //material->isDirty = true;
+            component->scale = { scale[0], scale[1], scale[2] };
+            if (scene.get()) scene->dirtyFlags |= (uint32_t)gfx::Scene::DirtyFlagBit::Camera;
+          }
+        }
+        ImGui::EndTable();
+      }
+    });
   }
 
   gfx::Camera* cameraComp = node.getComponent<gfx::Camera>();
@@ -386,6 +469,33 @@ void drawNodeInspector(gfx::Node& node) {
     });
   }
 
+  gfx::MeshRenderer* meshRenderComp = node.getComponent<gfx::MeshRenderer>();
+  if (meshRenderComp) {
+    drawComponent<gfx::MeshRenderer>(node, "MeshRenderer Component", [](gfx::MeshRenderer* component) {
+      bool isDirty = false;
+      
+      drawCustomColume("Name", 100, [&]() {
+        char buffer[256];
+        memset(buffer, 0, sizeof(buffer));
+        strcpy_s(buffer, component->mesh->name.c_str());
+        if (ImGui::InputText(" ", buffer, sizeof(buffer)))
+            component->mesh->name = std::string(buffer);
+      });
+      if (ImGui::TreeNode("Primitives")) {
+        ImGui::PushID("Primitives");
+        for (int i = 0; i < component->mesh->primitives.size(); ++i) {
+          bool opened = ImGui::TreeNode(("primitive - " + std::to_string(i)).c_str());
+          if (opened) {
+            auto& primitive = component->mesh->primitives[i];
+            drawMaterialEditor(primitive.material);
+            ImGui::TreePop();
+          }
+        }
+        ImGui::PopID();
+        ImGui::TreePop();
+      }
+    });
+  }
 }
 
 auto drawNode(gfx::Node const& node, gfx::Scene* scene, SceneWidget* widget) -> bool {
@@ -478,7 +588,7 @@ auto SceneWidget::onDrawGui() noexcept -> void {
   ImGui::Begin("Scene", 0, ImGuiWindowFlags_MenuBar);
   ImGui::PushItemWidth(ImGui::GetFontSize() * -12);
   auto save_scene = [&scene = this->scene]() {
-    std::string name = scene->name + ".scene";
+    std::string name = scene->name + ".gltf";
     std::string path = se::gfx::GFXContext::device->fromAdapter()->fromContext()->getBindedWindow()->saveFile(nullptr, name);
     if (path != "") {
       scene->serialize(path);

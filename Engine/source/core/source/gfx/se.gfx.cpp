@@ -897,7 +897,8 @@ auto Material::getName() const noexcept -> char const* { return name.c_str(); }
 auto Material::getDataPacket() const noexcept -> MaterialPacket {
   MaterialPacket packet;
   packet.bxdf_type = bxdf;
-  packet.floatvec_0 = { baseOrDiffuseColor, 1. };
+  packet.floatvec_0 = { baseOrDiffuseColor, roughnessFactor };
+  packet.floatvec_1 = { emissiveColor, metallicFactor };
   return packet;
 }
 
@@ -1063,7 +1064,7 @@ auto GFXContext::create_sampler_desc(
 auto GFXContext::load_mesh_empty() noexcept -> MeshHandle {
   RUID const ruid = root::resource::queryRUID();
   auto ret = meshs.load(ruid, MeshLoader::from_empty_tag{});
-  return MeshHandle{ ret.first->second };
+  return MeshHandle{ ret.first->second, ruid };
 }
 
 auto GFXContext::load_material_empty() noexcept -> MaterialHandle {

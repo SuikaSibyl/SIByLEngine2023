@@ -1,9 +1,9 @@
 #ifndef _SRENDERER_SPT_HEADER_
 #define _SRENDERER_SPT_HEADER_
 
-#include "../common/raycast.hlsli"
-#include "../common/random.hlsli"
-#include "../common/geometry.hlsli"
+#include "common/geometry.hlsli"
+#include "common/random.hlsli"
+#include "common/raycast.hlsli"
 
 /**********************************************************************
 ****                    Common Payloads Structures                 ****
@@ -34,6 +34,10 @@ struct RawPayload {
     int geometryID;
     float2 barycentric;
     bool hasHit;
+};
+
+struct MediumHit {
+    int mediumID;
 };
 
 // ------------------------------------------------------------
@@ -108,14 +112,34 @@ Ray SpawnRay(
     return ray;
 }
 
+Ray SpawnRay(float3 pos, float3 dir) {
+    Ray ray;
+    ray.origin = pos;
+    ray.direction = dir;
+    ray.tMin = 0.000;
+    ray.tMax = 1e6;
+    return ray;
+}
+
 Ray SpawnVisibilityRay(
     in_ref(GeometryHit) isect,
     in_ref(float3) position)
 {
     float3 dir = position - isect.position;
     float distance = length(dir);
-    Ray visiblityRay = SpawnRay(isect, dir);
-    visiblityRay.tMax = distance - 0.01;
+    Ray visiblityRay = SpawnRay(isect, dir / distance);
+    visiblityRay.tMax = distance - min(0.01, distance * 0.02);
+    return visiblityRay;
+}
+
+Ray SpawnVisibilityRay(
+    in_ref(float3) origin,
+    in_ref(float3) target)
+{
+    float3 dir = target - origin;
+    float distance = length(dir);
+    Ray visiblityRay = SpawnRay(origin, dir / distance);
+    visiblityRay.tMax = distance - min(0.01, distance * 0.02);
     return visiblityRay;
 }
 

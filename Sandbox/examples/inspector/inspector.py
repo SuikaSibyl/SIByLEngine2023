@@ -1,0 +1,54 @@
+# Append the path of the parent directory to the system path
+# to import the modules from the parent directory
+import sys
+import os
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(os.path.dirname(SCRIPT_DIR))
+sys.path.append(ROOT_DIR)
+# import se modules
+from se.common import *
+from se.editor import *
+import se.pycore as se  
+import se.pyeditor as sed
+from examples.inspector.pipeline import *
+
+class EditorApp(EditorApplication):
+    def __init__(self):
+        super().__init__()
+    
+    def onInit(self):        
+        # create and bind the pipeline
+        self.pipeline = RenderPipeline()
+        self.pipeline.setStandardSize(se.ivec3(1024, 1024, 1))
+        self.pipeline.build()
+        sed.EditorBase.bindPipeline(self.pipeline.pipeline())
+        # create and bind the scene
+        # self.scene = se.gfx.Context.load_scene_gltf("examples/lighting/_data/manylight.gltf")
+        # self.scene = se.gfx.Context.load_scene_gltf("examples/glt/_data/test2.gltf")
+        # self.scene = se.gfx.Context.load_scene_gltf("examples/lighting/_data/onelight.gltf")
+        self.scene = se.gfx.Context.load_scene_gltf("examples/lighting/_data/manylight-2.gltf")
+        
+        sed.EditorBase.bindScene(self.scene)
+        self.scene.get().updateTransform()
+        self.scene.get().updateGPUScene()
+        se.gfx.PMFConstructor.upload_datapack()
+    
+    def onUpdate(self):
+        # update the scene
+        self.ctx.device.waitIdle()
+        self.scene.get().updateGPUScene()
+    
+    def onCommandRecord(self, cmdEncoder: se.rhi.CommandEncoder):
+        self.pipeline.bindScene(self.scene)
+        self.pipeline.execute(cmdEncoder)
+    
+    def onClose(self):
+        se.gfx.PMFConstructor.clear_datapack()
+        del self.pipeline
+        del self.scene
+        super().onClose()
+
+
+editor = EditorApp()
+editor.run()
+print("Script End Successfully!")

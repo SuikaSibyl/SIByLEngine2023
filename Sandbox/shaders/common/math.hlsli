@@ -183,36 +183,43 @@ complex operator /(float value, complex z) { return complex(value) / z; }
     return acos(clamp(x, -1, 1));
 }
 
+[Differentiable] float angle_between(float3 v1, float3 v2) {
+    if (dot(v1, v2) < 0) return k_pi - 2 * safe_acos(length(v1 + v2) / 2);
+    else return 2 * safe_acos(length(v2 - v1) / 2);
+}
+
 [Differentiable] float evaluate_polynomial_0(float t, float c) { return c; }
+
+[Differentiable] float ffma(float a, float b, float c) { return a * b + c; }
 
 float evaluate_polynomial_1(
     float t, float c1, float c0) {
-    return fma(t, evaluate_polynomial_0(t, c0), c1);
+    return ffma(t, evaluate_polynomial_0(t, c0), c1);
 }
 
 float evaluate_polynomial_2(
     float t, float c2, float c1, float c0) {
-    return fma(t, evaluate_polynomial_1(t, c1, c0), c2);
+    return ffma(t, evaluate_polynomial_1(t, c1, c0), c2);
 }
 
 float evaluate_polynomial_3(
     float t, float c3, float c2, float c1, float c0) {
-    return fma(t, evaluate_polynomial_2(t, c2, c1, c0), c3);
+    return ffma(t, evaluate_polynomial_2(t, c2, c1, c0), c3);
 }
 
 float evaluate_polynomial_4(
     float t, float c4, float c3, float c2, float c1, float c0) {
-    return fma(t, evaluate_polynomial_3(t, c3, c2, c1, c0), c4);
+    return ffma(t, evaluate_polynomial_3(t, c3, c2, c1, c0), c4);
 }
 
 float evaluate_polynomial_5(
     float t, float c5, float c4, float c3, float c2, float c1, float c0) {
-    return fma(t, evaluate_polynomial_4(t, c4, c3, c2, c1, c0), c5);
+    return ffma(t, evaluate_polynomial_4(t, c4, c3, c2, c1, c0), c5);
 }
 
 float evaluate_polynomial_6(
     float t, float c6, float c5, float c4, float c3, float c2, float c1, float c0) {
-    return fma(t, evaluate_polynomial_5(t, c5, c4, c3, c2, c1, c0), c6);
+    return ffma(t, evaluate_polynomial_5(t, c5, c4, c3, c2, c1, c0), c6);
 }
 
 float erf(float x) {
@@ -243,6 +250,61 @@ float erf(float x) {
         float x2 = x * x;
         return (((((A6 * x2 + A5) * x2 + A4) * x2 + A3) * x2 + A2) * x2 + A1) * x;
     }
+}
+
+float next_float_down(float v) {
+    // Handle infinity and positive zero for _NextFloatDown()_
+    if (isinf(v) && v < 0.) return v;
+    if (v == 0.f) v = -0.f;
+    uint32_t ui = asuint(v);
+    if (v > 0) --ui;
+    else ++ui;
+    return asfloat(ui);
+}
+
+float unpack_cpu_half(uint16_t hdata) {
+    int s = (hdata >> 15) & 0x00000001;
+    int e = (hdata >> 10) & 0x0000001f;
+    int m = hdata & 0x000003ff;
+
+    if (e == 0) {
+        if (m == 0) {
+            uint32_t result = (uint32_t)(s << 31);
+            return asfloat(result);
+        }
+        else {
+            while (!bool(m & 0x00000400)) {
+                m <<= 1;
+                e -= 1;
+            }
+
+            e += 1;
+            m &= ~0x00000400;
+        }
+    }
+    else if (e == 31) {
+        if (m == 0) {
+            uint32_t result = (uint32_t)((s << 31) | 0x7f800000);
+            return asfloat(result);
+        } else {
+            uint32_t result = (uint32_t)((s << 31) | 0x7f800000 | (m << 13));
+            return asfloat(result);
+        }
+    }
+
+    e = e + (127 - 15);
+    m = m << 13;
+
+    uint32_t result = (uint32_t)((s << 31) | (e << 23) | m);
+    return asfloat(result);
+}
+
+float3 yuv2rgb(float3 yuv) {
+    float3 rgb;
+    rgb.x = yuv.x + 1.13983f * yuv.z;
+    rgb.y = yuv.x - 0.39465f * yuv.y - 0.58060f * yuv.z;
+    rgb.z = yuv.x + 2.03211f * yuv.y;
+    return rgb;
 }
 
 #endif // !_SRENDERER_COMMMON_MATH_HEADER_

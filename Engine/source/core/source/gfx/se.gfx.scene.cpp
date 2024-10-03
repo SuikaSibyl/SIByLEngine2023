@@ -2,6 +2,9 @@
 #include <se.gfx.hpp>
 #undef DLIB_EXPORT
 #include <stack>
+#include <tinyparser-mitsuba.h>
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
 
 namespace se::gfx {
 static std::array<uint64_t, 24> primes = {3,  5,  7,  11, 13, 17, 19, 23,
@@ -95,7 +98,11 @@ Scene::Scene() {
   gpuScene.light_buffer = GFXContext::load_buffer_empty();
   gpuScene.geometry_buffer = GFXContext::load_buffer_empty();
   gpuScene.camera_buffer = GFXContext::load_buffer_empty();
+  gpuScene.scene_desc_buffer = GFXContext::load_buffer_empty();
+  gpuScene.lbvh.light_bvh_buffer = GFXContext::load_buffer_empty();
+  gpuScene.lbvh.light_trail_buffer = GFXContext::load_buffer_empty();
   gpuScene.camera_buffer->host.resize(sizeof(Scene::CameraData));
+  gpuScene.scene_desc_buffer->host.resize(sizeof(Scene::SceneDescription));
   gpuScene.position_buffer->usages =
     (uint32_t)rhi::BufferUsageBit::VERTEX |
     (uint32_t)rhi::BufferUsageBit::SHADER_DEVICE_ADDRESS |
@@ -126,6 +133,15 @@ Scene::Scene() {
     (uint32_t)rhi::BufferUsageBit::SHADER_DEVICE_ADDRESS |
     (uint32_t)rhi::BufferUsageBit::STORAGE;
   gpuScene.camera_buffer->usages =
+    (uint32_t)rhi::BufferUsageBit::SHADER_DEVICE_ADDRESS |
+    (uint32_t)rhi::BufferUsageBit::STORAGE;
+  gpuScene.scene_desc_buffer->usages =
+    (uint32_t)rhi::BufferUsageBit::SHADER_DEVICE_ADDRESS |
+    (uint32_t)rhi::BufferUsageBit::STORAGE;
+  gpuScene.lbvh.light_bvh_buffer->usages =
+    (uint32_t)rhi::BufferUsageBit::SHADER_DEVICE_ADDRESS |
+    (uint32_t)rhi::BufferUsageBit::STORAGE;
+  gpuScene.lbvh.light_trail_buffer->usages =
     (uint32_t)rhi::BufferUsageBit::SHADER_DEVICE_ADDRESS |
     (uint32_t)rhi::BufferUsageBit::STORAGE;
 }
@@ -226,12 +242,15 @@ auto Scene::serialize() noexcept -> tinygltf::Model {
     int node_id = data.nodes[node.entity];
     scene.nodes.push_back(node_id);
   }
-  m.buffers.resize(4);
+  m.buffers.resize(3);
   // store position buffer
   m.buffers[0].data = gpuScene.position_buffer.get()->host;
   m.buffers[1].data = gpuScene.index_buffer.get()->host;
   m.buffers[2].data = gpuScene.vertex_buffer.get()->host;
-  m.buffers[3].data = gpuScene.texcoord_buffer.get()->getHost();
+  if (gpuScene.texcoord_buffer.get()->host.size() > 0) {
+    m.buffers.resize(4);
+    m.buffers[3].data = gpuScene.texcoord_buffer.get()->getHost();
+  }
 
   auto add_view_accessor = [&](
     tinygltf::BufferView bufferView,
@@ -264,6 +283,10 @@ auto Scene::serialize() noexcept -> tinygltf::Model {
         material->baseOrDiffuseColor.b, 1. };
     gltf_material.pbrMetallicRoughness.roughnessFactor = double(material->roughnessFactor);
     gltf_material.pbrMetallicRoughness.metallicFactor = double(material->metallicFactor);
+    gltf_material.emissiveFactor = {
+        material->emissiveColor.r, material->emissiveColor.g,
+        material->emissiveColor.b
+    };
     m.materials.push_back(gltf_material);
     material_map[material] = material_id;
     return material_id;
@@ -333,7 +356,7 @@ auto Scene::serialize() noexcept -> tinygltf::Model {
         gltf_primitive.attributes["TEXCOORD_0"] = add_accessor(accessor);
       }
       // texcoord1 buffer
-      if(m.buffers[3].data.size() > 0) {
+      if(m.buffers.size() >= 4 && m.buffers[3].data.size() > 0) {
         tinygltf::BufferView bufferView;
         bufferView.buffer = 3;
         bufferView.byteOffset = (primitive.baseVertex * sizeof(float) * 3 + se_mesh.mesh.get()->vertex_offset) * 2 / 3;
@@ -361,7 +384,7 @@ auto Scene::serialize() noexcept -> tinygltf::Model {
     if (se_camera.projectType == Camera::ProjectType::PERSPECTIVE) {
       gltf_camera.type = "perspective";
       gltf_camera.perspective.aspectRatio = se_camera.aspectRatio;
-      gltf_camera.perspective.yfov = se_camera.yfov;
+      gltf_camera.perspective.yfov = se::radians(se_camera.yfov);
       gltf_camera.perspective.znear = se_camera.znear;
       gltf_camera.perspective.zfar = se_camera.zfar;
     }
@@ -434,6 +457,10 @@ Scene::CameraData::CameraData(Camera const& camera, Transform const& transform) 
   rectArea = 4 * ulen * vlen / (focalDistance * focalDistance);
 }
 
+auto Scene::getSceneLightCounts() noexcept -> int {
+  return gpuScene.light_buffer->host.size() / sizeof(Light::LightPacket);
+}
+
 auto Scene::useEditorCameraView(Transform* transfrom, Camera* camera) noexcept -> void {
   editorInfo.viewport_transfrom = transfrom;
   editorInfo.viewport_camera = camera;
@@ -472,6 +499,7 @@ auto Scene::updateGPUScene() noexcept -> void {
     size_t geometry_index = 0;
     for (auto entity : node_mesh_view) {
       auto [transform, mesh_renderer] = node_mesh_view.get<Transform, MeshRenderer>(entity);
+      std::vector<int> indices(mesh_renderer.mesh->primitives.size()); int i = 0;
       for (auto& primitive : mesh_renderer.mesh->primitives) {
         GeometryDrawData geometry;
         geometry.vertexOffset = primitive.baseVertex + mesh_renderer.mesh->vertex_offset / (sizeof(float) * 3);
@@ -482,16 +510,118 @@ auto Scene::updateGPUScene() noexcept -> void {
         geometry.oddNegativeScaling = transform.oddScaling;
         geometry.materialID = gpuScene.try_fetch_material_index(primitive.material);
         geometry.primitiveType = 0;
-        geometry.lightID = 0;
+        geometry.lightID = -1;
         if (gpuScene.geometry_buffer->host.size() < (geometry_index + 1) * sizeof(GeometryDrawData)) {
           gpuScene.geometry_buffer->host.resize((geometry_index + 1) * sizeof(GeometryDrawData));
         }
         memcpy(&gpuScene.geometry_buffer->host[geometry_index * sizeof(GeometryDrawData)], &geometry, sizeof(GeometryDrawData));
-        geometry_index++;
+        indices[i++] = geometry_index; geometry_index++;
+      }
+      gpuScene.geometry_loc_index[mesh_renderer.mesh.ruid] = indices;
+    }
+  }
+  std::span<GeometryDrawData> geometry_array = {
+    (GeometryDrawData*)gpuScene.geometry_buffer->host.data(),
+    gpuScene.geometry_buffer->host.size() / sizeof(GeometryDrawData),
+  };
+
+  auto node_light_view = registry.view<Transform, Light>();
+  if ((dirtyFlags & (uint64_t)DirtyFlagBit::Light) != 0) {
+    size_t light_index = 0;
+    for (auto entity : node_light_view) {
+      auto [transform, light] = node_light_view.get<Transform, Light>(entity);
+      switch (light.type) {
+      case Light::LightType::MESH_PRIMITIVE: {
+        MeshHandle& mesh = registry.get<MeshRenderer>(entity).mesh;
+        std::vector<int>& indices = gpuScene.geometry_loc_index[mesh.ruid];
+        for (int i = 0; i < light.primitives.size(); ++i) {
+          int primitive_index = light.primitives[i];
+          int geometry_index = indices[primitive_index];
+          GeometryDrawData& geometry = geometry_array[geometry_index];
+          std::vector<Light::LightPacket> packets(geometry.indexSize / 3);
+          const vec3 emissive = mesh->primitives[primitive_index].material->emissiveColor;
+          const vec3 yuv = {
+            0.299 * emissive.r + 0.587 * emissive.g + 0.114 * emissive.b,
+            -0.14713 * emissive.r - 0.28886 * emissive.g + 0.436 * emissive.b,
+            0.615 * emissive.r - 0.51499 * emissive.g - 0.10001 * emissive.b,
+          };
+          for (int j = 0; j < geometry.indexSize / 3; j++) {
+            packets[j].light_type = int(Light::LightType::MESH_PRIMITIVE);
+            packets[j].uintscalar_0 = j;
+            packets[j].uintscalar_1 = geometry_index;
+            // todo (twoSided ? 2 : 1)
+            uvec3 indices = gpuScene.fetch_triangle_indices(geometry, j);
+            vec3 v0 = gpuScene.fetch_vertex_position(indices[0] + int(geometry.vertexOffset));
+            vec3 v1 = gpuScene.fetch_vertex_position(indices[1] + int(geometry.vertexOffset));
+            vec3 v2 = gpuScene.fetch_vertex_position(indices[2] + int(geometry.vertexOffset));
+            v0 = mul(mat4(geometry.geometryTransform), { v0, 1 }).xyz();
+            v1 = mul(mat4(geometry.geometryTransform), { v1, 1 }).xyz();
+            v2 = mul(mat4(geometry.geometryTransform), { v2, 1 }).xyz();
+            float area = 0.5f * length(cross(v1 - v0, v2 - v0));
+            bounds3 bound;
+            bound = unionPoint(bound, point3(v0));
+            bound = unionPoint(bound, point3(v1));
+            bound = unionPoint(bound, point3(v2));
+
+            normal3 n = normalize(normal3(cross(v1 - v0, v2 - v0)));
+            // Ensure correct orientation of geometric normal for normal bounds
+            vec3 n0 = gpuScene.fetch_vertex_normal(indices[0] + int(geometry.vertexOffset));
+            vec3 n1 = gpuScene.fetch_vertex_normal(indices[1] + int(geometry.vertexOffset));
+            vec3 n2 = gpuScene.fetch_vertex_normal(indices[2] + int(geometry.vertexOffset));
+            n0 = mul(mat4(geometry.geometryTransformInverse), { n0, 0 }).xyz();
+            n1 = mul(mat4(geometry.geometryTransformInverse), { n1, 0 }).xyz();
+            n2 = mul(mat4(geometry.geometryTransformInverse), { n2, 0 }).xyz();
+            //normal3 ns = normalize(n0 + n1 + n2);
+            //n = faceForward(n, ns);
+            n *= geometry.oddNegativeScaling;
+            
+            vec3 power = yuv * k_pi * area;
+            packets[j].floatvec_0 = { power , n.x };
+            packets[j].floatvec_1 = { bound.pMin, n.y };
+            packets[j].floatvec_2 = { bound.pMax, n.z };
+          }
+          int light_index = gpuScene.light_buffer->host.size() / sizeof(Light::LightPacket);
+          geometry.lightID = light_index;
+          if (gpuScene.light_buffer->host.size() < (light_index + packets.size()) * sizeof(Light::LightPacket)) {
+              gpuScene.light_buffer->host.resize((light_index + packets.size()) * sizeof(Light::LightPacket));
+          }
+          memcpy(&gpuScene.light_buffer->host[light_index * sizeof(Light::LightPacket)],
+            (float*)packets.data(), packets.size() * sizeof(Light::LightPacket));
+        }
+        gpuScene.light_buffer->host_stamp++;
+        break;
+      }
+      default: break;
+      }
+    }
+    // build light bvh
+    gpuScene.build_light_bvh();
+  }
+
+  if ((dirtyFlags & (uint64_t)DirtyFlagBit::Material) != 0) {
+    for (auto& pair : gpuScene.material_loc_index) {
+      if (pair.second.second->isDirty) {
+          pair.second.second->isDirty = false;
+          Material::MaterialPacket pack = pair.second.second->getDataPacket();
+          memcpy((float*)&(gpuScene.material_buffer->host[sizeof(Material::MaterialPacket) * 
+            pair.second.first]), &pack, sizeof(pack));
+          gpuScene.material_buffer->host_stamp++;
       }
     }
   }
-  
+
+  // always update ?
+  {
+    SceneDescription desc;
+    desc.light_bound_min = gpuScene.lbvh.all_light_bounds.pMin;
+    desc.light_bound_max = gpuScene.lbvh.all_light_bounds.pMax;
+    desc.max_light_count = getSceneLightCounts();
+    desc.active_camera_index = getEditorActiveCameraIndex();
+    memcpy((SceneDescription*)gpuScene.scene_desc_buffer->host.data(), 
+      &desc, sizeof(SceneDescription));
+    gpuScene.scene_desc_buffer->host_stamp++;
+  }
+
   gpuScene.position_buffer->hostToDevice();
   gpuScene.index_buffer->hostToDevice();
   gpuScene.vertex_buffer->hostToDevice();
@@ -499,7 +629,13 @@ auto Scene::updateGPUScene() noexcept -> void {
   gpuScene.camera_buffer->hostToDevice();
   gpuScene.texcoord_buffer->hostToDevice();
   gpuScene.material_buffer->hostToDevice();
-  
+  gpuScene.light_buffer->hostToDevice();
+  gpuScene.scene_desc_buffer->hostToDevice();
+
+  // also update the light bvh
+  gpuScene.lbvh.light_bvh_buffer->hostToDevice();
+  gpuScene.lbvh.light_trail_buffer->hostToDevice();
+
   // also update the ray tracing data structures
   gpuScene.tlas.desc = {};
   if ((dirtyFlags & (uint64_t)DirtyFlagBit::Geometry) != 0) {
@@ -605,6 +741,22 @@ auto Scene::GPUScene::bindingResourceMaterial() noexcept -> rhi::BindingResource
   return rhi::BindingResource{ {material_buffer->buffer.get(), 0, material_buffer->buffer->size()} };
 }
 
+auto Scene::GPUScene::bindingResourceLight() noexcept -> rhi::BindingResource {
+    return rhi::BindingResource{ {light_buffer->buffer.get(), 0, light_buffer->buffer->size()} };
+}
+
+auto Scene::GPUScene::bindingResourceLightBVH() noexcept -> rhi::BindingResource {
+  return rhi::BindingResource{ {lbvh.light_bvh_buffer->buffer.get(), 0, lbvh.light_bvh_buffer->buffer->size()} };
+}
+
+auto Scene::GPUScene::bindingResourceLightTrail() noexcept -> rhi::BindingResource {
+  return rhi::BindingResource{ {lbvh.light_trail_buffer->buffer.get(), 0, lbvh.light_trail_buffer->buffer->size()} };
+}
+
+auto Scene::GPUScene::bindingSceneDescriptor() noexcept -> rhi::BindingResource {
+  return rhi::BindingResource{ {scene_desc_buffer->buffer.get(), 0, scene_desc_buffer->buffer->size()} };
+}
+
 auto Scene::GPUScene::bindingResourceTLAS() noexcept -> rhi::BindingResource {
   return rhi::BindingResource{ tlas.prim.get() };
 }
@@ -629,14 +781,318 @@ auto Scene::GPUScene::try_fetch_material_index(MaterialHandle& handle) noexcept 
   auto iter = material_loc_index.find(handle.ruid);
   if (iter == material_loc_index.end()) {
     int index = material_loc_index.size();
-    material_loc_index[handle.ruid] = index;
+    material_loc_index[handle.ruid] = { index, handle };
     material_buffer->host.resize(sizeof(Material::MaterialPacket) * (index + 1));
     Material::MaterialPacket pack = handle->getDataPacket();
     memcpy((float*)&(material_buffer->host[sizeof(Material::MaterialPacket) * index]), &pack, sizeof(pack));
     material_buffer->host_stamp++;
     return index;
   }
-  return iter->second;
+  return iter->second.first;
+}
+
+auto Scene::GPUScene::fetch_geometry_data(int geometryID) noexcept -> GeometryDrawData {
+  std::span<GeometryDrawData> geometry_array = {
+  (GeometryDrawData*)geometry_buffer->host.data(),
+  geometry_buffer->host.size() / sizeof(GeometryDrawData),
+  };
+  return geometry_array[geometryID];
+}
+
+auto Scene::GPUScene::fetch_triangle_indices(
+  GeometryDrawData const& geometry, int triangleID) noexcept -> uvec3 {
+  std::span<uint32_t> index_array = {
+    (uint32_t*)index_buffer->host.data(),
+    index_buffer->host.size() / sizeof(uint32_t),
+  };
+  return uvec3 {
+    index_array[geometry.indexOffset + triangleID * 3 + 0],
+    index_array[geometry.indexOffset + triangleID * 3 + 1],
+    index_array[geometry.indexOffset + triangleID * 3 + 2]
+  };
+}
+
+auto Scene::GPUScene::fetch_vertex_position(int vertexID) noexcept -> vec3 {
+  std::span<float> position_array = {
+    (float*)position_buffer->host.data(),
+    position_buffer->host.size() / sizeof(float),
+  };
+  return vec3 {
+    position_array[vertexID * 3 + 0],
+    position_array[vertexID * 3 + 1],
+    position_array[vertexID * 3 + 2]
+  };
+}
+
+auto Scene::GPUScene::fetch_vertex_normal(int vertexID) noexcept -> vec3 {
+  std::span<float> vertex_array = {
+  (float*)vertex_buffer->host.data(),
+  vertex_buffer->host.size() / sizeof(float),
+  };
+  return vec3{
+    vertex_array[vertexID * 8 + 0],
+    vertex_array[vertexID * 8 + 1],
+    vertex_array[vertexID * 8 + 2]
+  };
+}
+
+auto loadObjMesh(std::string path, Scene& scene) noexcept -> MeshHandle {
+      // load obj file
+  tinyobj::ObjReaderConfig reader_config;
+  reader_config.mtl_search_path =
+    std::filesystem::path(path).parent_path().string();  // Path to material files
+  tinyobj::ObjReader reader;
+  if (!reader.ParseFromFile(path, reader_config)) {
+    if (!reader.Error().empty()) {
+      root::print::error("TinyObjReader: " + reader.Error());
+    }
+    return MeshHandle{};
+  }
+  if (!reader.Warning().empty()) {
+    root::print::warning("TinyObjReader: " + reader.Warning());
+  }
+  auto& attrib = reader.GetAttrib();
+  auto& shapes = reader.GetShapes();
+  auto& materials = reader.GetMaterials();
+
+  uint32_t vertex_offset = 0;
+  std::unordered_map<uint64_t, uint32_t> uniqueVertices{};
+
+  std::vector<float> vertexBufferV = {};
+  std::vector<float> positionBufferV = {};
+  std::vector<uint32_t> indexBufferWV = {};
+  // create mesh resource
+  MeshHandle mesh = GFXContext::load_mesh_empty();
+
+  // check whether tangent is need in mesh attributes
+  bool needTangent = false;
+  for (auto const& entry : defaultMeshDataLayout.layout)
+    if (entry.info == MeshDataLayout::VertexInfo::TANGENT) needTangent = true;
+
+  // Loop over shapes
+  uint64_t global_index_offset = 0;
+  uint32_t submesh_vertex_offset = 0, submesh_index_offset = 0;
+  for (size_t s = 0; s < shapes.size(); s++) {
+    vec3 position_max = vec3(-1e9);
+    vec3 position_min = vec3(1e9);
+    // Loop over faces(polygon)
+    size_t index_offset = 0;
+    for (size_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++) {
+      size_t fv = size_t(shapes[s].mesh.num_face_vertices[f]);
+      // require tangent
+      if (fv != 3) {
+        root::print::error(
+          "GFX :: SceneNodeLoader_obj :: non-triangle geometry not "
+          "supported when required TANGENT attribute now.");
+        return MeshHandle{};
+      }
+      vec3 tangent;
+      vec3 bitangent;
+      if (needTangent) {
+        vec3 positions[3];
+        vec3 normals[3];
+        vec2 uvs[3];
+        for (size_t v = 0; v < fv; v++) {
+          // index finding
+          tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v];
+          positions[v] = {attrib.vertices[3 * size_t(idx.vertex_index) + 0],
+                          attrib.vertices[3 * size_t(idx.vertex_index) + 1],
+                          attrib.vertices[3 * size_t(idx.vertex_index) + 2]};
+          if (attrib.normals.size() == 0) {
+            normals[v] = {0, 0, 0};  
+          } else {
+            normals[v] = {attrib.normals[3 * size_t(idx.normal_index) + 0],
+                          attrib.normals[3 * size_t(idx.normal_index) + 1],
+                          attrib.normals[3 * size_t(idx.normal_index) + 2]};          
+          }
+          if (attrib.texcoords.size() == 0) {
+            uvs[v] = {0, 0};
+          } else {
+            uvs[v] = {attrib.texcoords[2 * size_t(idx.texcoord_index) + 0],
+                      -attrib.texcoords[2 * size_t(idx.texcoord_index) + 1]};
+
+          }
+        }
+        vec3 edge1 = positions[1] - positions[0];
+        vec3 edge2 = positions[2] - positions[0];
+        vec2 deltaUV1 = uvs[1] - uvs[0];
+        vec2 deltaUV2 = uvs[2] - uvs[0];
+
+        float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+
+        tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+        tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+        tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+        tangent = normalize(tangent);
+
+        bitangent.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
+        bitangent.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
+        bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
+        bitangent = normalize(bitangent);
+      }
+      // Loop over vertices in the face.
+      for (size_t v = 0; v < fv; v++) {
+        // index finding
+        tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v];
+        // atrributes filling
+        std::vector<float> vertex = {};
+        std::vector<float> position = {};
+        for (auto const& entry : defaultMeshDataLayout.layout) {
+          // vertex position
+          if (entry.info == MeshDataLayout::VertexInfo::POSITION) {
+            if (entry.format == rhi::VertexFormat::FLOAT32X3) {
+              tinyobj::real_t vx =
+                  attrib.vertices[3 * size_t(idx.vertex_index) + 0];
+              tinyobj::real_t vy =
+                  attrib.vertices[3 * size_t(idx.vertex_index) + 1];
+              tinyobj::real_t vz =
+                  attrib.vertices[3 * size_t(idx.vertex_index) + 2];
+              //vertex.push_back(vx);
+              //vertex.push_back(vy);
+              //vertex.push_back(vz);
+              position_min = se::min(position_min, vec3{ vx,vy,vz });
+              position_max = se::max(position_max, vec3{ vx,vy,vz });
+              if (defaultMeshLoadConfig.usePositionBuffer) {
+                position.push_back(vx);
+                position.push_back(vy);
+                position.push_back(vz);
+              }
+            } else {
+                root::print::error(
+                  "GFX :: SceneNodeLoader_obj :: unwanted vertex format for "
+                  "POSITION attributes.");
+              return MeshHandle{};
+            }
+          } else if (entry.info == MeshDataLayout::VertexInfo::NORMAL) {
+            // Check if `normal_index` is zero or positive. negative = no
+            // normal data
+            if (idx.normal_index >= 0) {
+              tinyobj::real_t nx =
+                  attrib.normals[3 * size_t(idx.normal_index) + 0];
+              tinyobj::real_t ny =
+                  attrib.normals[3 * size_t(idx.normal_index) + 1];
+              tinyobj::real_t nz =
+                  attrib.normals[3 * size_t(idx.normal_index) + 2];
+              vertex.push_back(nx);
+              vertex.push_back(ny);
+              vertex.push_back(nz);
+            } else {
+              vertex.push_back(0);
+              vertex.push_back(0);
+              vertex.push_back(0);
+            }
+          } else if (entry.info == MeshDataLayout::VertexInfo::UV) {
+            if (idx.texcoord_index >= 0) {
+              tinyobj::real_t tx =
+                  attrib.texcoords[2 * size_t(idx.texcoord_index) + 0];
+              tinyobj::real_t ty =
+                  attrib.texcoords[2 * size_t(idx.texcoord_index) + 1];
+              vertex.push_back(tx);
+              vertex.push_back(1 - ty);
+            } else {
+              vertex.push_back(0);
+              vertex.push_back(0);
+            }
+          } else if (entry.info == MeshDataLayout::VertexInfo::TANGENT) {
+            vertex.push_back(tangent.x);
+            vertex.push_back(tangent.y);
+            vertex.push_back(tangent.z);
+          } else if (entry.info == MeshDataLayout::VertexInfo::COLOR) {
+            // Optional: vertex colors
+            tinyobj::real_t red =
+                attrib.colors[3 * size_t(idx.vertex_index) + 0];
+            tinyobj::real_t green =
+                attrib.colors[3 * size_t(idx.vertex_index) + 1];
+            tinyobj::real_t blue =
+                attrib.colors[3 * size_t(idx.vertex_index) + 2];
+            vertex.push_back(red);
+            vertex.push_back(green);
+            vertex.push_back(blue);
+          } else if (entry.info == MeshDataLayout::VertexInfo::CUSTOM) {
+          }
+        }
+
+        if (defaultMeshLoadConfig.deduplication) {
+          uint64_t hashed_vertex = hash_vertex(vertex);
+          if (uniqueVertices.count(hashed_vertex) == 0) {
+            uniqueVertices[hashed_vertex] =
+                static_cast<uint32_t>(vertex_offset);
+            vertexBufferV.insert(vertexBufferV.end(), vertex.begin(),
+                                 vertex.end());
+            positionBufferV.insert(positionBufferV.end(), position.begin(),
+                                   position.end());
+            ++vertex_offset;
+          }
+
+          // index filling
+          if (defaultMeshLoadConfig.layout.format == rhi::IndexFormat::UINT16_t)
+            indexBufferWV.push_back(uniqueVertices[hashed_vertex]);
+          else if (defaultMeshLoadConfig.layout.format == rhi::IndexFormat::UINT32_T)
+            indexBufferWV.push_back(uniqueVertices[hashed_vertex]);
+        } else {
+          vertexBufferV.insert(vertexBufferV.end(), vertex.begin(),
+                               vertex.end());
+          ++vertex_offset;
+          // index filling
+          if (defaultMeshLoadConfig.layout.format == rhi::IndexFormat::UINT16_t)
+            indexBufferWV.push_back(vertex_offset);
+          else if (defaultMeshLoadConfig.layout.format == rhi::IndexFormat::UINT32_T)
+            indexBufferWV.push_back(vertex_offset);
+        }
+      }
+      index_offset += fv;
+      // per-face material
+      shapes[s].mesh.material_ids[f];
+    }
+    global_index_offset += index_offset;
+
+    // load Material
+    Mesh::MeshPrimitive sePrimitive; 
+    sePrimitive.offset = submesh_index_offset;
+    sePrimitive.size = index_offset;
+    sePrimitive.baseVertex = submesh_vertex_offset;
+    sePrimitive.numVertex = positionBufferV.size() / 3 - submesh_vertex_offset;
+    sePrimitive.max = position_max;
+    sePrimitive.min = position_min;
+    mesh.get()->primitives.emplace_back(std::move(sePrimitive));
+    // todo:: add material
+    submesh_index_offset = global_index_offset;
+    submesh_vertex_offset = submesh_index_offset;
+  }
+  { // register mesh
+    Buffer* position_buffer = scene.gpuScene.position_buffer.get();
+    size_t position_size = sizeof(float) * positionBufferV.size();
+    size_t position_offset = position_buffer->host.size();
+    position_buffer->host.resize(position_size + position_offset);
+    memcpy(&position_buffer->host[position_offset], positionBufferV.data(), position_size);
+    mesh.get()->vertex_offset = position_offset;
+
+    Buffer* index_buffer = scene.gpuScene.index_buffer.get();
+    size_t index_size = sizeof(uint32_t) * indexBufferWV.size();
+    size_t index_offset = index_buffer->host.size();
+    index_buffer->host.resize(index_size + index_offset);
+    memcpy(&index_buffer->host[index_offset], indexBufferWV.data(), index_size);
+    mesh.get()->index_offset = index_offset;
+
+    Buffer* vertex_buffer = scene.gpuScene.vertex_buffer.get();
+    size_t vertex_size = sizeof(float) * vertexBufferV.size();
+    size_t vertex_offset = vertex_buffer->host.size();
+    vertex_buffer->host.resize(vertex_size + vertex_offset);
+    memcpy(&vertex_buffer->host[vertex_offset], vertexBufferV.data(), vertex_size);
+    
+    //if (true) {
+    //  mesh.jointIndexBuffer_host = Core::Buffer(sizeof(uint64_t) * JointIndexBuffer.size());
+    //  memcpy(mesh.jointIndexBuffer_host.data, JointIndexBuffer.data(), mesh.jointIndexBuffer_host.size);
+    //  mesh.jointIndexBufferInfo.onHost = true;
+    //  mesh.jointIndexBufferInfo.size = mesh.jointIndexBuffer_host.size;
+
+    //  mesh.jointWeightBuffer_host = Core::Buffer(sizeof(float) * JointweightsBuffer.size());
+    //  memcpy(mesh.jointWeightBuffer_host.data, JointweightsBuffer.data(), mesh.jointWeightBuffer_host.size);
+    //  mesh.jointWeightBufferInfo.onHost = true;
+    //  mesh.jointWeightBufferInfo.size = mesh.jointWeightBuffer_host.size;
+    //}
+  }
+  return mesh;
 }
 
 struct glTFLoaderEnv {
@@ -717,6 +1173,11 @@ auto loadGLTFMaterial(tinygltf::Material const* glmaterial, tinygltf::Model cons
       mat->roughnessFactor = (float)glmaterial->pbrMetallicRoughness.roughnessFactor;
       mat->metallicFactor = (float)glmaterial->pbrMetallicRoughness.metallicFactor;
     }
+    mat->emissiveColor = se::vec3{
+        glmaterial->emissiveFactor[0],
+        glmaterial->emissiveFactor[1],
+        glmaterial->emissiveFactor[2],
+    };
   }
   //{ // load diffuse texture
   //  if (glmaterial->pbrMetallicRoughness.baseColorTexture.index != -1) {
@@ -1217,6 +1678,241 @@ static inline auto loadGLTFMesh(tinygltf::Mesh const& gltfmesh,
   return mesh;
  }
  
+struct xmlLoaderEnv {
+  std::string directory;
+  std::unordered_map<TPM_NAMESPACE::Object const*, TextureHandle> textures;
+  std::unordered_map<TPM_NAMESPACE::Object const*, MaterialHandle> materials;
+};
+
+auto loadXMLMaterial(TPM_NAMESPACE::Object const* node,
+    xmlLoaderEnv* env) noexcept -> gfx::MaterialHandle {
+  if (env->materials.find(node) != env->materials.end()) {
+    return env->materials[node];
+  }
+  if (node->type() != TPM_NAMESPACE::OT_BSDF) {
+    se::root::print::error("gfx :: XML Loader :: Try load material node not actually bsdf.");
+    return gfx::MaterialHandle{};
+  }
+
+  TPM_NAMESPACE::Object const* mat_node = nullptr;
+  if (node->pluginType() == "dielectric") {
+    mat_node = node;
+  }
+  else if(node->pluginType() == "roughdielectric") {
+    mat_node = node;
+  }
+  else if(node->pluginType() == "thindielectric") {
+    mat_node = node;
+  }
+  else if (node->pluginType() == "twosided") {
+    if (node->anonymousChildren().size() == 0) {
+      root::print::error("Mitsuba Loader :: Material loading exception.");
+      return gfx::MaterialHandle{};
+    }
+    mat_node = node->anonymousChildren()[0].get();
+  }
+  else if (node->pluginType() == "mask") {
+    if (node->anonymousChildren().size() == 0) {
+      root::print::error("Mitsuba Loader :: Material loading exception.");
+      return gfx::MaterialHandle{};
+    }
+    return loadXMLMaterial(node->anonymousChildren()[0].get(), env);
+  }
+  else if (node->pluginType() == "bumpmap") {
+    if (node->anonymousChildren().size() == 0) {
+      root::print::error("Mitsuba Loader :: Material loading exception.");
+      return gfx::MaterialHandle{};
+    }
+    return loadXMLMaterial(node->anonymousChildren()[0].get(), env);
+  }
+  else {
+    mat_node = node;
+  }
+
+  MaterialHandle mat = GFXContext::load_material_empty();
+  std::string name = std::string(node->id());
+  if (name == "") name = "unnamed material";
+  mat->name = name;
+
+  if (mat_node->pluginType() == "roughplastic") {
+    mat->bxdf = 0;
+  } else if (mat_node->pluginType() == "diffuse") {
+    mat->bxdf = 0;
+  } else {
+    mat->bxdf = 0;
+  }
+  mat->eta = mat_node->property("int_ior").getNumber(1.5f);
+
+  //for (auto const& child : mat_node->namedChildren()) {
+  //  if (child.first == "diffuse_reflectance" ||
+  //      child.first == "reflectance") {
+  //    gfxmat.textures["base_color"] = {
+  //        loadMaterialTextures(child.second.get(), env), 0};
+  //  } else {
+  //    float a = 1.f;
+  //  }
+  //}
+  env->materials[node] = mat;
+  return mat;
+}
+
+auto loadXMLMesh(TPM_NAMESPACE::Object const* node, xmlLoaderEnv* env, 
+  Node& gfxNode, Scene& scene) -> void {
+  if (node->type() != TPM_NAMESPACE::OT_SHAPE) {
+    root::print::error("gfx :: xml loader :: try to load shape not actually shape");
+    return;
+  }
+  
+  if (node->pluginType() == "obj") {
+ /*   std::string filename = node->property("filename").getString();
+    std::string obj_path = env->directory + "\\" + filename;
+    GameObjectHandle obj_node = SceneNodeLoader_obj::loadSceneNode(
+        obj_path, gfxscene, gfxNode, meshConfig);
+    GFX::MeshRenderer* renderer = gfxscene.getGameObject(obj_node)
+                                      ->getEntity()
+                                      .addComponent<GFX::MeshRenderer>();
+    TPM_NAMESPACE::Transform transform =
+        node->property("to_world").getTransform();
+    Math::mat4 transform_mat = {
+        transform.matrix[0], transform.matrix[1], transform.matrix[2], transform.matrix[3],
+        transform.matrix[4], transform.matrix[5], transform.matrix[6], transform.matrix[7],
+        transform.matrix[8], transform.matrix[9], transform.matrix[10], transform.matrix[11],
+        transform.matrix[12], transform.matrix[13], transform.matrix[14], transform.matrix[15]
+    };
+    Math::vec3 t, r, s;
+    Math::Decompose(transform_mat, &t, &r, &s);
+    GFX::TransformComponent* transform_component =
+        gfxscene.getGameObject(obj_node)
+            ->getEntity()
+            .getComponent<GFX::TransformComponent>();
+    transform_component->translation = t;
+    transform_component->scale = s;
+    transform_component->eulerAngles = r;
+    if (node->anonymousChildren().size() > 0) {
+      TPM_NAMESPACE::Object* mat_node = node->anonymousChildren()[0].get();
+      Core::GUID mat = loadMaterial(mat_node, env);
+      renderer->materials.emplace_back(
+          Core::ResourceManager::get()->getResource<GFX::Material>(mat));
+    }*/
+  }
+  if (node->pluginType() == "cube") {
+   /* std::string engine_path = Core::RuntimeConfig::get()->string_property("engine_path");
+    std::string obj_path = engine_path + "\\" + "Binaries\\Runtime\\meshes\\cube.obj";
+    GameObjectHandle obj_node = SceneNodeLoader_obj::loadSceneNode(
+        obj_path, gfxscene, gfxNode, meshConfig);
+    GFX::MeshRenderer* renderer = gfxscene.getGameObject(obj_node)
+                                      ->getEntity()
+                                      .addComponent<GFX::MeshRenderer>();
+    TPM_NAMESPACE::Transform transform =
+        node->property("to_world").getTransform();
+    Math::mat4 transform_mat = {
+        transform.matrix[0],  transform.matrix[1],  transform.matrix[2],
+        transform.matrix[3],  transform.matrix[4],  transform.matrix[5],
+        transform.matrix[6],  transform.matrix[7],  transform.matrix[8],
+        transform.matrix[9],  transform.matrix[10], transform.matrix[11],
+        transform.matrix[12], transform.matrix[13], transform.matrix[14],
+        transform.matrix[15]};
+    Math::vec3 t, r, s;
+    Math::Decompose(transform_mat, &t, &r, &s);
+    GFX::TransformComponent* transform_component =
+        gfxscene.getGameObject(obj_node)
+            ->getEntity()
+            .getComponent<GFX::TransformComponent>();
+    transform_component->translation = t;
+    transform_component->scale = s;
+    transform_component->eulerAngles = r / Math::float_Pi * 180;
+    if (node->anonymousChildren().size() > 0) {
+      TPM_NAMESPACE::Object* mat_node = node->anonymousChildren()[0].get();
+      Core::GUID mat = loadMaterial(mat_node, env);
+      renderer->materials.emplace_back(
+          Core::ResourceManager::get()->getResource<GFX::Material>(mat));
+    }*/
+  }
+  if (node->pluginType() == "rectangle") {
+ /*   std::string engine_path =
+        Core::RuntimeConfig::get()->string_property("engine_path");
+    std::string obj_path =
+        engine_path + "\\" + "Binaries\\Runtime\\meshes\\rectangle.obj";
+    GameObjectHandle obj_node = SceneNodeLoader_obj::loadSceneNode(
+        obj_path, gfxscene, gfxNode, meshConfig);
+    GFX::MeshRenderer* renderer = gfxscene.getGameObject(obj_node)
+                                      ->getEntity()
+                                      .addComponent<GFX::MeshRenderer>();
+    TPM_NAMESPACE::Transform transform =
+        node->property("to_world").getTransform();
+    Math::mat4 transform_mat = {
+        transform.matrix[0],  transform.matrix[1],  transform.matrix[2],
+        transform.matrix[3],  transform.matrix[4],  transform.matrix[5],
+        transform.matrix[6],  transform.matrix[7],  transform.matrix[8],
+        transform.matrix[9],  transform.matrix[10], transform.matrix[11],
+        transform.matrix[12], transform.matrix[13], transform.matrix[14],
+        transform.matrix[15]};
+    Math::vec3 t, r, s;
+    Math::Decompose(transform_mat, &t, &r, &s);
+    GFX::TransformComponent* transform_component =
+        gfxscene.getGameObject(obj_node)
+            ->getEntity()
+            .getComponent<GFX::TransformComponent>();
+    transform_component->translation = t;
+    transform_component->scale = s;
+    transform_component->eulerAngles = r / Math::float_Pi * 180;
+    if (node->anonymousChildren().size() > 0) {
+      TPM_NAMESPACE::Object* mat_node = node->anonymousChildren()[0].get();
+      Core::GUID mat = loadMaterial(mat_node, env);
+      renderer->materials.emplace_back(
+          Core::ResourceManager::get()->getResource<GFX::Material>(mat));
+    }*/
+  }
+  if (node->pluginType() == "sphere") {
+    std::string engine_path = RuntimeConfig::get()->string_property("engine_path");
+    std::string obj_path = engine_path + "binary/resources/meshes/sphere.obj";
+    MeshHandle mesh = loadObjMesh(obj_path, scene);
+
+    scene.gpuScene.position_buffer->host_stamp++;
+    scene.gpuScene.index_buffer->host_stamp++;
+    scene.gpuScene.vertex_buffer->host_stamp++;
+    auto& mesh_renderer = scene.registry.emplace<MeshRenderer>(gfxNode.entity);
+    mesh_renderer.mesh = mesh;
+
+    { // process the transform
+      TPM_NAMESPACE::Transform transform =
+          node->property("to_world").getTransform();
+      float radius = node->property("radius").getNumber();
+      TPM_NAMESPACE::Vector center = node->property("center").getVector();
+      auto& transformComponent = scene.registry.get<Transform>(gfxNode.entity);
+      transformComponent.translation = vec3(center.x, center.y, center.z);
+      transformComponent.scale = vec3(radius);
+      transformComponent.rotation = Quaternion();
+    }
+    std::optional<MaterialHandle> mat;
+    if (node->anonymousChildren().size() > 0) {
+      se::vec3 radiance = se::vec3(0);
+      for (auto& subnode : node->anonymousChildren()) {
+        if (subnode->type() == TPM_NAMESPACE::OT_BSDF) {
+            // material
+          TPM_NAMESPACE::Object* mat_node = subnode.get();
+          mat = loadXMLMaterial(mat_node, env);
+        } else if (subnode->type() == TPM_NAMESPACE::OT_EMITTER) {
+          if (subnode->pluginType() == "area") {
+            TPM_NAMESPACE::Color rgb = subnode->property("radiance").getColor();
+            radiance = se::vec3(rgb.r, rgb.g, rgb.b);
+          }
+        }
+      }
+      if (mat.has_value()) {
+        mat.value()->emissiveColor = radiance;
+        for (auto& primitive : mesh_renderer.mesh->primitives) {
+          primitive.material = mat.value();
+        }
+      }
+    }
+  }
+  else {
+    root::print::error("gfx :: xml loader :: Unkown mesh type:" + node->pluginType());
+  }
+
+}
+
 SceneLoader::result_type SceneLoader::operator()(SceneLoader::from_gltf_tag, std::string const& path) {
   // load the gltf file
   tinygltf::TinyGLTF loader;
@@ -1309,6 +2005,21 @@ SceneLoader::result_type SceneLoader::operator()(SceneLoader::from_gltf_tag, std
       scene->gpuScene.vertex_buffer->host_stamp++;
       auto& mesh_renderer = scene->registry.emplace<MeshRenderer>(seNode.entity);
       mesh_renderer.mesh = mesh;
+
+      std::vector<int> emissive_primitives;
+      for (int i = 0; i < mesh->primitives.size(); ++i) {
+        MaterialHandle& mat = mesh->primitives[i].material;
+        if (mat->emissiveColor.r > 0 ||
+            mat->emissiveColor.g > 0 ||
+            mat->emissiveColor.b > 0) {
+            emissive_primitives.push_back(i);
+        }
+      }
+      if (emissive_primitives.size() > 0) {
+        auto& light = scene->registry.emplace<Light>(seNode.entity);
+        light.primitives = emissive_primitives;
+        light.type = Light::LightType::MESH_PRIMITIVE;
+      }
     }
     // process the camera
     if (gltfNode.camera != -1) {
@@ -1317,7 +2028,7 @@ SceneLoader::result_type SceneLoader::operator()(SceneLoader::from_gltf_tag, std
       if (gltf_camera.type == "perspective") {
         camera.zfar = gltf_camera.perspective.zfar;
         camera.znear = gltf_camera.perspective.znear;
-        camera.yfov = gltf_camera.perspective.yfov;
+        camera.yfov = gltf_camera.perspective.yfov * 180 / se::float_Pi;
         camera.aspectRatio = gltf_camera.perspective.aspectRatio;
       }
     }
@@ -1364,6 +2075,95 @@ SceneLoader::result_type SceneLoader::operator()(SceneLoader::from_gltf_tag, std
   return scene;
 }
 
+SceneLoader::result_type SceneLoader::operator()(SceneLoader::from_xml_tag, std::string const& path) {
+  SceneLoader::result_type scene = std::make_shared<Scene>();
+  TPM_NAMESPACE::SceneLoader loader;
+  try {
+    auto scene_xml = loader.loadFromFile(path.c_str());
+    xmlLoaderEnv env;
+    env.directory = std::filesystem::path(path).parent_path().string();
+
+    auto process_xml_node = [&](
+      TPM_NAMESPACE::Object* obj
+    ) {
+      switch (obj->type()) {
+      case TPM_NAMESPACE::OT_SCENE:
+          break;
+      case TPM_NAMESPACE::OT_BSDF:
+          //loadMaterial(node, env);
+          break;
+      case TPM_NAMESPACE::OT_FILM:
+          break;
+      case TPM_NAMESPACE::OT_INTEGRATOR:
+          break;
+      case TPM_NAMESPACE::OT_MEDIUM:
+          break;
+      case TPM_NAMESPACE::OT_PHASE:
+          break;
+      case TPM_NAMESPACE::OT_RFILTER:
+          break;
+      case TPM_NAMESPACE::OT_SAMPLER:
+          break;
+      case TPM_NAMESPACE::OT_SENSOR: {
+        Node node = scene->createNode(obj->id());
+        auto& camera = scene->registry.emplace<Camera>(node.entity);
+        camera.zfar = 1000.f;
+        camera.znear = 0.02f;
+        camera.yfov = obj->property("fov").getNumber();
+        camera.aspectRatio = 1.f;
+
+        auto& transformComponent = scene->registry.get<Transform>(node.entity);
+        auto transform = obj->property("to_world").getTransform();
+        se::mat4 transform_mat = {
+          transform.matrix[0], transform.matrix[1], transform.matrix[2], transform.matrix[3],
+          transform.matrix[4], transform.matrix[5], transform.matrix[6], transform.matrix[7],
+          transform.matrix[8], transform.matrix[9], transform.matrix[10], transform.matrix[11],
+          transform.matrix[12], transform.matrix[13], transform.matrix[14], transform.matrix[15]
+        };
+        se::vec3 t, s; Quaternion q;
+        se::Transform rotate = se::rotateY(180);
+        se::decompose(transform_mat, &t, &q, &s);
+        transformComponent.translation = t;
+        transformComponent.scale = s;
+        transformComponent.rotation = Quaternion(rotate.m) * q;
+        break;
+      }
+      case TPM_NAMESPACE::OT_SHAPE: {
+          Node node = scene->createNode(obj->id());
+          loadXMLMesh(obj, &env, node, *(scene.get()));
+          break;
+      }
+      case TPM_NAMESPACE::OT_SUBSURFACE:
+          break;
+      case TPM_NAMESPACE::OT_TEXTURE:
+          break;
+      case TPM_NAMESPACE::OT_VOLUME:
+          break;
+      case TPM_NAMESPACE::_OT_COUNT:
+          break;
+      default:
+          break;
+      }
+    };
+
+    //std::vector<Node> nodes(model.nodes.size());
+    //for (size_t i = 0; i < model.nodes.size(); ++i) {
+    //    nodes[i] = scene->createNode(model.nodes[i].name);
+    //}
+
+    for (auto& object : scene_xml.anonymousChildren()) {
+      process_xml_node(object.get());
+    }
+    for (auto& object : scene_xml.namedChildren()) {
+      process_xml_node(object.second.get());
+    }
+
+  } catch (...) {
+    root::print::error("gfx :: load xml failed!");
+  }
+  return scene;
+}
+
 SceneLoader::result_type SceneLoader::operator()(SceneLoader::from_scratch_tag) {
   SceneLoader::result_type scene = std::make_shared<Scene>();
   // create node
@@ -1377,7 +2177,6 @@ SceneLoader::result_type SceneLoader::operator()(SceneLoader::from_scratch_tag) 
   Node envmapNode = scene->createNode("Environment");
   auto& envLight = scene->registry.emplace<Light>(envmapNode.entity);
   envLight.type = Light::LightType::ENVIRONMENT;
-  envLight.intensity = se::vec3(0, 0, 0);
   return scene;
 }
 
@@ -1386,18 +2185,21 @@ ex::resource_cache<Scene, SceneLoader> GFXContext::scenes;
 auto GFXContext::load_scene_gltf(std::string const& path) noexcept -> SceneHandle {
   RUID const ruid = root::resource::queryRUID();
   auto ret = scenes.load(ruid, SceneLoader::from_gltf_tag{}, path);
-  ret.first->second->dirtyFlags =
-    (uint64_t)se::gfx::Scene::DirtyFlagBit::Camera
-    | (uint64_t)se::gfx::Scene::DirtyFlagBit::Geometry;
+  ret.first->second->dirtyFlags = (uint64_t)se::gfx::Scene::DirtyFlagBit::ALL;
+  return SceneHandle{ ret.first->second };
+}
+
+auto GFXContext::load_scene_xml(std::string const& path) noexcept -> SceneHandle {
+  RUID const ruid = root::resource::queryRUID();
+  auto ret = scenes.load(ruid, SceneLoader::from_xml_tag{}, path);
+  ret.first->second->dirtyFlags = (uint64_t)se::gfx::Scene::DirtyFlagBit::ALL;
   return SceneHandle{ ret.first->second };
 }
 
 auto GFXContext::create_scene(std::string const& name) noexcept -> SceneHandle {
   RUID const ruid = root::resource::queryRUID();
   auto ret = scenes.load(ruid, SceneLoader::from_scratch_tag{});
-  ret.first->second->dirtyFlags =
-    (uint64_t)se::gfx::Scene::DirtyFlagBit::Camera
-    | (uint64_t)se::gfx::Scene::DirtyFlagBit::Geometry;
+  ret.first->second->dirtyFlags = (uint64_t)se::gfx::Scene::DirtyFlagBit::ALL;
   return SceneHandle{ ret.first->second };
 }
 }

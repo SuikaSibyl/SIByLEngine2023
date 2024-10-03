@@ -36,14 +36,21 @@ std::unique_ptr<se::window> window = se::window::create(se::window::WindowOption
  //envlight = nullptr;
  //se::gfx::PMFConstructor::upload_datapack();
  //se::gfx::PMFConstructor::clear_datapack();
- std::string path = "S:/SIByL2024/Sandbox/examples/glt/_data/cbox.scene";
+ std::string path = "S:/SIByL2024/Sandbox/examples/lighting/_data/onelight-2.gltf";
+ //std::string path = "P:/GitProjects/lajolla_public/scenes/volpath_test/volpath_test2.xml";
+ //std::string path = "P:/GitProjects/lajolla_public/scenes/volpath_test/volpath_test2.gltf";
+ //auto scene = se::gfx::GFXContext::load_scene_xml(path);
  auto scene = se::gfx::GFXContext::load_scene_gltf(path);
+ scene->updateTransform();
  scene->updateGPUScene();
+ int light_counts = scene->getSceneLightCounts();
+
+
  //std::vector<float> pmf = { 0.1,0.2,0.3,0.4 };
  //auto pc1d = se::gfx::PMFConstructor::build_piecewise_constant_1d(pmf, 0,1);
  //float pdf; int offset;
  //float a = pc1d.sample(0.09, pdf, offset);
-
+ //scene->serialize("P:/GitProjects/lajolla_public/scenes/volpath_test/volpath_test2.gltf");
 
  device->waitIdle();
  se::editor::EditorBase::finalize();

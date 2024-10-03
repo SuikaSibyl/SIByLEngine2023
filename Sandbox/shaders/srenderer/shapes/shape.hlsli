@@ -4,6 +4,8 @@
 #include "common/math.hlsli"
 #include "srenderer/spt.hlsli"
 
+interface IShapeParameter : IDifferentiable {};
+
 namespace ishape {
 struct sample_in {
     // the position of the shading point
@@ -36,10 +38,13 @@ float inv_geometry_term(
 }
 
 interface IShape {
-    // Check intersection between a ray and the shape.
-    bool intersect(Ray ray, inout PrimaryPayload payload);
+    // Associated a parameter type for each microfacet distribution
+    associatedtype TParam : IShapeParameter;
+
+    // // Check intersection between a ray and the shape.
+    // bool intersect(Ray ray, inout PrimaryPayload payload);
     // Sample a point on the shape.
-    ishape::sample sample(ishape::sample_in i);
+    static ishape::sample sample(ishape::sample_in i, TParam param);
 };
 
 #endif // _SRENDERER_SHAPE_HEADER_

@@ -3,6 +3,119 @@
 #undef DLIB_EXPORT
 
 namespace se {
+union uif32 {
+  uif32() : i(0) {}
+  uif32(float f) : f(f) {}
+  uif32(unsigned int i) : i(i){}
+
+  float f;
+  unsigned int i;
+};
+
+typedef uif32 uif;
+
+float overflow() {
+  volatile float f = 1e10;
+  for (int i = 0; i < 10; ++i)
+    f *= f; // this will overflow before the forloop terminates
+  return f;
+}
+
+half::half(float f) {
+	uif Entry;
+	Entry.f = f;
+	int i = (int)Entry.i;
+
+	int s =  (i >> 16) & 0x00008000;
+	int e = ((i >> 23) & 0x000000ff) - (127 - 15);
+	int m =   i        & 0x007fffff;
+
+	if(e <= 0) {
+		if(e < -10) {
+			hdata = s;
+      return;
+		}
+
+		m = (m | 0x00800000) >> (1 - e);
+
+		if(m & 0x00001000) 
+			m += 0x00002000;
+
+    hdata = (s | (m >> 13));
+    return;
+	}
+	else if(e == 0xff - (127 - 15)) {
+		if(m == 0) {
+      hdata = (s | 0x7c00);
+      return;
+		}
+		else {
+			m >>= 13;
+      hdata = (s | 0x7c00 | m | (m == 0));
+      return;
+		}
+	}
+	else {
+		if(m &  0x00001000) {
+			m += 0x00002000;
+			if(m & 0x00800000) {
+				m =  0;     // overflow in significand,
+				e += 1;     // adjust exponent
+			}
+		}
+
+		if (e > 30) {
+			overflow();        // Cause a hardware floating point overflow;
+      hdata = (s | 0x7c00);
+      return;
+			// if this returns, the half becomes an
+		}   // infinity with the same sign as f.
+    hdata = (s | (e << 10) | (m >> 13));
+    return;
+	}
+}
+
+float half::to_float() const {
+  int s = (hdata >> 15) & 0x00000001;
+  int e = (hdata >> 10) & 0x0000001f;
+  int m = hdata & 0x000003ff;
+
+  if (e == 0) {
+    if (m == 0) {
+      uif result;
+      result.i = (unsigned int)(s << 31);
+      return result.f;
+    }
+    else {
+      while (!(m & 0x00000400)) {
+        m <<= 1;
+        e -= 1;
+      }
+
+      e += 1;
+      m &= ~0x00000400;
+    }
+  }
+  else if (e == 31) {
+    if (m == 0) {
+      uif result;
+      result.i = (unsigned int)((s << 31) | 0x7f800000);
+      return result.f;
+    } else {
+      uif result;
+      result.i = (unsigned int)((s << 31) | 0x7f800000 | (m << 13));
+      return result.f;
+    }
+  }
+
+  e = e + (127 - 15);
+  m = m << 13;
+
+  uif Result;
+  Result.i = (unsigned int)((s << 31) | (e << 23) | m);
+  return Result.f;
+}
+
 Quaternion::Quaternion(mat3 const& m) {
   // Notice:
   // T = 4 - 4*qx2 - 4*qy2 - 4*qz2

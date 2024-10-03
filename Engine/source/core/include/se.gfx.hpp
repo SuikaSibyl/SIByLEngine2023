@@ -279,9 +279,12 @@ struct SIByL_API Material : public Resource {
 
   vec3 baseOrDiffuseColor = vec3(1.f);
   float roughnessFactor = 1.f;
+  vec3 emissiveColor = vec3(0.f);
   float metallicFactor = 1.f;
+  float eta = 1.5f;
   int32_t bxdf = 0;    // bxdf index
   bool doubleSided = true;
+  bool isDirty = false;
   std::string name;
 };
 
@@ -338,7 +341,7 @@ struct SIByL_API Mesh : public Resource {
 };
 
 struct MeshHandle {
-  ex::resource<Mesh> handle;
+  ex::resource<Mesh> handle; RUID ruid = 0;
   auto get() noexcept -> Mesh* { return handle.handle().get(); }
   Mesh* operator->() { return get(); }
 };
@@ -405,12 +408,18 @@ struct SIByL_API Light {
     VPL,
     MAX_ENUM,
   } type;
-  /* light intensity to scale the light */
-  se::vec3 intensity = se::vec3(1, 1, 1);
-  /* packed data associated with light */
-  se::vec4 packed_data_0;
-  se::vec4 packed_data_1;
+  
+  struct LightPacket {
+    int32_t light_type = 0;
+    int32_t bitfield = 0;
+    uint32_t uintscalar_0;
+    uint32_t uintscalar_1;
+    vec4 floatvec_0;
+    vec4 floatvec_1;
+    vec4 floatvec_2;
+  };
   bool isDirty = false;
+  std::vector<int> primitives = {};
   /** texture guid */
   TextureHandle texture;
 };
@@ -483,41 +492,11 @@ struct SIByL_API Scene : public Resource {
     uint32_t materialID;
     uint32_t indexSize;
     float surfaceArea;
-    uint32_t lightID;
+    int32_t lightID;
     uint32_t primitiveType;
     float oddNegativeScaling;
     rhi::AffineTransformMatrix geometryTransform = {};
     rhi::AffineTransformMatrix geometryTransformInverse = {};
-  };
-  
-  /** standard material data */
-  struct MaterialData {
-    se::vec3 baseOrDiffuseColor;
-    uint32_t flags;
-    se::vec3 specularColor;
-    uint32_t bsdf_id = 1;
-    se::vec3 emissiveColor;
-    uint32_t domain = 1;
-
-    float opacity;
-    float roughness;
-    float metalness;
-    float normalTextureScale;
-
-    float occlusionStrength;
-    float alphaCutoff;
-    float transmissionFactor;
-    int baseOrDiffuseTextureIndex;
-
-    int metalRoughOrSpecularTextureIndex;
-    int emissiveTextureIndex;
-    int normalTextureIndex;
-    int occlusionTextureIndex;
-
-    int transmissionTextureIndex;
-    int padding1;
-    int padding2;
-    int padding3;
   };
 
   /** camera data */
@@ -558,6 +537,13 @@ struct SIByL_API Scene : public Resource {
     CameraData(Camera const& camera, Transform const& transform);
   };
 
+  struct SceneDescription {
+    vec3 light_bound_min;
+    int max_light_count;
+    vec3 light_bound_max;
+    int active_camera_index;
+  };
+
   struct SIByL_API GPUSceneSetting {
     bool useTexcoordTLAS = true;
   } gpuSceneSetting;
@@ -569,8 +555,9 @@ struct SIByL_API Scene : public Resource {
     BufferHandle texcoord_buffer;
     BufferHandle material_buffer;
     BufferHandle geometry_buffer;
-    BufferHandle light_buffer;
     BufferHandle camera_buffer;
+    BufferHandle light_buffer;
+    BufferHandle scene_desc_buffer;
 
     struct TLAS {
       rhi::TLASDescriptor desc = {};
@@ -580,22 +567,38 @@ struct SIByL_API Scene : public Resource {
       std::unique_ptr<rhi::TLAS> uvprim = nullptr;
     } tlas;
 
+    struct LBVH {
+      bounds3 all_light_bounds;
+      BufferHandle light_bvh_buffer;
+      BufferHandle light_trail_buffer;
+    } lbvh;
+
     auto bindingResourcePosition() noexcept -> rhi::BindingResource;
     auto bindingResourceIndex() noexcept -> rhi::BindingResource;
     auto bindingResourceVertex() noexcept -> rhi::BindingResource;
     auto bindingResourceGeometry() noexcept -> rhi::BindingResource;
     auto bindingResourceCamera() noexcept -> rhi::BindingResource;
     auto bindingResourceMaterial() noexcept -> rhi::BindingResource;
+    auto bindingResourceLight() noexcept -> rhi::BindingResource;
     auto bindingResourceTLAS() noexcept -> rhi::BindingResource;
     auto bindingResourceTLASPrev() noexcept -> rhi::BindingResource;
     auto bindingResourceUvTLAS() noexcept -> rhi::BindingResource;
+    auto bindingResourceLightBVH() noexcept -> rhi::BindingResource;
+    auto bindingResourceLightTrail() noexcept -> rhi::BindingResource;
+    auto bindingSceneDescriptor() noexcept -> rhi::BindingResource;
 
     auto getPositionBuffer() noexcept -> BufferHandle;
     auto getIndexBuffer() noexcept -> BufferHandle;
 
     // private
-    std::unordered_map<RUID, int> material_loc_index;
+    std::unordered_map<RUID, std::pair<int, MaterialHandle>> material_loc_index;
+    std::unordered_map<RUID, std::vector<int>> geometry_loc_index;
     auto try_fetch_material_index(MaterialHandle& handle) noexcept -> int;
+    auto build_light_bvh() noexcept -> void;
+    auto fetch_geometry_data(int geometryID) noexcept -> GeometryDrawData;
+    auto fetch_triangle_indices(GeometryDrawData const& geometry, int triangleID) noexcept -> uvec3;
+    auto fetch_vertex_position(int vertexID) noexcept -> vec3;
+    auto fetch_vertex_normal(int vertexID) noexcept -> vec3;
   } gpuScene;
 
   auto getGPUScene() noexcept -> GPUScene*;
@@ -604,6 +607,7 @@ struct SIByL_API Scene : public Resource {
   //auto createGPUScene() noexcept -> void;
   //auto integrateGPUScene() noexcept -> void;
 
+  auto getSceneLightCounts() noexcept -> int;
   auto useEditorCameraView(Transform* transfrom, Camera* camera) noexcept -> void;
   auto getEditorActiveCameraIndex() noexcept -> int;
   struct EditorInfo {
@@ -617,10 +621,12 @@ struct SIByL_API Scene : public Resource {
   ex::registry registry;
   bool isDirty = false;
   enum struct DirtyFlagBit {
-    NodeDirty = 0 << 0,
-    Camera = 1 << 0,
-    Geometry = 1 << 1,
-    Material = 1 << 2,
+    NodeDirty   = 0 << 0,
+    Camera      = 1 << 0,
+    Geometry    = 1 << 1,
+    Material    = 1 << 2,
+    Light       = 1 << 3,
+    ALL         = (1 << 10) - 1,
   };
   uint64_t dirtyFlags = 0;
 };
@@ -635,9 +641,11 @@ struct SIByL_API SceneLoader {
   using result_type = std::shared_ptr<Scene>;
 
   struct from_gltf_tag {};
+  struct from_xml_tag {};
   struct from_scratch_tag {};
 
   result_type operator()(from_gltf_tag, std::string const& path);
+  result_type operator()(from_xml_tag, std::string const& path);
   result_type operator()(from_scratch_tag);
 };
 
@@ -733,6 +741,7 @@ struct SIByL_API GFXContext {
   }
 
   static auto load_scene_gltf(std::string const& path) noexcept -> SceneHandle;
+  static auto load_scene_xml(std::string const& path) noexcept -> SceneHandle;
   static auto create_scene(std::string const& name) noexcept -> SceneHandle;
 };
 

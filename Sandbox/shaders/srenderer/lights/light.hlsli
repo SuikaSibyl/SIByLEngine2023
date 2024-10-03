@@ -1,5 +1,5 @@
-#ifndef _SRENDERER_LIGHTS_HEADER_
-#define _SRENDERER_LIGHTS_HEADER_
+#ifndef _SRENDERER_LIGHT_HEADER_
+#define _SRENDERER_LIGHT_HEADER_
 
 interface ILightParameter : IDifferentiable {};
 
@@ -11,6 +11,7 @@ struct eval_le_in {
 
 struct sample_li_in {
     float3 p;
+    float3 ns;
     float2 uv;
 };
 
@@ -18,7 +19,17 @@ struct sample_li_out {
     float3 L;
     float pdf;
     float3 wi;
+    bool valid;
     float3 x;
+    float3 ns;
+    int lightID;
+    __init() { valid = false; }
+};
+
+struct sample_li_pdf_in {
+    float3 p;
+    float3 n;
+    int lightID; 
 };
 }
 
@@ -28,4 +39,4 @@ interface ILight {
 
 };
 
-#endif // _SRENDERER_LIGHTS_HEADER_
+#endif // _SRENDERER_LIGHT_HEADER_

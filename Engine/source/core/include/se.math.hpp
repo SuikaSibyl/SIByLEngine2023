@@ -11,6 +11,7 @@
 namespace se {
 inline float float_Pi = 3.14159265358979323846f;
 inline double double_Pi = 3.14159265358979323846f;
+inline float k_pi = float_Pi;
 
 inline float float_InvPi = 1.f / float_Pi;
 inline float float_Inv2Pi = 1.f / (2 * float_Pi);
@@ -28,6 +29,13 @@ inline auto radians(float deg) noexcept -> float {
   return (float_Pi / 180) * deg; }
 inline auto radians(double deg) noexcept -> double {
   return (double_Pi / 180) * deg; }
+inline auto degrees(float rad) -> float {  return (180.f / float_Pi) * rad; }
+inline auto degrees(double rad) -> double { return (180. / double_Pi) * rad; }
+inline float safe_sqrt(float x) { return std::sqrt(std::max(0.f, x)); }
+inline float safe_acos(float x) { return std::acos(std::clamp(x, -1.f, 1.f)); }
+
+template <typename T>
+constexpr T sqr(T v) { return v * v; }
 
 inline auto floatToBits(float f) noexcept -> uint32_t {
   uint32_t bits = *reinterpret_cast<uint32_t*>(&f); return bits; }
@@ -264,6 +272,15 @@ inline auto equal(Vector2<T> const& v1, Vector2<T> const& v2) noexcept -> bool {
 }
 
 template <class T>
+inline auto clamp_vec2(Vector2<T> const& x, Vector2<T> const& min, Vector2<T> const& max) noexcept -> Vector2<T> {
+  Vector2<T> result;
+  for (size_t i = 0; i < 2; ++i) {
+    result[i] = std::clamp(x[i], min[i], max[i]);
+  }
+  return result;
+}
+
+template <class T>
 inline auto minComponent(Vector2<T> const& v) noexcept -> T {
   return std::min(v.x, v.y);
 }
@@ -345,6 +362,15 @@ auto Vector2<T>::length() const -> float {
 template <class T>
 auto Vector2<T>::operator-() const -> Vector2<T> {
   return Vector2<T>{-x, -y};
+}
+
+template <class T>
+inline auto select(Vector2<bool> p, Vector2<T> const& a, Vector2<T> const& b) noexcept -> Vector2<T> {
+  Vector2<T> result;
+  for (size_t i = 0; i < 2; ++i) {
+    result.data[i] = p.data[i] ? a.data[i] : b.data[i];
+  }
+  return result;
 }
 
 template <class T>
@@ -862,6 +888,11 @@ auto Vector3<T>::operator==(Vector3<T> const& v) const -> bool {
 template <class T>
 auto Vector3<T>::operator!=(Vector3<T> const& v) const -> bool {
   return !(*this == v);
+}
+
+inline float angle_between(vec3 v1, vec3 v2) {
+  if (dot(v1, v2) < 0) return float_Pi - 2 * safe_acos(length(v1 + v2) / 2);
+  else return 2 * safe_acos(length(v2 - v1) / 2);
 }
 
 template <class T>
@@ -2311,8 +2342,8 @@ template <class T>
 auto Bounds3<T>::offset(Point3<T> const& p) const -> Vector3<T> {
     Vector3<T> o = p - pMin;
     if (pMax.x > pMin.x) o.x /= pMax.x - pMin.x;
-    if (pMax.y > pMin.y) o.x /= pMax.y - pMin.y;
-    if (pMax.z > pMin.z) o.x /= pMax.z - pMin.z;
+    if (pMax.y > pMin.y) o.y /= pMax.y - pMin.y;
+    if (pMax.z > pMin.z) o.z /= pMax.z - pMin.z;
     return o;
 }
 
@@ -2448,6 +2479,13 @@ inline auto sphericalPhi(vec3 const& v) noexcept -> float {
     float p = std::atan2(v.y, v.x);
     return (p < 0) ? (p + 2 * float_Pi) : p;
 }
+
+struct SIByL_API half {
+  half() = default;
+  half(float f);
+  float to_float() const;
+  short hdata;
+};
 
 struct SIByL_API Quaternion {
     Quaternion() : v(0), s(1.f) {}

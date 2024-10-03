@@ -9,13 +9,14 @@ target_include_directories(${PROJECT_NAME} PUBLIC include
   "${PROJECT_SOURCE_DIR}/Engine/extern/spirv_reflect/include"
   "${PROJECT_SOURCE_DIR}/Engine/extern/slang/include"
   "${PROJECT_SOURCE_DIR}/Engine/extern/tinygltf/include"
+  "${PROJECT_SOURCE_DIR}/Engine/extern/tinyobjloader/include"
   "${PROJECT_SOURCE_DIR}/Engine/extern/vulkan/include")
 target_link_directories(${PROJECT_NAME} PUBLIC
   "${PROJECT_SOURCE_DIR}/Engine/extern/glfw/libs"
   "${PROJECT_SOURCE_DIR}/Engine/extern/vulkan/libs"
   "${PROJECT_SOURCE_DIR}/Engine/extern/slang/libs")
 target_link_libraries(${PROJECT_NAME} PUBLIC 
-  imgui yaml cnpy tinyexr)
+  imgui yaml cnpy tinyexr tinyxml tinymitsuba)
 target_link_libraries(${PROJECT_NAME} PRIVATE 
   ${TORCH_LIBRARIES} ${TORCH_PYTHON_LIBRARY} 
   "glfw3.lib" "vulkan-1.lib" "slang.lib" "slang-rt.lib")
@@ -34,6 +35,7 @@ target_sources(${PROJECT_NAME} PRIVATE
   "source/gfx/se.gfx.cpp"
   "source/gfx/se.gfx.scene.cpp"
   "source/gfx/se.gfx.pmf.cpp"
+  "source/gfx/se.gfx.lightbvh.cpp"
   "source/base/se.resource.cpp"
   "source/rdg/se.rdg.cpp"
   "source/editor/se.editor.cpp"

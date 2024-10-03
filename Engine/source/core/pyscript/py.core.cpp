@@ -750,6 +750,7 @@ PYBIND11_MODULE(pycore, m) {
   class_gfx_scene.def("updateTransform", &se::gfx::Scene::updateTransform)
     .def("updateGPUScene", &se::gfx::Scene::updateGPUScene)
     .def("createTexcoord", &se::gfx::Scene::createTexcoord)
+    .def("getSceneLightCounts", &se::gfx::Scene::getSceneLightCounts)
     .def("getEditorActiveCameraIndex", &se::gfx::Scene::getEditorActiveCameraIndex)
     .def("getGPUScene", &se::gfx::Scene::getGPUScene, py::return_value_policy::reference)
     .def("serialize", static_cast<void(se::gfx::Scene::*)(std::string const&)>(&se::gfx::Scene::serialize));
@@ -764,6 +765,10 @@ PYBIND11_MODULE(pycore, m) {
   class_gfx_gpuscene.def("bindingResourceCamera", &se::gfx::Scene::GPUScene::bindingResourceCamera)
     .def("bindingResourcePosition", &se::gfx::Scene::GPUScene::bindingResourcePosition)
     .def("bindingResourceMaterial", &se::gfx::Scene::GPUScene::bindingResourceMaterial)
+    .def("bindingResourceLight", &se::gfx::Scene::GPUScene::bindingResourceLight)
+    .def("bindingResourceLightBVH", &se::gfx::Scene::GPUScene::bindingResourceLightBVH)
+    .def("bindingResourceLightTrail", &se::gfx::Scene::GPUScene::bindingResourceLightTrail)
+    .def("bindingSceneDescriptor", &se::gfx::Scene::GPUScene::bindingSceneDescriptor)
     .def("bindingResourceIndex", &se::gfx::Scene::GPUScene::bindingResourceIndex)
     .def("bindingResourceVertex", &se::gfx::Scene::GPUScene::bindingResourceVertex)
     .def("bindingResourceGeometry", &se::gfx::Scene::GPUScene::bindingResourceGeometry)

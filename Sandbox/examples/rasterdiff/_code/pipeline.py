@@ -399,7 +399,7 @@ class RasterViewFwdPass(core.rdg.RenderPass):
         albedo:se.gfx.TextureHandle = rdrDat.getTexture("Albedo")
         position:se.gfx.BufferHandle = rdrDat.getBuffer("Position")
         scene:se.gfx.SceneHandle = rdrDat.getScene()
-
+    
         self.setRenderPassDescriptor(se.rhi.RenderPassDescriptor([
             se.rhi.RenderPassColorAttachment(color.get().getRTV(0,0,1), None, se.vec4(0,0,0,1), se.rhi.LoadOp.CLEAR, se.rhi.StoreOp.STORE),
             se.rhi.RenderPassColorAttachment(index.get().getRTV(0,0,1), None, se.vec4(0,0,0,1), se.rhi.LoadOp.CLEAR, se.rhi.StoreOp.STORE)
