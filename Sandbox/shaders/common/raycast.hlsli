@@ -5,14 +5,6 @@
 #include "camera.hlsli"
 #include "geometry.hlsli"
 
-/** A ray. */
-struct Ray {
-    float3 origin;
-    float tMin;
-    float3 direction;
-    float tMax;
-};
-
 RayDesc ToRayDesc(in_ref(Ray) ray) {
     RayDesc raydesc = {};
     raydesc.Origin = ray.origin;

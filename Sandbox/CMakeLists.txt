@@ -10,7 +10,11 @@ set_target_properties(
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/se")
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${PROJECT_SOURCE_DIR}/Engine/binary/dlls/${CURRENT_PLATFORM}"
+    "${PROJECT_SOURCE_DIR}/Engine/binary/dlls/${CMAKE_BUILD_TYPE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/se")
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${PROJECT_SOURCE_DIR}/Engine/binary/dlls/extern"
     "${CMAKE_CURRENT_SOURCE_DIR}/se")
 
 add_subdirectory("examples")

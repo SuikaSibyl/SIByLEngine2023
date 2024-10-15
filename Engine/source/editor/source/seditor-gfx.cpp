@@ -378,6 +378,61 @@ auto drawMaterialEditor(gfx::MaterialHandle material) {
     }
 }
 
+auto drawMediumEditor(gfx::MediumHandle medium) {
+  gfx::SceneHandle& scene = se::editor::EditorBase::sceneWidget.scene;
+  if (ImGui::BeginTable("table2", 2, ImGuiTableFlags_SizingFixedFit)) {
+    ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed);
+    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+
+    { // sigma_a
+      ImGui::TableNextRow();
+      ImGui::TableNextColumn();
+      ImGui::Text("Absorb");
+      ImGui::TableNextColumn();
+      float sigma_a[3] = {
+        medium->packet.sigmaA.r,
+        medium->packet.sigmaA.g,
+        medium->packet.sigmaA.b, };
+      if (ImGui::DragFloat3("##Absorb", sigma_a, 0.05, 0, 10)) {
+        medium->isDirty = true;
+        medium->packet.sigmaA = { sigma_a[0], sigma_a[1], sigma_a[2] };
+        if (scene.get()) scene->dirtyFlags |= (uint32_t)gfx::Scene::DirtyFlagBit::Medium;
+      }
+    }
+    { // emission
+      ImGui::TableNextRow();
+      ImGui::TableNextColumn();
+      ImGui::Text("Scatter");
+      ImGui::TableNextColumn();
+      float scatter[3] = {
+        medium->packet.sigmaS.r,
+        medium->packet.sigmaS.g,
+        medium->packet.sigmaS.b, };
+      if (ImGui::DragFloat3("##Scatter", scatter, 0.05, 0)) {
+        medium->isDirty = true;
+        medium->packet.sigmaS = { scatter[0], scatter[1], scatter[2] };
+        if (scene.get()) scene->dirtyFlags |= (uint32_t)gfx::Scene::DirtyFlagBit::Medium;
+      }
+    }
+    { // Aniso
+      ImGui::TableNextRow();
+      ImGui::TableNextColumn();
+      ImGui::Text("Aniso");
+      ImGui::TableNextColumn();
+      float aniso[3] = {
+        medium->packet.aniso.r,
+        medium->packet.aniso.g,
+        medium->packet.aniso.b, };
+      if (ImGui::DragFloat3("##Ansio", aniso, 0.05, -1, 1)) {
+        medium->isDirty = true;
+        medium->packet.aniso = { aniso[0], aniso[1], aniso[2] };
+        if (scene.get()) scene->dirtyFlags |= (uint32_t)gfx::Scene::DirtyFlagBit::Medium;
+      }
+    }
+    ImGui::EndTable();
+  }
+}
+
 void drawNodeInspector(gfx::Node& node) {
   gfx::NodeProperty* nodeprop = node.getComponent<gfx::NodeProperty>();
   if (nodeprop) {
@@ -466,6 +521,11 @@ void drawNodeInspector(gfx::Node& node) {
           isDirty = true;
         }
       });
+
+      if (component->medium.get()) {
+        ImGui::Text("Camera Medium:");
+        drawMediumEditor(component->medium);
+      }
     });
   }
 
@@ -482,16 +542,40 @@ void drawNodeInspector(gfx::Node& node) {
             component->mesh->name = std::string(buffer);
       });
       if (ImGui::TreeNode("Primitives")) {
-        ImGui::PushID("Primitives");
-        for (int i = 0; i < component->mesh->primitives.size(); ++i) {
-          bool opened = ImGui::TreeNode(("primitive - " + std::to_string(i)).c_str());
-          if (opened) {
-            auto& primitive = component->mesh->primitives[i];
-            drawMaterialEditor(primitive.material);
-            ImGui::TreePop();
+        if (component->mesh->custom_primitives.size() > 0) {
+          ImGui::PushID("Primitives");
+          for (int i = 0; i < component->mesh->custom_primitives.size(); ++i) {
+            bool opened = ImGui::TreeNode(("custom primitive - " + std::to_string(i)).c_str());
+            if (opened) {
+              auto& primitive = component->mesh->custom_primitives[i];
+              if (primitive.material.get()) {
+                ImGui::Text("Material:");
+                drawMaterialEditor(primitive.material);
+              }
+              if (primitive.exterior.get()) {
+                ImGui::Text("Exteriror Medium:");
+                drawMediumEditor(primitive.exterior);
+              }
+              if (primitive.interior.get()) {
+                ImGui::Text("Interior Medium:");
+                drawMediumEditor(primitive.interior);
+              }
+              ImGui::TreePop();
+            }
           }
+          ImGui::PopID();
         }
-        ImGui::PopID();
+        else {
+          for (int i = 0; i < component->mesh->primitives.size(); ++i) {
+            bool opened = ImGui::TreeNode(("primitive - " + std::to_string(i)).c_str());
+            if (opened) {
+              auto& primitive = component->mesh->primitives[i];
+              drawMaterialEditor(primitive.material);
+              ImGui::TreePop();
+            }
+          }
+          ImGui::PopID();
+        }
         ImGui::TreePop();
       }
     });

@@ -84,114 +84,162 @@ struct SphericalRectangle {
     }
 };
 
-struct Rectangle : IShape {
-    float3 p;   // The left-bottom corner
-    float3 n;   // The normal of the rectangle
-    float3 u;   // The first axis of the rectangle
-    float3 v;   // The second axis of the rectangle
+struct RectangleParameter {
+    float4x4 o2w;
+    float4x4 w2o;
+};
 
-    __init(float3 p, float3 n, float3 u, float3 v) {
-        this.p = p;
-        this.n = n;
-        this.u = u;
-        this.v = v;
-    }
+struct Rectangle {
+    typedef RectangleParameter TParam;
 
-    __init(float3 position, float3 euler,
-           float width, float height) {
-        float4x4 rot = rotate_euler(euler);
-        float3 u = mul(transpose(rot), float4(1, 0, 0, 0)).xyz * width;
-        float3 v = mul(transpose(rot), float4(0, 1, 0, 0)).xyz * height;
-        float3 n = mul(transpose(rot), float4(0, 0, 1, 0)).xyz;
-        return Rectangle(
-            position - 0.5 * u - 0.5 * v,
-            n, u, v);
-    }
-
-    bool intersect(Ray ray, inout PrimaryPayload payload) {
-        SetHit(payload.hit, false);
-        const float3 pro = ray.origin - p;
-        const float nrd = -dot(ray.direction, n);
-        const float t = dot(pro, n) / nrd;
-        if (t < ray.tMin || t > ray.tMax) return false;
-
-        const float3 hitpoint = ray.origin + t * ray.direction;
-        const float3 hpdir = hitpoint - p;
-
-        const float minU = 0.;
-        const float maxU = 1.;
-
-        float _u = dot(u, hpdir) / dot(u, u);
-        if (_u < minU || _u > maxU) return false;
-        float _v = dot(v, hpdir) / dot(v, v);
-        if (_v < minU || _v > maxU) return false;
-
-        SetHit(payload.hit, true);
-        const float3 p = ray.origin + t * ray.direction;
-        // vec3 p = plane.p + u * plane.u + v * plane.v;
-        payload.hit.position = p;
-        payload.hit.shadingNormal = (nrd < 0.) ? -n : n;
-        payload.hit.geometryNormal = (nrd < 0.) ? -n : n;
-        payload.hit.texcoord = float2(_u, _v);
-        return true;
-    }
-    
-    ishape::sample sample(ishape::sample_in i) {
-        ishape::sample o;
-        const uint32_t method = i.flag;
-        switch(method) {
-            case 0: {
-                // Uniform Area Sampling
-                // Sample a point on the rectangle
-                o.position = p + i.uv.x * u + i.uv.y * v;
-                o.normal = n;
-                o.pdf = ishape::inv_geometry_term(
-                    o.position, o.normal, i.position) 
-                    / length(cross(u, v));
-                break;
-            }
-            case 1: {
-                // Uniform Solid Angle Sampling
-                let sr = SphericalRectangle(p, u, v, i.position);
-                o = sr.sample(i);
-                o.normal = n;
-                break;
-            }
-            case 2: {
-                // Bilinear Cosine Warp X Uniform Solid Angle Sampling
-                float3 wp[4];
-                wp[0] = p;
-                wp[1] = p + u;
-                wp[2] = p + v;
-                wp[3] = p + u + v;
-                float4 prob;
-                for (int j = 0; j < 4; j++) {
-                    float3 wpd = wp[j] - i.position;
-                    float3 wpn = normalize(wpd);
-                    // cosine term of ray with illuminated surface
-                    prob[j] = max(0., dot(wpn, i.normal));
-                }
-                let bw = BilinearWarp(prob[0], prob[2], prob[1], prob[3]);
-                iwarp::warp2d_out wo = bw.inverse(i.uv);
-                let sr = SphericalRectangle(p, u, v, i.position);
-                i.uv = wo.sample;
-                o = sr.sample(i);
-                o.pdf = o.pdf * wo.pdf;
-                o.normal = n;
-                break;
-            }
-        }
-        return o;
-    }
-
-    float3[4] corners() {
-        float3 positions[4];
-        positions[0] = p;
-        positions[1] = p + u;
-        positions[2] = p + u + v;
-        positions[3] = p + v;
-        return positions;
+    // from iq:
+    // https://iquilezles.org/articles/boxfunctions/
+    static float hit(Ray ray, RectangleParameter param) {
+        // convert from world to box space
+        float3 rd = mul(float4(ray.direction, 0.0), param.w2o).xyz;
+        float3 ro = mul(float4(ray.origin, 1.0), param.w2o).xyz;
+        float t = -ro.z / rd.z;
+        float3 local = ro + t * rd;
+        if (abs(local.x) <= 1.f && abs(local.y) <= 1.f) return t;
+        return -1.f;
     }
 };
+
+GeometryHit fetchRectangleGeometryHit(GeometryData geometry, Ray ray, float t) {
+    // convert from world to box space
+    float4x4 o2w = ObjectToWorld(geometry);
+    float4x4 w2o = WorldToObject(geometry);
+    float3 rd = mul(float4(ray.direction, 0.0), w2o).xyz;
+    float3 ro = mul(float4(ray.origin, 1.0), w2o).xyz;
+    float t = -ro.z / rd.z;
+    GeometryHit hit;
+    hit.shadingNormal = mul(float4(0, 0, 1, 0), transpose(w2o)).xyz;
+    hit.shadingNormal = normalize(hit.shadingNormal);
+    hit.texcoord = (ro + t * rd).xy * 0.5 + 0.5;
+    hit.position = ray.origin + t * ray.direction;
+    hit.geometryNormal = hit.shadingNormal;
+    hit.barycentric = float2(0, 0);
+    hit.tangent = float4(0);
+    hit.barycentric = float2(0.333);
+
+    if (ro.z > 0) SetFaceForward(hit, true);
+    else {
+        SetFaceForward(hit, false);
+        hit.shadingNormal = -hit.shadingNormal;
+        hit.geometryNormal = -hit.geometryNormal;
+    }
+
+    return hit;
+}
+
+// struct Rectangle : IShape {
+//     float3 p;   // The left-bottom corner
+//     float3 n;   // The normal of the rectangle
+//     float3 u;   // The first axis of the rectangle
+//     float3 v;   // The second axis of the rectangle
+
+//     __init(float3 p, float3 n, float3 u, float3 v) {
+//         this.p = p;
+//         this.n = n;
+//         this.u = u;
+//         this.v = v;
+//     }
+
+//     __init(float3 position, float3 euler,
+//            float width, float height) {
+//         float4x4 rot = rotate_euler(euler);
+//         float3 u = mul(transpose(rot), float4(1, 0, 0, 0)).xyz * width;
+//         float3 v = mul(transpose(rot), float4(0, 1, 0, 0)).xyz * height;
+//         float3 n = mul(transpose(rot), float4(0, 0, 1, 0)).xyz;
+//         return Rectangle(
+//             position - 0.5 * u - 0.5 * v,
+//             n, u, v);
+//     }
+
+//     bool intersect(Ray ray, inout PrimaryPayload payload) {
+//         SetHit(payload.hit, false);
+//         const float3 pro = ray.origin - p;
+//         const float nrd = -dot(ray.direction, n);
+//         const float t = dot(pro, n) / nrd;
+//         if (t < ray.tMin || t > ray.tMax) return false;
+
+//         const float3 hitpoint = ray.origin + t * ray.direction;
+//         const float3 hpdir = hitpoint - p;
+
+//         const float minU = 0.;
+//         const float maxU = 1.;
+
+//         float _u = dot(u, hpdir) / dot(u, u);
+//         if (_u < minU || _u > maxU) return false;
+//         float _v = dot(v, hpdir) / dot(v, v);
+//         if (_v < minU || _v > maxU) return false;
+
+//         SetHit(payload.hit, true);
+//         const float3 p = ray.origin + t * ray.direction;
+//         // vec3 p = plane.p + u * plane.u + v * plane.v;
+//         payload.hit.position = p;
+//         payload.hit.shadingNormal = (nrd < 0.) ? -n : n;
+//         payload.hit.geometryNormal = (nrd < 0.) ? -n : n;
+//         payload.hit.texcoord = float2(_u, _v);
+//         return true;
+//     }
+    
+//     ishape::sample sample(ishape::sample_in i) {
+//         ishape::sample o;
+//         const uint32_t method = i.flag;
+//         switch(method) {
+//             case 0: {
+//                 // Uniform Area Sampling
+//                 // Sample a point on the rectangle
+//                 o.position = p + i.uv.x * u + i.uv.y * v;
+//                 o.normal = n;
+//                 o.pdf = ishape::inv_geometry_term(
+//                     o.position, o.normal, i.position) 
+//                     / length(cross(u, v));
+//                 break;
+//             }
+//             case 1: {
+//                 // Uniform Solid Angle Sampling
+//                 let sr = SphericalRectangle(p, u, v, i.position);
+//                 o = sr.sample(i);
+//                 o.normal = n;
+//                 break;
+//             }
+//             case 2: {
+//                 // Bilinear Cosine Warp X Uniform Solid Angle Sampling
+//                 float3 wp[4];
+//                 wp[0] = p;
+//                 wp[1] = p + u;
+//                 wp[2] = p + v;
+//                 wp[3] = p + u + v;
+//                 float4 prob;
+//                 for (int j = 0; j < 4; j++) {
+//                     float3 wpd = wp[j] - i.position;
+//                     float3 wpn = normalize(wpd);
+//                     // cosine term of ray with illuminated surface
+//                     prob[j] = max(0., dot(wpn, i.normal));
+//                 }
+//                 let bw = BilinearWarp(prob[0], prob[2], prob[1], prob[3]);
+//                 iwarp::warp2d_out wo = bw.inverse(i.uv);
+//                 let sr = SphericalRectangle(p, u, v, i.position);
+//                 i.uv = wo.sample;
+//                 o = sr.sample(i);
+//                 o.pdf = o.pdf * wo.pdf;
+//                 o.normal = n;
+//                 break;
+//             }
+//         }
+//         return o;
+//     }
+
+//     float3[4] corners() {
+//         float3 positions[4];
+//         positions[0] = p;
+//         positions[1] = p + u;
+//         positions[2] = p + u + v;
+//         positions[3] = p + v;
+//         return positions;
+//     }
+// };
 
 #endif // _SRENDERER_SHAPE_RECTANGLE_HEADER_

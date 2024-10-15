@@ -40,20 +40,101 @@ struct MediumHit {
     int mediumID;
 };
 
-// ------------------------------------------------------------
-// Query structures for bsdf evaluation and sampling
-// ------------------------------------------------------------
-// Payload structure for evaluating the bsdf.
-struct BSDFEvalGeometry {
-    // input
-    float3 dir_in; // ----------- 4 floats
-    float3 dir_out; // ---------- 4 floats
-    float3 geometric_normal; // - 4 floats
-    // output
-    float3 bsdf;
-    // shading frame - 3x3 floats
-    float3x3 frame; // shading frame
+// geometry info
+struct GeometryData {
+    uint vertexOffset;
+    uint indexOffset;
+    int materialID;
+    uint indexSize;
+    int16_t mediumIDExterior = -1;
+    int16_t mediumIDInterior = -1;
+    int lightID;
+    uint primitiveType;
+    float oddNegativeScaling;
+    float4 transform[3];
+    float4 transformInverse[3];
 };
+
+struct MaterialData {
+    int bxdf_type;
+    int bitfield;
+    int16_t albedo_tex;
+    int16_t normal_tex;
+    int16_t ext1_tex;
+    int16_t ext2_tex;
+    float4 floatvec_0;
+    float4 floatvec_1;
+    float4 floatvec_2;
+};
+
+enum LightType {
+    DIRECTIONAL,
+    POINT,
+    SPOT,
+    SPHERE,
+    RECTANGLE,
+    MESH_PRIMITIVE,
+    ENVIRONMENT,
+    VPL,
+    MAX_ENUM,
+};
+
+struct LightPacket {
+    LightType light_type;
+    int bitfield;
+    uint uintscalar_0;
+    uint uintscalar_1;
+    float4 floatvec_0;
+    float4 floatvec_1;
+    float4 floatvec_2;
+};
+
+struct MediumPacket {
+    enum MediumType {
+        HOMOGENEOUS,
+        HETEROGENEOUS,
+        MAX_ENUM,
+    };
+
+    float3 sigma_a = float3(0, 0, 0);
+    uint32_t bitfield = 0x80000000;
+    float3 sigma_s = float3(0, 0, 0);
+    float scale = 1.0f;
+    float3 aniso = float3(0, 0, 0);
+    float padding = 0.0f;
+
+    float3 get_g() { return clamp(aniso, -1 + 1e-3, 1 - 1e-3); }
+    float3 get_sigma_a() { return sigma_a * scale; }
+    float3 get_sigma_s() { return sigma_s * scale; }
+    float3 get_sigma_t() { return sigma_a * scale + sigma_s * scale; }
+    MediumType get_medium_type() { return MediumType::HOMOGENEOUS; }
+};
+
+bool IsValidMedium(MediumPacket medium) {
+    return medium.bitfield != 0x80000000;
+}
+
+struct SceneDescription {
+    float3 light_bound_min;
+    int max_light_count;
+    float3 light_bound_max;
+    int active_camera_index;
+};
+
+float4x4 ObjectToWorld(in const GeometryData geometry) {
+    return transpose(float4x4(geometry.transform[0], 
+        geometry.transform[1], geometry.transform[2], float4(0, 0, 0, 1)));
+}
+
+float4x4 WorldToObject(in const GeometryData geometry) {
+    return transpose(float4x4(geometry.transformInverse[0], 
+        geometry.transformInverse[1], geometry.transformInverse[2], float4(0, 0, 0, 1)));
+}
+
+float4x4 ObjectToWorldNormal(in const GeometryData geometry) {
+    return float4x4(geometry.transformInverse[0], 
+        geometry.transformInverse[1], geometry.transformInverse[2], float4(0, 0, 0, 1));
+}
 
 static const uint GeometryHitFlag_HitShift = 0x00;
 static const uint GeometryHitFlag_HitMask = 0x01;
@@ -99,11 +180,11 @@ float3 offsetPositionAlongNormal(float3 worldPosition, float3 normal) {
 
 Ray SpawnRay(
     in_ref(GeometryHit) isect,
-    in_ref(float3) dir)
-{
-    const float3 offsetDir = faceforward(isect.geometryNormal, -dir, isect.geometryNormal);
-    const float3 offsetedPosition = offsetPositionAlongNormal(isect.position, offsetDir);
-
+    in_ref(float3) dir) {
+    const float3 offsetDir = faceforward(isect.geometryNormal, 
+        -dir, isect.geometryNormal);
+    const float3 offsetedPosition = offsetPositionAlongNormal(
+        isect.position, offsetDir);
     Ray ray;
     ray.origin = offsetedPosition;
     ray.direction = dir;
@@ -119,12 +200,11 @@ Ray SpawnRay(float3 pos, float3 dir) {
     ray.tMin = 0.000;
     ray.tMax = 1e6;
     return ray;
-}
+} 
 
 Ray SpawnVisibilityRay(
     in_ref(GeometryHit) isect,
-    in_ref(float3) position)
-{
+    in_ref(float3) position) {
     float3 dir = position - isect.position;
     float distance = length(dir);
     Ray visiblityRay = SpawnRay(isect, dir / distance);
@@ -134,26 +214,12 @@ Ray SpawnVisibilityRay(
 
 Ray SpawnVisibilityRay(
     in_ref(float3) origin,
-    in_ref(float3) target)
-{
+    in_ref(float3) target) {
     float3 dir = target - origin;
     float distance = length(dir);
     Ray visiblityRay = SpawnRay(origin, dir / distance);
     visiblityRay.tMax = distance - min(0.01, distance * 0.02);
     return visiblityRay;
-}
-
-BSDFEvalGeometry createBSDFEvalGeometry(
-    in const GeometryHit hit,
-    in const float3 dir_in,
-    in const float3 dir_out,
-) {
-    BSDFEvalGeometry evalGeometry;
-    evalGeometry.dir_in = dir_in;
-    evalGeometry.dir_out = dir_out;
-    evalGeometry.geometric_normal = hit.geometryNormal;
-    evalGeometry.frame = createONB(hit.shadingNormal);
-    return evalGeometry;
 }
 
 #endif // _SRENDERER_SPT_HEADER_

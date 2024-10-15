@@ -1,67 +1,14 @@
 #ifndef _SRENDERER_SCENE_BINDING_
 #define _SRENDERER_SCENE_BINDING_
 
-#include "../common/camera.hlsli"
-#include "../common/raycast.hlsli"
+#include "common/camera.hlsli"
+#include "common/raycast.hlsli"
 #include "lights/lightbvh.hlsli"
 #include "spt.hlsli"
 
 /**********************************************************************
 ****                   Common Scene Data Structures                ****
 **********************************************************************/
-
-// geometry info
-struct GeometryData {
-    uint vertexOffset;
-    uint indexOffset;
-    uint materialID;
-    uint indexSize;
-    float surfaceArea;
-    int lightID;
-    uint primitiveType;
-    float oddNegativeScaling;
-    float4 transform[3];
-    float4 transformInverse[3];
-};
-
-struct MaterialData {
-    int bxdf_type;
-    int bitfield;
-    float floatscalar_0;
-    float floatscalar_1;
-    float4 floatvec_0;
-    float4 floatvec_1;
-    float4 floatvec_2;
-};
-
-enum LightType {
-    DIRECTIONAL,
-    POINT,
-    SPOT,
-    TRIANGLE,
-    RECTANGLE,
-    MESH_PRIMITIVE,
-    ENVIRONMENT,
-    VPL,
-    MAX_ENUM,
-};
-
-struct LightPacket {
-    LightType light_type;
-    int bitfield;
-    uint uintscalar_0;
-    uint uintscalar_1;
-    float4 floatvec_0;
-    float4 floatvec_1;
-    float4 floatvec_2;
-};
-
-struct SceneDescription {
-    float3 light_bound_min;
-    int max_light_count;
-    float3 light_bound_max;
-    int active_camera_index;
-};
 
 ByteAddressBuffer GPUScene_position;
 ByteAddressBuffer GPUScene_vertex;
@@ -74,6 +21,8 @@ RaytracingAccelerationStructure GPUScene_tlas;
 RWStructuredBuffer<LightBVHNode> GPUScene_light_bvh;
 RWStructuredBuffer<uint32_t> GPUScene_light_trail;
 RWStructuredBuffer<SceneDescription> GPUScene_description;
+RWStructuredBuffer<MediumPacket> GPUScene_medium;
+Sampler2D GPUScene_textures[];
 
 float3 fetchVertexPosition(int vertexIndex) { return GPUScene_position.Load<float3>(vertexIndex * 12); }
 float3 fetchVertexNormal(int vertexIndex) { return GPUScene_vertex.Load<float3>(vertexIndex * 32 + 0); }
@@ -88,6 +37,35 @@ uint3 fetchTriangleIndices(in const GeometryData geoInfo, int triangleIndex) { r
 int fetchActiveCameraID() { return GPUScene_description[0].active_camera_index; }
 CameraData fetchActiveCamera() { return GPUScene_camera[fetchActiveCameraID()]; }
 
+MediumPacket fetchMedium(int mediumID) {
+    if(mediumID < 0) return MediumPacket();
+    return GPUScene_medium[mediumID];
+}
+
+MediumPacket fetchCameraMedium(CameraData camera) {
+    return fetchMedium(camera.mediumID);
+}
+
+int fetchCameraMediumIdx(CameraData camera) { return camera.mediumID; }
+
+MediumPacket updateMedium(GeometryData geometry, GeometryHit hit, MediumPacket medium) {
+    if (geometry.mediumIDInterior != geometry.mediumIDExterior) {
+        // at medium transition, update medium
+        if (IsFaceForward(hit)) return fetchMedium(geometry.mediumIDInterior);
+        else return fetchMedium(geometry.mediumIDExterior);
+    }
+    return medium;
+}
+
+int updateMedium(GeometryData geometry, GeometryHit hit, int mediumID) {
+    if (geometry.mediumIDInterior != geometry.mediumIDExterior) {
+        // at medium transition, update medium
+        if (IsFaceForward(hit)) return geometry.mediumIDInterior;
+        else return geometry.mediumIDExterior;
+    }
+    return mediumID;
+}
+
 bounds3 fetchAllLightBounds() {
     bounds3 allb;
     allb.pMin = GPUScene_description[0].light_bound_min;
@@ -95,16 +73,10 @@ bounds3 fetchAllLightBounds() {
     return allb;
 }
 
-float4x4 ObjectToWorld(in const GeometryData geometry) {
-    return transpose(float4x4(geometry.transform[0], geometry.transform[1], geometry.transform[2], float4(0, 0, 0, 1)));
-}
-
-float4x4 WorldToObject(in const GeometryData geometry) {
-    return transpose(float4x4(geometry.transformInverse[0], geometry.transformInverse[1], geometry.transformInverse[2], float4(0, 0, 0, 1)));
-}
-
-float4x4 ObjectToWorldNormal(in const GeometryData geometry) {
-    return float4x4(geometry.transformInverse[0], geometry.transformInverse[1], geometry.transformInverse[2], float4(0, 0, 0, 1));
+float4 sampleTexture(int textureID, float2 uv) {
+    if (textureID >= 0)
+        return GPUScene_textures[textureID].Sample(uv);
+    else return float4(1, 1, 1, 1);
 }
 
 /**
@@ -142,12 +114,11 @@ GeometryHit fetchTrimeshGeometryHit(
     vertexUVs[0] = fetchVertexTexCoord(index[0] + int(geometry.vertexOffset));
     vertexUVs[1] = fetchVertexTexCoord(index[1] + int(geometry.vertexOffset));
     vertexUVs[2] = fetchVertexTexCoord(index[2] + int(geometry.vertexOffset));
-    vertexUVs[0] = frac(vertexUVs[0]);
-    vertexUVs[1] = frac(vertexUVs[1]);
-    vertexUVs[2] = frac(vertexUVs[2]);
     float2 uv = interpolate(vertexUVs, bary);
     hit.texcoord = uv;
-    
+    if (any(isnan(hit.texcoord)))
+        hit.texcoord = float2(.5);
+
     float3 objectSpaceFlatNormal = normalize(cross(
         vertexPositions[1] - vertexPositions[0],
         vertexPositions[2] - vertexPositions[0]));
@@ -163,6 +134,8 @@ GeometryHit fetchTrimeshGeometryHit(
     float3 vertexNormalOS = interpolate(normals, bary);
     float3 gvertexNormalWS = normalize(mul(float4(vertexNormalOS, 0.0), o2wn).xyz);
     hit.shadingNormal = gvertexNormalWS;
+    if (all(hit.shadingNormal == 0) || any(isnan(hit.shadingNormal)))
+        hit.shadingNormal = hit.geometryNormal;
 
     float3 tangents[3];
     tangents[0] = fetchVertexTangent(index[0] + int(geometry.vertexOffset));
@@ -200,8 +173,9 @@ GeometryHit fetchTrimeshGeometryHit(
     return hit;
 }
 
-MaterialData fetchMaterialData(GeometryHit hit) {
+Optional<MaterialData> fetchMaterialData(GeometryHit hit) {
     const int matID = GPUScene_geometry[hit.geometryID].materialID;
+    if (matID == -1) return none;
     return GPUScene_material[matID];
 }
 

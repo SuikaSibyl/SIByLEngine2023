@@ -19,7 +19,8 @@ std::unique_ptr<se::window> window = se::window::create(se::window::WindowOption
    se::rhi::ContextExtensionBit::CONSERVATIVE_RASTERIZATION |
    se::rhi::ContextExtensionBit::COOPERATIVE_MATRIX |
    se::rhi::ContextExtensionBit::CUDA_INTEROPERABILITY |
-   se::rhi::ContextExtensionBit::ATOMIC_FLOAT));
+   se::rhi::ContextExtensionBit::ATOMIC_FLOAT |
+   se::rhi::ContextExtensionBit::USE_AFTERMATH));
  std::unique_ptr<se::rhi::Adapter> adapter = context->requestAdapter({});
 
  std::unique_ptr<se::rhi::Device> device = adapter->requestDevice();
@@ -30,27 +31,26 @@ std::unique_ptr<se::window> window = se::window::create(se::window::WindowOption
  se::editor::EditorContext::initialize();
  ImGui::SetCurrentContext(se::editor::ImGuiContext::getRawCtx());
 
-
  //std::string path = "S:/SIByL2024/Sandbox/examples/lighting/_data/test.exr";
  //std::unique_ptr<se::EnvmapLight> envlight = std::make_unique<se::EnvmapLight>(path);
  //envlight = nullptr;
  //se::gfx::PMFConstructor::upload_datapack();
  //se::gfx::PMFConstructor::clear_datapack();
- std::string path = "S:/SIByL2024/Sandbox/examples/lighting/_data/onelight-2.gltf";
- //std::string path = "P:/GitProjects/lajolla_public/scenes/volpath_test/volpath_test2.xml";
+ //std::string path = "S:/SIByL2024/Sandbox/examples/lighting/_data/onelight-2.gltf";
+ //std::string path = "D:/Art/Scenes/veach-mis-mitsuba/scene_v3.xml";
+ std::string path = "P:/GitProjects/lajolla_public/scenes/volpath_test/vol_cbox.xml";
  //std::string path = "P:/GitProjects/lajolla_public/scenes/volpath_test/volpath_test2.gltf";
- //auto scene = se::gfx::GFXContext::load_scene_xml(path);
- auto scene = se::gfx::GFXContext::load_scene_gltf(path);
+ auto scene = se::gfx::GFXContext::load_scene_xml(path);
+ //auto scene = se::gfx::GFXContext::load_scene_gltf(path);
  scene->updateTransform();
  scene->updateGPUScene();
  int light_counts = scene->getSceneLightCounts();
-
 
  //std::vector<float> pmf = { 0.1,0.2,0.3,0.4 };
  //auto pc1d = se::gfx::PMFConstructor::build_piecewise_constant_1d(pmf, 0,1);
  //float pdf; int offset;
  //float a = pc1d.sample(0.09, pdf, offset);
- //scene->serialize("P:/GitProjects/lajolla_public/scenes/volpath_test/volpath_test2.gltf");
+ scene->serialize("D:/Art/Scenes/veach-mis-mitsuba/scene_v3.gltf");
 
  device->waitIdle();
  se::editor::EditorBase::finalize();

@@ -159,15 +159,15 @@ struct LightBVHNode {
             sinTheta_w, cosTheta_w, sinTheta_o, cosTheta_o);
         float cosThetap = LightBounds::cosSubClamped(
             sinTheta_x, cosTheta_x, sinTheta_b, cosTheta_b);
-        if (bool(factors & (uint)ImportanceFacotr::Use_Cone)) {
-            if (cosThetap <= cosTheta_e) return 0;
-        }
+        // if (bool(factors & (uint)ImportanceFacotr::Use_Cone)) {
+        //     if (cosThetap <= cosTheta_e) return 0;
+        // }
         // Return final importance at reference point
         float importance = 1.f;
         if (bool(factors & (uint)ImportanceFacotr::Use_Power)) importance *= phi;
         if (bool(factors & (uint)ImportanceFacotr::Use_Distance)) importance /= d2;
         if (bool(factors & (uint)ImportanceFacotr::Use_Cone)) {
-            importance *= cosThetap;
+            // importance *= cosThetap;
             // Account for cos theta_i in importance at surfaces
             if (any(n != float3(0, 0, 0))) {
                 float cosTheta_i = abs(dot(wi, n));
@@ -177,6 +177,8 @@ struct LightBVHNode {
                 importance *= cosThetap_i;
             }
         }
+        // importance = rgb().r * importance / phi;
+
         return importance;
     }
 

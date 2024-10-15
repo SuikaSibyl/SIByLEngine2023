@@ -14,7 +14,7 @@
 struct LambertMaterial : IBxDFParameter {
     __init() { R = float3(1.f); }
     __init(float3 r) { R = r; }
-    __init(MaterialData mat) { R = mat.floatvec_0.xyz; } 
+    __init(MaterialData mat, float2 uv) { R = mat.floatvec_0.xyz * sampleTexture(mat.albedo_tex, uv).rgb; } 
     float3 R; // reflectance
 };
 
@@ -24,11 +24,6 @@ struct LambertianBRDF : IBxDF {
     // Evaluate the BSDF
     [Differentiable]
     static float3 eval(no_diff ibsdf::eval_in i, LambertMaterial material) {
-        // if (dot(i.geometric_normal, i.wi) < 0 ||
-        //     dot(i.geometric_normal, i.wo) < 0) {
-        //     // No light below the surface
-        //     return float3(0);
-        // }
         Frame frame = i.shading_frame;
         // Lambertian BRDF
         return max(dot(frame.n, i.wo), 0.f) *
@@ -47,15 +42,6 @@ struct LambertianBRDF : IBxDF {
     // importance sample the BSDF
     static ibsdf::sample_out sample(ibsdf::sample_in i, LambertMaterial material) {
         ibsdf::sample_out o;
-        // For Lambertian, we importance sample the cosine hemisphere domain.
-        // if (dot(i.geometric_normal, i.wi) < 0) {
-        //     // Incoming direction is below the surface.
-        //     o.bsdf = float3(0);
-        //     o.wo = float3(0);
-        //     o.pdf = 0;
-        //     return o;
-        // }
-        
         // Flip the shading frame if it is
         // inconsistent with the geometry normal.
         Frame frame = i.shading_frame;

@@ -276,7 +276,8 @@ PYBIND11_MODULE(pycore, m) {
     .value("ATOMIC_FLOAT", se::rhi::ContextExtensionBit::ATOMIC_FLOAT)
     .value("CONSERVATIVE_RASTERIZATION", se::rhi::ContextExtensionBit::CONSERVATIVE_RASTERIZATION)
     .value("COOPERATIVE_MATRIX", se::rhi::ContextExtensionBit::COOPERATIVE_MATRIX)
-    .value("CUDA_INTEROPERABILITY", se::rhi::ContextExtensionBit::CUDA_INTEROPERABILITY);
+    .value("CUDA_INTEROPERABILITY", se::rhi::ContextExtensionBit::CUDA_INTEROPERABILITY)
+    .value("USE_AFTERMATH", se::rhi::ContextExtensionBit::USE_AFTERMATH);
   py::enum_<se::rhi::MemoryPropertyBit>(namespace_rhi, "EnumMemoryProperty")
     .value("DEVICE_LOCAL_BIT", se::rhi::MemoryPropertyBit::DEVICE_LOCAL_BIT)
     .value("HOST_VISIBLE_BIT", se::rhi::MemoryPropertyBit::HOST_VISIBLE_BIT)
@@ -707,6 +708,7 @@ PYBIND11_MODULE(pycore, m) {
   class_gfx_context.def_static("captureImage", static_cast<void(*)(se::gfx::TextureHandle src, std::string path)>(&se::gfx::captureImage));
   class_gfx_context.def_static("finalize", &se::gfx::GFXContext::finalize);
   class_gfx_context.def_static("load_scene_gltf", &se::gfx::GFXContext::load_scene_gltf);
+  class_gfx_context.def_static("load_scene_xml", &se::gfx::GFXContext::load_scene_xml);
   class_gfx_context.def_static("create_texture_file", &se::gfx::GFXContext::create_texture_file);
   class_gfx_context.def_static("create_sampler_desc", static_cast<se::gfx::SamplerHandle(*)
       (rhi::AddressMode, rhi::FilterMode, rhi::MipmapFilterMode)>
@@ -755,6 +757,7 @@ PYBIND11_MODULE(pycore, m) {
     .def("getGPUScene", &se::gfx::Scene::getGPUScene, py::return_value_policy::reference)
     .def("serialize", static_cast<void(se::gfx::Scene::*)(std::string const&)>(&se::gfx::Scene::serialize));
   
+
   py::class_<se::gfx::Scene::GeometryDrawData>(namespace_gfx, "GeometryDrawData");
 
   py::enum_<se::gfx::Scene::TexcoordKind>(namespace_gfx, "TexcoordKind")
@@ -765,6 +768,8 @@ PYBIND11_MODULE(pycore, m) {
   class_gfx_gpuscene.def("bindingResourceCamera", &se::gfx::Scene::GPUScene::bindingResourceCamera)
     .def("bindingResourcePosition", &se::gfx::Scene::GPUScene::bindingResourcePosition)
     .def("bindingResourceMaterial", &se::gfx::Scene::GPUScene::bindingResourceMaterial)
+    .def("bindingResourceMedium", &se::gfx::Scene::GPUScene::bindingResourceMedium)
+    .def("bindingResourceTextures", &se::gfx::Scene::GPUScene::bindingResourceTextures)
     .def("bindingResourceLight", &se::gfx::Scene::GPUScene::bindingResourceLight)
     .def("bindingResourceLightBVH", &se::gfx::Scene::GPUScene::bindingResourceLightBVH)
     .def("bindingResourceLightTrail", &se::gfx::Scene::GPUScene::bindingResourceLightTrail)

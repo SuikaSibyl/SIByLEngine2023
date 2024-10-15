@@ -26,6 +26,7 @@ struct gfx_namescope {};
 struct rdg_namescope {};
 struct imgui_namescope {};
 
+
 enum ImGuiDockRequestType {
     ImGuiDockRequestType_None = 0,
     ImGuiDockRequestType_Dock,
@@ -67,6 +68,10 @@ bool DragInt(const char* label, CPPType<int32_t>& v, float v_speed, int v_min,
 bool DragFloat(const char* label, CPPType<float>& v, float v_speed, float v_min, 
   float v_max, const char* format, ImGuiSliderFlags flags) {
   return DragFloat(label, &v.get(), v_speed, v_min, v_max, format, flags);
+}
+
+bool ColorEditVec3(const char* label, vec3& color) {
+  return ImGui::ColorEdit3(label, &color[0]);
 }
 
 bool Button(const char* label, se::vec2 size) {
@@ -143,6 +148,7 @@ PYBIND11_MODULE(pyeditor, m) {
       .def_static("PopItemWidth", &ImGui::PopItemWidth)
       .def_static("TreeNode", &ImGui::TreeNode_se)
       .def_static("TreePop", &ImGui::TreePop)
+      .def_static("ColorEditVec3", &ImGui::ColorEditVec3)
       .def_static("ShowTexture", &se::editor::drawTextureViewer)
       .def_static("Text", 
        static_cast<void(*)(std::string const&)>(&ImGui::Text),

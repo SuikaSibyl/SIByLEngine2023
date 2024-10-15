@@ -25,6 +25,13 @@ struct sample {
     float3 normal;
 };
 
+struct pdf_in {
+    float3 ref_point;
+    float3 ref_normal;
+    float3 sample_point;
+    float3 sample_normal;
+};
+
 float inv_geometry_term(
     float3 sample_position,
     float3 sample_normal,

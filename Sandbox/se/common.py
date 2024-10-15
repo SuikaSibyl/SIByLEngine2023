@@ -21,7 +21,7 @@ class SEContext:
     if with_window:
       self.window = core.window.create(
         core.WindowOption(core.window.EnumVendor.GLFW, 
-        "SE24", 800, 600, core.window.EnumProperty.VulkanContext))
+        "SE24", 1920, 1080, core.window.EnumProperty.VulkanContext))
     context_extensions = \
       int(core.rhi.EnumContextExtension.RAY_TRACING) \
       | int(core.rhi.EnumContextExtension.BINDLESS_INDEXING) \
@@ -29,7 +29,8 @@ class SEContext:
       | int(core.rhi.EnumContextExtension.CONSERVATIVE_RASTERIZATION) \
       | int(core.rhi.EnumContextExtension.COOPERATIVE_MATRIX) \
       | int(core.rhi.EnumContextExtension.CUDA_INTEROPERABILITY) \
-      | int(core.rhi.EnumContextExtension.ATOMIC_FLOAT)
+      | int(core.rhi.EnumContextExtension.ATOMIC_FLOAT) \
+      | int(core.rhi.EnumContextExtension.USE_AFTERMATH)
     self.context = core.rhi.Context.create(core.rhi.Context.EnumBackend.Vulkan)
     self.context.init(self.window, context_extensions)
     self.adapater = self.context.requestAdapter(core.rhi.RequestAdapterOptions())

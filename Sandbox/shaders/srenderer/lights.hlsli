@@ -5,6 +5,7 @@
 #include "lights/envmap.hlsli"
 #include "shapes/shape.hlsli"
 #include "shapes/triangles.hlsli"
+#include "shapes/sphere.hlsli"
 #include "common/sampling.hlsli"
 #include "materials.hlsli"
 
@@ -15,6 +16,7 @@ ilight::sample_li_out nee_given_light(ilight::sample_li_in i, LightPacket data) 
         TriangleParameter triangle = TriangleParameter(data);
         ishape::sample_in ishape_i;
         ishape_i.position = i.p;
+        ishape_i.normal = i.ns;
         ishape_i.uv = i.uv;
         ishape::sample ishape_o = Triangle::sample(ishape_i, triangle);
         ilight::sample_li_out o;
@@ -23,6 +25,30 @@ ilight::sample_li_out nee_given_light(ilight::sample_li_in i, LightPacket data) 
         // Compute the corresponding emission
         const uint geometryID = data.uintscalar_1;
         const uint materialID = GPUScene_geometry[geometryID].materialID;
+        MaterialData material = GPUScene_material[materialID];
+        o.L = materials::emission(material);
+        o.pdf = ishape_o.pdf;
+        o.ns = ishape_o.normal;
+        o.valid = true;
+        o.isDelta = false;
+        return o;
+    }
+    case LightType::SPHERE: {
+        const uint geometryID = data.uintscalar_1;
+        GeometryData geometry = GPUScene_geometry[geometryID];
+        const float4x4 o2w = ObjectToWorld(geometry);
+        const float4x4 o2wn = ObjectToWorldNormal(geometry);
+        const float3 sphere_center = mul(float4(0, 0, 0, 1), o2w).xyz;
+        const float sphere_radius = length(mul(float4(1, 0, 0, 1), o2w).xyz - sphere_center);
+        SphereParameter sphere = { sphere_center, sphere_radius };
+        ishape::sample_in ishape_i;
+        ishape_i.position = i.p;
+        ishape_i.uv = i.uv;
+        ishape::sample ishape_o = Sphere::sample(ishape_i, sphere);
+        ilight::sample_li_out o;
+        o.wi = normalize(ishape_o.position - i.p);
+        o.x = ishape_o.position;
+        const uint materialID = geometry.materialID;
         MaterialData material = GPUScene_material[materialID];
         o.L = materials::emission(material);
         o.pdf = ishape_o.pdf;
@@ -40,7 +66,27 @@ float nee_given_light_pdf(ilight::sample_li_pdf_in i, LightPacket data) {
     switch (data.light_type) {
     case LightType::MESH_PRIMITIVE: {
     TriangleParameter triangle = TriangleParameter(data);
-    return Triangle::sample_pdf(triangle);
+    ishape::pdf_in pdf_in;
+    pdf_in.ref_point = i.ref_point;
+    pdf_in.ref_normal = i.ref_normal;
+    pdf_in.sample_point = i.light_point;
+    pdf_in.sample_normal = i.light_normal;
+    return Triangle::sample_pdf(pdf_in, triangle);
+    }
+    case LightType::SPHERE: {
+    const uint geometryID = data.uintscalar_1;
+    GeometryData geometry = GPUScene_geometry[geometryID];
+    const float4x4 o2w = ObjectToWorld(geometry);
+    const float4x4 o2wn = ObjectToWorldNormal(geometry);
+    const float3 sphere_center = mul(float4(0, 0, 0, 1), o2w).xyz;
+    const float sphere_radius = length(mul(float4(1, 0, 0, 1), o2w).xyz - sphere_center);
+    SphereParameter sphere = { sphere_center, sphere_radius };
+    ishape::pdf_in pdf_in;
+    pdf_in.ref_point = i.ref_point;
+    pdf_in.ref_normal = i.ref_normal;
+    pdf_in.sample_point = i.light_point;
+    pdf_in.sample_normal = i.light_normal;
+    return Sphere::sample_pdf(pdf_in, sphere);
     }
     else : break;
     }
@@ -80,8 +126,8 @@ float nee_lbvh_pdf(ilight::sample_li_pdf_in ctx, uint factors) {
         // Compute child importances and update PMF for current node
         LightBVHNode child0 = GPUScene_light_bvh[nodeIndex + 1];
         LightBVHNode child1 = GPUScene_light_bvh[node.child_or_light_index()];
-        float ci[2] = { child0.importance(ctx.p, ctx.n, allb, factors),
-                        child1.importance(ctx.p, ctx.n, allb, factors) };
+        float ci[2] = { child0.importance(ctx.ref_point, ctx.ref_normal, allb, factors),
+                        child1.importance(ctx.ref_point, ctx.ref_normal, allb, factors) };
         pmf *= ci[bitTrail & 1] / (ci[0] + ci[1]);
         
         // Use bitTrail to find next node index and update its value

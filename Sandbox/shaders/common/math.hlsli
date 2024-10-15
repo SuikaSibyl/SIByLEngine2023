@@ -6,7 +6,8 @@ static const float k_2pi        = 6.2831853071795864f;
 static const float k_pi_over_2  = k_pi / 2;
 static const float k_pi_over_4  = k_pi / 4;
 static const float k_inv_pi     = 1. / k_pi;
-static const float k_inv_2_pi   = 1. / (2 * k_pi);
+static const float k_inv_2_pi = 1. / (2 * k_pi);
+static const float k_inv_4_pi = 0.07957747154594766788;
 
 static const float k_inf        = 1.0f / 0.0f;
 
@@ -89,7 +90,13 @@ float square(in float v) {
 }
 
 [Differentiable] float sqr(float v) { return v * v; }
+[Differentiable] float2 sqr(float2 v) { return float2(sqr(v.x), sqr(v.y)); }
+[Differentiable] float3 sqr(float3 v) { return float3(sqr(v.x), sqr(v.y), sqr(v.z)); }
+[Differentiable] float4 sqr(float4 v) { return float4(sqr(v.x), sqr(v.y), sqr(v.z), sqr(v.w)); }
 [Differentiable] float safe_sqrt(float v) { return sqrt(max(v, 0.f)); }
+[Differentiable] float2 safe_sqrt(float2 v) { return float2(safe_sqrt(v.x), safe_sqrt(v.y)); }
+[Differentiable] float3 safe_sqrt(float3 v) { return float3(safe_sqrt(v.x), safe_sqrt(v.y), safe_sqrt(v.z)); }
+[Differentiable] float4 safe_sqrt(float4 v) { return float4(safe_sqrt(v.x), safe_sqrt(v.y), safe_sqrt(v.z), safe_sqrt(v.w)); }
 
 float elevation(float3 d) {
     return 2.f * asin(.5f * sqrt(sqr(d.x) + sqr(d.y) + sqr(d.z - 1.f)));
@@ -175,6 +182,21 @@ complex operator /(float value, complex z) { return complex(value) / z; }
     else return complex(abs(t2), copysign(t1, z.im));
 }
 
+struct complex3 {
+    complex x, y, z;
+    __init(float r) { x = complex(r); y = complex(r); z = complex(r); }
+    __init(complex x, complex y, complex z) { this.x = x; this.y = y; this.z = z; }
+    __init(float3 r, float3 i) { x = complex(r.x, i.x); y = complex(r.y, i.y); z = complex(r.z, i.z); }
+}
+
+[Differentiable] complex3 operator +(complex3 a, complex3 b) { return complex3(a.x + b.x, a.y + b.y, a.z + b.z); }
+[Differentiable] complex3 operator -(complex3 a, complex3 b) { return complex3(a.x - b.x, a.y - b.y, a.z - b.z); }
+[Differentiable] complex3 operator *(complex3 a, complex3 b) { return complex3(a.x * b.x, a.y * b.y, a.z * b.z); }
+[Differentiable] complex3 operator /(complex3 a, complex3 b) { return complex3(a.x / b.x, a.y / b.y, a.z / b.z); }
+[Differentiable] complex3 sqr(complex3 c) { return complex3(sqr(c.x), sqr(c.y), sqr(c.z)); }
+[Differentiable] complex3 sqrt(complex3 c) { return complex3(sqrt(c.x), sqrt(c.y), sqrt(c.z)); }
+[Differentiable] float3 norm(complex3 c) { return float3(norm(c.x), norm(c.y), norm(c.z)); }
+
 [Differentiable] float mse(float3 input, no_diff float3 ref) {
     float3 error = input - ref; return dot(error, error);
 }
@@ -252,16 +274,6 @@ float erf(float x) {
     }
 }
 
-float next_float_down(float v) {
-    // Handle infinity and positive zero for _NextFloatDown()_
-    if (isinf(v) && v < 0.) return v;
-    if (v == 0.f) v = -0.f;
-    uint32_t ui = asuint(v);
-    if (v > 0) --ui;
-    else ++ui;
-    return asfloat(ui);
-}
-
 float unpack_cpu_half(uint16_t hdata) {
     int s = (hdata >> 15) & 0x00000001;
     int e = (hdata >> 10) & 0x0000001f;
@@ -306,5 +318,42 @@ float3 yuv2rgb(float3 yuv) {
     rgb.z = yuv.x + 2.03211f * yuv.y;
     return rgb;
 }
+
+float average(float3 v) {
+    return (v.x + v.y + v.z) / 3;
+}
+
+// decompose a floating-point number into its components
+int exponent(float v) { return (asuint(v) >> 23) - 127; }
+int significand(float v) { return asuint(v) & ((1 << 23) - 1); }
+uint32_t sign_bit(float v) { return asuint(v) & 0x80000000; }
+
+float min(float4 v) { return min(v.x, min(v.y, min(v.z, v.w))); }
+float max(float4 v) { return max(v.x, max(v.y, max(v.z, v.w))); }
+float fast_exp(float x) {
+    // Compute x' such that e^x = 2^(x')
+    float xp = x * 1.442695041f;
+    // Find integer and fractional components of x'
+    float fxp = floor(xp);
+    float f = xp - fxp;
+    int i = (int)fxp;
+    // <Evaluate polynomial approximation of 2^f
+    float twoToF = evaluate_polynomial_3(
+        f, 1.f, 0.695556856f,
+        0.226173572f, 0.0781455737f);
+    // Scale 2^f by 2^i and return final result
+    int exponent = exponent(twoToF) + i;
+    if (exponent < -126) return 0;
+    if (exponent > 127) return k_inf;
+    uint32_t bits = asuint(twoToF);
+    bits &= 0b10000000011111111111111111111111u;
+    bits |= (exponent + 127) << 23;
+    return asfloat(bits);
+}
+
+float sample_exponential(float u, float a) { return -log(1 - u) / a; }
+
+float2 fast_exp(float2 v) { return float2(exp(v.x), exp(v.y)); }
+float3 fast_exp(float3 v) { return float3(exp(v.x), exp(v.y), exp(v.z)); }
 
 #endif // !_SRENDERER_COMMMON_MATH_HEADER_

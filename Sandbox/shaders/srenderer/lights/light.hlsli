@@ -21,14 +21,17 @@ struct sample_li_out {
     float3 wi;
     bool valid;
     float3 x;
+    bool isDelta;
     float3 ns;
     int lightID;
     __init() { valid = false; }
 };
 
 struct sample_li_pdf_in {
-    float3 p;
-    float3 n;
+    float3 ref_point;
+    float3 ref_normal;
+    float3 light_point;
+    float3 light_normal;
     int lightID; 
 };
 }

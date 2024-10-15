@@ -8,6 +8,9 @@ import matplotlib.pyplot as plt
 class LightingCommon:
     def __init__(self):
         self.inspector_mode = se.Int32(0)
+        self.wireframe_thickness = se.Float32(0.01)
+        self.wireframe_color = se.vec3(0, 0, 0)
+        self.wireframe_smoothness = se.Float32(0.5)
 
 class ForwardPass(core.rdg.ComputePass):
     def __init__(self, common:LightingCommon):
@@ -57,6 +60,7 @@ class ForwardPass(core.rdg.ComputePass):
             ["GPUScene_tlas", scene.get().getGPUScene().bindingResourceTLAS()],
             ["GPUScene_light", scene.get().getGPUScene().bindingResourceLight()],
             ["GPUScene_tlas", scene.get().getGPUScene().bindingResourceTLAS()],
+            ["GPUScene_textures", scene.get().getGPUScene().bindingResourceTextures()],
             ["GPUScene_light_bvh", scene.get().getGPUScene().bindingResourceLightBVH()],
             ["GPUScene_light_trail", scene.get().getGPUScene().bindingResourceLightTrail()],
             ["GPUScene_description", scene.get().getGPUScene().bindingSceneDescriptor()],
@@ -64,10 +68,18 @@ class ForwardPass(core.rdg.ComputePass):
         
         class PushConstant(ctypes.Structure):
           _fields_ = [("random_seed", ctypes.c_int),
-                      ("inspector_mode", ctypes.c_int)]
+                      ("inspector_mode", ctypes.c_int),
+                      ("wireframe_thickness", ctypes.c_float),
+                      ("wireframe_smoothness", ctypes.c_float),
+                      ("wireframe_color", ctypes.c_float * 3)]
 
         pConst = PushConstant(random_seed=np.random.randint(0, 1000000),
-                            inspector_mode=self.common.inspector_mode.get())
+                            inspector_mode=self.common.inspector_mode.get(),
+                            wireframe_thickness=self.common.wireframe_thickness.get(),
+                            wireframe_smoothness=self.common.wireframe_smoothness.get(),
+                            wireframe_color=(self.common.wireframe_color.x,
+                                             self.common.wireframe_color.y,
+                                             self.common.wireframe_color.z))
         
         encoder = self.beginPass(rdrCtx)
         encoder.pushConstants(get_ptr(pConst), int(core.rhi.EnumShaderStage.COMPUTE), 0, ctypes.sizeof(pConst))
@@ -79,8 +91,14 @@ class ForwardPass(core.rdg.ComputePass):
             self.common.inspector_mode, [
             "Albedo",
             "Emission",
-            "Face Forward"
+            "Face Forward",
+            "Texcoord",
+            "Normal",
+            "Position",
         ])
+        sed.ImGui.DragFloat("Wireframe Smoothness", self.common.wireframe_smoothness, 0.01, 0.0, 1.0)
+        sed.ImGui.DragFloat("Wireframe Thickness", self.common.wireframe_thickness, 0.01, 0.0, 1.0)
+        sed.ImGui.ColorEditVec3("Wireframe Color", self.common.wireframe_color)
 
 class RenderGraph(core.rdg.Graph):
     def __init__(self, common:LightingCommon):

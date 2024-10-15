@@ -16,7 +16,21 @@ class EditorApp(EditorApplication):
     def __init__(self):
         super().__init__()
     
-    def onInit(self):        
+    def onInit(self):
+        self.scene = se.gfx.Context.load_scene_xml("P:/GitProjects/lajolla_public/scenes/volpath_test/vol_cbox.xml")
+        # self.scene = se.gfx.Context.load_scene_xml("D:/Art/Scenes/living-room-3-mitsuba/living-room-3/scene_v3.xml")
+        # self.scene = se.gfx.Context.load_scene_xml("D:/Art/Scenes/dragon/scene_v3.xml")
+        # self.scene = se.gfx.Context.load_scene_xml("D:/Art/Scenes/living-room-mitsuba/scene_v3.xml")
+        # self.scene = se.gfx.Context.load_scene_xml("D:/Art/Scenes/living-room-2/scene_v3.xml")
+        # self.scene = se.gfx.Context.load_scene_xml("D:/Art/Scenes/kitchen-mitsuba/scene_v3.xml")
+        
+        # self.scene = se.gfx.Context.load_scene_xml("D:/Art/Scenes/house/scene_v3.xml")
+        print("Scene Loaded Successfully!")
+        
+        sed.EditorBase.bindScene(self.scene)
+        self.scene.get().updateTransform()
+        self.scene.get().updateGPUScene()
+        
         # create and bind the pipeline
         self.pipeline = RenderPipeline()
         self.pipeline.setStandardSize(se.ivec3(1024, 1024, 1))
@@ -26,11 +40,13 @@ class EditorApp(EditorApplication):
         # self.scene = se.gfx.Context.load_scene_gltf("examples/lighting/_data/manylight.gltf")
         # self.scene = se.gfx.Context.load_scene_gltf("examples/glt/_data/test2.gltf")
         # self.scene = se.gfx.Context.load_scene_gltf("examples/lighting/_data/onelight.gltf")
-        self.scene = se.gfx.Context.load_scene_gltf("examples/lighting/_data/manylight-2.gltf")
-        
-        sed.EditorBase.bindScene(self.scene)
-        self.scene.get().updateTransform()
-        self.scene.get().updateGPUScene()
+        # self.scene = se.gfx.Context.load_scene_gltf("examples/lighting/_data/manylight-2.gltf")
+        # self.scene = se.gfx.Context.load_scene_xml("D:/Art/Scenes/veach-mis-mitsuba/scene_v3.xml")
+        # self.scene = se.gfx.Context.load_scene_gltf("D:/Art/Scenes/veach-mis-mitsuba/scene_v3.gltf")
+        # self.scene = se.gfx.Context.load_scene_xml("P:/GitProjects/lajolla_public/scenes/volpath_test/volpath_test3.xml")
+        # self.scene = se.gfx.Context.load_scene_xml("D:/Art/Scenes/cornell-box-mitsuba/scene.xml")
+        # self.scene = se.gfx.Context.load_scene_xml("D:/Art/Scenes/living-room-3-mitsuba/living-room-3/scene_v3.xml")
+ 
         se.gfx.PMFConstructor.upload_datapack()
     
     def onUpdate(self):

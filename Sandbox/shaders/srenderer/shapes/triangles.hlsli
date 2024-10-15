@@ -58,12 +58,14 @@ struct Triangle : IShape {
         // fill the output structure
         ishape::sample o;
         o.position = mul(float4(param.v0 + (e1 * b1) + (e2 * b2), 1), param.o2w).xyz;
-        o.normal = normalize(mul(float4(geometric_normal, 0.0), param.o2wn).xyz);
-        o.pdf = 1.f / area;
+        o.normal = -normalize(mul(float4(geometric_normal, 0.0), param.o2wn).xyz);
+        const float3 direction = normalize(o.position - i.position);
+        o.pdf = length_squared(o.position - i.position) 
+        / (area * max(dot(o.normal, direction), 0));
         return o;
     }
 
-    static float sample_pdf(TriangleParameter param) {
+    static float sample_pdf(ishape::pdf_in i, TriangleParameter param) {
         // Sample on the triangle
         const float3 e1 = param.v1 - param.v0;
         const float3 e2 = param.v2 - param.v0;
@@ -74,7 +76,9 @@ struct Triangle : IShape {
         const float3 e2_ws = v2_ws - v0_ws;
         float3 geometric_normal = normalize(cross(e1, e2));
         const float area = length(cross(e1_ws, e2_ws)) / 2;
-        return 1. / area;
+        const float3 direction = normalize(i.sample_point - i.ref_point);
+        return length_squared(i.ref_point - i.sample_point) 
+        / (area * abs(dot(i.sample_normal, direction)));
     }
 };
 

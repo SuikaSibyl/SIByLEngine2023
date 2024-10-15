@@ -927,6 +927,20 @@ float FresnelComplex(float cosTheta_i, complex eta) {
     return (norm(r_parl) + norm(r_perp)) / 2;
 }
 
+[Differentiable]
+float3 FresnelComplex(float cosTheta_i, complex3 eta) {
+    cosTheta_i = clamp(cosTheta_i, 0, 1);
+    // Compute complex cosθt for Fresnel equations using Snell's law
+    float sin2Theta_i = 1 - sqr(cosTheta_i);
+    complex3 sin2Theta_t = complex3(sin2Theta_i) / sqr(eta);
+    complex3 cosTheta_t = sqrt(complex3(1) - sin2Theta_t);
+    complex3 r_parl = (eta * complex3(cosTheta_i) - cosTheta_t) /
+                      (eta * complex3(cosTheta_i) + cosTheta_t);
+    complex3 r_perp = (complex3(cosTheta_i) - eta * cosTheta_t) /
+                      (complex3(cosTheta_i) + eta * cosTheta_t);
+    return (norm(r_parl) + norm(r_perp)) / 2;
+}
+
 /**
  * @param n: The surface normal.
  * @param eta: The relative index of refraction;

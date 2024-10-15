@@ -47,6 +47,12 @@ struct SIByL_API PNG {
   static auto fromPNG(std::filesystem::path const& path) noexcept -> std::unique_ptr<Texture>;
 };
 
+struct SIByL_API JPEG {
+  static auto writeJPEG(std::filesystem::path const& path, uint32_t width,
+    uint32_t height, uint32_t channel, float* data) noexcept -> void;
+  static auto fromJPEG(std::filesystem::path const& path) noexcept -> std::unique_ptr<Texture>;
+};
+
 struct SIByL_API EXR {
   static auto writeEXR(std::filesystem::path const& path, uint32_t width,
     uint32_t height, uint32_t channel, float* data) noexcept -> void;

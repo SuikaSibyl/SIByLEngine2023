@@ -2,6 +2,8 @@
 #include <se.gfx.hpp>
 #undef DLIB_EXPORT
 #include <stack>
+#include <locale>
+#include <codecvt>
 #include <tinyparser-mitsuba.h>
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
@@ -84,10 +86,10 @@ struct MeshLoaderConfig {
   bool usePositionBuffer = true;
   bool residentOnHost = true;
   bool residentOnDevice = false;
-  bool deduplication = true;
+  bool deduplication = false;
 };
 
-MeshLoaderConfig defaultMeshLoadConfig = { defaultMeshDataLayout, true, true, false, true};
+MeshLoaderConfig defaultMeshLoadConfig = { defaultMeshDataLayout, true, true, false, false};
 
 Scene::Scene() {
   gpuScene.position_buffer = GFXContext::load_buffer_empty();
@@ -99,6 +101,7 @@ Scene::Scene() {
   gpuScene.geometry_buffer = GFXContext::load_buffer_empty();
   gpuScene.camera_buffer = GFXContext::load_buffer_empty();
   gpuScene.scene_desc_buffer = GFXContext::load_buffer_empty();
+  gpuScene.medium_buffer = GFXContext::load_buffer_empty();
   gpuScene.lbvh.light_bvh_buffer = GFXContext::load_buffer_empty();
   gpuScene.lbvh.light_trail_buffer = GFXContext::load_buffer_empty();
   gpuScene.camera_buffer->host.resize(sizeof(Scene::CameraData));
@@ -124,6 +127,9 @@ Scene::Scene() {
       (uint32_t)rhi::BufferUsageBit::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY |
     (uint32_t)rhi::BufferUsageBit::STORAGE;
   gpuScene.material_buffer->usages =
+    (uint32_t)rhi::BufferUsageBit::SHADER_DEVICE_ADDRESS |
+    (uint32_t)rhi::BufferUsageBit::STORAGE;
+  gpuScene.medium_buffer->usages =
     (uint32_t)rhi::BufferUsageBit::SHADER_DEVICE_ADDRESS |
     (uint32_t)rhi::BufferUsageBit::STORAGE;
   gpuScene.light_buffer->usages =
@@ -479,6 +485,9 @@ auto Scene::updateGPUScene() noexcept -> void {
       if (gpuScene.camera_buffer->host.size() < (camera_index + 1) * sizeof(CameraData)) {
         gpuScene.camera_buffer->host.resize((camera_index + 1) * sizeof(CameraData));
       }
+      if (camera.medium.get() != nullptr) {
+        camData.mediumID = gpuScene.try_fetch_medium_index(camera.medium);
+      }
       memcpy(&gpuScene.camera_buffer->host[(camera_index++) * sizeof(CameraData)], &camData, sizeof(CameraData));
       gpuScene.camera_buffer->host_stamp++;
     };
@@ -500,22 +509,56 @@ auto Scene::updateGPUScene() noexcept -> void {
     for (auto entity : node_mesh_view) {
       auto [transform, mesh_renderer] = node_mesh_view.get<Transform, MeshRenderer>(entity);
       std::vector<int> indices(mesh_renderer.mesh->primitives.size()); int i = 0;
-      for (auto& primitive : mesh_renderer.mesh->primitives) {
-        GeometryDrawData geometry;
-        geometry.vertexOffset = primitive.baseVertex + mesh_renderer.mesh->vertex_offset / (sizeof(float) * 3);
-        geometry.indexOffset = primitive.offset + mesh_renderer.mesh->index_offset / sizeof(uint32_t);
-        geometry.indexSize = primitive.size;
-        geometry.geometryTransform = transform.global;
-        geometry.geometryTransformInverse = se::inverse(transform.global);
-        geometry.oddNegativeScaling = transform.oddScaling;
-        geometry.materialID = gpuScene.try_fetch_material_index(primitive.material);
-        geometry.primitiveType = 0;
-        geometry.lightID = -1;
-        if (gpuScene.geometry_buffer->host.size() < (geometry_index + 1) * sizeof(GeometryDrawData)) {
-          gpuScene.geometry_buffer->host.resize((geometry_index + 1) * sizeof(GeometryDrawData));
+      if (mesh_renderer.mesh->custom_primitives.size() > 0) {
+        for (auto& primitive : mesh_renderer.mesh->custom_primitives) {
+          GeometryDrawData geometry;
+          geometry.vertexOffset = 0;
+          geometry.indexOffset = 0;
+          geometry.indexSize = 0;
+          geometry.geometryTransform = transform.global;
+          geometry.geometryTransformInverse = se::inverse(transform.global);
+          geometry.oddNegativeScaling = transform.oddScaling;
+          if (primitive.material.get())
+            geometry.materialID = gpuScene.try_fetch_material_index(primitive.material);
+          geometry.primitiveType = primitive.primitive_type;
+          geometry.lightID = -1;
+          geometry.mediumIDInterior = -1;
+          geometry.mediumIDExterior = -1;
+          if (primitive.exterior.get())
+            geometry.mediumIDExterior = gpuScene.try_fetch_medium_index(primitive.exterior);
+          if (primitive.interior.get())
+            geometry.mediumIDInterior = gpuScene.try_fetch_medium_index(primitive.interior);
+          if (gpuScene.geometry_buffer->host.size() < (geometry_index + 1) * sizeof(GeometryDrawData)) {
+            gpuScene.geometry_buffer->host.resize((geometry_index + 1) * sizeof(GeometryDrawData));
+          }
+          memcpy(&gpuScene.geometry_buffer->host[geometry_index * sizeof(GeometryDrawData)], &geometry, sizeof(GeometryDrawData));
+          indices[i++] = geometry_index; geometry_index++;
         }
-        memcpy(&gpuScene.geometry_buffer->host[geometry_index * sizeof(GeometryDrawData)], &geometry, sizeof(GeometryDrawData));
-        indices[i++] = geometry_index; geometry_index++;
+      }
+      else {
+        for (auto& primitive : mesh_renderer.mesh->primitives) {
+          GeometryDrawData geometry;
+          geometry.vertexOffset = primitive.baseVertex + mesh_renderer.mesh->vertex_offset / (sizeof(float) * 3);
+          geometry.indexOffset = primitive.offset + mesh_renderer.mesh->index_offset / sizeof(uint32_t);
+          geometry.indexSize = primitive.size;
+          geometry.geometryTransform = transform.global;
+          geometry.geometryTransformInverse = se::inverse(transform.global);
+          geometry.oddNegativeScaling = transform.oddScaling;
+          geometry.materialID = gpuScene.try_fetch_material_index(primitive.material);
+          geometry.primitiveType = 0;
+          geometry.lightID = -1;
+          geometry.mediumIDInterior = -1;
+          geometry.mediumIDExterior = -1;
+          if (primitive.exterior.get())
+            geometry.mediumIDExterior = gpuScene.try_fetch_medium_index(primitive.exterior);
+          if (primitive.interior.get())
+            geometry.mediumIDInterior = gpuScene.try_fetch_medium_index(primitive.interior);
+          if (gpuScene.geometry_buffer->host.size() < (geometry_index + 1) * sizeof(GeometryDrawData)) {
+            gpuScene.geometry_buffer->host.resize((geometry_index + 1) * sizeof(GeometryDrawData));
+          }
+          memcpy(&gpuScene.geometry_buffer->host[geometry_index * sizeof(GeometryDrawData)], &geometry, sizeof(GeometryDrawData));
+          indices[i++] = geometry_index; geometry_index++;
+        }
       }
       gpuScene.geometry_loc_index[mesh_renderer.mesh.ruid] = indices;
     }
@@ -534,59 +577,108 @@ auto Scene::updateGPUScene() noexcept -> void {
       case Light::LightType::MESH_PRIMITIVE: {
         MeshHandle& mesh = registry.get<MeshRenderer>(entity).mesh;
         std::vector<int>& indices = gpuScene.geometry_loc_index[mesh.ruid];
-        for (int i = 0; i < light.primitives.size(); ++i) {
-          int primitive_index = light.primitives[i];
-          int geometry_index = indices[primitive_index];
-          GeometryDrawData& geometry = geometry_array[geometry_index];
-          std::vector<Light::LightPacket> packets(geometry.indexSize / 3);
-          const vec3 emissive = mesh->primitives[primitive_index].material->emissiveColor;
-          const vec3 yuv = {
-            0.299 * emissive.r + 0.587 * emissive.g + 0.114 * emissive.b,
-            -0.14713 * emissive.r - 0.28886 * emissive.g + 0.436 * emissive.b,
-            0.615 * emissive.r - 0.51499 * emissive.g - 0.10001 * emissive.b,
-          };
-          for (int j = 0; j < geometry.indexSize / 3; j++) {
-            packets[j].light_type = int(Light::LightType::MESH_PRIMITIVE);
-            packets[j].uintscalar_0 = j;
-            packets[j].uintscalar_1 = geometry_index;
-            // todo (twoSided ? 2 : 1)
-            uvec3 indices = gpuScene.fetch_triangle_indices(geometry, j);
-            vec3 v0 = gpuScene.fetch_vertex_position(indices[0] + int(geometry.vertexOffset));
-            vec3 v1 = gpuScene.fetch_vertex_position(indices[1] + int(geometry.vertexOffset));
-            vec3 v2 = gpuScene.fetch_vertex_position(indices[2] + int(geometry.vertexOffset));
-            v0 = mul(mat4(geometry.geometryTransform), { v0, 1 }).xyz();
-            v1 = mul(mat4(geometry.geometryTransform), { v1, 1 }).xyz();
-            v2 = mul(mat4(geometry.geometryTransform), { v2, 1 }).xyz();
-            float area = 0.5f * length(cross(v1 - v0, v2 - v0));
-            bounds3 bound;
-            bound = unionPoint(bound, point3(v0));
-            bound = unionPoint(bound, point3(v1));
-            bound = unionPoint(bound, point3(v2));
+        if (mesh->custom_primitives.size() > 0) {
+          for (int i = 0; i < light.primitives.size(); ++i) {
+            int primitive_index = light.primitives[i];
+            int geometry_index = indices[primitive_index];
+            GeometryDrawData& geometry = geometry_array[geometry_index];
+            Light::LightPacket packet;
+            const vec3 emissive = mesh->custom_primitives[primitive_index].material->emissiveColor;
+            const vec3 yuv = {
+              0.299 * emissive.r + 0.587 * emissive.g + 0.114 * emissive.b,
+              -0.14713 * emissive.r - 0.28886 * emissive.g + 0.436 * emissive.b,
+              0.615 * emissive.r - 0.51499 * emissive.g - 0.10001 * emissive.b,
+            };
+            int type = mesh->custom_primitives[primitive_index].primitive_type;
+            if (type == 1) {
+              packet.light_type = int(Light::LightType::SPHERE);
+              vec3 x1 = mul(mat4(geometry.geometryTransform), vec4{ 1, 0, 0, 1 }).xyz();
+              vec3 x0 = mul(mat4(geometry.geometryTransform), vec4{ 0, 0, 0, 1 }).xyz();
+              float radius = se::length(x1 - x0);
+              packet.uintscalar_0 = 0;
+              packet.uintscalar_1 = geometry_index;
+              bounds3 bound;
+              bound.pMin = x0 - vec3{ radius };
+              bound.pMax = x0 + vec3{ radius };
+              float area = 4 * k_pi * radius * radius;
+              vec3 power = yuv * k_pi * area;
+              packet.floatvec_0 = { power , 0 };
+              packet.floatvec_1 = { bound.pMin, 0 };
+              packet.floatvec_2 = { bound.pMax, 0 };
+            }
+            else if (type == 2) {
 
-            normal3 n = normalize(normal3(cross(v1 - v0, v2 - v0)));
-            // Ensure correct orientation of geometric normal for normal bounds
-            vec3 n0 = gpuScene.fetch_vertex_normal(indices[0] + int(geometry.vertexOffset));
-            vec3 n1 = gpuScene.fetch_vertex_normal(indices[1] + int(geometry.vertexOffset));
-            vec3 n2 = gpuScene.fetch_vertex_normal(indices[2] + int(geometry.vertexOffset));
-            n0 = mul(mat4(geometry.geometryTransformInverse), { n0, 0 }).xyz();
-            n1 = mul(mat4(geometry.geometryTransformInverse), { n1, 0 }).xyz();
-            n2 = mul(mat4(geometry.geometryTransformInverse), { n2, 0 }).xyz();
-            //normal3 ns = normalize(n0 + n1 + n2);
-            //n = faceForward(n, ns);
-            n *= geometry.oddNegativeScaling;
-            
-            vec3 power = yuv * k_pi * area;
-            packets[j].floatvec_0 = { power , n.x };
-            packets[j].floatvec_1 = { bound.pMin, n.y };
-            packets[j].floatvec_2 = { bound.pMax, n.z };
+            }
+            else if (type == 3) {
+
+            }
+            //if()
+
+
+            int light_index = gpuScene.light_buffer->host.size() / sizeof(Light::LightPacket);
+            geometry.lightID = light_index;
+            if (gpuScene.light_buffer->host.size() < (light_index + 1) * sizeof(Light::LightPacket)) {
+              gpuScene.light_buffer->host.resize((light_index + 1) * sizeof(Light::LightPacket));
+            }
+            memcpy(&gpuScene.light_buffer->host[light_index * sizeof(Light::LightPacket)],
+              (float*)&packet, 1 * sizeof(Light::LightPacket));
           }
-          int light_index = gpuScene.light_buffer->host.size() / sizeof(Light::LightPacket);
-          geometry.lightID = light_index;
-          if (gpuScene.light_buffer->host.size() < (light_index + packets.size()) * sizeof(Light::LightPacket)) {
+        }
+        else {
+          for (int i = 0; i < light.primitives.size(); ++i) {
+            int primitive_index = light.primitives[i];
+            int geometry_index = indices[primitive_index];
+            GeometryDrawData& geometry = geometry_array[geometry_index];
+            std::vector<Light::LightPacket> packets(geometry.indexSize / 3);
+            const vec3 emissive = mesh->primitives[primitive_index].material->emissiveColor;
+            const vec3 yuv = {
+              0.299 * emissive.r + 0.587 * emissive.g + 0.114 * emissive.b,
+              -0.14713 * emissive.r - 0.28886 * emissive.g + 0.436 * emissive.b,
+              0.615 * emissive.r - 0.51499 * emissive.g - 0.10001 * emissive.b,
+            };
+            for (int j = 0; j < geometry.indexSize / 3; j++) {
+              packets[j].light_type = int(Light::LightType::MESH_PRIMITIVE);
+              packets[j].uintscalar_0 = j;
+              packets[j].uintscalar_1 = geometry_index;
+              // todo (twoSided ? 2 : 1)
+              uvec3 indices = gpuScene.fetch_triangle_indices(geometry, j);
+              vec3 v0 = gpuScene.fetch_vertex_position(indices[0] + int(geometry.vertexOffset));
+              vec3 v1 = gpuScene.fetch_vertex_position(indices[1] + int(geometry.vertexOffset));
+              vec3 v2 = gpuScene.fetch_vertex_position(indices[2] + int(geometry.vertexOffset));
+              v0 = mul(mat4(geometry.geometryTransform), { v0, 1 }).xyz();
+              v1 = mul(mat4(geometry.geometryTransform), { v1, 1 }).xyz();
+              v2 = mul(mat4(geometry.geometryTransform), { v2, 1 }).xyz();
+              float area = 0.5f * length(cross(v1 - v0, v2 - v0));
+              bounds3 bound;
+              bound = unionPoint(bound, point3(v0));
+              bound = unionPoint(bound, point3(v1));
+              bound = unionPoint(bound, point3(v2));
+
+              normal3 n = normalize(normal3(cross(v1 - v0, v2 - v0)));
+              // Ensure correct orientation of geometric normal for normal bounds
+              vec3 n0 = gpuScene.fetch_vertex_normal(indices[0] + int(geometry.vertexOffset));
+              vec3 n1 = gpuScene.fetch_vertex_normal(indices[1] + int(geometry.vertexOffset));
+              vec3 n2 = gpuScene.fetch_vertex_normal(indices[2] + int(geometry.vertexOffset));
+              n0 = mul(mat4(geometry.geometryTransformInverse), { n0, 0 }).xyz();
+              n1 = mul(mat4(geometry.geometryTransformInverse), { n1, 0 }).xyz();
+              n2 = mul(mat4(geometry.geometryTransformInverse), { n2, 0 }).xyz();
+              //normal3 ns = normalize(n0 + n1 + n2);
+              //n = faceForward(n, ns);
+              n *= geometry.oddNegativeScaling;
+
+              vec3 power = yuv * k_pi * area;
+              packets[j].floatvec_0 = { power , n.x };
+              packets[j].floatvec_1 = { bound.pMin, n.y };
+              packets[j].floatvec_2 = { bound.pMax, n.z };
+            }
+            int light_index = gpuScene.light_buffer->host.size() / sizeof(Light::LightPacket);
+            geometry.lightID = light_index;
+            if (gpuScene.light_buffer->host.size() < (light_index + packets.size()) * sizeof(Light::LightPacket)) {
               gpuScene.light_buffer->host.resize((light_index + packets.size()) * sizeof(Light::LightPacket));
+            }
+            memcpy(&gpuScene.light_buffer->host[light_index * sizeof(Light::LightPacket)],
+              (float*)packets.data(), packets.size() * sizeof(Light::LightPacket));
           }
-          memcpy(&gpuScene.light_buffer->host[light_index * sizeof(Light::LightPacket)],
-            (float*)packets.data(), packets.size() * sizeof(Light::LightPacket));
         }
         gpuScene.light_buffer->host_stamp++;
         break;
@@ -603,9 +695,24 @@ auto Scene::updateGPUScene() noexcept -> void {
       if (pair.second.second->isDirty) {
           pair.second.second->isDirty = false;
           Material::MaterialPacket pack = pair.second.second->getDataPacket();
+          // load material
+          if (pair.second.second->basecolorTex.get())
+            pack.base_tex = gpuScene.try_fetch_texture_index(pair.second.second->basecolorTex);
           memcpy((float*)&(gpuScene.material_buffer->host[sizeof(Material::MaterialPacket) * 
             pair.second.first]), &pack, sizeof(pack));
           gpuScene.material_buffer->host_stamp++;
+      }
+    }
+  }
+
+  if ((dirtyFlags & (uint64_t)DirtyFlagBit::Medium) != 0) {
+    for (auto& pair : gpuScene.medium_loc_index) {
+      if (pair.second.second->isDirty) {
+        pair.second.second->isDirty = false;
+        Medium::MediumPacket pack = pair.second.second->packet;
+        memcpy((float*)&(gpuScene.medium_buffer->host[sizeof(Medium::MediumPacket) *
+          pair.second.first]), &pack, sizeof(pack));
+        gpuScene.medium_buffer->host_stamp++;
       }
     }
   }
@@ -630,12 +737,13 @@ auto Scene::updateGPUScene() noexcept -> void {
   gpuScene.texcoord_buffer->hostToDevice();
   gpuScene.material_buffer->hostToDevice();
   gpuScene.light_buffer->hostToDevice();
+  gpuScene.medium_buffer->hostToDevice();
   gpuScene.scene_desc_buffer->hostToDevice();
 
   // also update the light bvh
   gpuScene.lbvh.light_bvh_buffer->hostToDevice();
   gpuScene.lbvh.light_trail_buffer->hostToDevice();
-
+    
   // also update the ray tracing data structures
   gpuScene.tlas.desc = {};
   if ((dirtyFlags & (uint64_t)DirtyFlagBit::Geometry) != 0) {
@@ -644,59 +752,90 @@ auto Scene::updateGPUScene() noexcept -> void {
       mesh_renderer.blasInstance.resize(mesh_renderer.mesh->primitives.size());
       mesh_renderer.uvblasInstance.resize(mesh_renderer.mesh->primitives.size());
       size_t primitive_index = 0;
-      for (auto& primitive : mesh_renderer.mesh->primitives) {
-        primitive.back_blas = std::move(primitive.prim_blas);
-        primitive.blasDesc.allowCompaction = true;
-        primitive.blasDesc.triangleGeometries.push_back(rhi::BLASTriangleGeometry{
-          gpuScene.position_buffer->buffer.get(),
-          gpuScene.index_buffer->buffer.get(),
-          rhi::IndexFormat::UINT32_T,
-          uint32_t(primitive.numVertex),
-          uint32_t(primitive.baseVertex + mesh_renderer.mesh->vertex_offset / (sizeof(float) * 3)),
-          uint32_t(primitive.size / 3),
-          uint32_t(primitive.offset * sizeof(uint32_t) + mesh_renderer.mesh->index_offset),
-          rhi::AffineTransformMatrix{},
-          (uint32_t)rhi::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION,
-          0 });
-        primitive.prim_blas = GFXContext::device->createBLAS(primitive.blasDesc);
-        // update the instance of the mesh resource
-        rhi::BLASInstance& instance = mesh_renderer.blasInstance[primitive_index++];
-        instance.blas = primitive.prim_blas.get();
-        instance.transform = transform.global;
-        instance.instanceCustomIndex = 0; // geometry_start
-        instance.instanceShaderBindingTableRecordOffset = 0;
-        gpuScene.tlas.desc.instances.push_back(instance);
-    
-        if (gpuSceneSetting.useTexcoordTLAS) {
-          // create the blas for sampling from the texture coordinates.
-          primitive.back_uv_blas = std::move(primitive.prim_uv_blas);
-          primitive.uvblasDesc.allowCompaction = true;
-          primitive.uvblasDesc.triangleGeometries.push_back(rhi::BLASTriangleGeometry{
-            gpuScene.texcoord_buffer->buffer.get(),
+      // if there are custom primitive we do not use traingles
+      if (mesh_renderer.mesh->custom_primitives.size() > 0) {
+        for (auto& primitive : mesh_renderer.mesh->custom_primitives) {
+          primitive.back_blas = std::move(primitive.prim_blas);
+          primitive.blasDesc.allowCompaction = true;
+          primitive.blasDesc.customGeometries.push_back(rhi::BLASCustomGeometry{
+            rhi::AffineTransformMatrix{},
+            std::vector<se::bounds3>{se::bounds3{primitive.min, primitive.max}},
+            (uint32_t)rhi::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION
+            | (uint32_t)rhi::BLASGeometryFlagBits::OPAQUE_GEOMETRY,
+          });
+          primitive.prim_blas = GFXContext::device->createBLAS(primitive.blasDesc);
+          // update the instance of the mesh resource
+          rhi::BLASInstance& instance = mesh_renderer.blasInstance[primitive_index++];
+          instance.blas = primitive.prim_blas.get();
+          instance.transform = transform.global;
+          instance.instanceCustomIndex = primitive.primitive_type; // geometry_start
+          instance.instanceShaderBindingTableRecordOffset = 0;
+          gpuScene.tlas.desc.instances.push_back(instance);
+        }
+      }
+      // otherwise we push the triangles to BLAS
+      else {
+        se::root::print::log("scene :: update gpu-scene :: start create triangle BLAS " + registry.get<NodeProperty>(entity).name);
+
+        for (auto& primitive : mesh_renderer.mesh->primitives) {
+          primitive.back_blas = std::move(primitive.prim_blas);
+          primitive.blasDesc.allowCompaction = true;
+          primitive.blasDesc.triangleGeometries.push_back(rhi::BLASTriangleGeometry{
+            gpuScene.position_buffer->buffer.get(),
             gpuScene.index_buffer->buffer.get(),
             rhi::IndexFormat::UINT32_T,
-            uint32_t(primitive.numVertex),
+            uint32_t(primitive.numVertex - 1),
             uint32_t(primitive.baseVertex + mesh_renderer.mesh->vertex_offset / (sizeof(float) * 3)),
             uint32_t(primitive.size / 3),
             uint32_t(primitive.offset * sizeof(uint32_t) + mesh_renderer.mesh->index_offset),
             rhi::AffineTransformMatrix{},
-            (uint32_t)rhi::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION,
-            0, 2 * sizeof(float), 0, rhi::BLASTriangleGeometry::VertexFormat::RG32 });
-          primitive.prim_uv_blas = GFXContext::device->createBLAS(primitive.uvblasDesc);
+            (uint32_t)rhi::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION
+            | (uint32_t)rhi::BLASGeometryFlagBits::OPAQUE_GEOMETRY,
+            0 });
+          primitive.prim_blas = GFXContext::device->createBLAS(primitive.blasDesc);
           // update the instance of the mesh resource
-          rhi::BLASInstance& uvinstance = mesh_renderer.uvblasInstance[primitive_index - 1];
-          uvinstance.blas = primitive.prim_uv_blas.get();
-          uvinstance.transform = {};
-          uvinstance.instanceCustomIndex = 0; // geometry_start
-          uvinstance.instanceShaderBindingTableRecordOffset = 0;
-          gpuScene.tlas.uvdesc.instances.push_back(uvinstance);
+          rhi::BLASInstance& instance = mesh_renderer.blasInstance[primitive_index++];
+          instance.blas = primitive.prim_blas.get();
+          instance.transform = transform.global;
+          instance.instanceCustomIndex = 0; // geometry_start
+          instance.instanceShaderBindingTableRecordOffset = 0;
+          gpuScene.tlas.desc.instances.push_back(instance);
+
+          if (gpuSceneSetting.useTexcoordTLAS) {
+            // create the blas for sampling from the texture coordinates.
+            primitive.back_uv_blas = std::move(primitive.prim_uv_blas);
+            primitive.uvblasDesc.allowCompaction = true;
+            primitive.uvblasDesc.triangleGeometries.push_back(rhi::BLASTriangleGeometry{
+              gpuScene.texcoord_buffer->buffer.get(),
+              gpuScene.index_buffer->buffer.get(),
+              rhi::IndexFormat::UINT32_T,
+              uint32_t(primitive.numVertex - 1),
+              uint32_t(primitive.baseVertex + mesh_renderer.mesh->vertex_offset / (sizeof(float) * 3)),
+              uint32_t(primitive.size / 3),
+              uint32_t(primitive.offset * sizeof(uint32_t) + mesh_renderer.mesh->index_offset),
+              rhi::AffineTransformMatrix{},
+              (uint32_t)rhi::BLASGeometryFlagBits::NO_DUPLICATE_ANY_HIT_INVOCATION,
+              0, 2 * sizeof(float), 0, rhi::BLASTriangleGeometry::VertexFormat::RG32 });
+            primitive.prim_uv_blas = GFXContext::device->createBLAS(primitive.uvblasDesc);
+            // update the instance of the mesh resource
+            rhi::BLASInstance& uvinstance = mesh_renderer.uvblasInstance[primitive_index - 1];
+            uvinstance.blas = primitive.prim_uv_blas.get();
+            uvinstance.transform = {};
+            uvinstance.instanceCustomIndex = 0; // geometry_start
+            uvinstance.instanceShaderBindingTableRecordOffset = 0;
+            gpuScene.tlas.uvdesc.instances.push_back(uvinstance);
+          }
         }
+        gfx::GFXContext::getDevice()->waitIdle();
+        se::root::print::log("scene :: update gpu-scene :: end create triangle BLAS ");
       }
     }
-    
+
     gpuScene.tlas.prim = GFXContext::device->createTLAS(gpuScene.tlas.desc);
     gpuScene.tlas.uvprim = GFXContext::device->createTLAS(gpuScene.tlas.uvdesc);
   }
+
+  se::root::print::log("scene :: update gpu-scene :: end create accelerate-structures ");
   // set the dirty flag to 0
   dirtyFlags = 0;
 }
@@ -745,6 +884,10 @@ auto Scene::GPUScene::bindingResourceLight() noexcept -> rhi::BindingResource {
     return rhi::BindingResource{ {light_buffer->buffer.get(), 0, light_buffer->buffer->size()} };
 }
 
+auto Scene::GPUScene::bindingResourceMedium() noexcept -> rhi::BindingResource {
+  return rhi::BindingResource{ {medium_buffer->buffer.get(), 0, medium_buffer->buffer->size()} };
+}
+
 auto Scene::GPUScene::bindingResourceLightBVH() noexcept -> rhi::BindingResource {
   return rhi::BindingResource{ {lbvh.light_bvh_buffer->buffer.get(), 0, lbvh.light_bvh_buffer->buffer->size()} };
 }
@@ -755,6 +898,10 @@ auto Scene::GPUScene::bindingResourceLightTrail() noexcept -> rhi::BindingResour
 
 auto Scene::GPUScene::bindingSceneDescriptor() noexcept -> rhi::BindingResource {
   return rhi::BindingResource{ {scene_desc_buffer->buffer.get(), 0, scene_desc_buffer->buffer->size()} };
+}
+
+auto Scene::GPUScene::bindingResourceTextures() noexcept -> rhi::BindingResource {
+  return rhi::BindingResource{ texp.prim_t, texp.prim_s };
 }
 
 auto Scene::GPUScene::bindingResourceTLAS() noexcept -> rhi::BindingResource {
@@ -777,6 +924,19 @@ auto Scene::GPUScene::getIndexBuffer() noexcept -> BufferHandle {
   return index_buffer;
 }
 
+auto Scene::GPUScene::try_fetch_texture_index(TextureHandle& handle) noexcept -> int {
+  auto iter = texture_loc_index.find(handle.ruid);
+  if (iter == texture_loc_index.end()) {
+    int index = texture_loc_index.size();
+    texture_loc_index[handle.ruid] = { index, handle };
+    texp.prim_t.push_back(handle->getSRV(0, 1, 0, 1));
+    SamplerHandle sampler = GFXContext::create_sampler_desc(rhi::SamplerDescriptor{});
+    texp.prim_s.push_back(sampler.get());
+    return index;
+  }
+  return iter->second.first;
+}
+
 auto Scene::GPUScene::try_fetch_material_index(MaterialHandle& handle) noexcept -> int {
   auto iter = material_loc_index.find(handle.ruid);
   if (iter == material_loc_index.end()) {
@@ -784,8 +944,24 @@ auto Scene::GPUScene::try_fetch_material_index(MaterialHandle& handle) noexcept 
     material_loc_index[handle.ruid] = { index, handle };
     material_buffer->host.resize(sizeof(Material::MaterialPacket) * (index + 1));
     Material::MaterialPacket pack = handle->getDataPacket();
+    if (handle->basecolorTex.get())
+      pack.base_tex = try_fetch_texture_index(handle->basecolorTex);
     memcpy((float*)&(material_buffer->host[sizeof(Material::MaterialPacket) * index]), &pack, sizeof(pack));
     material_buffer->host_stamp++;
+    return index;
+  }
+  return iter->second.first;
+}
+
+auto Scene::GPUScene::try_fetch_medium_index(MediumHandle& handle) noexcept -> int {
+  auto iter = medium_loc_index.find(handle.ruid);
+  if (iter == medium_loc_index.end()) {
+    int index = medium_loc_index.size();
+    medium_loc_index[handle.ruid] = { index, handle };
+    medium_buffer->host.resize(sizeof(Medium::MediumPacket) * (index + 1));
+    Medium::MediumPacket pack = handle->packet;
+    memcpy((float*)&(medium_buffer->host[sizeof(Medium::MediumPacket) * index]), &pack, sizeof(pack));
+    medium_buffer->host_stamp++;
     return index;
   }
   return iter->second.first;
@@ -947,9 +1123,9 @@ auto loadObjMesh(std::string path, Scene& scene) noexcept -> MeshHandle {
                   attrib.vertices[3 * size_t(idx.vertex_index) + 1];
               tinyobj::real_t vz =
                   attrib.vertices[3 * size_t(idx.vertex_index) + 2];
-              //vertex.push_back(vx);
-              //vertex.push_back(vy);
-              //vertex.push_back(vz);
+              vertex.push_back(vx);
+              vertex.push_back(vy);
+              vertex.push_back(vz);
               position_min = se::min(position_min, vec3{ vx,vy,vz });
               position_max = se::max(position_max, vec3{ vx,vy,vz });
               if (defaultMeshLoadConfig.usePositionBuffer) {
@@ -994,9 +1170,16 @@ auto loadObjMesh(std::string path, Scene& scene) noexcept -> MeshHandle {
               vertex.push_back(0);
             }
           } else if (entry.info == MeshDataLayout::VertexInfo::TANGENT) {
-            vertex.push_back(tangent.x);
-            vertex.push_back(tangent.y);
-            vertex.push_back(tangent.z);
+            if (isnan(tangent.x) || isnan(tangent.y) || isnan(tangent.z)) {
+              vertex.push_back(0);
+              vertex.push_back(0);
+              vertex.push_back(0);
+            }
+            else {
+              vertex.push_back(tangent.x);
+              vertex.push_back(tangent.y);
+              vertex.push_back(tangent.z);
+            }
           } else if (entry.info == MeshDataLayout::VertexInfo::COLOR) {
             // Optional: vertex colors
             tinyobj::real_t red =
@@ -1017,7 +1200,7 @@ auto loadObjMesh(std::string path, Scene& scene) noexcept -> MeshHandle {
           if (uniqueVertices.count(hashed_vertex) == 0) {
             uniqueVertices[hashed_vertex] =
                 static_cast<uint32_t>(vertex_offset);
-            vertexBufferV.insert(vertexBufferV.end(), vertex.begin(),
+            vertexBufferV.insert(vertexBufferV.end(), vertex.begin() + 3,
                                  vertex.end());
             positionBufferV.insert(positionBufferV.end(), position.begin(),
                                    position.end());
@@ -1029,15 +1212,18 @@ auto loadObjMesh(std::string path, Scene& scene) noexcept -> MeshHandle {
             indexBufferWV.push_back(uniqueVertices[hashed_vertex]);
           else if (defaultMeshLoadConfig.layout.format == rhi::IndexFormat::UINT32_T)
             indexBufferWV.push_back(uniqueVertices[hashed_vertex]);
-        } else {
-          vertexBufferV.insert(vertexBufferV.end(), vertex.begin(),
+        } 
+        else {
+          vertexBufferV.insert(vertexBufferV.end(), vertex.begin() + 3,
                                vertex.end());
-          ++vertex_offset;
+          positionBufferV.insert(positionBufferV.end(), position.begin(),
+            position.end());
           // index filling
           if (defaultMeshLoadConfig.layout.format == rhi::IndexFormat::UINT16_t)
             indexBufferWV.push_back(vertex_offset);
           else if (defaultMeshLoadConfig.layout.format == rhi::IndexFormat::UINT32_T)
             indexBufferWV.push_back(vertex_offset);
+          ++vertex_offset;
         }
       }
       index_offset += fv;
@@ -1682,7 +1868,109 @@ struct xmlLoaderEnv {
   std::string directory;
   std::unordered_map<TPM_NAMESPACE::Object const*, TextureHandle> textures;
   std::unordered_map<TPM_NAMESPACE::Object const*, MaterialHandle> materials;
+  std::unordered_map<TPM_NAMESPACE::Object const*, MediumHandle> mediums;
 };
+
+auto loadXMLTextures(TPM_NAMESPACE::Object const* node,
+  xmlLoaderEnv* env) noexcept -> TextureHandle {
+  if (env->textures.find(node) != env->textures.end()) {
+    return env->textures[node];
+  }
+  if (node->type() != TPM_NAMESPACE::OT_TEXTURE) {
+    se::root::print::error("GFX :: Mitsuba Loader :: Try load texture node not actually texture.");
+  }
+  std::string filename = node->property("filename").getString();
+  std::string tex_path = env->directory + "/" + filename;
+  TextureHandle texture = gfx::GFXContext::create_texture_file(tex_path);
+  env->textures[node] = texture;
+  return texture;
+}
+
+/// To support spectral data, we need to convert spectral measurements (how much energy at each wavelength) to
+/// RGB. To do this, we first convert the spectral data to CIE XYZ, by
+/// integrating over the XYZ response curve. Here we use an analytical response
+/// curve proposed by Wyman et al.: https://jcgt.org/published/0002/02/01/
+inline float xFit_1931(float wavelength) {
+  float t1 = (wavelength - float(442.0)) * ((wavelength < float(442.0)) ? float(0.0624) : float(0.0374));
+  float t2 = (wavelength - float(599.8)) * ((wavelength < float(599.8)) ? float(0.0264) : float(0.0323));
+  float t3 = (wavelength - float(501.1)) * ((wavelength < float(501.1)) ? float(0.0490) : float(0.0382));
+  return float(0.362) * exp(-float(0.5) * t1 * t1) +
+    float(1.056) * exp(-float(0.5) * t2 * t2) -
+    float(0.065) * exp(-float(0.5) * t3 * t3);
+}
+inline float yFit_1931(float wavelength) {
+  float t1 = (wavelength - float(568.8)) * ((wavelength < float(568.8)) ? float(0.0213) : float(0.0247));
+  float t2 = (wavelength - float(530.9)) * ((wavelength < float(530.9)) ? float(0.0613) : float(0.0322));
+  return float(0.821) * exp(-float(0.5) * t1 * t1) +
+    float(0.286) * exp(-float(0.5) * t2 * t2);
+}
+inline float zFit_1931(float wavelength) {
+  float t1 = (wavelength - float(437.0)) * ((wavelength < float(437.0)) ? float(0.0845) : float(0.0278));
+  float t2 = (wavelength - float(459.0)) * ((wavelength < float(459.0)) ? float(0.0385) : float(0.0725));
+  return float(1.217) * exp(-float(0.5) * t1 * t1) +
+    float(0.681) * exp(-float(0.5) * t2 * t2);
+}
+inline vec3 XYZintegral_coeff(float wavelength) {
+  return Vector3{ xFit_1931(wavelength), yFit_1931(wavelength), zFit_1931(wavelength) };
+}
+
+inline vec3 integrate_XYZ(const std::vector<std::pair<float, float>>& data) {
+  static const float CIE_Y_integral = 106.856895;
+  static const float wavelength_beg = 400;
+  static const float wavelength_end = 700;
+  if (data.size() == 0) {
+    return vec3{ 0, 0, 0 };
+  }
+  vec3 ret = vec3{ 0, 0, 0 };
+  int data_pos = 0;
+  // integrate from wavelength 400 nm to 700 nm, increment by 1nm at a time
+  // linearly interpolate from the data
+  for (float wavelength = wavelength_beg; wavelength <= wavelength_end; wavelength += float(1)) {
+    // assume the spectrum data is sorted by wavelength
+    // move data_pos such that wavelength is between two data or at one end
+    while (data_pos < (int)data.size() - 1 &&
+      !((data[data_pos].first <= wavelength &&
+        data[data_pos + 1].first > wavelength) ||
+        data[0].first > wavelength)) {
+      data_pos += 1;
+    }
+    float measurement = 0;
+    if (data_pos < (int)data.size() - 1 && data[0].first <= wavelength) {
+      float curr_data = data[data_pos].second;
+      float next_data = data[std::min(data_pos + 1, (int)data.size() - 1)].second;
+      float curr_wave = data[data_pos].first;
+      float next_wave = data[std::min(data_pos + 1, (int)data.size() - 1)].first;
+      // linearly interpolate
+      measurement = curr_data * (next_wave - wavelength) / (next_wave - curr_wave) +
+        next_data * (wavelength - curr_wave) / (next_wave - curr_wave);
+    }
+    else {
+      // assign the endpoint
+      measurement = data[data_pos].second;
+    }
+    vec3 coeff = XYZintegral_coeff(wavelength);
+    ret += coeff * measurement;
+  }
+  float wavelength_span = wavelength_end - wavelength_beg;
+  ret *= (wavelength_span / (CIE_Y_integral * (wavelength_end - wavelength_beg)));
+  return ret;
+}
+
+inline vec3 XYZ_to_RGB(const vec3& xyz) {
+  return vec3{
+      float(3.240479) * xyz[0]  - float(1.537150) * xyz[1] - float(0.498535) * xyz[2],
+      float(-0.969256) * xyz[0] + float(1.875991) * xyz[1] + float(0.041556) * xyz[2],
+      float(0.055648) * xyz[0]  - float(0.204043) * xyz[1] + float(1.057311) * xyz[2] };
+}
+
+vec3 spectrum_to_rgb(TPM_NAMESPACE::Spectrum spec) {
+  std::vector<std::pair<float, float>> vec (spec.wavelengths().size());
+  for (int i = 0; i < spec.wavelengths().size(); ++i) {
+    vec[i] = { spec.wavelengths()[i], spec.weights()[i] };
+  }
+  vec3 xyz = integrate_XYZ(vec);
+  return XYZ_to_RGB(xyz);
+}
 
 auto loadXMLMaterial(TPM_NAMESPACE::Object const* node,
     xmlLoaderEnv* env) noexcept -> gfx::MaterialHandle {
@@ -1738,135 +2026,233 @@ auto loadXMLMaterial(TPM_NAMESPACE::Object const* node,
     mat->bxdf = 0;
   } else if (mat_node->pluginType() == "diffuse") {
     mat->bxdf = 0;
+    if (mat_node->property("reflectance").type() == TPM_NAMESPACE::PT_COLOR) {
+      TPM_NAMESPACE::Color reflectance = mat_node->property("reflectance").getColor();
+      mat->baseOrDiffuseColor = { reflectance.r, reflectance.g, reflectance.b };
+    }
+    else if (mat_node->property("reflectance").type() == TPM_NAMESPACE::PT_SPECTRUM) {
+      TPM_NAMESPACE::Spectrum reflectance = mat_node->property("reflectance").getSpectrum();
+      if (reflectance.isUniform()) {
+        mat->baseOrDiffuseColor = { reflectance.uniformValue() };
+      }
+      else {
+        mat->baseOrDiffuseColor = spectrum_to_rgb(reflectance);
+      }
+    }
+  } else if (mat_node->pluginType() == "roughconductor") {
+    mat->bxdf = 1;
+    TPM_NAMESPACE::Color eta = mat_node->property("eta").getColor();
+    TPM_NAMESPACE::Color k = mat_node->property("k").getColor();
+    float alpha = mat_node->property("alpha").getNumber(1.f);
+    mat->baseOrDiffuseColor = vec3{ k.r, k.g, k.b };
+    mat->roughnessFactor = alpha;
+    TPM_NAMESPACE::Color spec = mat_node->property("specular_reflectance").getColor();
+    mat->floatvec_2 = vec4{ eta.r, eta.g, eta.b, spec.r };
   } else {
     mat->bxdf = 0;
   }
-  mat->eta = mat_node->property("int_ior").getNumber(1.5f);
 
-  //for (auto const& child : mat_node->namedChildren()) {
-  //  if (child.first == "diffuse_reflectance" ||
-  //      child.first == "reflectance") {
-  //    gfxmat.textures["base_color"] = {
-  //        loadMaterialTextures(child.second.get(), env), 0};
-  //  } else {
-  //    float a = 1.f;
-  //  }
-  //}
+  for (auto const& child : mat_node->namedChildren()) {
+    if (child.first == "diffuse_reflectance" ||
+        child.first == "reflectance") {
+      mat->basecolorTex = loadXMLTextures(child.second.get(), env);
+    }
+  }
   env->materials[node] = mat;
   return mat;
 }
 
-auto loadXMLMesh(TPM_NAMESPACE::Object const* node, xmlLoaderEnv* env, 
+auto loadXMLMesh(TPM_NAMESPACE::Object const* node, xmlLoaderEnv* env,
   Node& gfxNode, Scene& scene) -> void {
   if (node->type() != TPM_NAMESPACE::OT_SHAPE) {
     root::print::error("gfx :: xml loader :: try to load shape not actually shape");
     return;
   }
+
+  auto handle_material_medium = [&node, &env, &gfxNode, &scene](MeshRenderer& mesh_renderer) {
+    std::optional<MaterialHandle> mat;
+    if (node->anonymousChildren().size() > 0) {
+      se::vec3 radiance = se::vec3(0);
+      for (auto& subnode : node->anonymousChildren()) {
+        if (subnode->type() == TPM_NAMESPACE::OT_BSDF) {
+          // material
+          TPM_NAMESPACE::Object* mat_node = subnode.get();
+          mat = loadXMLMaterial(mat_node, env);
+        }
+        else if (subnode->type() == TPM_NAMESPACE::OT_EMITTER) {
+          if (subnode->pluginType() == "area") {
+            bool is_rgb;
+            TPM_NAMESPACE::Color rgb = subnode->property("radiance").
+              getColor(TPM_NAMESPACE::Color(0, 0, 0), &is_rgb);
+            if (is_rgb) radiance = se::vec3(rgb.r, rgb.g, rgb.b);
+            bool is_float;
+            float intensity = subnode->property("radiance").
+              getNumber(0.f, &is_float);
+            if (is_float) radiance = se::vec3(intensity);
+            bool is_spectrum;
+            TPM_NAMESPACE::Spectrum spectrum = subnode->property("radiance").
+              getSpectrum({}, &is_spectrum);
+            if (is_spectrum && spectrum.isUniform())
+              radiance = se::vec3(spectrum.uniformValue());
+            else if (is_spectrum)
+              radiance = spectrum_to_rgb(spectrum);
+          }
+        }
+      }
+      if (mat.has_value()) {
+        if (radiance.r == 0
+          && radiance.g == 0
+          && radiance.b == 0) {
+        }
+        else {
+          MaterialHandle mat_copy = GFXContext::load_material_empty();
+          *(mat_copy.get()) = *(mat.value().get());
+          mat = mat_copy;
+          mat.value()->emissiveColor = radiance;
+        }
+        for (auto& primitive : mesh_renderer.mesh->primitives) {
+          primitive.material = mat.value();
+        }
+        for (auto& primitive : mesh_renderer.mesh->custom_primitives) {
+          primitive.material = mat.value();
+        }
+      }
+      auto& light_component = scene.registry.emplace<Light>(gfxNode.entity);
+      light_component.primitives.push_back(0);
+      light_component.type = Light::LightType::MESH_PRIMITIVE;
+    }
+
+    for (auto& subnode : node->namedChildren()) {
+      if (subnode.first == "exterior") {
+        for (auto& primitive : mesh_renderer.mesh->primitives)
+          primitive.exterior = env->mediums[subnode.second.get()];
+        for (auto& primitive : mesh_renderer.mesh->custom_primitives)
+          primitive.exterior = env->mediums[subnode.second.get()];
+      }
+      else if (subnode.first == "interior") {
+        for (auto& primitive : mesh_renderer.mesh->primitives)
+          primitive.interior = env->mediums[subnode.second.get()];
+        for (auto& primitive : mesh_renderer.mesh->custom_primitives)
+          primitive.interior = env->mediums[subnode.second.get()];
+      }
+    }
+  };
   
   if (node->pluginType() == "obj") {
- /*   std::string filename = node->property("filename").getString();
-    std::string obj_path = env->directory + "\\" + filename;
-    GameObjectHandle obj_node = SceneNodeLoader_obj::loadSceneNode(
-        obj_path, gfxscene, gfxNode, meshConfig);
-    GFX::MeshRenderer* renderer = gfxscene.getGameObject(obj_node)
-                                      ->getEntity()
-                                      .addComponent<GFX::MeshRenderer>();
-    TPM_NAMESPACE::Transform transform =
+    std::string filename = node->property("filename").getString();
+    std::string obj_path = env->directory + "/" + filename;
+    MeshHandle mesh = loadObjMesh(obj_path, scene);
+    
+    scene.gpuScene.position_buffer->host_stamp++;
+    scene.gpuScene.index_buffer->host_stamp++;
+    scene.gpuScene.vertex_buffer->host_stamp++;
+    auto& mesh_renderer = scene.registry.emplace<MeshRenderer>(gfxNode.entity);
+    mesh_renderer.mesh = mesh;
+
+    { // process the transform
+      TPM_NAMESPACE::Transform transform =
         node->property("to_world").getTransform();
-    Math::mat4 transform_mat = {
-        transform.matrix[0], transform.matrix[1], transform.matrix[2], transform.matrix[3],
-        transform.matrix[4], transform.matrix[5], transform.matrix[6], transform.matrix[7],
-        transform.matrix[8], transform.matrix[9], transform.matrix[10], transform.matrix[11],
-        transform.matrix[12], transform.matrix[13], transform.matrix[14], transform.matrix[15]
-    };
-    Math::vec3 t, r, s;
-    Math::Decompose(transform_mat, &t, &r, &s);
-    GFX::TransformComponent* transform_component =
-        gfxscene.getGameObject(obj_node)
-            ->getEntity()
-            .getComponent<GFX::TransformComponent>();
-    transform_component->translation = t;
-    transform_component->scale = s;
-    transform_component->eulerAngles = r;
-    if (node->anonymousChildren().size() > 0) {
-      TPM_NAMESPACE::Object* mat_node = node->anonymousChildren()[0].get();
-      Core::GUID mat = loadMaterial(mat_node, env);
-      renderer->materials.emplace_back(
-          Core::ResourceManager::get()->getResource<GFX::Material>(mat));
-    }*/
-  }
-  if (node->pluginType() == "cube") {
-   /* std::string engine_path = Core::RuntimeConfig::get()->string_property("engine_path");
-    std::string obj_path = engine_path + "\\" + "Binaries\\Runtime\\meshes\\cube.obj";
-    GameObjectHandle obj_node = SceneNodeLoader_obj::loadSceneNode(
-        obj_path, gfxscene, gfxNode, meshConfig);
-    GFX::MeshRenderer* renderer = gfxscene.getGameObject(obj_node)
-                                      ->getEntity()
-                                      .addComponent<GFX::MeshRenderer>();
-    TPM_NAMESPACE::Transform transform =
-        node->property("to_world").getTransform();
-    Math::mat4 transform_mat = {
+      se::mat4 mat = {
         transform.matrix[0],  transform.matrix[1],  transform.matrix[2],
         transform.matrix[3],  transform.matrix[4],  transform.matrix[5],
         transform.matrix[6],  transform.matrix[7],  transform.matrix[8],
         transform.matrix[9],  transform.matrix[10], transform.matrix[11],
         transform.matrix[12], transform.matrix[13], transform.matrix[14],
-        transform.matrix[15]};
-    Math::vec3 t, r, s;
-    Math::Decompose(transform_mat, &t, &r, &s);
-    GFX::TransformComponent* transform_component =
-        gfxscene.getGameObject(obj_node)
-            ->getEntity()
-            .getComponent<GFX::TransformComponent>();
-    transform_component->translation = t;
-    transform_component->scale = s;
-    transform_component->eulerAngles = r / Math::float_Pi * 180;
-    if (node->anonymousChildren().size() > 0) {
-      TPM_NAMESPACE::Object* mat_node = node->anonymousChildren()[0].get();
-      Core::GUID mat = loadMaterial(mat_node, env);
-      renderer->materials.emplace_back(
-          Core::ResourceManager::get()->getResource<GFX::Material>(mat));
-    }*/
+        transform.matrix[15] };
+      //mat = se::transpose(mat);
+      se::vec3 t, s; se::Quaternion quat;
+      se::decompose(mat, &t, &quat, &s);
+
+      auto& transformComponent = scene.registry.get<Transform>(gfxNode.entity);
+      transformComponent.translation = t;
+      transformComponent.scale = s;
+      transformComponent.rotation = quat;
+    }
+    handle_material_medium(mesh_renderer);
   }
-  if (node->pluginType() == "rectangle") {
- /*   std::string engine_path =
-        Core::RuntimeConfig::get()->string_property("engine_path");
-    std::string obj_path =
-        engine_path + "\\" + "Binaries\\Runtime\\meshes\\rectangle.obj";
-    GameObjectHandle obj_node = SceneNodeLoader_obj::loadSceneNode(
-        obj_path, gfxscene, gfxNode, meshConfig);
-    GFX::MeshRenderer* renderer = gfxscene.getGameObject(obj_node)
-                                      ->getEntity()
-                                      .addComponent<GFX::MeshRenderer>();
-    TPM_NAMESPACE::Transform transform =
+  else if (node->pluginType() == "cube") {
+    std::string engine_path = RuntimeConfig::get()->string_property("engine_path");
+    std::string obj_path = engine_path + "binary/resources/meshes/cube.obj";
+    MeshHandle mesh = loadObjMesh(obj_path, scene);
+    Mesh::CustomPrimitive cube_primitive;
+    cube_primitive.primitive_type = 3;
+    cube_primitive.min = -vec3(1.f);
+    cube_primitive.max = vec3(1.f);
+    mesh->custom_primitives.emplace_back(std::move(cube_primitive));
+
+    scene.gpuScene.position_buffer->host_stamp++;
+    scene.gpuScene.index_buffer->host_stamp++;
+    scene.gpuScene.vertex_buffer->host_stamp++;
+    auto& mesh_renderer = scene.registry.emplace<MeshRenderer>(gfxNode.entity);
+    mesh_renderer.mesh = mesh;
+
+    { // process the transform
+      TPM_NAMESPACE::Transform transform =
         node->property("to_world").getTransform();
-    Math::mat4 transform_mat = {
+      se::mat4 mat = {
         transform.matrix[0],  transform.matrix[1],  transform.matrix[2],
         transform.matrix[3],  transform.matrix[4],  transform.matrix[5],
         transform.matrix[6],  transform.matrix[7],  transform.matrix[8],
         transform.matrix[9],  transform.matrix[10], transform.matrix[11],
         transform.matrix[12], transform.matrix[13], transform.matrix[14],
-        transform.matrix[15]};
-    Math::vec3 t, r, s;
-    Math::Decompose(transform_mat, &t, &r, &s);
-    GFX::TransformComponent* transform_component =
-        gfxscene.getGameObject(obj_node)
-            ->getEntity()
-            .getComponent<GFX::TransformComponent>();
-    transform_component->translation = t;
-    transform_component->scale = s;
-    transform_component->eulerAngles = r / Math::float_Pi * 180;
-    if (node->anonymousChildren().size() > 0) {
-      TPM_NAMESPACE::Object* mat_node = node->anonymousChildren()[0].get();
-      Core::GUID mat = loadMaterial(mat_node, env);
-      renderer->materials.emplace_back(
-          Core::ResourceManager::get()->getResource<GFX::Material>(mat));
-    }*/
+        transform.matrix[15] };
+      //mat = se::transpose(mat);
+      se::vec3 t, s; se::Quaternion quat;
+      se::decompose(mat, &t, &quat, &s);
+
+      auto& transformComponent = scene.registry.get<Transform>(gfxNode.entity);
+      transformComponent.translation = t;
+      transformComponent.scale = s;
+      transformComponent.rotation = quat;
+    }
+    handle_material_medium(mesh_renderer);
   }
-  if (node->pluginType() == "sphere") {
+  else if (node->pluginType() == "rectangle") {
+    std::string engine_path = RuntimeConfig::get()->string_property("engine_path");
+    std::string obj_path = engine_path + "binary/resources/meshes/rectangle.obj";
+    MeshHandle mesh = loadObjMesh(obj_path, scene);
+    Mesh::CustomPrimitive rect_primitive;
+    rect_primitive.primitive_type = 2;
+    rect_primitive.min = vec3(-1.f, -1.f, 0.f);
+    rect_primitive.max = vec3(+1.f, +1.f, 0.f);
+    mesh->custom_primitives.emplace_back(std::move(rect_primitive));
+
+    scene.gpuScene.position_buffer->host_stamp++;
+    scene.gpuScene.index_buffer->host_stamp++;
+    scene.gpuScene.vertex_buffer->host_stamp++;
+    auto& mesh_renderer = scene.registry.emplace<MeshRenderer>(gfxNode.entity);
+    mesh_renderer.mesh = mesh;
+
+    { // process the transform
+      TPM_NAMESPACE::Transform transform =
+        node->property("to_world").getTransform();
+      se::mat4 mat = {
+        transform.matrix[0],  transform.matrix[1],  transform.matrix[2],
+        transform.matrix[3],  transform.matrix[4],  transform.matrix[5],
+        transform.matrix[6],  transform.matrix[7],  transform.matrix[8],
+        transform.matrix[9],  transform.matrix[10], transform.matrix[11],
+        transform.matrix[12], transform.matrix[13], transform.matrix[14],
+        transform.matrix[15] };
+      //mat = se::transpose(mat);
+      se::vec3 t, s; se::Quaternion quat;
+      se::decompose(mat, &t, &quat, &s);
+
+      auto& transformComponent = scene.registry.get<Transform>(gfxNode.entity);
+      transformComponent.translation = t;
+      transformComponent.scale = s;
+      transformComponent.rotation = quat;
+    }
+    handle_material_medium(mesh_renderer);
+  }
+  else if (node->pluginType() == "sphere") {
     std::string engine_path = RuntimeConfig::get()->string_property("engine_path");
     std::string obj_path = engine_path + "binary/resources/meshes/sphere.obj";
     MeshHandle mesh = loadObjMesh(obj_path, scene);
+    Mesh::CustomPrimitive sphere_primitive;
+    sphere_primitive.primitive_type = 1;
+    sphere_primitive.min = -vec3(1.f);
+    sphere_primitive.max = vec3(1.f);
+    mesh->custom_primitives.emplace_back(std::move(sphere_primitive));
 
     scene.gpuScene.position_buffer->host_stamp++;
     scene.gpuScene.index_buffer->host_stamp++;
@@ -1884,33 +2270,1391 @@ auto loadXMLMesh(TPM_NAMESPACE::Object const* node, xmlLoaderEnv* env,
       transformComponent.scale = vec3(radius);
       transformComponent.rotation = Quaternion();
     }
-    std::optional<MaterialHandle> mat;
-    if (node->anonymousChildren().size() > 0) {
-      se::vec3 radiance = se::vec3(0);
-      for (auto& subnode : node->anonymousChildren()) {
-        if (subnode->type() == TPM_NAMESPACE::OT_BSDF) {
-            // material
-          TPM_NAMESPACE::Object* mat_node = subnode.get();
-          mat = loadXMLMaterial(mat_node, env);
-        } else if (subnode->type() == TPM_NAMESPACE::OT_EMITTER) {
-          if (subnode->pluginType() == "area") {
-            TPM_NAMESPACE::Color rgb = subnode->property("radiance").getColor();
-            radiance = se::vec3(rgb.r, rgb.g, rgb.b);
-          }
-        }
-      }
-      if (mat.has_value()) {
-        mat.value()->emissiveColor = radiance;
-        for (auto& primitive : mesh_renderer.mesh->primitives) {
-          primitive.material = mat.value();
-        }
-      }
-    }
+
+    handle_material_medium(mesh_renderer);
   }
   else {
     root::print::error("gfx :: xml loader :: Unkown mesh type:" + node->pluginType());
   }
 
+}
+
+namespace PBRT_LOADER {
+  // FileLoc Definition
+  struct FileLoc {
+    FileLoc() = default;
+    FileLoc(std::string_view filename) : filename(filename) {}
+    std::string ToString() const {
+      return std::string(filename.data(), filename.size()) + ": line " 
+        + std::to_string(line) + ", column: " + std::to_string(column);
+    }
+
+    std::string_view filename;
+    int line = 1, column = 0;
+  };
+
+  // Token Definition
+  struct Token {
+    Token() = default;
+    Token(std::string_view token, FileLoc loc) : token(token), loc(loc) {}
+    std::string_view token;
+    FileLoc loc;
+  };
+
+  // Tokenizer Definition
+  class Tokenizer {
+  public:
+    // Tokenizer Public Methods
+    Tokenizer(std::string str, std::string filename,
+      std::function<void(const char*, const FileLoc*)> errorCallback);
+    
+    ~Tokenizer();
+
+    static std::unique_ptr<Tokenizer> CreateFromFile(
+      const std::string& filename,
+      std::function<void(const char*, const FileLoc*)> errorCallback);
+    static std::unique_ptr<Tokenizer> CreateFromString(
+      std::string str,
+      std::function<void(const char*, const FileLoc*)> errorCallback);
+
+    std::optional<Token> Next();
+
+    // Just for parse().
+    // TODO? Have a method to set this?
+    FileLoc loc;
+
+  private:
+    // Tokenizer Private Methods
+    void CheckUTF(const void* ptr, int len) const;
+
+    int getChar() {
+      if (pos == end)
+        return EOF;
+      int ch = *pos++;
+      if (ch == '\n') {
+        ++loc.line;
+        loc.column = 0;
+      }
+      else
+        ++loc.column;
+      return ch;
+    }
+    void ungetChar() {
+      --pos;
+      if (*pos == '\n')
+        // Don't worry about the column; we'll be going to the start of
+        // the next line again shortly...
+        --loc.line;
+    }
+
+    // Tokenizer Private Members
+    // This function is called if there is an error during lexing.
+    std::function<void(const char*, const FileLoc*)> errorCallback;
+    
+    // If the input is stdin, then we copy everything until EOF into this
+    // string and then start lexing.  This is a little wasteful (versus
+    // tokenizing directly from stdin), but makes the implementation
+    // simpler.
+    std::string contents;
+
+    // Pointers to the current position in the file and one past the end of
+    // the file.
+    const char* pos, * end;
+
+    // If there are escaped characters in the string, we can't just return
+    // a std::string_view into the mapped file. In that case, we handle the
+    // escaped characters and return a std::string_view to sEscaped.  (And
+    // thence, std::string_views from previous calls to Next() must be invalid
+    // after a subsequent call, since we may reuse sEscaped.)
+    std::string sEscaped;
+  };
+
+  Tokenizer::Tokenizer(std::string str, std::string filename,
+    std::function<void(const char*, const FileLoc*)> errorCallback)
+    : errorCallback(std::move(errorCallback)), contents(std::move(str)) {
+    loc = FileLoc(*new std::string(filename));
+    pos = contents.data();
+    end = pos + contents.size();
+    CheckUTF(contents.data(), contents.size());
+  }
+
+  Tokenizer::~Tokenizer() {}
+
+  bool HasExtension(std::string filename, std::string e) {
+    std::string ext = e;
+    if (!ext.empty() && ext[0] == '.')
+      ext.erase(0, 1);
+
+    std::string filenameExtension = std::filesystem::path(filename).extension().string();
+    if (ext.size() > filenameExtension.size())
+      return false;
+    return std::equal(ext.rbegin(), ext.rend(), filenameExtension.rbegin(),
+      [](char a, char b) { return std::tolower(a) == std::tolower(b); });
+  }
+
+#ifdef _WIN32 
+  std::u16string UTF16FromUTF8(std::string str) {
+    std::wstring_convert<
+      std::codecvt_utf8_utf16<char16_t, 0x10ffff, std::codecvt_mode::little_endian>,
+      char16_t>
+      cnv;
+    std::u16string utf16 = cnv.from_bytes(str);
+    //CHECK_GE(cnv.converted(), str.size());
+    return utf16;
+  }
+
+  std::wstring WStringFromU16String(std::u16string str) {
+    std::wstring ws;
+    ws.reserve(str.size());
+    for (char16_t c : str)
+      ws.push_back(c);
+    return ws;
+  }
+
+  std::wstring WStringFromUTF8(std::string str) {
+    return WStringFromU16String(UTF16FromUTF8(str));
+  }
+#endif
+
+  std::string ReadFileContents(std::string filename) {
+#ifdef _WIN32 
+    std::ifstream ifs(WStringFromUTF8(filename).c_str(), std::ios::binary);
+    if (!ifs)
+      root::print::error("pbrt loader :: read file failed: " + filename);
+    return std::string((std::istreambuf_iterator<char>(ifs)),
+      (std::istreambuf_iterator<char>()));
+#else
+    int fd = open(filename.c_str(), O_RDONLY);
+    if (fd == -1)
+      ErrorExit("%s: %s", filename, ErrorString());
+
+    struct stat stat;
+    if (fstat(fd, &stat) != 0)
+      ErrorExit("%s: %s", filename, ErrorString());
+
+    std::string contents(stat.st_size, '\0');
+    if (read(fd, contents.data(), stat.st_size) == -1)
+      ErrorExit("%s: %s", filename, ErrorString());
+
+    close(fd);
+    return contents;
+#endif
+  }
+
+  //std::string ReadDecompressedFileContents(std::string filename) {
+  //  std::string compressed = ReadFileContents(filename);
+
+  //  // Get the size of the uncompressed file: with gzip, it's stored in the
+  //  // last 4 bytes of the file.  (One nit is that only 4 bytes are used,
+  //  // so it's actually the uncompressed size mod 2^32.)
+  //  if (!compressed.size() == 4) {
+  //    root::print::error("pbrt loader :: read file compressed failed: " + filename);
+  //  }
+  //  size_t sizeOffset = compressed.size() - 4;
+
+  //  // It's stored in little-endian, so manually reconstruct the value to
+  //  // be sure that it ends up in the right order for the target system.
+  //  const unsigned char* s = (const unsigned char*)compressed.data() + sizeOffset;
+  //  size_t size = (uint32_t(s[0]) | (uint32_t(s[1]) << 8) | (uint32_t(s[2]) << 16) |
+  //    (uint32_t(s[3]) << 24));
+
+  //  // A single libdeflate_decompressor * can't be used by multiple threads
+  //  // concurrently, so make sure to do per-thread allocations of them.
+  //  static ThreadLocal<libdeflate_decompressor*> decompressors(
+  //    []() { return libdeflate_alloc_decompressor(); });
+
+  //  libdeflate_decompressor* d = decompressors.Get();
+  //  std::string decompressed(size, '\0');
+  //  int retries = 0;
+  //  while (true) {
+  //    size_t actualOut;
+  //    libdeflate_result result = libdeflate_gzip_decompress(
+  //      d, compressed.data(), compressed.size(), decompressed.data(),
+  //      decompressed.size(), &actualOut);
+  //    switch (result) {
+  //    case LIBDEFLATE_SUCCESS:
+  //      CHECK_EQ(actualOut, decompressed.size());
+  //      LOG_VERBOSE("Decompressed %s from %d to %d bytes", filename,
+  //        compressed.size(), decompressed.size());
+  //      return decompressed;
+
+  //    case LIBDEFLATE_BAD_DATA:
+  //      ErrorExit("%s: invalid or corrupt compressed data", filename);
+
+  //    case LIBDEFLATE_INSUFFICIENT_SPACE:
+  //      // Assume that the decompressed contents are > 4GB and that
+  //      // thus the size reported in the file didn't tell the whole
+  //      // story.  Since the stored size is mod 2^32, try increasing
+  //      // the allocation by that much.
+  //      decompressed.resize(decompressed.size() + (1ull << 32));
+
+  //      // But if we keep going around in circles, then fail eventually
+  //      // since there is probably some other problem.
+  //      CHECK_LT(++retries, 10);
+  //      break;
+
+  //    default:
+  //    case LIBDEFLATE_SHORT_OUTPUT:
+  //      // This should never be returned by libdeflate, since we are
+  //      // passing a non-null actualOut pointer...
+  //      LOG_FATAL("Unexpected return value from libdeflate");
+  //    }
+  //  }
+  //}
+
+  std::unique_ptr<Tokenizer> Tokenizer::CreateFromFile(
+    const std::string& filename,
+    std::function<void(const char*, const FileLoc*)> errorCallback) {
+    if (filename == "-") {
+      // Handle stdin by slurping everything into a string.
+      std::string str;
+      int ch;
+      while ((ch = getchar()) != EOF)
+        str.push_back((char)ch);
+      return std::make_unique<Tokenizer>(std::move(str), "<stdin>",
+        std::move(errorCallback));
+    }
+
+    //if (HasExtension(filename, ".gz")) {
+    //  std::string str = ReadDecompressedFileContents(filename);
+    //  return std::make_unique<Tokenizer>(std::move(str), filename,
+    //    std::move(errorCallback));
+    //}
+
+    std::string str = ReadFileContents(filename);
+    return std::make_unique<Tokenizer>(std::move(str), filename,
+      std::move(errorCallback));
+  }
+
+  std::unique_ptr<Tokenizer> Tokenizer::CreateFromString(
+    std::string str, std::function<void(const char*, const FileLoc*)> errorCallback) {
+    return std::make_unique<Tokenizer>(std::move(str), "<stdin>",
+      std::move(errorCallback));
+  }
+
+  // Tokenizer Implementation
+  static char decodeEscaped(int ch, const FileLoc& loc) {
+    switch (ch) {
+    case EOF:
+      se::root::print::error("pbrt :: import : premature EOF after character escape");
+    case 'b':
+      return '\b';
+    case 'f':
+      return '\f';
+    case 'n':
+      return '\n';
+    case 'r':
+      return '\r';
+    case 't':
+      return '\t';
+    case '\\':
+      return '\\';
+    case '\'':
+      return '\'';
+    case '\"':
+      return '\"';
+    default:
+      se::root::print::error("pbrt :: unexpected escaped character");
+    }
+    return 0;  // NOTREACHED
+  }
+
+  std::optional<Token> Tokenizer::Next() {
+    while (true) {
+      const char* tokenStart = pos;
+      FileLoc startLoc = loc;
+
+      int ch = getChar();
+      if (ch == EOF)
+        return {};
+      else if (ch == ' ' || ch == '\n' || ch == '\t' || ch == '\r') {
+        // nothing
+      }
+      else if (ch == '"') {
+        // scan to closing quote
+        bool haveEscaped = false;
+        while ((ch = getChar()) != '"') {
+          if (ch == EOF) {
+            errorCallback("premature EOF", &startLoc);
+            return {};
+          }
+          else if (ch == '\n') {
+            errorCallback("unterminated string", &startLoc);
+            return {};
+          }
+          else if (ch == '\\') {
+            haveEscaped = true;
+            // Grab the next character
+            if ((ch = getChar()) == EOF) {
+              errorCallback("premature EOF", &startLoc);
+              return {};
+            }
+          }
+        }
+
+        if (!haveEscaped)
+          return Token({ tokenStart, size_t(pos - tokenStart) }, startLoc);
+        else {
+          sEscaped.clear();
+          for (const char* p = tokenStart; p < pos; ++p) {
+            if (*p != '\\')
+              sEscaped.push_back(*p);
+            else {
+              ++p;
+              //CHECK_LT(p, pos);
+              sEscaped.push_back(decodeEscaped(*p, startLoc));
+            }
+          }
+          return Token({ sEscaped.data(), sEscaped.size() }, startLoc);
+        }
+      }
+      else if (ch == '[' || ch == ']') {
+        return Token({ tokenStart, size_t(1) }, startLoc);
+      }
+      else if (ch == '#') {
+        // comment: scan to EOL (or EOF)
+        while ((ch = getChar()) != EOF) {
+          if (ch == '\n' || ch == '\r') {
+            ungetChar();
+            break;
+          }
+        }
+
+        return Token({ tokenStart, size_t(pos - tokenStart) }, startLoc);
+      }
+      else {
+        // Regular statement or numeric token; scan until we hit a
+        // space, opening quote, or bracket.
+        while ((ch = getChar()) != EOF) {
+          if (ch == ' ' || ch == '\n' || ch == '\t' || ch == '\r' || ch == '"' ||
+            ch == '[' || ch == ']') {
+            ungetChar();
+            break;
+          }
+        }
+        return Token({ tokenStart, size_t(pos - tokenStart) }, startLoc);
+      }
+    }
+  }
+
+  void Tokenizer::CheckUTF(const void* ptr, int len) const {
+    const unsigned char* c = (const unsigned char*)ptr;
+    // https://en.wikipedia.org/wiki/Byte_order_mark
+    if (len >= 2 && ((c[0] == 0xfe && c[1] == 0xff) || (c[0] == 0xff && c[1] == 0xfe)))
+      root::print::error("File is encoded with UTF-16, which is not currently supported");
+  }
+
+  static int parseInt(const Token& t) {
+    bool negate = t.token[0] == '-';
+
+    int index = 0;
+    if (t.token[0] == '+' || t.token[0] == '-')
+      ++index;
+
+    int64_t value = 0;
+    while (index < t.token.size()) {
+      if (!(t.token[index] >= '0' && t.token[index] <= '9'))
+        root::print::error(t.loc.ToString() + t.token[index] + ": expected a number");
+      value = 10 * value + (t.token[index] - '0');
+      ++index;
+
+      if (value > std::numeric_limits<int>::max())
+        root::print::error(t.loc.ToString() +
+          "Numeric value too large to represent as a 32-bit integer.");
+      else if (value < std::numeric_limits<int>::lowest())
+        root::print::warning(t.loc.ToString() + "Numeric value %d too low to represent as a 32-bit integer.");
+    }
+
+    return negate ? -value : value;
+  }
+
+  static double parseFloat(const Token& t) {
+    // Fast path for a single digit
+    if (t.token.size() == 1) {
+      if (!(t.token[0] >= '0' && t.token[0] <= '9'))
+        root::print::error(t.loc.ToString() + t.token[0] + ": expected a number");
+      return t.token[0] - '0';
+    }
+
+    // Copy to a buffer so we can NUL-terminate it, as strto[idf]() expect.
+    char buf[64];
+    char* bufp = buf;
+    std::unique_ptr<char[]> allocBuf;
+    //CHECK_RARE(1e-5, t.token.size() + 1 >= sizeof(buf));
+    if (t.token.size() + 1 >= sizeof(buf)) {
+      // This should be very unusual, but is necessary in case we get a
+      // goofball number with lots of leading zeros, for example.
+      allocBuf = std::make_unique<char[]>(t.token.size() + 1);
+      bufp = allocBuf.get();
+    }
+
+    std::copy(t.token.begin(), t.token.end(), bufp);
+    bufp[t.token.size()] = '\0';
+
+    // Can we just use strtol?
+    auto isInteger = [](std::string_view str) {
+      for (char ch : str)
+        if (!(ch >= '0' && ch <= '9'))
+          return false;
+      return true;
+    };
+
+    int length = 0;
+    double val;
+    if (isInteger(t.token)) {
+      char* endptr;
+      val = double(strtol(bufp, &endptr, 10));
+      length = endptr - bufp;
+    }
+    else
+      val = strtof(bufp, NULL);
+
+    if (length == 0)
+      root::print::error(t.loc.ToString() + std::string(t.token) + ": expected a number");
+
+    return val;
+  }
+
+  inline bool isQuotedString(std::string_view str) {
+    return str.size() >= 2 && str[0] == '"' && str.back() == '"';
+  }
+
+  static std::string_view dequoteString(const Token& t) {
+    if (!isQuotedString(t.token))
+      root::print::error(t.loc.ToString() + std::string(t.token) + ": expected quoted string");
+
+    std::string_view str = t.token;
+    str.remove_prefix(1);
+    str.remove_suffix(1);
+    return str;
+  }
+
+  constexpr int TokenOptional = 0;
+  constexpr int TokenRequired = 1;
+
+  // ParsedParameter Definition
+  class ParsedParameter {
+  public:
+    // ParsedParameter Public Methods
+    ParsedParameter(FileLoc loc) : loc(loc) {}
+
+    void AddFloat(float v);
+    void AddInt(int i);
+    void AddString(std::string_view str);
+    void AddBool(bool v);
+
+    std::string ToString() const;
+
+    // ParsedParameter Public Members
+    std::string type, name;
+    FileLoc loc;
+    std::vector<float> floats;
+    std::vector<int> ints;
+    std::vector<std::string> strings;
+    std::vector<uint8_t> bools;
+    mutable bool lookedUp = false;
+    //mutable const RGBColorSpace* colorSpace = nullptr;
+    bool mayBeUnused = false;
+  };
+
+  // ParsedParameterVector Definition
+  using ParsedParameterVector = std::array<ParsedParameter*, 8>;
+  
+  template <typename Next, typename Unget>
+  static ParsedParameterVector parseParameters(
+    Next nextToken, Unget ungetToken, bool formatting,
+    const std::function<void(const Token& token, const char*)>& errorCallback) {
+    ParsedParameterVector parameterVector;
+
+    while (true) {
+      pstd::optional<Token> t = nextToken(TokenOptional);
+      if (!t.has_value())
+        return parameterVector;
+
+      if (!isQuotedString(t->token)) {
+        ungetToken(*t);
+        return parameterVector;
+      }
+
+      ParsedParameter* param = new ParsedParameter(t->loc);
+
+      std::string_view decl = dequoteString(*t);
+
+      auto skipSpace = [&decl](std::string_view::const_iterator iter) {
+        while (iter != decl.end() && (*iter == ' ' || *iter == '\t'))
+          ++iter;
+        return iter;
+      };
+      // Skip to the next whitespace character (or the end of the string).
+      auto skipToSpace = [&decl](std::string_view::const_iterator iter) {
+        while (iter != decl.end() && *iter != ' ' && *iter != '\t')
+          ++iter;
+        return iter;
+      };
+
+      auto typeBegin = skipSpace(decl.begin());
+      if (typeBegin == decl.end())
+        ErrorExit(&t->loc, "Parameter \"%s\" doesn't have a type declaration?!",
+          std::string(decl.begin(), decl.end()));
+
+      // Find end of type declaration
+      auto typeEnd = skipToSpace(typeBegin);
+      param->type.assign(typeBegin, typeEnd);
+
+      if (formatting) {  // close enough: upgrade...
+        if (param->type == "point")
+          param->type = "point3";
+        if (param->type == "vector")
+          param->type = "vector3";
+        if (param->type == "color")
+          param->type = "rgb";
+      }
+
+      auto nameBegin = skipSpace(typeEnd);
+      if (nameBegin == decl.end())
+        ErrorExit(&t->loc, "Unable to find parameter name from \"%s\"",
+          std::string(decl.begin(), decl.end()));
+
+      auto nameEnd = skipToSpace(nameBegin);
+      param->name.assign(nameBegin, nameEnd);
+
+      enum ValType { Unknown, String, Bool, Float, Int } valType = Unknown;
+
+      if (param->type == "integer")
+        valType = Int;
+
+      auto addVal = [&](const Token& t) {
+        if (isQuotedString(t.token)) {
+          switch (valType) {
+          case Unknown:
+            valType = String;
+            break;
+          case String:
+            break;
+          case Float:
+            errorCallback(t, "expected floating-point value");
+          case Int:
+            errorCallback(t, "expected integer value");
+          case Bool:
+            errorCallback(t, "expected Boolean value");
+          }
+
+          param->AddString(dequoteString(t));
+        }
+        else if (t.token[0] == 't' && t.token == "true") {
+          switch (valType) {
+          case Unknown:
+            valType = Bool;
+            break;
+          case String:
+            errorCallback(t, "expected string value");
+          case Float:
+            errorCallback(t, "expected floating-point value");
+          case Int:
+            errorCallback(t, "expected integer value");
+          case Bool:
+            break;
+          }
+
+          param->AddBool(true);
+        }
+        else if (t.token[0] == 'f' && t.token == "false") {
+          switch (valType) {
+          case Unknown:
+            valType = Bool;
+            break;
+          case String:
+            errorCallback(t, "expected string value");
+          case Float:
+            errorCallback(t, "expected floating-point value");
+          case Int:
+            errorCallback(t, "expected integer value");
+          case Bool:
+            break;
+          }
+
+          param->AddBool(false);
+        }
+        else {
+          switch (valType) {
+          case Unknown:
+            valType = Float;
+            break;
+          case String:
+            errorCallback(t, "expected string value");
+          case Float:
+            break;
+          case Int:
+            break;
+          case Bool:
+            errorCallback(t, "expected Boolean value");
+          }
+
+          if (valType == Int)
+            param->AddInt(parseInt(t));
+          else
+            param->AddFloat(parseFloat(t));
+        }
+      };
+
+      Token val = *nextToken(TokenRequired);
+
+      if (val.token == "[") {
+        while (true) {
+          val = *nextToken(TokenRequired);
+          if (val.token == "]")
+            break;
+          addVal(val);
+        }
+      }
+      else {
+        addVal(val);
+      }
+
+      if (formatting && param->type == "bool") {
+        for (const auto& b : param->strings) {
+          if (b == "true")
+            param->bools.push_back(true);
+          else if (b == "false")
+            param->bools.push_back(false);
+          else
+            Error(&param->loc,
+              "%s: neither \"true\" nor \"false\" in bool "
+              "parameter list.",
+              b);
+        }
+        param->strings.clear();
+      }
+
+      parameterVector.push_back(param);
+    }
+
+    return parameterVector;
+  }
+
+#define Float float
+class ParserTarget {
+  public:
+    virtual void Scale(Float sx, Float sy, Float sz, FileLoc loc) = 0;
+    virtual void Shape(const std::string& name,
+      ParsedParameterVector params, FileLoc loc) = 0;
+    virtual ~ParserTarget();
+
+    virtual void Option(const std::string& name, const std::string& value,
+      FileLoc loc) = 0;
+
+    virtual void Identity(FileLoc loc) = 0;
+    virtual void Translate(Float dx, Float dy, Float dz, FileLoc loc) = 0;
+    virtual void Rotate(Float angle, Float ax, Float ay, Float az, FileLoc loc) = 0;
+    virtual void LookAt(Float ex, Float ey, Float ez, Float lx, Float ly, Float lz,
+      Float ux, Float uy, Float uz, FileLoc loc) = 0;
+    virtual void ConcatTransform(Float transform[16], FileLoc loc) = 0;
+    virtual void Transform(Float transform[16], FileLoc loc) = 0;
+    virtual void CoordinateSystem(const std::string&, FileLoc loc) = 0;
+    virtual void CoordSysTransform(const std::string&, FileLoc loc) = 0;
+    virtual void ActiveTransformAll(FileLoc loc) = 0;
+    virtual void ActiveTransformEndTime(FileLoc loc) = 0;
+    virtual void ActiveTransformStartTime(FileLoc loc) = 0;
+    virtual void TransformTimes(Float start, Float end, FileLoc loc) = 0;
+
+    virtual void ColorSpace(const std::string& n, FileLoc loc) = 0;
+    virtual void PixelFilter(const std::string& name, ParsedParameterVector params,
+      FileLoc loc) = 0;
+    virtual void Film(const std::string& type, ParsedParameterVector params,
+      FileLoc loc) = 0;
+    virtual void Accelerator(const std::string& name, ParsedParameterVector params,
+      FileLoc loc) = 0;
+    virtual void Integrator(const std::string& name, ParsedParameterVector params,
+      FileLoc loc) = 0;
+    virtual void Camera(const std::string&, ParsedParameterVector params,
+      FileLoc loc) = 0;
+    virtual void MakeNamedMedium(const std::string& name, ParsedParameterVector params,
+      FileLoc loc) = 0;
+    virtual void MediumInterface(const std::string& insideName,
+      const std::string& outsideName, FileLoc loc) = 0;
+    virtual void Sampler(const std::string& name, ParsedParameterVector params,
+      FileLoc loc) = 0;
+
+    virtual void WorldBegin(FileLoc loc) = 0;
+    virtual void AttributeBegin(FileLoc loc) = 0;
+    virtual void AttributeEnd(FileLoc loc) = 0;
+    virtual void Attribute(const std::string& target, ParsedParameterVector params,
+      FileLoc loc) = 0;
+    virtual void Texture(const std::string& name, const std::string& type,
+      const std::string& texname, ParsedParameterVector params,
+      FileLoc loc) = 0;
+    virtual void Material(const std::string& name, ParsedParameterVector params,
+      FileLoc loc) = 0;
+    virtual void MakeNamedMaterial(const std::string& name, ParsedParameterVector params,
+      FileLoc loc) = 0;
+    virtual void NamedMaterial(const std::string& name, FileLoc loc) = 0;
+    virtual void LightSource(const std::string& name, ParsedParameterVector params,
+      FileLoc loc) = 0;
+    virtual void AreaLightSource(const std::string& name, ParsedParameterVector params,
+      FileLoc loc) = 0;
+    virtual void ReverseOrientation(FileLoc loc) = 0;
+    virtual void ObjectBegin(const std::string& name, FileLoc loc) = 0;
+    virtual void ObjectEnd(FileLoc loc) = 0;
+    virtual void ObjectInstance(const std::string& name, FileLoc loc) = 0;
+
+    virtual void EndOfFiles() = 0;
+
+  protected:
+    template <typename... Args>
+    void ErrorExitDeferred(const char* fmt, Args &&... args) const {
+      errorExit = true;
+      root::print::error(std::format(fmt, std::forward<Args>(args)...));
+    }
+
+    template <typename... Args>
+    void ErrorExitDeferred(const FileLoc* loc, const char* fmt, Args &&... args) const {
+      errorExit = true;
+      root::print::error(loc->ToString() + std::format(fmt, std::forward<Args>(args)...));
+    }
+
+    mutable bool errorExit = false;
+  };
+
+  static std::string toString(std::string_view s) {
+    return std::string(s.data(), s.size());
+  }
+
+  //// ParameterDictionary Definition
+  //class ParameterDictionary {
+  //public:
+  //  // ParameterDictionary Public Methods
+  //  ParameterDictionary() = default;
+  //  ParameterDictionary(ParsedParameterVector params, const RGBColorSpace* colorSpace);
+
+  //  ParameterDictionary(ParsedParameterVector params0,
+  //    const ParsedParameterVector& params1,
+  //    const RGBColorSpace* colorSpace);
+
+  //  std::string GetTexture(const std::string& name) const;
+
+  //  std::vector<RGB> GetRGBArray(const std::string& name) const;
+
+  //  // For --upgrade only
+  //  std::optional<RGB> GetOneRGB(const std::string& name) const;
+  //  // Unfortunately, this is most easily done here...
+  //  Float UpgradeBlackbody(const std::string& name);
+  //  void RemoveFloat(const std::string&);
+  //  void RemoveInt(const std::string&);
+  //  void RemoveBool(const std::string&);
+  //  void RemovePoint2f(const std::string&);
+  //  void RemoveVector2f(const std::string&);
+  //  void RemovePoint3f(const std::string&);
+  //  void RemoveVector3f(const std::string&);
+  //  void RemoveNormal3f(const std::string&);
+  //  void RemoveString(const std::string&);
+  //  void RemoveTexture(const std::string&);
+  //  void RemoveSpectrum(const std::string&);
+
+  //  void RenameParameter(const std::string& before, const std::string& after);
+  //  void RenameUsedTextures(const std::map<std::string, std::string>& m);
+
+  //  const RGBColorSpace* ColorSpace() const { return colorSpace; }
+
+  //  std::string ToParameterList(int indent = 0) const;
+  //  std::string ToParameterDefinition(const std::string&) const;
+  //  std::string ToString() const;
+
+  //  const FileLoc* loc(const std::string&) const;
+
+  //  const ParsedParameterVector& GetParameterVector() const { return params; }
+
+  //  void FreeParameters();
+
+  //  Float GetOneFloat(const std::string& name, Float def) const;
+  //  int GetOneInt(const std::string& name, int def) const;
+  //  bool GetOneBool(const std::string& name, bool def) const;
+  //  std::string GetOneString(const std::string& name, const std::string& def) const;
+
+  //  Point2f GetOnePoint2f(const std::string& name, Point2f def) const;
+  //  Vector2f GetOneVector2f(const std::string& name, Vector2f def) const;
+  //  Point3f GetOnePoint3f(const std::string& name, Point3f def) const;
+  //  Vector3f GetOneVector3f(const std::string& name, Vector3f def) const;
+  //  Normal3f GetOneNormal3f(const std::string& name, Normal3f def) const;
+
+  //  Spectrum GetOneSpectrum(const std::string& name, Spectrum def,
+  //    SpectrumType spectrumType, Allocator alloc) const;
+
+  //  std::vector<Float> GetFloatArray(const std::string& name) const;
+  //  std::vector<int> GetIntArray(const std::string& name) const;
+  //  std::vector<uint8_t> GetBoolArray(const std::string& name) const;
+
+  //  std::vector<Point2f> GetPoint2fArray(const std::string& name) const;
+  //  std::vector<Vector2f> GetVector2fArray(const std::string& name) const;
+  //  std::vector<Point3f> GetPoint3fArray(const std::string& name) const;
+  //  std::vector<Vector3f> GetVector3fArray(const std::string& name) const;
+  //  std::vector<Normal3f> GetNormal3fArray(const std::string& name) const;
+  //  std::vector<Spectrum> GetSpectrumArray(const std::string& name,
+  //    SpectrumType spectrumType,
+  //    Allocator alloc) const;
+  //  std::vector<std::string> GetStringArray(const std::string& name) const;
+
+  //  void ReportUnused() const;
+
+  //private:
+  //  friend class TextureParameterDictionary;
+  //  // ParameterDictionary Private Methods
+  //  template <ParameterType PT>
+  //  typename ParameterTypeTraits<PT>::ReturnType lookupSingle(
+  //    const std::string& name,
+  //    typename ParameterTypeTraits<PT>::ReturnType defaultValue) const;
+
+  //  template <ParameterType PT>
+  //  std::vector<typename ParameterTypeTraits<PT>::ReturnType> lookupArray(
+  //    const std::string& name) const;
+
+  //  template <typename ReturnType, typename G, typename C>
+  //  std::vector<ReturnType> lookupArray(const std::string& name, ParameterType type,
+  //    const char* typeName, int nPerItem, G getValues,
+  //    C convert) const;
+
+  //  std::vector<Spectrum> extractSpectrumArray(const ParsedParameter& param,
+  //    SpectrumType spectrumType,
+  //    Allocator alloc) const;
+
+  //  void remove(const std::string& name, const char* typeName);
+  //  void checkParameterTypes();
+  //  static std::string ToParameterDefinition(const ParsedParameter* p, int indentCount);
+
+  //  // ParameterDictionary Private Members
+  //  ParsedParameterVector params;
+  //  const RGBColorSpace* colorSpace = nullptr;
+  //  int nOwnedParams;
+  //};
+
+  //// FormattingParserTarget Definition
+  //class FormattingParserTarget : public ParserTarget {
+  //public:
+  //  FormattingParserTarget(bool toPly, bool upgrade) : toPly(toPly), upgrade(upgrade) {}
+  //  ~FormattingParserTarget();
+
+  //  void Option(const std::string& name, const std::string& value, FileLoc loc);
+  //  void Identity(FileLoc loc);
+  //  void Translate(Float dx, Float dy, Float dz, FileLoc loc);
+  //  void Rotate(Float angle, Float ax, Float ay, Float az, FileLoc loc);
+  //  void Scale(Float sx, Float sy, Float sz, FileLoc loc);
+  //  void LookAt(Float ex, Float ey, Float ez, Float lx, Float ly, Float lz, Float ux,
+  //    Float uy, Float uz, FileLoc loc);
+  //  void ConcatTransform(Float transform[16], FileLoc loc);
+  //  void Transform(Float transform[16], FileLoc loc);
+  //  void CoordinateSystem(const std::string&, FileLoc loc);
+  //  void CoordSysTransform(const std::string&, FileLoc loc);
+  //  void ActiveTransformAll(FileLoc loc);
+  //  void ActiveTransformEndTime(FileLoc loc);
+  //  void ActiveTransformStartTime(FileLoc loc);
+  //  void TransformTimes(Float start, Float end, FileLoc loc);
+  //  void TransformBegin(FileLoc loc);
+  //  void TransformEnd(FileLoc loc);
+  //  void ColorSpace(const std::string& n, FileLoc loc);
+  //  void PixelFilter(const std::string& name, ParsedParameterVector params, FileLoc loc);
+  //  void Film(const std::string& type, ParsedParameterVector params, FileLoc loc);
+  //  void Sampler(const std::string& name, ParsedParameterVector params, FileLoc loc);
+  //  void Accelerator(const std::string& name, ParsedParameterVector params, FileLoc loc);
+  //  void Integrator(const std::string& name, ParsedParameterVector params, FileLoc loc);
+  //  void Camera(const std::string&, ParsedParameterVector params, FileLoc loc);
+  //  void MakeNamedMedium(const std::string& name, ParsedParameterVector params,
+  //    FileLoc loc);
+  //  void MediumInterface(const std::string& insideName, const std::string& outsideName,
+  //    FileLoc loc);
+  //  void WorldBegin(FileLoc loc);
+  //  void AttributeBegin(FileLoc loc);
+  //  void AttributeEnd(FileLoc loc);
+  //  void Attribute(const std::string& target, ParsedParameterVector params, FileLoc loc);
+  //  void Texture(const std::string& name, const std::string& type,
+  //    const std::string& texname, ParsedParameterVector params, FileLoc loc);
+  //  void Material(const std::string& name, ParsedParameterVector params, FileLoc loc);
+  //  void MakeNamedMaterial(const std::string& name, ParsedParameterVector params,
+  //    FileLoc loc);
+  //  void NamedMaterial(const std::string& name, FileLoc loc);
+  //  void LightSource(const std::string& name, ParsedParameterVector params, FileLoc loc);
+  //  void AreaLightSource(const std::string& name, ParsedParameterVector params,
+  //    FileLoc loc);
+  //  void Shape(const std::string& name, ParsedParameterVector params, FileLoc loc);
+  //  void ReverseOrientation(FileLoc loc);
+  //  void ObjectBegin(const std::string& name, FileLoc loc);
+  //  void ObjectEnd(FileLoc loc);
+  //  void ObjectInstance(const std::string& name, FileLoc loc);
+
+  //  void EndOfFiles();
+
+  //  std::string indent(int extra = 0) const {
+  //    return std::string(catIndentCount + 4 * extra, ' ');
+  //  }
+
+  //private:
+  //  std::string upgradeMaterialIndex(const std::string& name, ParameterDictionary* dict,
+  //    FileLoc loc) const;
+  //  std::string upgradeMaterial(std::string* name, ParameterDictionary* dict,
+  //    FileLoc loc) const;
+
+  //  int catIndentCount = 0;
+  //  bool toPly, upgrade;
+  //  std::map<std::string, std::string> definedTextures;
+  //  std::map<std::string, std::string> definedNamedMaterials;
+  //  std::map<std::string, ParameterDictionary> namedMaterialDictionaries;
+  //  std::map<std::string, std::string> definedObjectInstances;
+  //};
+
+  //void parse(ParserTarget* target, std::unique_ptr<Tokenizer> t) {
+  //  FormattingParserTarget* formattingTarget =
+  //    dynamic_cast<FormattingParserTarget*>(target);
+  //  bool formatting = formattingTarget;
+
+  //  static std::atomic<bool> warnedTransformBeginEndDeprecated{ false };
+
+  //  std::vector<std::pair<AsyncJob<int>*, BasicSceneBuilder*>> imports;
+
+  //  std::vector<std::unique_ptr<Tokenizer>> fileStack;
+  //  fileStack.push_back(std::move(t));
+
+  //  std::optional<Token> ungetToken;
+
+  //  auto parseError = [&](const char* msg, const FileLoc* loc) {
+  //    root::print::error(loc->ToString() + msg);
+  //  };
+
+  //  // nextToken is a little helper function that handles the file stack,
+  //  // returning the next token from the current file until reaching EOF,
+  //  // at which point it switches to the next file (if any).
+  //  std::function<std::optional<Token>(int)> nextToken;
+  //  nextToken = [&](int flags) -> std::optional<Token> {
+  //    if (ungetToken.has_value())
+  //      return std::exchange(ungetToken, {});
+
+  //    if (fileStack.empty()) {
+  //      if ((flags & TokenRequired) != 0) {
+  //        root::print::error("premature end of file");
+  //      }
+  //      return {};
+  //    }
+
+  //    std::optional<Token> tok = fileStack.back()->Next();
+
+  //    if (!tok) {
+  //      // We've reached EOF in the current file. Anything more to parse?
+  //      fileStack.pop_back();
+  //      return nextToken(flags);
+  //    }
+  //    else if (tok->token[0] == '#') {
+  //      // Swallow comments, unless --format or --toply was given, in
+  //      // which case they're printed to stdout.
+  //      if (formatting)
+  //        printf("%s%s\n",
+  //          dynamic_cast<FormattingParserTarget*>(target)->indent().c_str(),
+  //          toString(tok->token).c_str());
+  //      return nextToken(flags);
+  //    }
+  //    else
+  //      // Regular token; success.
+  //      return tok;
+  //  };
+
+  //  auto unget = [&](Token t) {
+  //    //CHECK(!ungetToken.has_value());
+  //    ungetToken = t;
+  //  };
+
+  //  // Helper function for pbrt API entrypoints that take a single string
+  //  // parameter and a ParameterVector (e.g. pbrtShape()).
+  //  auto basicParamListEntrypoint =
+  //    [&](void (ParserTarget::* apiFunc)(const std::string&, ParsedParameterVector,
+  //      FileLoc),
+  //      FileLoc loc) {
+  //        Token t = *nextToken(TokenRequired);
+  //        std::string_view dequoted = dequoteString(t);
+  //        std::string n = toString(dequoted);
+  //        ParsedParameterVector parameterVector = parseParameters(
+  //          nextToken, unget, formatting, [&](const Token& t, const char* msg) {
+  //            std::string token = toString(t.token);
+  //        std::string str = std::format("%s: %s", token, msg);
+  //        parseError(str.c_str(), &t.loc);
+  //          });
+  //        (target->*apiFunc)(n, std::move(parameterVector), loc);
+  //  };
+
+  //  auto syntaxError = [&](const Token& t) {
+  //    root::print::error(t.loc.ToString() + "Unknown directive: %s", toString(t.token));
+  //  };
+
+  //  std::optional<Token> tok;
+
+  //  while (true) {
+  //    tok = nextToken(TokenOptional);
+  //    if (!tok.has_value())
+  //      break;
+
+  //    switch (tok->token[0]) {
+  //    case 'A':
+  //      if (tok->token == "AttributeBegin")
+  //        target->AttributeBegin(tok->loc);
+  //      else if (tok->token == "AttributeEnd")
+  //        target->AttributeEnd(tok->loc);
+  //      else if (tok->token == "Attribute")
+  //        basicParamListEntrypoint(&ParserTarget::Attribute, tok->loc);
+  //      else if (tok->token == "ActiveTransform") {
+  //        Token a = *nextToken(TokenRequired);
+  //        if (a.token == "All")
+  //          target->ActiveTransformAll(tok->loc);
+  //        else if (a.token == "EndTime")
+  //          target->ActiveTransformEndTime(tok->loc);
+  //        else if (a.token == "StartTime")
+  //          target->ActiveTransformStartTime(tok->loc);
+  //        else
+  //          syntaxError(*tok);
+  //      }
+  //      else if (tok->token == "AreaLightSource")
+  //        basicParamListEntrypoint(&ParserTarget::AreaLightSource, tok->loc);
+  //      else if (tok->token == "Accelerator")
+  //        basicParamListEntrypoint(&ParserTarget::Accelerator, tok->loc);
+  //      else
+  //        syntaxError(*tok);
+  //      break;
+
+  //    case 'C':
+  //      if (tok->token == "ConcatTransform") {
+  //        if (nextToken(TokenRequired)->token != "[")
+  //          syntaxError(*tok);
+  //        Float m[16];
+  //        for (int i = 0; i < 16; ++i)
+  //          m[i] = parseFloat(*nextToken(TokenRequired));
+  //        if (nextToken(TokenRequired)->token != "]")
+  //          syntaxError(*tok);
+  //        target->ConcatTransform(m, tok->loc);
+  //      }
+  //      else if (tok->token == "CoordinateSystem") {
+  //        std::string_view n = dequoteString(*nextToken(TokenRequired));
+  //        target->CoordinateSystem(toString(n), tok->loc);
+  //      }
+  //      else if (tok->token == "CoordSysTransform") {
+  //        std::string_view n = dequoteString(*nextToken(TokenRequired));
+  //        target->CoordSysTransform(toString(n), tok->loc);
+  //      }
+  //      else if (tok->token == "ColorSpace") {
+  //        std::string_view n = dequoteString(*nextToken(TokenRequired));
+  //        target->ColorSpace(toString(n), tok->loc);
+  //      }
+  //      else if (tok->token == "Camera")
+  //        basicParamListEntrypoint(&ParserTarget::Camera, tok->loc);
+  //      else
+  //        syntaxError(*tok);
+  //      break;
+
+  //    case 'F':
+  //      if (tok->token == "Film")
+  //        basicParamListEntrypoint(&ParserTarget::Film, tok->loc);
+  //      else
+  //        syntaxError(*tok);
+  //      break;
+
+  //    case 'I':
+  //      if (tok->token == "Integrator")
+  //        basicParamListEntrypoint(&ParserTarget::Integrator, tok->loc);
+  //      else if (tok->token == "Include") {
+  //        Token filenameToken = *nextToken(TokenRequired);
+  //        std::string filename = toString(dequoteString(filenameToken));
+  //        if (formatting)
+  //          Printf("%sInclude \"%s\"\n",
+  //            dynamic_cast<FormattingParserTarget*>(target)->indent(),
+  //            filename);
+  //        else {
+  //          filename = ResolveFilename(filename);
+  //          std::unique_ptr<Tokenizer> tinc =
+  //            Tokenizer::CreateFromFile(filename, parseError);
+  //          if (tinc) {
+  //            LOG_VERBOSE("Started parsing %s",
+  //              std::string(tinc->loc.filename.begin(),
+  //                tinc->loc.filename.end()));
+  //            fileStack.push_back(std::move(tinc));
+  //          }
+  //        }
+  //      }
+  //      else if (tok->token == "Import") {
+  //        Token filenameToken = *nextToken(TokenRequired);
+  //        std::string filename = toString(dequoteString(filenameToken));
+  //        if (formatting)
+  //          Printf("%sImport \"%s\"\n",
+  //            dynamic_cast<FormattingParserTarget*>(target)->indent(),
+  //            filename);
+  //        else {
+  //          BasicSceneBuilder* builder =
+  //            dynamic_cast<BasicSceneBuilder*>(target);
+  //          CHECK(builder);
+
+  //          if (builder->currentBlock !=
+  //            BasicSceneBuilder::BlockState::WorldBlock)
+  //            ErrorExit(&tok->loc, "Import statement only allowed inside world "
+  //              "definition block.");
+
+  //          filename = ResolveFilename(filename);
+  //          BasicSceneBuilder* importBuilder = builder->CopyForImport();
+
+  //          if (RunningThreads() == 1) {
+  //            std::unique_ptr<Tokenizer> timport =
+  //              Tokenizer::CreateFromFile(filename, parseError);
+  //            if (timport)
+  //              parse(importBuilder, std::move(timport));
+  //            builder->MergeImported(importBuilder);
+  //          }
+  //          else {
+  //            auto job = [=](std::string filename) {
+  //              Timer timer;
+  //              std::unique_ptr<Tokenizer> timport =
+  //                Tokenizer::CreateFromFile(filename, parseError);
+  //              if (timport)
+  //                parse(importBuilder, std::move(timport));
+  //              LOG_VERBOSE("Elapsed time to parse \"%s\": %.2fs", filename,
+  //                timer.ElapsedSeconds());
+  //              return 0;
+  //            };
+  //            AsyncJob<int>* jobFinished = RunAsync(job, filename);
+  //            imports.push_back(std::make_pair(jobFinished, importBuilder));
+  //          }
+  //        }
+  //      }
+  //      else if (tok->token == "Identity")
+  //        target->Identity(tok->loc);
+  //      else
+  //        syntaxError(*tok);
+  //      break;
+
+  //    case 'L':
+  //      if (tok->token == "LightSource")
+  //        basicParamListEntrypoint(&ParserTarget::LightSource, tok->loc);
+  //      else if (tok->token == "LookAt") {
+  //        Float v[9];
+  //        for (int i = 0; i < 9; ++i)
+  //          v[i] = parseFloat(*nextToken(TokenRequired));
+  //        target->LookAt(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8],
+  //          tok->loc);
+  //      }
+  //      else
+  //        syntaxError(*tok);
+  //      break;
+
+  //    case 'M':
+  //      if (tok->token == "MakeNamedMaterial")
+  //        basicParamListEntrypoint(&ParserTarget::MakeNamedMaterial, tok->loc);
+  //      else if (tok->token == "MakeNamedMedium")
+  //        basicParamListEntrypoint(&ParserTarget::MakeNamedMedium, tok->loc);
+  //      else if (tok->token == "Material")
+  //        basicParamListEntrypoint(&ParserTarget::Material, tok->loc);
+  //      else if (tok->token == "MediumInterface") {
+  //        std::string_view n = dequoteString(*nextToken(TokenRequired));
+  //        std::string names[2];
+  //        names[0] = toString(n);
+
+  //        // Check for optional second parameter
+  //        std::optional<Token> second = nextToken(TokenOptional);
+  //        if (second.has_value()) {
+  //          if (isQuotedString(second->token))
+  //            names[1] = toString(dequoteString(*second));
+  //          else {
+  //            unget(*second);
+  //            names[1] = names[0];
+  //          }
+  //        }
+  //        else
+  //          names[1] = names[0];
+
+  //        target->MediumInterface(names[0], names[1], tok->loc);
+  //      }
+  //      else
+  //        syntaxError(*tok);
+  //      break;
+
+  //    case 'N':
+  //      if (tok->token == "NamedMaterial") {
+  //        std::string_view n = dequoteString(*nextToken(TokenRequired));
+  //        target->NamedMaterial(toString(n), tok->loc);
+  //      }
+  //      else
+  //        syntaxError(*tok);
+  //      break;
+
+  //    case 'O':
+  //      if (tok->token == "ObjectBegin") {
+  //        std::string_view n = dequoteString(*nextToken(TokenRequired));
+  //        target->ObjectBegin(toString(n), tok->loc);
+  //      }
+  //      else if (tok->token == "ObjectEnd")
+  //        target->ObjectEnd(tok->loc);
+  //      else if (tok->token == "ObjectInstance") {
+  //        std::string_view n = dequoteString(*nextToken(TokenRequired));
+  //        target->ObjectInstance(toString(n), tok->loc);
+  //      }
+  //      else if (tok->token == "Option") {
+  //        std::string name = toString(dequoteString(*nextToken(TokenRequired)));
+  //        std::string value = toString(nextToken(TokenRequired)->token);
+  //        target->Option(name, value, tok->loc);
+  //      }
+  //      else
+  //        syntaxError(*tok);
+  //      break;
+
+  //    case 'P':
+  //      if (tok->token == "PixelFilter")
+  //        basicParamListEntrypoint(&ParserTarget::PixelFilter, tok->loc);
+  //      else
+  //        syntaxError(*tok);
+  //      break;
+
+  //    case 'R':
+  //      if (tok->token == "ReverseOrientation")
+  //        target->ReverseOrientation(tok->loc);
+  //      else if (tok->token == "Rotate") {
+  //        Float v[4];
+  //        for (int i = 0; i < 4; ++i)
+  //          v[i] = parseFloat(*nextToken(TokenRequired));
+  //        target->Rotate(v[0], v[1], v[2], v[3], tok->loc);
+  //      }
+  //      else
+  //        syntaxError(*tok);
+  //      break;
+
+  //    case 'S':
+  //      if (tok->token == "Shape")
+  //        basicParamListEntrypoint(&ParserTarget::Shape, tok->loc);
+  //      else if (tok->token == "Sampler")
+  //        basicParamListEntrypoint(&ParserTarget::Sampler, tok->loc);
+  //      else if (tok->token == "Scale") {
+  //        Float v[3];
+  //        for (int i = 0; i < 3; ++i)
+  //          v[i] = parseFloat(*nextToken(TokenRequired));
+  //        target->Scale(v[0], v[1], v[2], tok->loc);
+  //      }
+  //      else
+  //        syntaxError(*tok);
+  //      break;
+
+  //    case 'T':
+  //      if (tok->token == "TransformBegin") {
+  //        if (formattingTarget)
+  //          formattingTarget->TransformBegin(tok->loc);
+  //        else {
+  //          if (!warnedTransformBeginEndDeprecated) {
+  //            Warning(&tok->loc, "TransformBegin/End are deprecated and should "
+  //              "be replaced with AttributeBegin/End");
+  //            warnedTransformBeginEndDeprecated = true;
+  //          }
+  //          target->AttributeBegin(tok->loc);
+  //        }
+  //      }
+  //      else if (tok->token == "TransformEnd") {
+  //        if (formattingTarget)
+  //          formattingTarget->TransformEnd(tok->loc);
+  //        else
+  //          target->AttributeEnd(tok->loc);
+  //      }
+  //      else if (tok->token == "Transform") {
+  //        if (nextToken(TokenRequired)->token != "[")
+  //          syntaxError(*tok);
+  //        Float m[16];
+  //        for (int i = 0; i < 16; ++i)
+  //          m[i] = parseFloat(*nextToken(TokenRequired));
+  //        if (nextToken(TokenRequired)->token != "]")
+  //          syntaxError(*tok);
+  //        target->Transform(m, tok->loc);
+  //      }
+  //      else if (tok->token == "Translate") {
+  //        Float v[3];
+  //        for (int i = 0; i < 3; ++i)
+  //          v[i] = parseFloat(*nextToken(TokenRequired));
+  //        target->Translate(v[0], v[1], v[2], tok->loc);
+  //      }
+  //      else if (tok->token == "TransformTimes") {
+  //        Float v[2];
+  //        for (int i = 0; i < 2; ++i)
+  //          v[i] = parseFloat(*nextToken(TokenRequired));
+  //        target->TransformTimes(v[0], v[1], tok->loc);
+  //      }
+  //      else if (tok->token == "Texture") {
+  //        std::string_view n = dequoteString(*nextToken(TokenRequired));
+  //        std::string name = toString(n);
+  //        n = dequoteString(*nextToken(TokenRequired));
+  //        std::string type = toString(n);
+
+  //        Token t = *nextToken(TokenRequired);
+  //        std::string_view dequoted = dequoteString(t);
+  //        std::string texName = toString(dequoted);
+  //        ParsedParameterVector params = parseParameters(
+  //          nextToken, unget, formatting, [&](const Token& t, const char* msg) {
+  //            std::string token = toString(t.token);
+  //        std::string str = StringPrintf("%s: %s", token, msg);
+  //        parseError(str.c_str(), &t.loc);
+  //          });
+
+  //        target->Texture(name, type, texName, std::move(params), tok->loc);
+  //      }
+  //      else
+  //        syntaxError(*tok);
+  //      break;
+
+  //    case 'W':
+  //      if (tok->token == "WorldBegin")
+  //        target->WorldBegin(tok->loc);
+  //      else if (tok->token == "WorldEnd" && formatting)
+  //        ;  // just swallow it
+  //      else
+  //        syntaxError(*tok);
+  //      break;
+
+  //    default:
+  //      syntaxError(*tok);
+  //    }
+  //  }
+
+  //  for (auto& import : imports) {
+  //    import.first->Wait();
+
+  //    BasicSceneBuilder* builder = dynamic_cast<BasicSceneBuilder*>(target);
+  //    CHECK(builder);
+  //    builder->MergeImported(import.second);
+  //    // HACK: let import.second leak so that its TransformCache isn't deallocated...
+  //  }
+  //}
+
+  //void ParseFiles(ParserTarget* target, std::span<const std::string> filenames) {
+  //  auto tokError = [](const char* msg, const FileLoc* loc) {
+  //    ErrorExit(loc, "%s", msg);
+  //  };
+
+  //  // Process scene description
+  //  if (filenames.empty()) {
+  //    // Parse scene from standard input
+  //    std::unique_ptr<Tokenizer> t = Tokenizer::CreateFromFile("-", tokError);
+  //    if (t)
+  //      parse(target, std::move(t));
+  //  }
+  //  else {
+  //    // Parse scene from input files
+  //    for (const std::string& fn : filenames) {
+  //      if (fn != "-")
+  //        SetSearchDirectory(fn);
+
+  //      std::unique_ptr<Tokenizer> t = Tokenizer::CreateFromFile(fn, tokError);
+  //      if (t)
+  //        parse(target, std::move(t));
+  //    }
+  //  }
+
+  //  target->EndOfFiles();
+  //}
+
+  //void ParseString(ParserTarget* target, std::string str) {
+  //  auto tokError = [](const char* msg, const FileLoc* loc) {
+  //    ErrorExit(loc, "%s", msg);
+  //  };
+  //  std::unique_ptr<Tokenizer> t = Tokenizer::CreateFromString(std::move(str), tokError);
+  //  if (!t)
+  //    return;
+  //  parse(target, std::move(t));
+
+  //  target->EndOfFiles();
+  //}
 }
 
 SceneLoader::result_type SceneLoader::operator()(SceneLoader::from_gltf_tag, std::string const& path) {
@@ -2096,8 +3840,19 @@ SceneLoader::result_type SceneLoader::operator()(SceneLoader::from_xml_tag, std:
           break;
       case TPM_NAMESPACE::OT_INTEGRATOR:
           break;
-      case TPM_NAMESPACE::OT_MEDIUM:
-          break;
+      case TPM_NAMESPACE::OT_MEDIUM: {
+        MediumHandle medium = GFXContext::load_medium_empty();
+        if (obj->pluginType() == "homogeneous") {
+          medium->packet.bitfield = (uint32_t)Medium::MediumType::Homogeneous;
+          TPM_NAMESPACE::Color sigma_a = obj->property("sigma_a").getColor();
+          TPM_NAMESPACE::Color sigma_s = obj->property("sigma_s").getColor();
+          medium->packet.sigmaA = { sigma_a.r, sigma_a.g, sigma_a.b };
+          medium->packet.sigmaS = { sigma_s.r, sigma_s.g, sigma_s.b };
+          medium->packet.scale = obj->property("scale").getNumber();
+        }
+        env.mediums[obj] = medium;
+        break;
+      }
       case TPM_NAMESPACE::OT_PHASE:
           break;
       case TPM_NAMESPACE::OT_RFILTER:
@@ -2126,6 +3881,15 @@ SceneLoader::result_type SceneLoader::operator()(SceneLoader::from_xml_tag, std:
         transformComponent.translation = t;
         transformComponent.scale = s;
         transformComponent.rotation = Quaternion(rotate.m) * q;
+
+        for (auto& subnode : obj->namedChildren()) {
+          if (subnode.second->type() == TPM_NAMESPACE::OT_MEDIUM)
+            camera.medium = env.mediums[subnode.second.get()];
+        }
+        for (auto& subnode : obj->anonymousChildren()) {
+          if (subnode->type() == TPM_NAMESPACE::OT_MEDIUM)
+            camera.medium = env.mediums[subnode.get()];
+        }
         break;
       }
       case TPM_NAMESPACE::OT_SHAPE: {

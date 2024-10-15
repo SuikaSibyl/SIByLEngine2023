@@ -52,6 +52,35 @@ auto PNG::fromPNG(std::filesystem::path const& path) noexcept -> std::unique_ptr
   return image;
 }
 
+auto JPEG::writeJPEG(std::filesystem::path const& path, uint32_t width,
+  uint32_t height, uint32_t channel, float* data) noexcept -> void {
+  stbi_write_jpg(path.string().c_str(), width, height, channel, data,
+    width * channel);
+}
+
+auto JPEG::fromJPEG(std::filesystem::path const& path) noexcept -> std::unique_ptr<Texture> {
+  int texWidth, texHeight, texChannels;
+  stbi_uc* pixels = stbi_load(path.string().c_str(), &texWidth, &texHeight,
+    &texChannels, STBI_rgb_alpha);
+  if (!pixels) {
+    root::print::error("Image :: failed to load texture image!");
+    return nullptr;
+  }
+  std::unique_ptr<Texture> image = std::make_unique<Texture>();
+  image->buffer = se::buffer(texWidth * texHeight * sizeof(uint8_t) * 4);
+  memcpy(image->buffer.data, pixels, texWidth * texHeight * sizeof(uint8_t) * 4);
+  image->extend = rhi::Extend3D{ (uint32_t)texWidth, (uint32_t)texHeight, 1 };
+  image->format = rhi::TextureFormat::RGBA8_UNORM_SRGB;
+  image->dimension = rhi::TextureDimension::TEX2D;
+  image->data_size = image->buffer.size;
+  image->mip_levels = 1;
+  image->array_layers = 1;
+  image->subResources.push_back(Texture::SubResource{ 0, 0, 0,
+    uint32_t(image->buffer.size), uint32_t(texWidth), uint32_t(texHeight) });
+  stbi_image_free(pixels);
+  return image;
+}
+
 auto EXR::writeEXR(std::filesystem::path const& path, uint32_t width,
   uint32_t height, uint32_t channel, float* data) noexcept -> void {
   EXRHeader header;
@@ -214,8 +243,7 @@ auto EXR::fromEXR(std::filesystem::path const& path) noexcept
 auto load_image(std::filesystem::path const& path) noexcept -> std::unique_ptr<Texture> {
 if (path.extension() == ".jpg" || path.extension() == ".JPG" ||
     path.extension() == ".JPEG") {
-  return nullptr;
-
+  return JPEG::fromJPEG(path);
 }
 else if (path.extension() == ".png" || path.extension() == ".PNG") {
   return PNG::fromPNG(path);

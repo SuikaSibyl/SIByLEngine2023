@@ -3,6 +3,7 @@
 
 #include "cpp_compatible.hlsli"
 #include "math.hlsli"
+#include "error.hlsli"
 
 float3 to_world(in_ref(float3x3) frame, in_ref(float3) v) {
     return v[0] * frame[0] + v[1] * frame[1] + v[2] * frame[2];
@@ -518,9 +519,50 @@ struct bounds3 {
     __init() { pMin = float3(k_inf); pMax = float3(-k_inf); }
     __init(float3 pmin, float3 pmax) { pMin = pmin; pMax = pmax; }
     float3 diagonal() { return pMax - pMin; }
+    float3 offset(float3 p) {
+        float3 o = p - pMin;
+        if (pMax.x > pMin.x) o.x /= pMax.x - pMin.x;
+        if (pMax.y > pMin.y) o.y /= pMax.y - pMin.y;
+        if (pMax.z > pMin.z) o.z /= pMax.z - pMin.z;
+        return o;
+    }
     void bounding_sphere(out float3 center, out float radius) {
         center = (pMin + pMax) / 2;
         radius = inside(center, this) ? distance(center, pMax) : 0;
+    }
+
+    bool intersect_p(
+        float3 o, float3 d, float tMax,
+        out float hitt0, out float hitt1) {
+        float t0 = 0; float t1 = tMax;
+        for (int i = 0; i < 3; ++i) {
+            // Update interval for ith bounding box slab
+            float invRayDir = 1 / d[i];
+            float tNear = (pMin[i] - o[i]) * invRayDir;
+            float tFar = (pMax[i] - o[i]) * invRayDir;
+            // Update parametric interval from slab intersection t values
+            if (tNear > tFar) swap(tNear, tFar);
+            // Update tFar to ensure robust ray–bounds intersection
+            tFar *= 1 + 2 * gamma(3);
+
+            t0 = tNear > t0 ? tNear : t0;
+            t1 = tFar  < t1 ? tFar  : t1;
+            if (t0 > t1) return false;
+        }
+        hitt0 = t0;
+        hitt1 = t1;
+        return true;
+    }
+};
+
+struct bounds3i {
+    int3 pMin;
+    int3 pMax;
+
+    static bool inside_exclusive(int3 p, bounds3i b) {
+        return (p.x >= b.pMin.x && p.x < b.pMax.x &&
+                p.y >= b.pMin.y && p.y < b.pMax.y &&
+                p.z >= b.pMin.z && p.z < b.pMax.z);
     }
 };
 
@@ -541,5 +583,19 @@ float distance(float3 p, bounds3 b) {
     float dist2 = distance_squared(p, b);
     return sqrt(dist2);
 }
+
+struct Ray {
+    float3 origin;
+    float tMin;
+    float3 direction;
+    float tMax;
+
+    float3 at(float t) { return origin + t * direction; }
+};
+
+struct Transform {
+    float4x4 o2w;
+    float4x4 w2o;
+};
 
 #endif

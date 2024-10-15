@@ -79,6 +79,7 @@ enum struct ContextExtensionBit {
   CONSERVATIVE_RASTERIZATION = 1 << 8,
   COOPERATIVE_MATRIX = 1 << 9,
   CUDA_INTEROPERABILITY = 1 << 10,
+  USE_AFTERMATH = 1 << 11,
 };
 
 /** pipeline stage enums */
@@ -710,9 +711,9 @@ enum struct CompareFunction {
 };
 
 struct SIByL_API SamplerDescriptor {
-  AddressMode addressModeU = AddressMode::MIRROR_REPEAT;
-  AddressMode addressModeV = AddressMode::MIRROR_REPEAT;
-  AddressMode addressModeW = AddressMode::CLAMP_TO_EDGE;
+  AddressMode addressModeU = AddressMode::REPEAT;
+  AddressMode addressModeV = AddressMode::REPEAT;
+  AddressMode addressModeW = AddressMode::REPEAT;
   FilterMode magFilter = FilterMode::LINEAR;
   FilterMode minFilter = FilterMode::LINEAR;
   MipmapFilterMode mipmapFilter = MipmapFilterMode::LINEAR;

@@ -899,6 +899,7 @@ auto Material::getDataPacket() const noexcept -> MaterialPacket {
   packet.bxdf_type = bxdf;
   packet.floatvec_0 = { baseOrDiffuseColor, roughnessFactor };
   packet.floatvec_1 = { emissiveColor, metallicFactor };
+  packet.floatvec_2 = floatvec_2;
   return packet;
 }
 
@@ -929,6 +930,11 @@ Mesh::operator tinygltf::Mesh() const {
 
 MeshLoader::result_type MeshLoader::operator()(MeshLoader::from_empty_tag) {
   auto ptr = std::make_shared<Mesh>();
+  return ptr;
+}
+
+MediumLoader::result_type MediumLoader::operator()(MediumLoader::from_empty_tag) {
+  auto ptr = std::make_shared<Medium>();
   return ptr;
 }
 
@@ -972,6 +978,7 @@ ex::resource_cache<Buffer, BufferLoader> GFXContext::buffers = {};
 ex::resource_cache<Texture, TextureLoader> GFXContext::textures = {};
 ex::resource_cache<rhi::Sampler, SamplerLoader> GFXContext::samplers = {};
 ex::resource_cache<ShaderModule, ShaderModuleLoader> GFXContext::shaders = {};
+ex::resource_cache<Medium, MediumLoader> GFXContext::mediums = {};
 
 auto GFXContext::initialize(rhi::Device* device) noexcept -> void {
   GFXContext::device = device;
@@ -1027,7 +1034,7 @@ auto GFXContext::create_buffer_desc(rhi::BufferDescriptor const& desc) noexcept 
 auto GFXContext::create_texture_desc(rhi::TextureDescriptor const& desc) noexcept -> TextureHandle {
   RUID const ruid = root::resource::queryRUID();
   auto ret = textures.load(ruid, TextureLoader::from_desc_tag{}, desc);
-  return TextureHandle{ ret.first->second };
+  return TextureHandle{ ret.first->second, ruid };
 }
 
 auto GFXContext::create_texture_file(std::string const& path) noexcept -> TextureHandle {
@@ -1035,7 +1042,7 @@ auto GFXContext::create_texture_file(std::string const& path) noexcept -> Textur
   auto ret = textures.load(ruid, TextureLoader::from_file_tag{}, path);
   gfx::GFXContext::device->trainsitionTextureLayout(ret.first->second->texture.get(),
     se::rhi::TextureLayout::UNDEFINED, se::rhi::TextureLayout::GENERAL);
-  return TextureHandle{ ret.first->second };
+  return TextureHandle{ ret.first->second, ruid };
 }
 
 auto GFXContext::create_sampler_desc(
@@ -1071,6 +1078,12 @@ auto GFXContext::load_material_empty() noexcept -> MaterialHandle {
   RUID const ruid = root::resource::queryRUID();
   auto ret = materials.load(ruid, MaterialLoader::from_empty_tag{});
   return MaterialHandle{ ret.first->second, ruid };
+}
+
+auto GFXContext::load_medium_empty() noexcept -> MediumHandle {
+  RUID const ruid = root::resource::queryRUID();
+  auto ret = mediums.load(ruid, MediumLoader::from_empty_tag{});
+  return MediumHandle{ ret.first->second, ruid };
 }
 
 auto GFXContext::load_shader_spirv(se::buffer* buffer, rhi::ShaderStageBit stage) noexcept -> ShaderHandle {

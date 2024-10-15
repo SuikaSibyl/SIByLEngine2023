@@ -4,6 +4,8 @@
 #undef DLIB_EXPORT
 #include <format>
 #undef max
+#include <aftermath/GFSDK_Aftermath.h>
+#include <aftermath/GFSDK_Aftermath_GpuCrashDump.h>
 
 namespace se::rhi {
 auto Context::create(Backend backend) noexcept -> std::unique_ptr<Context> {
@@ -411,8 +413,71 @@ auto attachWindow(Context_VK* contexVk) noexcept -> void {
   }
 }
 
+namespace Aftermath {
+  std::mutex m_mutex;
+  // Static wrapper for the GPU crash dump handler. See the 'Handling GPU crash
+  // dump Callbacks' section for details.
+  void GpuCrashDumpCallback(const void* pGpuCrashDump,
+    const uint32_t gpuCrashDumpSize, void* pUserData) {
+    //// Make sure only one thread at a time...
+    std::lock_guard<std::mutex> lock(m_mutex);
+    //  Write to file for later in-depth analysis.
+    se::buffer buffer;
+    buffer.isReference = true;
+    buffer.data = (void*)pGpuCrashDump;
+    buffer.size = gpuCrashDumpSize;
+    std::string timestamp = se::worldtime::get().to_string();
+    se::syncWriteFile(std::string("./dmp/" + timestamp + ".nv-gpudmp").c_str(), buffer);
+  }
+
+  // Static wrapper for the shader debug information handler. See the 'Handling
+  // Shader Debug Information callbacks' section for details.
+  void ShaderDebugInfoCallback(const void* pShaderDebugInfo,
+    const uint32_t shaderDebugInfoSize,
+    void* pUserData) {
+    root::print::error("ShaderDebugInfoCallback");
+  }
+
+  // Static wrapper for the GPU crash dump description handler. See the
+  // 'Handling GPU Crash Dump Description Callbacks' section for details.
+  void CrashDumpDescriptionCallback(
+    PFN_GFSDK_Aftermath_AddGpuCrashDumpDescription addDescription,
+    void* pUserData) {
+    // GpuCrashTracker* pGpuCrashTracker =
+    //     reinterpret_cast<GpuCrashTracker*>(pUserData);
+    // pGpuCrashTracker->OnDescription(addDescription);
+
+    root::print::error("CrashDumpDescriptionCallback");
+  }
+
+  // Static wrapper for the resolve marker handler. See the 'Handling Marker
+  // Resolve Callbacks' section for details.
+  void ResolveMarkerCallback(const void* pMarkerData,
+    const uint32_t markerDataSize, void* pUserData,
+    void** ppResolvedMarkerData,
+    uint32_t* pResolvedMarkerDataSize) {
+    root::print::error("ResolveMarkerCallback");
+    // GpuCrashTracker* pGpuCrashTracker =
+    // reinterpret_cast<GpuCrashTracker*>(pUserData);
+    // pGpuCrashTracker->OnResolveMarker(pMarkerData, markerDataSize,
+    // ppResolvedMarkerData, pResolvedMarkerDataSize);
+  }
+}
+
 auto Context_VK::init(se::window* window, ContextExtensions ext) noexcept -> bool {
   bindedWindow = window;
+  if (ext & (uint32_t)ContextExtensionBit::USE_AFTERMATH) {
+    // Enable GPU crash dumps and register callbacks.
+    GFSDK_Aftermath_EnableGpuCrashDumps(
+      GFSDK_Aftermath_Version_API,
+      GFSDK_Aftermath_GpuCrashDumpWatchedApiFlags_Vulkan,
+      GFSDK_Aftermath_GpuCrashDumpFeatureFlags_Default,  // Default behavior.
+      Aftermath::GpuCrashDumpCallback,  // Register callback for GPU crash dumps.
+      Aftermath::ShaderDebugInfoCallback,  // Register callback for shader debug information.
+      Aftermath::CrashDumpDescriptionCallback,  // Register callback for GPU crash dump description.
+      Aftermath::ResolveMarkerCallback,  // Register callback for marker resolution (R495 or later NVIDIA graphics driver).
+      nullptr);               // Set the GpuCrashTracker object as user data passed back by the above callbacks.
+  }
   // create VkInstance
   createInstance(this, ext);
   setupDebugMessenger(this);
@@ -634,6 +699,10 @@ auto inline destroyDebugUtilsMessengerEXT(
 }
 
 auto Context_VK::destroy() noexcept -> void {
+  if (extensions & (uint32_t)ContextExtensionBit::USE_AFTERMATH) {
+    // Disable GPU crash dump creation.
+    GFSDK_Aftermath_DisableGpuCrashDumps();
+  }
   if (enableValidationLayers)
     destroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
   if (surface) vkDestroySurfaceKHR(instance, surface, nullptr);
@@ -920,32 +989,30 @@ auto Device_VK::waitIdle() noexcept -> void {
       case VK_ERROR_COMPRESSION_EXHAUSTED_EXT: error_str="Error compression exhausted"; break;
       default: break;
     }
-    //
-    //if (result == VK_ERROR_DEVICE_LOST) {
-    //  GFSDK_Aftermath_CrashDump_Status status = GFSDK_Aftermath_CrashDump_Status_Unknown;
-    //  GFSDK_Aftermath_GetCrashDumpStatus(&status);
-    //  auto tStart = std::chrono::steady_clock::now();
-    //  auto tElapsed = std::chrono::milliseconds::zero();
-    //  // Loop while Aftermath crash dump data collection has not finished or
-    //  // the application is still processing the crash dump data.
-    //  while (status != GFSDK_Aftermath_CrashDump_Status_CollectingDataFailed &&
-    //         status != GFSDK_Aftermath_CrashDump_Status_Finished &&
-    //         tElapsed.count() < 1500000)
-    //  {
-    //    // Sleep a couple of milliseconds and poll the status again.
-    //    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    //    GFSDK_Aftermath_GetCrashDumpStatus(&status);
-    //    tElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tStart);
-    //  }
+    
+    if (result == VK_ERROR_DEVICE_LOST) {
+      GFSDK_Aftermath_CrashDump_Status status = GFSDK_Aftermath_CrashDump_Status_Unknown;
+      GFSDK_Aftermath_GetCrashDumpStatus(&status);
+      auto tStart = std::chrono::steady_clock::now();
+      auto tElapsed = std::chrono::milliseconds::zero();
+      // Loop while Aftermath crash dump data collection has not finished or
+      // the application is still processing the crash dump data.
+      while (status != GFSDK_Aftermath_CrashDump_Status_CollectingDataFailed &&
+             status != GFSDK_Aftermath_CrashDump_Status_Finished &&
+             tElapsed.count() < 1500000)
+      {
+        // Sleep a couple of milliseconds and poll the status again.
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        GFSDK_Aftermath_GetCrashDumpStatus(&status);
+        tElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tStart);
+      }
 
-    //  if (status == GFSDK_Aftermath_CrashDump_Status_Finished) {
-    //      root::print::error("Aftermath finished processing the crash dump.\n");
-    //  } else {
-    //      root::print::error("Unexpected crash dump status after timeout: " + std::to_string(status));
-    //  }
-
-    //  exit(-1);
-    //}
+      if (status == GFSDK_Aftermath_CrashDump_Status_Finished) {
+          root::print::error("Aftermath finished processing the crash dump.\n");
+      } else {
+          root::print::error("Unexpected crash dump status after timeout: " + std::to_string(status));
+      }
+    }
     root::print::error("VULKAN :: Device WaitIdle not Success! Error code: "+ error_str);
   }
 }

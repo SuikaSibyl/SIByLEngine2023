@@ -34,9 +34,9 @@ struct CameraData {
     float apertureRadius; ///< Camera aperture radius in scene units.
     float shutterSpeed;   ///< Camera shutter speed in seconds.
     float ISOSpeed;       ///< Camera film speed based on ISO standards.
-    float _padding1;
+    int mediumID;
     float _padding2;
-
+    
     float2 clipToWindowScale;
     float2 clipToWindowBias;
 };

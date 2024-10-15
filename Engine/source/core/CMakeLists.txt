@@ -14,12 +14,13 @@ target_include_directories(${PROJECT_NAME} PUBLIC include
 target_link_directories(${PROJECT_NAME} PUBLIC
   "${PROJECT_SOURCE_DIR}/Engine/extern/glfw/libs"
   "${PROJECT_SOURCE_DIR}/Engine/extern/vulkan/libs"
+  "${PROJECT_SOURCE_DIR}/Engine/extern/aftermath/libs"
   "${PROJECT_SOURCE_DIR}/Engine/extern/slang/libs")
 target_link_libraries(${PROJECT_NAME} PUBLIC 
   imgui yaml cnpy tinyexr tinyxml tinymitsuba)
 target_link_libraries(${PROJECT_NAME} PRIVATE 
   ${TORCH_LIBRARIES} ${TORCH_PYTHON_LIBRARY} 
-  "glfw3.lib" "vulkan-1.lib" "slang.lib" "slang-rt.lib")
+  "glfw3.lib" "vulkan-1.lib" "slang.lib" "slang-rt.lib" "GFSDK_Aftermath_Lib.x64.lib")
 target_sources(${PROJECT_NAME} PRIVATE 
   "source/base/se.log.cpp"
   "source/base/se.math.cpp"
