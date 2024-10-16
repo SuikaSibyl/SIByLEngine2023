@@ -266,7 +266,7 @@ auto Line3DPass::execute(
     se::ivec2 size;
     int cameraIndex;
   } pConst;
-  pConst.size = se::ivec2{ color->texture->width() , color->texture->height() };
+  pConst.size = se::ivec2{ (int)color->texture->width() , (int)color->texture->height() };
   pConst.cameraIndex = scene->editorInfo.active_camera_index;
 
   if (size > 0) {

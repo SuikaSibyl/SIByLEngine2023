@@ -9,7 +9,7 @@ auto root::resource::add_path(std::filesystem::path const& path) noexcept -> voi
 }
 
 auto root::resource::find_path(std::filesystem::path const& path) noexcept -> std::filesystem::path {
-
+  return {};
 }
 
 struct ResourceManager {

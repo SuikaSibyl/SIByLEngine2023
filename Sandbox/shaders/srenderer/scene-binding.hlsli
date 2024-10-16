@@ -97,7 +97,7 @@ GeometryHit fetchTrimeshGeometryHit(
     hit.barycentric = bary.yz;
     hit.primitiveID = primitiveID;
     hit.geometryID = geometryID;
-
+    
     const int3 index = int3(fetchTriangleIndices(geometry, primitiveID));
 
     float3 vertexPositions[3];

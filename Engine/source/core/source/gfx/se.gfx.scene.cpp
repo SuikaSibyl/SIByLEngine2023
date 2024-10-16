@@ -89,7 +89,7 @@ struct MeshLoaderConfig {
   bool deduplication = false;
 };
 
-MeshLoaderConfig defaultMeshLoadConfig = { defaultMeshDataLayout, true, true, false, false};
+MeshLoaderConfig defaultMeshLoadConfig = { defaultMeshDataLayout, true, true, false, true};
 
 Scene::Scene() {
   gpuScene.position_buffer = GFXContext::load_buffer_empty();
@@ -544,7 +544,8 @@ auto Scene::updateGPUScene() noexcept -> void {
           geometry.geometryTransform = transform.global;
           geometry.geometryTransformInverse = se::inverse(transform.global);
           geometry.oddNegativeScaling = transform.oddScaling;
-          geometry.materialID = gpuScene.try_fetch_material_index(primitive.material);
+          if (primitive.material.get())
+            geometry.materialID = gpuScene.try_fetch_material_index(primitive.material);
           geometry.primitiveType = 0;
           geometry.lightID = -1;
           geometry.mediumIDInterior = -1;
@@ -585,9 +586,9 @@ auto Scene::updateGPUScene() noexcept -> void {
             Light::LightPacket packet;
             const vec3 emissive = mesh->custom_primitives[primitive_index].material->emissiveColor;
             const vec3 yuv = {
-              0.299 * emissive.r + 0.587 * emissive.g + 0.114 * emissive.b,
-              -0.14713 * emissive.r - 0.28886 * emissive.g + 0.436 * emissive.b,
-              0.615 * emissive.r - 0.51499 * emissive.g - 0.10001 * emissive.b,
+              0.299f * emissive.r + 0.587f * emissive.g + 0.114f * emissive.b,
+              -0.14713f * emissive.r - 0.28886f * emissive.g + 0.436f * emissive.b,
+              0.615f * emissive.r - 0.51499f * emissive.g - 0.10001f * emissive.b,
             };
             int type = mesh->custom_primitives[primitive_index].primitive_type;
             if (type == 1) {
@@ -632,9 +633,9 @@ auto Scene::updateGPUScene() noexcept -> void {
             std::vector<Light::LightPacket> packets(geometry.indexSize / 3);
             const vec3 emissive = mesh->primitives[primitive_index].material->emissiveColor;
             const vec3 yuv = {
-              0.299 * emissive.r + 0.587 * emissive.g + 0.114 * emissive.b,
-              -0.14713 * emissive.r - 0.28886 * emissive.g + 0.436 * emissive.b,
-              0.615 * emissive.r - 0.51499 * emissive.g - 0.10001 * emissive.b,
+              0.299f * emissive.r + 0.587f * emissive.g + 0.114f * emissive.b,
+              -0.14713f * emissive.r - 0.28886f * emissive.g + 0.436f * emissive.b,
+              0.615f * emissive.r - 0.51499f * emissive.g - 0.10001f * emissive.b,
             };
             for (int j = 0; j < geometry.indexSize / 3; j++) {
               packets[j].light_type = int(Light::LightType::MESH_PRIMITIVE);
@@ -1031,9 +1032,6 @@ auto loadObjMesh(std::string path, Scene& scene) noexcept -> MeshHandle {
   auto& shapes = reader.GetShapes();
   auto& materials = reader.GetMaterials();
 
-  uint32_t vertex_offset = 0;
-  std::unordered_map<uint64_t, uint32_t> uniqueVertices{};
-
   std::vector<float> vertexBufferV = {};
   std::vector<float> positionBufferV = {};
   std::vector<uint32_t> indexBufferWV = {};
@@ -1049,6 +1047,8 @@ auto loadObjMesh(std::string path, Scene& scene) noexcept -> MeshHandle {
   uint64_t global_index_offset = 0;
   uint32_t submesh_vertex_offset = 0, submesh_index_offset = 0;
   for (size_t s = 0; s < shapes.size(); s++) {
+    uint32_t vertex_offset = 0;
+    std::unordered_map<uint64_t, uint32_t> uniqueVertices{};
     vec3 position_max = vec3(-1e9);
     vec3 position_min = vec3(1e9);
     // Loop over faces(polygon)
@@ -1243,7 +1243,7 @@ auto loadObjMesh(std::string path, Scene& scene) noexcept -> MeshHandle {
     mesh.get()->primitives.emplace_back(std::move(sePrimitive));
     // todo:: add material
     submesh_index_offset = global_index_offset;
-    submesh_vertex_offset = submesh_index_offset;
+    submesh_vertex_offset += positionBufferV.size() / 3 - submesh_vertex_offset;
   }
   { // register mesh
     Buffer* position_buffer = scene.gpuScene.position_buffer.get();
@@ -1360,9 +1360,9 @@ auto loadGLTFMaterial(tinygltf::Material const* glmaterial, tinygltf::Model cons
       mat->metallicFactor = (float)glmaterial->pbrMetallicRoughness.metallicFactor;
     }
     mat->emissiveColor = se::vec3{
-        glmaterial->emissiveFactor[0],
-        glmaterial->emissiveFactor[1],
-        glmaterial->emissiveFactor[2],
+        (float)glmaterial->emissiveFactor[0],
+        (float)glmaterial->emissiveFactor[1],
+        (float)glmaterial->emissiveFactor[2],
     };
   }
   //{ // load diffuse texture
@@ -1464,8 +1464,8 @@ static inline auto loadGLTFMesh(tinygltf::Mesh const& gltfmesh,
             if (attribute.first == "POSITION") {
               switch (attribAccessor.type) {
                 case TINYGLTF_TYPE_VEC3: {
-                  positionMax = { attribAccessor.maxValues[0], attribAccessor.maxValues[1],attribAccessor.maxValues[2] };
-                  positionMin = { attribAccessor.minValues[0], attribAccessor.minValues[1],attribAccessor.minValues[2] };
+                  positionMax = { (float)attribAccessor.maxValues[0], (float)attribAccessor.maxValues[1], (float)attribAccessor.maxValues[2] };
+                  positionMin = { (float)attribAccessor.minValues[0], (float)attribAccessor.minValues[1], (float)attribAccessor.minValues[2] };
                   switch (attribAccessor.componentType) {
                     case TINYGLTF_COMPONENT_TYPE_FLOAT:
                       // 3D vector of float
@@ -2758,7 +2758,7 @@ namespace PBRT_LOADER {
   };
 
   // ParsedParameterVector Definition
-  using ParsedParameterVector = std::array<ParsedParameter*, 8>;
+  using ParsedParameterVector = std::vector<ParsedParameter*>;
   
   template <typename Next, typename Unget>
   static ParsedParameterVector parseParameters(
@@ -2767,7 +2767,7 @@ namespace PBRT_LOADER {
     ParsedParameterVector parameterVector;
 
     while (true) {
-      pstd::optional<Token> t = nextToken(TokenOptional);
+      std::optional<Token> t = nextToken(TokenOptional);
       if (!t.has_value())
         return parameterVector;
 
@@ -2794,7 +2794,7 @@ namespace PBRT_LOADER {
 
       auto typeBegin = skipSpace(decl.begin());
       if (typeBegin == decl.end())
-        ErrorExit(&t->loc, "Parameter \"%s\" doesn't have a type declaration?!",
+        root::print::error(t->loc.ToString() + "Parameter doesn't have a type declaration?!" +
           std::string(decl.begin(), decl.end()));
 
       // Find end of type declaration
@@ -2812,7 +2812,7 @@ namespace PBRT_LOADER {
 
       auto nameBegin = skipSpace(typeEnd);
       if (nameBegin == decl.end())
-        ErrorExit(&t->loc, "Unable to find parameter name from \"%s\"",
+        root::print::error(t->loc.ToString() + "Unable to find parameter name from: " +
           std::string(decl.begin(), decl.end()));
 
       auto nameEnd = skipToSpace(nameBegin);

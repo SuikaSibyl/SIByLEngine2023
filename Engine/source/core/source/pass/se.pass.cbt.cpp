@@ -504,7 +504,7 @@ auto CBTSpatialTreeVisualizePass::execute(
     {"cbt_heap", rhi::BindingResource{{cbt->buffer.get(), 0, cbt->buffer->size()}}},
   });
 
-  pConst.resolution = { color->texture->width(), color->texture->width() };
+  pConst.resolution = { (int)color->texture->width(), (int)color->texture->width() };
   pConst.camera_index = scene->getEditorActiveCameraIndex();
 
   rhi::RenderPassEncoder* encoder = beginPass(context, color.get());

@@ -31,6 +31,8 @@ std::unique_ptr<se::window> window = se::window::create(se::window::WindowOption
  se::editor::EditorContext::initialize();
  ImGui::SetCurrentContext(se::editor::ImGuiContext::getRawCtx());
 
+
+
  //std::string path = "S:/SIByL2024/Sandbox/examples/lighting/_data/test.exr";
  //std::unique_ptr<se::EnvmapLight> envlight = std::make_unique<se::EnvmapLight>(path);
  //envlight = nullptr;
@@ -38,7 +40,7 @@ std::unique_ptr<se::window> window = se::window::create(se::window::WindowOption
  //se::gfx::PMFConstructor::clear_datapack();
  //std::string path = "S:/SIByL2024/Sandbox/examples/lighting/_data/onelight-2.gltf";
  //std::string path = "D:/Art/Scenes/veach-mis-mitsuba/scene_v3.xml";
- std::string path = "P:/GitProjects/lajolla_public/scenes/volpath_test/vol_cbox.xml";
+ std::string path = "P:/GitProjects/lajolla_public/scenes/volpath_test/volpath_test_buddha.xml";
  //std::string path = "P:/GitProjects/lajolla_public/scenes/volpath_test/volpath_test2.gltf";
  auto scene = se::gfx::GFXContext::load_scene_xml(path);
  //auto scene = se::gfx::GFXContext::load_scene_gltf(path);
@@ -51,6 +53,7 @@ std::unique_ptr<se::window> window = se::window::create(se::window::WindowOption
  //float pdf; int offset;
  //float a = pc1d.sample(0.09, pdf, offset);
  scene->serialize("D:/Art/Scenes/veach-mis-mitsuba/scene_v3.gltf");
+
 
  device->waitIdle();
  se::editor::EditorBase::finalize();

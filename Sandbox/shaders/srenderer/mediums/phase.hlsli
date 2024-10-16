@@ -62,6 +62,12 @@ struct HGPhaseFunction : IPhaseFunction {
         return { wi, pdf, p, true };
     }
 
+    static iphase::sample_o sample_p_wcv(float3 wo, float2 u, TParam param, out float3 cv) {
+        float3 p; float pdf;
+        float3 wi = sample_henyey_greenstein(wo, param.g, u, p, pdf);
+        cv = p; return { wi, pdf, p, true };
+    }
+
     static float pdf(float3 wo, float3 wi, TParam param) {
         return average(HGPhaseFunction::p(wo, wi, param));
     };
@@ -96,6 +102,10 @@ struct HGPhaseFunction : IPhaseFunction {
 namespace phases {
 iphase::sample_o sample_p(float3 wo, float2 u, PhasePacket param) {
     return HGPhaseFunction::sample_p(wo, u, HGParam(param));
+}
+
+iphase::sample_o sample_p_wcv(float3 wo, float2 u, PhasePacket param, out float3 cv) {
+    return HGPhaseFunction::sample_p_wcv(wo, u, HGParam(param), cv);
 }
 
 float3 p(float3 wo, float3 wi, PhasePacket param) {

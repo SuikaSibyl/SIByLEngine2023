@@ -67,7 +67,7 @@ auto RasterizerShadePass::execute(
     {"GPUScene_geometry", scene->getGPUScene()->bindingResourceGeometry() },
   });
 
-  pConst.resolution = { color->texture->width(), color->texture->width() };
+  pConst.resolution = { (int)color->texture->width(), (int)color->texture->width() };
   pConst.cameraIndex = scene->getEditorActiveCameraIndex();
 
   rhi::RenderPassEncoder* encoder = beginPass(context, color.get());

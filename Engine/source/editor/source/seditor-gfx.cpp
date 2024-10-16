@@ -29,7 +29,7 @@ auto ViewportWidget::bindTimer(se::timer* timer) noexcept -> void {
   controller.timer = timer;
 }
 
-auto ViewportWidget::onUpdate() noexcept -> void {
+auto ViewportWidget::onUpdate() -> void {
   controller.bindTransform(se::editor::EditorBase::viewportWidget.camera_transform);
   controller.onUpdate();
 }
@@ -566,11 +566,23 @@ void drawNodeInspector(gfx::Node& node) {
           ImGui::PopID();
         }
         else {
+          ImGui::PushID("Primitives");
           for (int i = 0; i < component->mesh->primitives.size(); ++i) {
-            bool opened = ImGui::TreeNode(("primitive - " + std::to_string(i)).c_str());
+            bool opened = ImGui::TreeNode(("custom primitive - " + std::to_string(i)).c_str());
             if (opened) {
               auto& primitive = component->mesh->primitives[i];
-              drawMaterialEditor(primitive.material);
+              if (primitive.material.get()) {
+                ImGui::Text("Material:");
+                drawMaterialEditor(primitive.material);
+              }
+              if (primitive.exterior.get()) {
+                ImGui::Text("Exteriror Medium:");
+                drawMediumEditor(primitive.exterior);
+              }
+              if (primitive.interior.get()) {
+                ImGui::Text("Interior Medium:");
+                drawMediumEditor(primitive.interior);
+              }
               ImGui::TreePop();
             }
           }
