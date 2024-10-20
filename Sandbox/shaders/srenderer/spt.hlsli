@@ -101,7 +101,19 @@ struct MediumPacket {
     float3 sigma_s = float3(0, 0, 0);
     float scale = 1.0f;
     float3 aniso = float3(0, 0, 0);
-    float padding = 0.0f;
+    float temperatureScale = 0.0f;
+    float3 bound_min;
+    float LeScale;
+    float3 bound_max;
+    MediumType medium_type = MediumType::HOMOGENEOUS;
+    int3 density_xyz;
+    int density_offset;
+    int3 temperature_xyz;
+    int temperature_offset;
+    int3 le_xyz;
+    int le_offset;
+    int3 majorant_xyz;
+    int majorant_offset;
 
     float3 get_g() { return clamp(aniso, -1 + 1e-3, 1 - 1e-3); }
     float3 get_sigma_a() { return sigma_a * scale; }

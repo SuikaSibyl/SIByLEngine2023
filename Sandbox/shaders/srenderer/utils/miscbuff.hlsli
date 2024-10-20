@@ -4,7 +4,7 @@
 #include "common/math.hlsli"
 #include "common/geometry.hlsli"
 
-RWStructuredBuffer<float> GPUScene_misc_storage;
+RWStructuredBuffer<float> GPUScene_grid_storage;
 
 struct SampledGrid {
     int nx; int ny; int nz;
@@ -28,11 +28,11 @@ struct SampledGrid {
                          look_up(pi + int3(1, 1, 1)), d.x);
         return lerp(lerp(d00, d10, d.y), lerp(d01, d11, d.y), d.z);
     }
-
+    
     float look_up(int3 p) {
         bounds3i sampleBounds = { int3(0, 0, 0), int3(nx, ny, nz) };
         if (!bounds3i::inside_exclusive(p, sampleBounds)) return 0;
-        return GPUScene_misc_storage[offset + (p.z * ny + p.y) * nx + p.x];
+        return GPUScene_grid_storage[offset + (p.z * ny + p.y) * nx + p.x];
     }
 
     int x_size() { return nx; }

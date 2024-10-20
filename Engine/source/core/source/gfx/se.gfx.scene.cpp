@@ -7,6 +7,11 @@
 #include <tinyparser-mitsuba.h>
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
+#include "ex.tinyprbrtloader.hpp"
+#include <nanovdb/NanoVDB.h>
+#define NANOVDB_USE_ZIP 1
+#include <nanovdb/util/IO.h>
+
 
 namespace se::gfx {
 static std::array<uint64_t, 24> primes = {3,  5,  7,  11, 13, 17, 19, 23,
@@ -889,6 +894,10 @@ auto Scene::GPUScene::bindingResourceMedium() noexcept -> rhi::BindingResource {
   return rhi::BindingResource{ {medium_buffer->buffer.get(), 0, medium_buffer->buffer->size()} };
 }
 
+auto Scene::GPUScene::bindingResourceGridStorage() noexcept -> rhi::BindingResource {
+  return rhi::BindingResource{ {grid_storage_buffer->buffer.get(), 0, grid_storage_buffer->buffer->size()} };
+}
+
 auto Scene::GPUScene::bindingResourceLightBVH() noexcept -> rhi::BindingResource {
   return rhi::BindingResource{ {lbvh.light_bvh_buffer->buffer.get(), 0, lbvh.light_bvh_buffer->buffer->size()} };
 }
@@ -963,6 +972,18 @@ auto Scene::GPUScene::try_fetch_medium_index(MediumHandle& handle) noexcept -> i
     Medium::MediumPacket pack = handle->packet;
     memcpy((float*)&(medium_buffer->host[sizeof(Medium::MediumPacket) * index]), &pack, sizeof(pack));
     medium_buffer->host_stamp++;
+
+    if (handle->density.has_value()) {
+      handle->packet.bound_min = handle->density->bounds.pMin;
+      handle->packet.bound_max = handle->density->bounds.pMax;
+      int size = handle->density->values.size();
+      handle->packet.density_offset = grid_storage_buffer->host.size() / sizeof(float);
+      grid_storage_buffer->host.resize(sizeof(float) * size);
+      memcpy(&(grid_storage_buffer->host[handle->packet.density_offset * sizeof(float)]),
+        handle->density->values.data(), size * sizeof(float));
+      grid_storage_buffer->host_stamp++;
+    }
+
     return index;
   }
   return iter->second.first;
@@ -2279,1382 +2300,94 @@ auto loadXMLMesh(TPM_NAMESPACE::Object const* node, xmlLoaderEnv* env,
 
 }
 
-namespace PBRT_LOADER {
-  // FileLoc Definition
-  struct FileLoc {
-    FileLoc() = default;
-    FileLoc(std::string_view filename) : filename(filename) {}
-    std::string ToString() const {
-      return std::string(filename.data(), filename.size()) + ": line " 
-        + std::to_string(line) + ", column: " + std::to_string(column);
-    }
+auto nanovdb_float_grid_loader(nanovdb::GridHandle<nanovdb::HostBuffer>& grid) -> Medium::SampledGrid {
+  nanovdb::NanoGrid<float>* floatGrid = grid.grid<float>();
+  float minValue, maxValue;
+  floatGrid->tree().extrema(minValue, maxValue);
+  nanovdb::Vec3dBBox bbox = floatGrid->worldBBox();
 
-    std::string_view filename;
-    int line = 1, column = 0;
+  int nx = floatGrid->indexBBox().dim()[0];
+  int ny = floatGrid->indexBBox().dim()[1];
+  int nz = floatGrid->indexBBox().dim()[2];
+
+  std::vector<float> values;
+
+  int z0 = 0, z1 = nz;
+  int y0 = 0, y1 = ny;
+  int x0 = 0, x1 = nx;
+
+  bounds3 bounds = bounds3(vec3(bbox.min()[0], bbox.min()[1], bbox.min()[2]),
+    vec3(bbox.max()[0], bbox.max()[1], bbox.max()[2]));
+
+  int downsample = 0;
+  // Fix the resolution to be a multiple of 2^downsample just to make
+  // downsampling easy. Chop off one at a time from the bottom and top
+  // of the range until we get there; the bounding box is updated as
+  // well so that the remaining volume doesn't shift spatially.
+  auto round = [=](int& low, int& high, float& c0, float& c1) {
+    float delta = (c1 - c0) / (high - low);
+    int mult = 1 << downsample; // want a multiple of this in resolution
+    while ((high - low) % mult) {
+      ++low;
+      c0 += delta;
+      if ((high - low) % mult) {
+        --high;
+        c1 -= delta;
+      }
+    }
+    return high - low;
   };
+  nz = round(z0, z1, bounds.pMin.z, bounds.pMax.z);
+  ny = round(y0, y1, bounds.pMin.y, bounds.pMax.y);
+  nx = round(x0, x1, bounds.pMin.x, bounds.pMax.x);
 
-  // Token Definition
-  struct Token {
-    Token() = default;
-    Token(std::string_view token, FileLoc loc) : token(token), loc(loc) {}
-    std::string_view token;
-    FileLoc loc;
-  };
-
-  // Tokenizer Definition
-  class Tokenizer {
-  public:
-    // Tokenizer Public Methods
-    Tokenizer(std::string str, std::string filename,
-      std::function<void(const char*, const FileLoc*)> errorCallback);
-    
-    ~Tokenizer();
-
-    static std::unique_ptr<Tokenizer> CreateFromFile(
-      const std::string& filename,
-      std::function<void(const char*, const FileLoc*)> errorCallback);
-    static std::unique_ptr<Tokenizer> CreateFromString(
-      std::string str,
-      std::function<void(const char*, const FileLoc*)> errorCallback);
-
-    std::optional<Token> Next();
-
-    // Just for parse().
-    // TODO? Have a method to set this?
-    FileLoc loc;
-
-  private:
-    // Tokenizer Private Methods
-    void CheckUTF(const void* ptr, int len) const;
-
-    int getChar() {
-      if (pos == end)
-        return EOF;
-      int ch = *pos++;
-      if (ch == '\n') {
-        ++loc.line;
-        loc.column = 0;
+  for (int z = z0; z < z1; ++z)
+    for (int y = y0; y < y1; ++y)
+      for (int x = x0; x < x1; ++x) {
+        values.push_back(floatGrid->tree().getValue({ x, y, z }));
       }
-      else
-        ++loc.column;
-      return ch;
-    }
-    void ungetChar() {
-      --pos;
-      if (*pos == '\n')
-        // Don't worry about the column; we'll be going to the start of
-        // the next line again shortly...
-        --loc.line;
-    }
 
-    // Tokenizer Private Members
-    // This function is called if there is an error during lexing.
-    std::function<void(const char*, const FileLoc*)> errorCallback;
-    
-    // If the input is stdin, then we copy everything until EOF into this
-    // string and then start lexing.  This is a little wasteful (versus
-    // tokenizing directly from stdin), but makes the implementation
-    // simpler.
-    std::string contents;
-
-    // Pointers to the current position in the file and one past the end of
-    // the file.
-    const char* pos, * end;
-
-    // If there are escaped characters in the string, we can't just return
-    // a std::string_view into the mapped file. In that case, we handle the
-    // escaped characters and return a std::string_view to sEscaped.  (And
-    // thence, std::string_views from previous calls to Next() must be invalid
-    // after a subsequent call, since we may reuse sEscaped.)
-    std::string sEscaped;
-  };
-
-  Tokenizer::Tokenizer(std::string str, std::string filename,
-    std::function<void(const char*, const FileLoc*)> errorCallback)
-    : errorCallback(std::move(errorCallback)), contents(std::move(str)) {
-    loc = FileLoc(*new std::string(filename));
-    pos = contents.data();
-    end = pos + contents.size();
-    CheckUTF(contents.data(), contents.size());
-  }
-
-  Tokenizer::~Tokenizer() {}
-
-  bool HasExtension(std::string filename, std::string e) {
-    std::string ext = e;
-    if (!ext.empty() && ext[0] == '.')
-      ext.erase(0, 1);
-
-    std::string filenameExtension = std::filesystem::path(filename).extension().string();
-    if (ext.size() > filenameExtension.size())
-      return false;
-    return std::equal(ext.rbegin(), ext.rend(), filenameExtension.rbegin(),
-      [](char a, char b) { return std::tolower(a) == std::tolower(b); });
-  }
-
-#ifdef _WIN32 
-  std::u16string UTF16FromUTF8(std::string str) {
-    std::wstring_convert<
-      std::codecvt_utf8_utf16<char16_t, 0x10ffff, std::codecvt_mode::little_endian>,
-      char16_t>
-      cnv;
-    std::u16string utf16 = cnv.from_bytes(str);
-    //CHECK_GE(cnv.converted(), str.size());
-    return utf16;
-  }
-
-  std::wstring WStringFromU16String(std::u16string str) {
-    std::wstring ws;
-    ws.reserve(str.size());
-    for (char16_t c : str)
-      ws.push_back(c);
-    return ws;
-  }
-
-  std::wstring WStringFromUTF8(std::string str) {
-    return WStringFromU16String(UTF16FromUTF8(str));
-  }
-#endif
-
-  std::string ReadFileContents(std::string filename) {
-#ifdef _WIN32 
-    std::ifstream ifs(WStringFromUTF8(filename).c_str(), std::ios::binary);
-    if (!ifs)
-      root::print::error("pbrt loader :: read file failed: " + filename);
-    return std::string((std::istreambuf_iterator<char>(ifs)),
-      (std::istreambuf_iterator<char>()));
-#else
-    int fd = open(filename.c_str(), O_RDONLY);
-    if (fd == -1)
-      ErrorExit("%s: %s", filename, ErrorString());
-
-    struct stat stat;
-    if (fstat(fd, &stat) != 0)
-      ErrorExit("%s: %s", filename, ErrorString());
-
-    std::string contents(stat.st_size, '\0');
-    if (read(fd, contents.data(), stat.st_size) == -1)
-      ErrorExit("%s: %s", filename, ErrorString());
-
-    close(fd);
-    return contents;
-#endif
-  }
-
-  //std::string ReadDecompressedFileContents(std::string filename) {
-  //  std::string compressed = ReadFileContents(filename);
-
-  //  // Get the size of the uncompressed file: with gzip, it's stored in the
-  //  // last 4 bytes of the file.  (One nit is that only 4 bytes are used,
-  //  // so it's actually the uncompressed size mod 2^32.)
-  //  if (!compressed.size() == 4) {
-  //    root::print::error("pbrt loader :: read file compressed failed: " + filename);
-  //  }
-  //  size_t sizeOffset = compressed.size() - 4;
-
-  //  // It's stored in little-endian, so manually reconstruct the value to
-  //  // be sure that it ends up in the right order for the target system.
-  //  const unsigned char* s = (const unsigned char*)compressed.data() + sizeOffset;
-  //  size_t size = (uint32_t(s[0]) | (uint32_t(s[1]) << 8) | (uint32_t(s[2]) << 16) |
-  //    (uint32_t(s[3]) << 24));
-
-  //  // A single libdeflate_decompressor * can't be used by multiple threads
-  //  // concurrently, so make sure to do per-thread allocations of them.
-  //  static ThreadLocal<libdeflate_decompressor*> decompressors(
-  //    []() { return libdeflate_alloc_decompressor(); });
-
-  //  libdeflate_decompressor* d = decompressors.Get();
-  //  std::string decompressed(size, '\0');
-  //  int retries = 0;
-  //  while (true) {
-  //    size_t actualOut;
-  //    libdeflate_result result = libdeflate_gzip_decompress(
-  //      d, compressed.data(), compressed.size(), decompressed.data(),
-  //      decompressed.size(), &actualOut);
-  //    switch (result) {
-  //    case LIBDEFLATE_SUCCESS:
-  //      CHECK_EQ(actualOut, decompressed.size());
-  //      LOG_VERBOSE("Decompressed %s from %d to %d bytes", filename,
-  //        compressed.size(), decompressed.size());
-  //      return decompressed;
-
-  //    case LIBDEFLATE_BAD_DATA:
-  //      ErrorExit("%s: invalid or corrupt compressed data", filename);
-
-  //    case LIBDEFLATE_INSUFFICIENT_SPACE:
-  //      // Assume that the decompressed contents are > 4GB and that
-  //      // thus the size reported in the file didn't tell the whole
-  //      // story.  Since the stored size is mod 2^32, try increasing
-  //      // the allocation by that much.
-  //      decompressed.resize(decompressed.size() + (1ull << 32));
-
-  //      // But if we keep going around in circles, then fail eventually
-  //      // since there is probably some other problem.
-  //      CHECK_LT(++retries, 10);
-  //      break;
-
-  //    default:
-  //    case LIBDEFLATE_SHORT_OUTPUT:
-  //      // This should never be returned by libdeflate, since we are
-  //      // passing a non-null actualOut pointer...
-  //      LOG_FATAL("Unexpected return value from libdeflate");
-  //    }
-  //  }
-  //}
-
-  std::unique_ptr<Tokenizer> Tokenizer::CreateFromFile(
-    const std::string& filename,
-    std::function<void(const char*, const FileLoc*)> errorCallback) {
-    if (filename == "-") {
-      // Handle stdin by slurping everything into a string.
-      std::string str;
-      int ch;
-      while ((ch = getchar()) != EOF)
-        str.push_back((char)ch);
-      return std::make_unique<Tokenizer>(std::move(str), "<stdin>",
-        std::move(errorCallback));
-    }
-
-    //if (HasExtension(filename, ".gz")) {
-    //  std::string str = ReadDecompressedFileContents(filename);
-    //  return std::make_unique<Tokenizer>(std::move(str), filename,
-    //    std::move(errorCallback));
-    //}
-
-    std::string str = ReadFileContents(filename);
-    return std::make_unique<Tokenizer>(std::move(str), filename,
-      std::move(errorCallback));
-  }
-
-  std::unique_ptr<Tokenizer> Tokenizer::CreateFromString(
-    std::string str, std::function<void(const char*, const FileLoc*)> errorCallback) {
-    return std::make_unique<Tokenizer>(std::move(str), "<stdin>",
-      std::move(errorCallback));
-  }
-
-  // Tokenizer Implementation
-  static char decodeEscaped(int ch, const FileLoc& loc) {
-    switch (ch) {
-    case EOF:
-      se::root::print::error("pbrt :: import : premature EOF after character escape");
-    case 'b':
-      return '\b';
-    case 'f':
-      return '\f';
-    case 'n':
-      return '\n';
-    case 'r':
-      return '\r';
-    case 't':
-      return '\t';
-    case '\\':
-      return '\\';
-    case '\'':
-      return '\'';
-    case '\"':
-      return '\"';
-    default:
-      se::root::print::error("pbrt :: unexpected escaped character");
-    }
-    return 0;  // NOTREACHED
-  }
-
-  std::optional<Token> Tokenizer::Next() {
-    while (true) {
-      const char* tokenStart = pos;
-      FileLoc startLoc = loc;
-
-      int ch = getChar();
-      if (ch == EOF)
-        return {};
-      else if (ch == ' ' || ch == '\n' || ch == '\t' || ch == '\r') {
-        // nothing
-      }
-      else if (ch == '"') {
-        // scan to closing quote
-        bool haveEscaped = false;
-        while ((ch = getChar()) != '"') {
-          if (ch == EOF) {
-            errorCallback("premature EOF", &startLoc);
-            return {};
-          }
-          else if (ch == '\n') {
-            errorCallback("unterminated string", &startLoc);
-            return {};
-          }
-          else if (ch == '\\') {
-            haveEscaped = true;
-            // Grab the next character
-            if ((ch = getChar()) == EOF) {
-              errorCallback("premature EOF", &startLoc);
-              return {};
-            }
-          }
+  while (downsample > 0) {
+    std::vector<float> v2;
+    for (int z = 0; z < nz / 2; ++z)
+      for (int y = 0; y < ny / 2; ++y)
+        for (int x = 0; x < nx / 2; ++x) {
+          auto v = [&](int dx, int dy, int dz) -> float {
+            return values[(2 * x + dx) + nx * ((2 * y + dy) + ny * (2 * z + dz))];
+          };
+          v2.push_back((v(0, 0, 0) + v(1, 0, 0) + v(0, 1, 0) + v(1, 1, 0) +
+            v(0, 0, 1) + v(1, 0, 1) + v(0, 1, 1) + v(1, 1, 1)) / 8);
         }
 
-        if (!haveEscaped)
-          return Token({ tokenStart, size_t(pos - tokenStart) }, startLoc);
-        else {
-          sEscaped.clear();
-          for (const char* p = tokenStart; p < pos; ++p) {
-            if (*p != '\\')
-              sEscaped.push_back(*p);
-            else {
-              ++p;
-              //CHECK_LT(p, pos);
-              sEscaped.push_back(decodeEscaped(*p, startLoc));
-            }
-          }
-          return Token({ sEscaped.data(), sEscaped.size() }, startLoc);
-        }
-      }
-      else if (ch == '[' || ch == ']') {
-        return Token({ tokenStart, size_t(1) }, startLoc);
-      }
-      else if (ch == '#') {
-        // comment: scan to EOL (or EOF)
-        while ((ch = getChar()) != EOF) {
-          if (ch == '\n' || ch == '\r') {
-            ungetChar();
-            break;
-          }
-        }
-
-        return Token({ tokenStart, size_t(pos - tokenStart) }, startLoc);
-      }
-      else {
-        // Regular statement or numeric token; scan until we hit a
-        // space, opening quote, or bracket.
-        while ((ch = getChar()) != EOF) {
-          if (ch == ' ' || ch == '\n' || ch == '\t' || ch == '\r' || ch == '"' ||
-            ch == '[' || ch == ']') {
-            ungetChar();
-            break;
-          }
-        }
-        return Token({ tokenStart, size_t(pos - tokenStart) }, startLoc);
-      }
-    }
+    values = std::move(v2);
+    nx /= 2;
+    ny /= 2;
+    nz /= 2;
+    --downsample;
   }
 
-  void Tokenizer::CheckUTF(const void* ptr, int len) const {
-    const unsigned char* c = (const unsigned char*)ptr;
-    // https://en.wikipedia.org/wiki/Byte_order_mark
-    if (len >= 2 && ((c[0] == 0xfe && c[1] == 0xff) || (c[0] == 0xff && c[1] == 0xfe)))
-      root::print::error("File is encoded with UTF-16, which is not currently supported");
-  }
+  Medium::SampledGrid sgrid;
+  sgrid.nx = nx;
+  sgrid.ny = ny;
+  sgrid.nz = nz;
+  sgrid.values = std::move(values);
+  sgrid.bounds = bounds;
+  return sgrid;
+}
 
-  static int parseInt(const Token& t) {
-    bool negate = t.token[0] == '-';
-
-    int index = 0;
-    if (t.token[0] == '+' || t.token[0] == '-')
-      ++index;
-
-    int64_t value = 0;
-    while (index < t.token.size()) {
-      if (!(t.token[index] >= '0' && t.token[index] <= '9'))
-        root::print::error(t.loc.ToString() + t.token[index] + ": expected a number");
-      value = 10 * value + (t.token[index] - '0');
-      ++index;
-
-      if (value > std::numeric_limits<int>::max())
-        root::print::error(t.loc.ToString() +
-          "Numeric value too large to represent as a 32-bit integer.");
-      else if (value < std::numeric_limits<int>::lowest())
-        root::print::warning(t.loc.ToString() + "Numeric value %d too low to represent as a 32-bit integer.");
+auto nanovdb_loader(std::string file_name, MediumHandle& medium) {
+  auto list = nanovdb::io::readGridMetaData(file_name);
+  for (auto& m : list) {
+    std::string grid_name = m.gridName;
+    if (grid_name == "density") {
+      nanovdb::GridHandle<nanovdb::HostBuffer> handle = nanovdb::io::readGrid(file_name, m.gridName);
+      medium->density = nanovdb_float_grid_loader(handle);
     }
-
-    return negate ? -value : value;
-  }
-
-  static double parseFloat(const Token& t) {
-    // Fast path for a single digit
-    if (t.token.size() == 1) {
-      if (!(t.token[0] >= '0' && t.token[0] <= '9'))
-        root::print::error(t.loc.ToString() + t.token[0] + ": expected a number");
-      return t.token[0] - '0';
+    if (grid_name == "temperature") {
+      nanovdb::GridHandle<nanovdb::HostBuffer> handle = nanovdb::io::readGrid(file_name, m.gridName);
+      medium->temperatureGrid = nanovdb_float_grid_loader(handle);
     }
-
-    // Copy to a buffer so we can NUL-terminate it, as strto[idf]() expect.
-    char buf[64];
-    char* bufp = buf;
-    std::unique_ptr<char[]> allocBuf;
-    //CHECK_RARE(1e-5, t.token.size() + 1 >= sizeof(buf));
-    if (t.token.size() + 1 >= sizeof(buf)) {
-      // This should be very unusual, but is necessary in case we get a
-      // goofball number with lots of leading zeros, for example.
-      allocBuf = std::make_unique<char[]>(t.token.size() + 1);
-      bufp = allocBuf.get();
-    }
-
-    std::copy(t.token.begin(), t.token.end(), bufp);
-    bufp[t.token.size()] = '\0';
-
-    // Can we just use strtol?
-    auto isInteger = [](std::string_view str) {
-      for (char ch : str)
-        if (!(ch >= '0' && ch <= '9'))
-          return false;
-      return true;
-    };
-
-    int length = 0;
-    double val;
-    if (isInteger(t.token)) {
-      char* endptr;
-      val = double(strtol(bufp, &endptr, 10));
-      length = endptr - bufp;
-    }
-    else
-      val = strtof(bufp, NULL);
-
-    if (length == 0)
-      root::print::error(t.loc.ToString() + std::string(t.token) + ": expected a number");
-
-    return val;
   }
-
-  inline bool isQuotedString(std::string_view str) {
-    return str.size() >= 2 && str[0] == '"' && str.back() == '"';
-  }
-
-  static std::string_view dequoteString(const Token& t) {
-    if (!isQuotedString(t.token))
-      root::print::error(t.loc.ToString() + std::string(t.token) + ": expected quoted string");
-
-    std::string_view str = t.token;
-    str.remove_prefix(1);
-    str.remove_suffix(1);
-    return str;
-  }
-
-  constexpr int TokenOptional = 0;
-  constexpr int TokenRequired = 1;
-
-  // ParsedParameter Definition
-  class ParsedParameter {
-  public:
-    // ParsedParameter Public Methods
-    ParsedParameter(FileLoc loc) : loc(loc) {}
-
-    void AddFloat(float v);
-    void AddInt(int i);
-    void AddString(std::string_view str);
-    void AddBool(bool v);
-
-    std::string ToString() const;
-
-    // ParsedParameter Public Members
-    std::string type, name;
-    FileLoc loc;
-    std::vector<float> floats;
-    std::vector<int> ints;
-    std::vector<std::string> strings;
-    std::vector<uint8_t> bools;
-    mutable bool lookedUp = false;
-    //mutable const RGBColorSpace* colorSpace = nullptr;
-    bool mayBeUnused = false;
-  };
-
-  // ParsedParameterVector Definition
-  using ParsedParameterVector = std::vector<ParsedParameter*>;
-  
-  template <typename Next, typename Unget>
-  static ParsedParameterVector parseParameters(
-    Next nextToken, Unget ungetToken, bool formatting,
-    const std::function<void(const Token& token, const char*)>& errorCallback) {
-    ParsedParameterVector parameterVector;
-
-    while (true) {
-      std::optional<Token> t = nextToken(TokenOptional);
-      if (!t.has_value())
-        return parameterVector;
-
-      if (!isQuotedString(t->token)) {
-        ungetToken(*t);
-        return parameterVector;
-      }
-
-      ParsedParameter* param = new ParsedParameter(t->loc);
-
-      std::string_view decl = dequoteString(*t);
-
-      auto skipSpace = [&decl](std::string_view::const_iterator iter) {
-        while (iter != decl.end() && (*iter == ' ' || *iter == '\t'))
-          ++iter;
-        return iter;
-      };
-      // Skip to the next whitespace character (or the end of the string).
-      auto skipToSpace = [&decl](std::string_view::const_iterator iter) {
-        while (iter != decl.end() && *iter != ' ' && *iter != '\t')
-          ++iter;
-        return iter;
-      };
-
-      auto typeBegin = skipSpace(decl.begin());
-      if (typeBegin == decl.end())
-        root::print::error(t->loc.ToString() + "Parameter doesn't have a type declaration?!" +
-          std::string(decl.begin(), decl.end()));
-
-      // Find end of type declaration
-      auto typeEnd = skipToSpace(typeBegin);
-      param->type.assign(typeBegin, typeEnd);
-
-      if (formatting) {  // close enough: upgrade...
-        if (param->type == "point")
-          param->type = "point3";
-        if (param->type == "vector")
-          param->type = "vector3";
-        if (param->type == "color")
-          param->type = "rgb";
-      }
-
-      auto nameBegin = skipSpace(typeEnd);
-      if (nameBegin == decl.end())
-        root::print::error(t->loc.ToString() + "Unable to find parameter name from: " +
-          std::string(decl.begin(), decl.end()));
-
-      auto nameEnd = skipToSpace(nameBegin);
-      param->name.assign(nameBegin, nameEnd);
-
-      enum ValType { Unknown, String, Bool, Float, Int } valType = Unknown;
-
-      if (param->type == "integer")
-        valType = Int;
-
-      auto addVal = [&](const Token& t) {
-        if (isQuotedString(t.token)) {
-          switch (valType) {
-          case Unknown:
-            valType = String;
-            break;
-          case String:
-            break;
-          case Float:
-            errorCallback(t, "expected floating-point value");
-          case Int:
-            errorCallback(t, "expected integer value");
-          case Bool:
-            errorCallback(t, "expected Boolean value");
-          }
-
-          param->AddString(dequoteString(t));
-        }
-        else if (t.token[0] == 't' && t.token == "true") {
-          switch (valType) {
-          case Unknown:
-            valType = Bool;
-            break;
-          case String:
-            errorCallback(t, "expected string value");
-          case Float:
-            errorCallback(t, "expected floating-point value");
-          case Int:
-            errorCallback(t, "expected integer value");
-          case Bool:
-            break;
-          }
-
-          param->AddBool(true);
-        }
-        else if (t.token[0] == 'f' && t.token == "false") {
-          switch (valType) {
-          case Unknown:
-            valType = Bool;
-            break;
-          case String:
-            errorCallback(t, "expected string value");
-          case Float:
-            errorCallback(t, "expected floating-point value");
-          case Int:
-            errorCallback(t, "expected integer value");
-          case Bool:
-            break;
-          }
-
-          param->AddBool(false);
-        }
-        else {
-          switch (valType) {
-          case Unknown:
-            valType = Float;
-            break;
-          case String:
-            errorCallback(t, "expected string value");
-          case Float:
-            break;
-          case Int:
-            break;
-          case Bool:
-            errorCallback(t, "expected Boolean value");
-          }
-
-          if (valType == Int)
-            param->AddInt(parseInt(t));
-          else
-            param->AddFloat(parseFloat(t));
-        }
-      };
-
-      Token val = *nextToken(TokenRequired);
-
-      if (val.token == "[") {
-        while (true) {
-          val = *nextToken(TokenRequired);
-          if (val.token == "]")
-            break;
-          addVal(val);
-        }
-      }
-      else {
-        addVal(val);
-      }
-
-      if (formatting && param->type == "bool") {
-        for (const auto& b : param->strings) {
-          if (b == "true")
-            param->bools.push_back(true);
-          else if (b == "false")
-            param->bools.push_back(false);
-          else
-            Error(&param->loc,
-              "%s: neither \"true\" nor \"false\" in bool "
-              "parameter list.",
-              b);
-        }
-        param->strings.clear();
-      }
-
-      parameterVector.push_back(param);
-    }
-
-    return parameterVector;
-  }
-
-#define Float float
-class ParserTarget {
-  public:
-    virtual void Scale(Float sx, Float sy, Float sz, FileLoc loc) = 0;
-    virtual void Shape(const std::string& name,
-      ParsedParameterVector params, FileLoc loc) = 0;
-    virtual ~ParserTarget();
-
-    virtual void Option(const std::string& name, const std::string& value,
-      FileLoc loc) = 0;
-
-    virtual void Identity(FileLoc loc) = 0;
-    virtual void Translate(Float dx, Float dy, Float dz, FileLoc loc) = 0;
-    virtual void Rotate(Float angle, Float ax, Float ay, Float az, FileLoc loc) = 0;
-    virtual void LookAt(Float ex, Float ey, Float ez, Float lx, Float ly, Float lz,
-      Float ux, Float uy, Float uz, FileLoc loc) = 0;
-    virtual void ConcatTransform(Float transform[16], FileLoc loc) = 0;
-    virtual void Transform(Float transform[16], FileLoc loc) = 0;
-    virtual void CoordinateSystem(const std::string&, FileLoc loc) = 0;
-    virtual void CoordSysTransform(const std::string&, FileLoc loc) = 0;
-    virtual void ActiveTransformAll(FileLoc loc) = 0;
-    virtual void ActiveTransformEndTime(FileLoc loc) = 0;
-    virtual void ActiveTransformStartTime(FileLoc loc) = 0;
-    virtual void TransformTimes(Float start, Float end, FileLoc loc) = 0;
-
-    virtual void ColorSpace(const std::string& n, FileLoc loc) = 0;
-    virtual void PixelFilter(const std::string& name, ParsedParameterVector params,
-      FileLoc loc) = 0;
-    virtual void Film(const std::string& type, ParsedParameterVector params,
-      FileLoc loc) = 0;
-    virtual void Accelerator(const std::string& name, ParsedParameterVector params,
-      FileLoc loc) = 0;
-    virtual void Integrator(const std::string& name, ParsedParameterVector params,
-      FileLoc loc) = 0;
-    virtual void Camera(const std::string&, ParsedParameterVector params,
-      FileLoc loc) = 0;
-    virtual void MakeNamedMedium(const std::string& name, ParsedParameterVector params,
-      FileLoc loc) = 0;
-    virtual void MediumInterface(const std::string& insideName,
-      const std::string& outsideName, FileLoc loc) = 0;
-    virtual void Sampler(const std::string& name, ParsedParameterVector params,
-      FileLoc loc) = 0;
-
-    virtual void WorldBegin(FileLoc loc) = 0;
-    virtual void AttributeBegin(FileLoc loc) = 0;
-    virtual void AttributeEnd(FileLoc loc) = 0;
-    virtual void Attribute(const std::string& target, ParsedParameterVector params,
-      FileLoc loc) = 0;
-    virtual void Texture(const std::string& name, const std::string& type,
-      const std::string& texname, ParsedParameterVector params,
-      FileLoc loc) = 0;
-    virtual void Material(const std::string& name, ParsedParameterVector params,
-      FileLoc loc) = 0;
-    virtual void MakeNamedMaterial(const std::string& name, ParsedParameterVector params,
-      FileLoc loc) = 0;
-    virtual void NamedMaterial(const std::string& name, FileLoc loc) = 0;
-    virtual void LightSource(const std::string& name, ParsedParameterVector params,
-      FileLoc loc) = 0;
-    virtual void AreaLightSource(const std::string& name, ParsedParameterVector params,
-      FileLoc loc) = 0;
-    virtual void ReverseOrientation(FileLoc loc) = 0;
-    virtual void ObjectBegin(const std::string& name, FileLoc loc) = 0;
-    virtual void ObjectEnd(FileLoc loc) = 0;
-    virtual void ObjectInstance(const std::string& name, FileLoc loc) = 0;
-
-    virtual void EndOfFiles() = 0;
-
-  protected:
-    template <typename... Args>
-    void ErrorExitDeferred(const char* fmt, Args &&... args) const {
-      errorExit = true;
-      root::print::error(std::format(fmt, std::forward<Args>(args)...));
-    }
-
-    template <typename... Args>
-    void ErrorExitDeferred(const FileLoc* loc, const char* fmt, Args &&... args) const {
-      errorExit = true;
-      root::print::error(loc->ToString() + std::format(fmt, std::forward<Args>(args)...));
-    }
-
-    mutable bool errorExit = false;
-  };
-
-  static std::string toString(std::string_view s) {
-    return std::string(s.data(), s.size());
-  }
-
-  //// ParameterDictionary Definition
-  //class ParameterDictionary {
-  //public:
-  //  // ParameterDictionary Public Methods
-  //  ParameterDictionary() = default;
-  //  ParameterDictionary(ParsedParameterVector params, const RGBColorSpace* colorSpace);
-
-  //  ParameterDictionary(ParsedParameterVector params0,
-  //    const ParsedParameterVector& params1,
-  //    const RGBColorSpace* colorSpace);
-
-  //  std::string GetTexture(const std::string& name) const;
-
-  //  std::vector<RGB> GetRGBArray(const std::string& name) const;
-
-  //  // For --upgrade only
-  //  std::optional<RGB> GetOneRGB(const std::string& name) const;
-  //  // Unfortunately, this is most easily done here...
-  //  Float UpgradeBlackbody(const std::string& name);
-  //  void RemoveFloat(const std::string&);
-  //  void RemoveInt(const std::string&);
-  //  void RemoveBool(const std::string&);
-  //  void RemovePoint2f(const std::string&);
-  //  void RemoveVector2f(const std::string&);
-  //  void RemovePoint3f(const std::string&);
-  //  void RemoveVector3f(const std::string&);
-  //  void RemoveNormal3f(const std::string&);
-  //  void RemoveString(const std::string&);
-  //  void RemoveTexture(const std::string&);
-  //  void RemoveSpectrum(const std::string&);
-
-  //  void RenameParameter(const std::string& before, const std::string& after);
-  //  void RenameUsedTextures(const std::map<std::string, std::string>& m);
-
-  //  const RGBColorSpace* ColorSpace() const { return colorSpace; }
-
-  //  std::string ToParameterList(int indent = 0) const;
-  //  std::string ToParameterDefinition(const std::string&) const;
-  //  std::string ToString() const;
-
-  //  const FileLoc* loc(const std::string&) const;
-
-  //  const ParsedParameterVector& GetParameterVector() const { return params; }
-
-  //  void FreeParameters();
-
-  //  Float GetOneFloat(const std::string& name, Float def) const;
-  //  int GetOneInt(const std::string& name, int def) const;
-  //  bool GetOneBool(const std::string& name, bool def) const;
-  //  std::string GetOneString(const std::string& name, const std::string& def) const;
-
-  //  Point2f GetOnePoint2f(const std::string& name, Point2f def) const;
-  //  Vector2f GetOneVector2f(const std::string& name, Vector2f def) const;
-  //  Point3f GetOnePoint3f(const std::string& name, Point3f def) const;
-  //  Vector3f GetOneVector3f(const std::string& name, Vector3f def) const;
-  //  Normal3f GetOneNormal3f(const std::string& name, Normal3f def) const;
-
-  //  Spectrum GetOneSpectrum(const std::string& name, Spectrum def,
-  //    SpectrumType spectrumType, Allocator alloc) const;
-
-  //  std::vector<Float> GetFloatArray(const std::string& name) const;
-  //  std::vector<int> GetIntArray(const std::string& name) const;
-  //  std::vector<uint8_t> GetBoolArray(const std::string& name) const;
-
-  //  std::vector<Point2f> GetPoint2fArray(const std::string& name) const;
-  //  std::vector<Vector2f> GetVector2fArray(const std::string& name) const;
-  //  std::vector<Point3f> GetPoint3fArray(const std::string& name) const;
-  //  std::vector<Vector3f> GetVector3fArray(const std::string& name) const;
-  //  std::vector<Normal3f> GetNormal3fArray(const std::string& name) const;
-  //  std::vector<Spectrum> GetSpectrumArray(const std::string& name,
-  //    SpectrumType spectrumType,
-  //    Allocator alloc) const;
-  //  std::vector<std::string> GetStringArray(const std::string& name) const;
-
-  //  void ReportUnused() const;
-
-  //private:
-  //  friend class TextureParameterDictionary;
-  //  // ParameterDictionary Private Methods
-  //  template <ParameterType PT>
-  //  typename ParameterTypeTraits<PT>::ReturnType lookupSingle(
-  //    const std::string& name,
-  //    typename ParameterTypeTraits<PT>::ReturnType defaultValue) const;
-
-  //  template <ParameterType PT>
-  //  std::vector<typename ParameterTypeTraits<PT>::ReturnType> lookupArray(
-  //    const std::string& name) const;
-
-  //  template <typename ReturnType, typename G, typename C>
-  //  std::vector<ReturnType> lookupArray(const std::string& name, ParameterType type,
-  //    const char* typeName, int nPerItem, G getValues,
-  //    C convert) const;
-
-  //  std::vector<Spectrum> extractSpectrumArray(const ParsedParameter& param,
-  //    SpectrumType spectrumType,
-  //    Allocator alloc) const;
-
-  //  void remove(const std::string& name, const char* typeName);
-  //  void checkParameterTypes();
-  //  static std::string ToParameterDefinition(const ParsedParameter* p, int indentCount);
-
-  //  // ParameterDictionary Private Members
-  //  ParsedParameterVector params;
-  //  const RGBColorSpace* colorSpace = nullptr;
-  //  int nOwnedParams;
-  //};
-
-  //// FormattingParserTarget Definition
-  //class FormattingParserTarget : public ParserTarget {
-  //public:
-  //  FormattingParserTarget(bool toPly, bool upgrade) : toPly(toPly), upgrade(upgrade) {}
-  //  ~FormattingParserTarget();
-
-  //  void Option(const std::string& name, const std::string& value, FileLoc loc);
-  //  void Identity(FileLoc loc);
-  //  void Translate(Float dx, Float dy, Float dz, FileLoc loc);
-  //  void Rotate(Float angle, Float ax, Float ay, Float az, FileLoc loc);
-  //  void Scale(Float sx, Float sy, Float sz, FileLoc loc);
-  //  void LookAt(Float ex, Float ey, Float ez, Float lx, Float ly, Float lz, Float ux,
-  //    Float uy, Float uz, FileLoc loc);
-  //  void ConcatTransform(Float transform[16], FileLoc loc);
-  //  void Transform(Float transform[16], FileLoc loc);
-  //  void CoordinateSystem(const std::string&, FileLoc loc);
-  //  void CoordSysTransform(const std::string&, FileLoc loc);
-  //  void ActiveTransformAll(FileLoc loc);
-  //  void ActiveTransformEndTime(FileLoc loc);
-  //  void ActiveTransformStartTime(FileLoc loc);
-  //  void TransformTimes(Float start, Float end, FileLoc loc);
-  //  void TransformBegin(FileLoc loc);
-  //  void TransformEnd(FileLoc loc);
-  //  void ColorSpace(const std::string& n, FileLoc loc);
-  //  void PixelFilter(const std::string& name, ParsedParameterVector params, FileLoc loc);
-  //  void Film(const std::string& type, ParsedParameterVector params, FileLoc loc);
-  //  void Sampler(const std::string& name, ParsedParameterVector params, FileLoc loc);
-  //  void Accelerator(const std::string& name, ParsedParameterVector params, FileLoc loc);
-  //  void Integrator(const std::string& name, ParsedParameterVector params, FileLoc loc);
-  //  void Camera(const std::string&, ParsedParameterVector params, FileLoc loc);
-  //  void MakeNamedMedium(const std::string& name, ParsedParameterVector params,
-  //    FileLoc loc);
-  //  void MediumInterface(const std::string& insideName, const std::string& outsideName,
-  //    FileLoc loc);
-  //  void WorldBegin(FileLoc loc);
-  //  void AttributeBegin(FileLoc loc);
-  //  void AttributeEnd(FileLoc loc);
-  //  void Attribute(const std::string& target, ParsedParameterVector params, FileLoc loc);
-  //  void Texture(const std::string& name, const std::string& type,
-  //    const std::string& texname, ParsedParameterVector params, FileLoc loc);
-  //  void Material(const std::string& name, ParsedParameterVector params, FileLoc loc);
-  //  void MakeNamedMaterial(const std::string& name, ParsedParameterVector params,
-  //    FileLoc loc);
-  //  void NamedMaterial(const std::string& name, FileLoc loc);
-  //  void LightSource(const std::string& name, ParsedParameterVector params, FileLoc loc);
-  //  void AreaLightSource(const std::string& name, ParsedParameterVector params,
-  //    FileLoc loc);
-  //  void Shape(const std::string& name, ParsedParameterVector params, FileLoc loc);
-  //  void ReverseOrientation(FileLoc loc);
-  //  void ObjectBegin(const std::string& name, FileLoc loc);
-  //  void ObjectEnd(FileLoc loc);
-  //  void ObjectInstance(const std::string& name, FileLoc loc);
-
-  //  void EndOfFiles();
-
-  //  std::string indent(int extra = 0) const {
-  //    return std::string(catIndentCount + 4 * extra, ' ');
-  //  }
-
-  //private:
-  //  std::string upgradeMaterialIndex(const std::string& name, ParameterDictionary* dict,
-  //    FileLoc loc) const;
-  //  std::string upgradeMaterial(std::string* name, ParameterDictionary* dict,
-  //    FileLoc loc) const;
-
-  //  int catIndentCount = 0;
-  //  bool toPly, upgrade;
-  //  std::map<std::string, std::string> definedTextures;
-  //  std::map<std::string, std::string> definedNamedMaterials;
-  //  std::map<std::string, ParameterDictionary> namedMaterialDictionaries;
-  //  std::map<std::string, std::string> definedObjectInstances;
-  //};
-
-  //void parse(ParserTarget* target, std::unique_ptr<Tokenizer> t) {
-  //  FormattingParserTarget* formattingTarget =
-  //    dynamic_cast<FormattingParserTarget*>(target);
-  //  bool formatting = formattingTarget;
-
-  //  static std::atomic<bool> warnedTransformBeginEndDeprecated{ false };
-
-  //  std::vector<std::pair<AsyncJob<int>*, BasicSceneBuilder*>> imports;
-
-  //  std::vector<std::unique_ptr<Tokenizer>> fileStack;
-  //  fileStack.push_back(std::move(t));
-
-  //  std::optional<Token> ungetToken;
-
-  //  auto parseError = [&](const char* msg, const FileLoc* loc) {
-  //    root::print::error(loc->ToString() + msg);
-  //  };
-
-  //  // nextToken is a little helper function that handles the file stack,
-  //  // returning the next token from the current file until reaching EOF,
-  //  // at which point it switches to the next file (if any).
-  //  std::function<std::optional<Token>(int)> nextToken;
-  //  nextToken = [&](int flags) -> std::optional<Token> {
-  //    if (ungetToken.has_value())
-  //      return std::exchange(ungetToken, {});
-
-  //    if (fileStack.empty()) {
-  //      if ((flags & TokenRequired) != 0) {
-  //        root::print::error("premature end of file");
-  //      }
-  //      return {};
-  //    }
-
-  //    std::optional<Token> tok = fileStack.back()->Next();
-
-  //    if (!tok) {
-  //      // We've reached EOF in the current file. Anything more to parse?
-  //      fileStack.pop_back();
-  //      return nextToken(flags);
-  //    }
-  //    else if (tok->token[0] == '#') {
-  //      // Swallow comments, unless --format or --toply was given, in
-  //      // which case they're printed to stdout.
-  //      if (formatting)
-  //        printf("%s%s\n",
-  //          dynamic_cast<FormattingParserTarget*>(target)->indent().c_str(),
-  //          toString(tok->token).c_str());
-  //      return nextToken(flags);
-  //    }
-  //    else
-  //      // Regular token; success.
-  //      return tok;
-  //  };
-
-  //  auto unget = [&](Token t) {
-  //    //CHECK(!ungetToken.has_value());
-  //    ungetToken = t;
-  //  };
-
-  //  // Helper function for pbrt API entrypoints that take a single string
-  //  // parameter and a ParameterVector (e.g. pbrtShape()).
-  //  auto basicParamListEntrypoint =
-  //    [&](void (ParserTarget::* apiFunc)(const std::string&, ParsedParameterVector,
-  //      FileLoc),
-  //      FileLoc loc) {
-  //        Token t = *nextToken(TokenRequired);
-  //        std::string_view dequoted = dequoteString(t);
-  //        std::string n = toString(dequoted);
-  //        ParsedParameterVector parameterVector = parseParameters(
-  //          nextToken, unget, formatting, [&](const Token& t, const char* msg) {
-  //            std::string token = toString(t.token);
-  //        std::string str = std::format("%s: %s", token, msg);
-  //        parseError(str.c_str(), &t.loc);
-  //          });
-  //        (target->*apiFunc)(n, std::move(parameterVector), loc);
-  //  };
-
-  //  auto syntaxError = [&](const Token& t) {
-  //    root::print::error(t.loc.ToString() + "Unknown directive: %s", toString(t.token));
-  //  };
-
-  //  std::optional<Token> tok;
-
-  //  while (true) {
-  //    tok = nextToken(TokenOptional);
-  //    if (!tok.has_value())
-  //      break;
-
-  //    switch (tok->token[0]) {
-  //    case 'A':
-  //      if (tok->token == "AttributeBegin")
-  //        target->AttributeBegin(tok->loc);
-  //      else if (tok->token == "AttributeEnd")
-  //        target->AttributeEnd(tok->loc);
-  //      else if (tok->token == "Attribute")
-  //        basicParamListEntrypoint(&ParserTarget::Attribute, tok->loc);
-  //      else if (tok->token == "ActiveTransform") {
-  //        Token a = *nextToken(TokenRequired);
-  //        if (a.token == "All")
-  //          target->ActiveTransformAll(tok->loc);
-  //        else if (a.token == "EndTime")
-  //          target->ActiveTransformEndTime(tok->loc);
-  //        else if (a.token == "StartTime")
-  //          target->ActiveTransformStartTime(tok->loc);
-  //        else
-  //          syntaxError(*tok);
-  //      }
-  //      else if (tok->token == "AreaLightSource")
-  //        basicParamListEntrypoint(&ParserTarget::AreaLightSource, tok->loc);
-  //      else if (tok->token == "Accelerator")
-  //        basicParamListEntrypoint(&ParserTarget::Accelerator, tok->loc);
-  //      else
-  //        syntaxError(*tok);
-  //      break;
-
-  //    case 'C':
-  //      if (tok->token == "ConcatTransform") {
-  //        if (nextToken(TokenRequired)->token != "[")
-  //          syntaxError(*tok);
-  //        Float m[16];
-  //        for (int i = 0; i < 16; ++i)
-  //          m[i] = parseFloat(*nextToken(TokenRequired));
-  //        if (nextToken(TokenRequired)->token != "]")
-  //          syntaxError(*tok);
-  //        target->ConcatTransform(m, tok->loc);
-  //      }
-  //      else if (tok->token == "CoordinateSystem") {
-  //        std::string_view n = dequoteString(*nextToken(TokenRequired));
-  //        target->CoordinateSystem(toString(n), tok->loc);
-  //      }
-  //      else if (tok->token == "CoordSysTransform") {
-  //        std::string_view n = dequoteString(*nextToken(TokenRequired));
-  //        target->CoordSysTransform(toString(n), tok->loc);
-  //      }
-  //      else if (tok->token == "ColorSpace") {
-  //        std::string_view n = dequoteString(*nextToken(TokenRequired));
-  //        target->ColorSpace(toString(n), tok->loc);
-  //      }
-  //      else if (tok->token == "Camera")
-  //        basicParamListEntrypoint(&ParserTarget::Camera, tok->loc);
-  //      else
-  //        syntaxError(*tok);
-  //      break;
-
-  //    case 'F':
-  //      if (tok->token == "Film")
-  //        basicParamListEntrypoint(&ParserTarget::Film, tok->loc);
-  //      else
-  //        syntaxError(*tok);
-  //      break;
-
-  //    case 'I':
-  //      if (tok->token == "Integrator")
-  //        basicParamListEntrypoint(&ParserTarget::Integrator, tok->loc);
-  //      else if (tok->token == "Include") {
-  //        Token filenameToken = *nextToken(TokenRequired);
-  //        std::string filename = toString(dequoteString(filenameToken));
-  //        if (formatting)
-  //          Printf("%sInclude \"%s\"\n",
-  //            dynamic_cast<FormattingParserTarget*>(target)->indent(),
-  //            filename);
-  //        else {
-  //          filename = ResolveFilename(filename);
-  //          std::unique_ptr<Tokenizer> tinc =
-  //            Tokenizer::CreateFromFile(filename, parseError);
-  //          if (tinc) {
-  //            LOG_VERBOSE("Started parsing %s",
-  //              std::string(tinc->loc.filename.begin(),
-  //                tinc->loc.filename.end()));
-  //            fileStack.push_back(std::move(tinc));
-  //          }
-  //        }
-  //      }
-  //      else if (tok->token == "Import") {
-  //        Token filenameToken = *nextToken(TokenRequired);
-  //        std::string filename = toString(dequoteString(filenameToken));
-  //        if (formatting)
-  //          Printf("%sImport \"%s\"\n",
-  //            dynamic_cast<FormattingParserTarget*>(target)->indent(),
-  //            filename);
-  //        else {
-  //          BasicSceneBuilder* builder =
-  //            dynamic_cast<BasicSceneBuilder*>(target);
-  //          CHECK(builder);
-
-  //          if (builder->currentBlock !=
-  //            BasicSceneBuilder::BlockState::WorldBlock)
-  //            ErrorExit(&tok->loc, "Import statement only allowed inside world "
-  //              "definition block.");
-
-  //          filename = ResolveFilename(filename);
-  //          BasicSceneBuilder* importBuilder = builder->CopyForImport();
-
-  //          if (RunningThreads() == 1) {
-  //            std::unique_ptr<Tokenizer> timport =
-  //              Tokenizer::CreateFromFile(filename, parseError);
-  //            if (timport)
-  //              parse(importBuilder, std::move(timport));
-  //            builder->MergeImported(importBuilder);
-  //          }
-  //          else {
-  //            auto job = [=](std::string filename) {
-  //              Timer timer;
-  //              std::unique_ptr<Tokenizer> timport =
-  //                Tokenizer::CreateFromFile(filename, parseError);
-  //              if (timport)
-  //                parse(importBuilder, std::move(timport));
-  //              LOG_VERBOSE("Elapsed time to parse \"%s\": %.2fs", filename,
-  //                timer.ElapsedSeconds());
-  //              return 0;
-  //            };
-  //            AsyncJob<int>* jobFinished = RunAsync(job, filename);
-  //            imports.push_back(std::make_pair(jobFinished, importBuilder));
-  //          }
-  //        }
-  //      }
-  //      else if (tok->token == "Identity")
-  //        target->Identity(tok->loc);
-  //      else
-  //        syntaxError(*tok);
-  //      break;
-
-  //    case 'L':
-  //      if (tok->token == "LightSource")
-  //        basicParamListEntrypoint(&ParserTarget::LightSource, tok->loc);
-  //      else if (tok->token == "LookAt") {
-  //        Float v[9];
-  //        for (int i = 0; i < 9; ++i)
-  //          v[i] = parseFloat(*nextToken(TokenRequired));
-  //        target->LookAt(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8],
-  //          tok->loc);
-  //      }
-  //      else
-  //        syntaxError(*tok);
-  //      break;
-
-  //    case 'M':
-  //      if (tok->token == "MakeNamedMaterial")
-  //        basicParamListEntrypoint(&ParserTarget::MakeNamedMaterial, tok->loc);
-  //      else if (tok->token == "MakeNamedMedium")
-  //        basicParamListEntrypoint(&ParserTarget::MakeNamedMedium, tok->loc);
-  //      else if (tok->token == "Material")
-  //        basicParamListEntrypoint(&ParserTarget::Material, tok->loc);
-  //      else if (tok->token == "MediumInterface") {
-  //        std::string_view n = dequoteString(*nextToken(TokenRequired));
-  //        std::string names[2];
-  //        names[0] = toString(n);
-
-  //        // Check for optional second parameter
-  //        std::optional<Token> second = nextToken(TokenOptional);
-  //        if (second.has_value()) {
-  //          if (isQuotedString(second->token))
-  //            names[1] = toString(dequoteString(*second));
-  //          else {
-  //            unget(*second);
-  //            names[1] = names[0];
-  //          }
-  //        }
-  //        else
-  //          names[1] = names[0];
-
-  //        target->MediumInterface(names[0], names[1], tok->loc);
-  //      }
-  //      else
-  //        syntaxError(*tok);
-  //      break;
-
-  //    case 'N':
-  //      if (tok->token == "NamedMaterial") {
-  //        std::string_view n = dequoteString(*nextToken(TokenRequired));
-  //        target->NamedMaterial(toString(n), tok->loc);
-  //      }
-  //      else
-  //        syntaxError(*tok);
-  //      break;
-
-  //    case 'O':
-  //      if (tok->token == "ObjectBegin") {
-  //        std::string_view n = dequoteString(*nextToken(TokenRequired));
-  //        target->ObjectBegin(toString(n), tok->loc);
-  //      }
-  //      else if (tok->token == "ObjectEnd")
-  //        target->ObjectEnd(tok->loc);
-  //      else if (tok->token == "ObjectInstance") {
-  //        std::string_view n = dequoteString(*nextToken(TokenRequired));
-  //        target->ObjectInstance(toString(n), tok->loc);
-  //      }
-  //      else if (tok->token == "Option") {
-  //        std::string name = toString(dequoteString(*nextToken(TokenRequired)));
-  //        std::string value = toString(nextToken(TokenRequired)->token);
-  //        target->Option(name, value, tok->loc);
-  //      }
-  //      else
-  //        syntaxError(*tok);
-  //      break;
-
-  //    case 'P':
-  //      if (tok->token == "PixelFilter")
-  //        basicParamListEntrypoint(&ParserTarget::PixelFilter, tok->loc);
-  //      else
-  //        syntaxError(*tok);
-  //      break;
-
-  //    case 'R':
-  //      if (tok->token == "ReverseOrientation")
-  //        target->ReverseOrientation(tok->loc);
-  //      else if (tok->token == "Rotate") {
-  //        Float v[4];
-  //        for (int i = 0; i < 4; ++i)
-  //          v[i] = parseFloat(*nextToken(TokenRequired));
-  //        target->Rotate(v[0], v[1], v[2], v[3], tok->loc);
-  //      }
-  //      else
-  //        syntaxError(*tok);
-  //      break;
-
-  //    case 'S':
-  //      if (tok->token == "Shape")
-  //        basicParamListEntrypoint(&ParserTarget::Shape, tok->loc);
-  //      else if (tok->token == "Sampler")
-  //        basicParamListEntrypoint(&ParserTarget::Sampler, tok->loc);
-  //      else if (tok->token == "Scale") {
-  //        Float v[3];
-  //        for (int i = 0; i < 3; ++i)
-  //          v[i] = parseFloat(*nextToken(TokenRequired));
-  //        target->Scale(v[0], v[1], v[2], tok->loc);
-  //      }
-  //      else
-  //        syntaxError(*tok);
-  //      break;
-
-  //    case 'T':
-  //      if (tok->token == "TransformBegin") {
-  //        if (formattingTarget)
-  //          formattingTarget->TransformBegin(tok->loc);
-  //        else {
-  //          if (!warnedTransformBeginEndDeprecated) {
-  //            Warning(&tok->loc, "TransformBegin/End are deprecated and should "
-  //              "be replaced with AttributeBegin/End");
-  //            warnedTransformBeginEndDeprecated = true;
-  //          }
-  //          target->AttributeBegin(tok->loc);
-  //        }
-  //      }
-  //      else if (tok->token == "TransformEnd") {
-  //        if (formattingTarget)
-  //          formattingTarget->TransformEnd(tok->loc);
-  //        else
-  //          target->AttributeEnd(tok->loc);
-  //      }
-  //      else if (tok->token == "Transform") {
-  //        if (nextToken(TokenRequired)->token != "[")
-  //          syntaxError(*tok);
-  //        Float m[16];
-  //        for (int i = 0; i < 16; ++i)
-  //          m[i] = parseFloat(*nextToken(TokenRequired));
-  //        if (nextToken(TokenRequired)->token != "]")
-  //          syntaxError(*tok);
-  //        target->Transform(m, tok->loc);
-  //      }
-  //      else if (tok->token == "Translate") {
-  //        Float v[3];
-  //        for (int i = 0; i < 3; ++i)
-  //          v[i] = parseFloat(*nextToken(TokenRequired));
-  //        target->Translate(v[0], v[1], v[2], tok->loc);
-  //      }
-  //      else if (tok->token == "TransformTimes") {
-  //        Float v[2];
-  //        for (int i = 0; i < 2; ++i)
-  //          v[i] = parseFloat(*nextToken(TokenRequired));
-  //        target->TransformTimes(v[0], v[1], tok->loc);
-  //      }
-  //      else if (tok->token == "Texture") {
-  //        std::string_view n = dequoteString(*nextToken(TokenRequired));
-  //        std::string name = toString(n);
-  //        n = dequoteString(*nextToken(TokenRequired));
-  //        std::string type = toString(n);
-
-  //        Token t = *nextToken(TokenRequired);
-  //        std::string_view dequoted = dequoteString(t);
-  //        std::string texName = toString(dequoted);
-  //        ParsedParameterVector params = parseParameters(
-  //          nextToken, unget, formatting, [&](const Token& t, const char* msg) {
-  //            std::string token = toString(t.token);
-  //        std::string str = StringPrintf("%s: %s", token, msg);
-  //        parseError(str.c_str(), &t.loc);
-  //          });
-
-  //        target->Texture(name, type, texName, std::move(params), tok->loc);
-  //      }
-  //      else
-  //        syntaxError(*tok);
-  //      break;
-
-  //    case 'W':
-  //      if (tok->token == "WorldBegin")
-  //        target->WorldBegin(tok->loc);
-  //      else if (tok->token == "WorldEnd" && formatting)
-  //        ;  // just swallow it
-  //      else
-  //        syntaxError(*tok);
-  //      break;
-
-  //    default:
-  //      syntaxError(*tok);
-  //    }
-  //  }
-
-  //  for (auto& import : imports) {
-  //    import.first->Wait();
-
-  //    BasicSceneBuilder* builder = dynamic_cast<BasicSceneBuilder*>(target);
-  //    CHECK(builder);
-  //    builder->MergeImported(import.second);
-  //    // HACK: let import.second leak so that its TransformCache isn't deallocated...
-  //  }
-  //}
-
-  //void ParseFiles(ParserTarget* target, std::span<const std::string> filenames) {
-  //  auto tokError = [](const char* msg, const FileLoc* loc) {
-  //    ErrorExit(loc, "%s", msg);
-  //  };
-
-  //  // Process scene description
-  //  if (filenames.empty()) {
-  //    // Parse scene from standard input
-  //    std::unique_ptr<Tokenizer> t = Tokenizer::CreateFromFile("-", tokError);
-  //    if (t)
-  //      parse(target, std::move(t));
-  //  }
-  //  else {
-  //    // Parse scene from input files
-  //    for (const std::string& fn : filenames) {
-  //      if (fn != "-")
-  //        SetSearchDirectory(fn);
-
-  //      std::unique_ptr<Tokenizer> t = Tokenizer::CreateFromFile(fn, tokError);
-  //      if (t)
-  //        parse(target, std::move(t));
-  //    }
-  //  }
-
-  //  target->EndOfFiles();
-  //}
-
-  //void ParseString(ParserTarget* target, std::string str) {
-  //  auto tokError = [](const char* msg, const FileLoc* loc) {
-  //    ErrorExit(loc, "%s", msg);
-  //  };
-  //  std::unique_ptr<Tokenizer> t = Tokenizer::CreateFromString(std::move(str), tokError);
-  //  if (!t)
-  //    return;
-  //  parse(target, std::move(t));
-
-  //  target->EndOfFiles();
-  //}
 }
 
 SceneLoader::result_type SceneLoader::operator()(SceneLoader::from_gltf_tag, std::string const& path) {
@@ -3928,6 +2661,337 @@ SceneLoader::result_type SceneLoader::operator()(SceneLoader::from_xml_tag, std:
   return scene;
 }
 
+std::string loadFileAsString(const std::string& filePath) {
+  std::ifstream file(filePath); // Open the file
+  if (!file) {
+    throw std::runtime_error("Unable to open file");
+  }
+  std::stringstream buffer;
+  buffer << file.rdbuf(); // Read the file's content into the stringstream
+  return buffer.str(); // Return the string content
+}
+
+auto loadPbrtDefineddMesh(std::vector<tiny_pbrt_loader::Point3f> p,
+  std::vector<int> indices, Scene& scene) noexcept -> MeshHandle {
+  // load obj file
+  std::vector<float> vertexBufferV = {};
+  std::vector<float> positionBufferV = {};
+  std::vector<uint32_t> indexBufferWV = {};
+  // create mesh resource
+  MeshHandle mesh = GFXContext::load_mesh_empty();
+
+  // check whether tangent is need in mesh attributes
+  bool needTangent = false;
+  for (auto const& entry : defaultMeshDataLayout.layout)
+    if (entry.info == MeshDataLayout::VertexInfo::TANGENT) needTangent = true;
+
+  // Loop over shapes
+  uint64_t global_index_offset = 0;
+  uint32_t submesh_vertex_offset = 0, submesh_index_offset = 0;
+  for (size_t s = 0; s < 1; s++) {
+    int index_offset = 0;
+    uint32_t vertex_offset = 0;
+    std::unordered_map<uint64_t, uint32_t> uniqueVertices{};
+    vec3 position_max = vec3(-1e9);
+    vec3 position_min = vec3(1e9);
+    // Loop over faces(polygon)
+    for (size_t f = 0; f < indices.size() / 3; f++) {
+      vec3 normal;
+      vec3 tangent;
+      vec3 bitangent;
+      if (needTangent) {
+        vec3 positions[3];
+        vec3 normals[3];
+        vec2 uvs[3];
+        for (size_t v = 0; v < 3; v++) {
+          // index finding
+          int idx = indices[f * 3 + v];
+          positions[v] = { p[idx].v[0], p[idx].v[1], p[idx].v[2] };
+          normals[v] = { 0, 0, 0 };
+          uvs[v] = { 0, 0 };
+        }
+        vec3 edge1 = positions[1] - positions[0];
+        vec3 edge2 = positions[2] - positions[0];
+        vec2 deltaUV1 = uvs[1] - uvs[0];
+        vec2 deltaUV2 = uvs[2] - uvs[0];
+
+        normal = normalize(cross(edge1, edge2));
+
+        float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+
+        tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+        tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+        tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+        tangent = normalize(tangent);
+
+        bitangent.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
+        bitangent.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
+        bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
+        bitangent = normalize(bitangent);
+      }
+      // Loop over vertices in the face.
+      for (size_t v = 0; v < 3; v++) {
+        // index finding
+        int idx = indices[f * 3 + v];
+        // atrributes filling
+        std::vector<float> vertex = {};
+        std::vector<float> position = {};
+        for (auto const& entry : defaultMeshDataLayout.layout) {
+          // vertex position
+          if (entry.info == MeshDataLayout::VertexInfo::POSITION) {
+            if (entry.format == rhi::VertexFormat::FLOAT32X3) {
+              float vx = p[idx].v[0];
+              float vy = p[idx].v[1];
+              float vz = p[idx].v[2];
+              vertex.push_back(vx);
+              vertex.push_back(vy);
+              vertex.push_back(vz);
+              position_min = se::min(position_min, vec3{ vx,vy,vz });
+              position_max = se::max(position_max, vec3{ vx,vy,vz });
+              if (defaultMeshLoadConfig.usePositionBuffer) {
+                position.push_back(vx);
+                position.push_back(vy);
+                position.push_back(vz);
+              }
+            }
+            else {
+              root::print::error(
+                "GFX :: SceneNodeLoader_obj :: unwanted vertex format for "
+                "POSITION attributes.");
+              return MeshHandle{};
+            }
+          }
+          else if (entry.info == MeshDataLayout::VertexInfo::NORMAL) {
+            // Check if `normal_index` is zero or positive. negative = no
+            // normal data
+            vertex.push_back(normal.x);
+            vertex.push_back(normal.y);
+            vertex.push_back(normal.z);
+          }
+          else if (entry.info == MeshDataLayout::VertexInfo::UV) {
+            vertex.push_back(0);
+            vertex.push_back(0);
+          }
+          else if (entry.info == MeshDataLayout::VertexInfo::TANGENT) {
+            if (isnan(tangent.x) || isnan(tangent.y) || isnan(tangent.z)) {
+              vertex.push_back(0);
+              vertex.push_back(0);
+              vertex.push_back(0);
+            }
+            else {
+              vertex.push_back(tangent.x);
+              vertex.push_back(tangent.y);
+              vertex.push_back(tangent.z);
+            }
+          }
+          else if (entry.info == MeshDataLayout::VertexInfo::COLOR) {
+          }
+          else if (entry.info == MeshDataLayout::VertexInfo::CUSTOM) {
+          }
+        }
+
+        if (defaultMeshLoadConfig.deduplication) {
+          uint64_t hashed_vertex = hash_vertex(vertex);
+          if (uniqueVertices.count(hashed_vertex) == 0) {
+            uniqueVertices[hashed_vertex] =
+              static_cast<uint32_t>(vertex_offset);
+            vertexBufferV.insert(vertexBufferV.end(), vertex.begin() + 3,
+              vertex.end());
+            positionBufferV.insert(positionBufferV.end(), position.begin(),
+              position.end());
+            ++vertex_offset;
+          }
+
+          // index filling
+          if (defaultMeshLoadConfig.layout.format == rhi::IndexFormat::UINT16_t)
+            indexBufferWV.push_back(uniqueVertices[hashed_vertex]);
+          else if (defaultMeshLoadConfig.layout.format == rhi::IndexFormat::UINT32_T)
+            indexBufferWV.push_back(uniqueVertices[hashed_vertex]);
+        }
+        else {
+          vertexBufferV.insert(vertexBufferV.end(), vertex.begin() + 3,
+            vertex.end());
+          positionBufferV.insert(positionBufferV.end(), position.begin(),
+            position.end());
+          // index filling
+          if (defaultMeshLoadConfig.layout.format == rhi::IndexFormat::UINT16_t)
+            indexBufferWV.push_back(vertex_offset);
+          else if (defaultMeshLoadConfig.layout.format == rhi::IndexFormat::UINT32_T)
+            indexBufferWV.push_back(vertex_offset);
+          ++vertex_offset;
+        }
+      }
+      index_offset += 3;
+      //// per-face material
+      //shapes[s].mesh.material_ids[f];
+    }
+    global_index_offset += index_offset;
+
+    // load Material
+    Mesh::MeshPrimitive sePrimitive;
+    sePrimitive.offset = submesh_index_offset;
+    sePrimitive.size = index_offset;
+    sePrimitive.baseVertex = submesh_vertex_offset;
+    sePrimitive.numVertex = positionBufferV.size() / 3 - submesh_vertex_offset;
+    sePrimitive.max = position_max;
+    sePrimitive.min = position_min;
+    mesh.get()->primitives.emplace_back(std::move(sePrimitive));
+    // todo:: add material
+    submesh_index_offset = global_index_offset;
+    submesh_vertex_offset += positionBufferV.size() / 3 - submesh_vertex_offset;
+  }
+  { // register mesh
+    Buffer* position_buffer = scene.gpuScene.position_buffer.get();
+    size_t position_size = sizeof(float) * positionBufferV.size();
+    size_t position_offset = position_buffer->host.size();
+    position_buffer->host.resize(position_size + position_offset);
+    memcpy(&position_buffer->host[position_offset], positionBufferV.data(), position_size);
+    mesh.get()->vertex_offset = position_offset;
+
+    Buffer* index_buffer = scene.gpuScene.index_buffer.get();
+    size_t index_size = sizeof(uint32_t) * indexBufferWV.size();
+    size_t index_offset = index_buffer->host.size();
+    index_buffer->host.resize(index_size + index_offset);
+    memcpy(&index_buffer->host[index_offset], indexBufferWV.data(), index_size);
+    mesh.get()->index_offset = index_offset;
+
+    Buffer* vertex_buffer = scene.gpuScene.vertex_buffer.get();
+    size_t vertex_size = sizeof(float) * vertexBufferV.size();
+    size_t vertex_offset = vertex_buffer->host.size();
+    vertex_buffer->host.resize(vertex_size + vertex_offset);
+    memcpy(&vertex_buffer->host[vertex_offset], vertexBufferV.data(), vertex_size);
+
+  }
+  return mesh;
+}
+
+void FillTransfromFromPBRT(tiny_pbrt_loader::TransformData const& pbrt_trans, Transform& transformComponent) {
+  se::mat4 mat = {
+  (float)pbrt_trans.m[0][0],  (float)pbrt_trans.m[0][1], (float)pbrt_trans.m[0][2], (float)pbrt_trans.m[0][3],
+  (float)pbrt_trans.m[1][0],  (float)pbrt_trans.m[1][1], (float)pbrt_trans.m[1][2], (float)pbrt_trans.m[1][3],
+  (float)pbrt_trans.m[2][0],  (float)pbrt_trans.m[2][1], (float)pbrt_trans.m[2][2], (float)pbrt_trans.m[2][3],
+  (float)pbrt_trans.m[3][0],  (float)pbrt_trans.m[3][1], (float)pbrt_trans.m[3][2], (float)pbrt_trans.m[3][3], };
+  //mat = se::transpose(mat);
+  se::vec3 t, s; se::Quaternion quat;
+  se::decompose(mat, &t, &quat, &s);
+
+  transformComponent.translation = t;
+  transformComponent.scale = s;
+  transformComponent.rotation = quat;
+}
+
+bounds3 Medium::MajorantGrid::voxel_bounds(int x, int y, int z) const {
+  vec3 p0(float(x) / res.x, float(y) / res.y, float(z) / res.z);
+  vec3 p1(float(x + 1) / res.x, float(y + 1) / res.y, float(z + 1) / res.z);
+  return bounds3(p0, p1);
+}
+
+void Medium::MajorantGrid::set(int x, int y, int z, float v) {
+  voxels[x + res.x * (y + res.y * z)] = v;
+}
+
+float Medium::SampledGrid::max_value(const bounds3& bounds) const {
+  vec3 ps[2] = { vec3(bounds.pMin.x * nx - .5f, bounds.pMin.y * ny - .5f,
+                         bounds.pMin.z * nz - .5f),
+                 vec3(bounds.pMax.x * nx - .5f, bounds.pMax.y * ny - .5f,
+                         bounds.pMax.z * nz - .5f) };
+  ivec3 pi[2] = { max(ivec3(floor(ps[0])), ivec3(0, 0, 0)),
+                   min(ivec3(floor(ps[1])) + ivec3(1, 1, 1),
+                       ivec3(nx - 1, ny - 1, nz - 1)) };
+
+  float maxValue = lookup(ivec3(pi[0]));
+  for (int z = pi[0].z; z <= pi[1].z; ++z)
+    for (int y = pi[0].y; y <= pi[1].y; ++y)
+      for (int x = pi[0].x; x <= pi[1].x; ++x)
+        maxValue = std::max(maxValue, lookup(ivec3(x, y, z)));
+
+  return maxValue;
+}
+
+float Medium::SampledGrid::lookup(const ivec3& p) const {
+  ibounds3 sampleBounds(ivec3(0, 0, 0), ivec3(nx, ny, nz));
+  //if (!InsideExclusive(p, sampleBounds))
+  //  return convert(T{});
+  return values[(p.z * ny + p.y) * nx + p.x];
+}
+
+SceneLoader::result_type SceneLoader::operator()(SceneLoader::from_pbrt_tag, std::string const& path) {
+  SceneLoader::result_type scene = std::make_shared<Scene>();
+  std::string fileContent = loadFileAsString("D:/Art/Scenes/pbrt-v4-volumes/scenes/ground_explosion/ground_explosion.pbrt");
+  std::unique_ptr<tiny_pbrt_loader::BasicScene> scene_pbrt = tiny_pbrt_loader::load_scene_from_string(fileContent);
+  std::string prefix = path.substr(0, path.find_last_of("/") + 1);
+  // camera
+  {
+    auto camera_node = scene->createNode("camera");
+    Transform& transformComponent = scene->registry.get<Transform>(camera_node.entity);
+    Camera& cameraComponent = scene->registry.emplace<Camera>(camera_node.entity);
+    //cameraComponent.yfov = scene_pbrt->camera.cameraFromWorld;
+    FillTransfromFromPBRT(scene_pbrt->camera.cameraFromWorld, transformComponent);
+    cameraComponent.yfov = scene_pbrt->camera.dict.GetOneFloat("fov", 0.f);
+    float b = 1.f;
+  }
+
+  // shapes  // first, create the nodes
+  //std::vector<Node> nodes(model.nodes.size());
+  //for (size_t i = 0; i < model.nodes.size(); ++i) {
+  //  nodes[i] = scene->createNode(model.nodes[i].name);
+  //}
+  //// add the hierarchy information
+  //for (size_t i = 0; i < model.nodes.size(); ++i) {
+  //  auto& children = scene->registry.get<NodeProperty>(nodes[i].entity).children;
+  //  for (auto& child_id : model.nodes[i].children) {
+  //    children.push_back(nodes[child_id]);
+  //  }
+  //}
+
+  for (auto& medium : scene_pbrt->mediums) {
+    MediumHandle medium_handle = GFXContext::load_medium_empty();
+    medium_handle->packet.scale = medium.dict.GetOneFloat("scale", 1.f);
+    medium_handle->packet.temperatureScale = medium.dict.GetOneFloat("temperaturescale", 1.f);
+    //medium_handle->packet.Lescale = medium.dict.GetOneFloat("Lescale", 1.f);
+    tiny_pbrt_loader::Vector3f sigma_a = medium.dict.GetOneRGB3f("sigma_a", { 0.f ,0.f ,0.f });
+    tiny_pbrt_loader::Vector3f sigma_s = medium.dict.GetOneRGB3f("sigma_s", { 0.f ,0.f ,0.f });
+    medium_handle->packet.sigmaA = { sigma_a.v[0], sigma_a.v[1] ,sigma_a.v[2] };
+    medium_handle->packet.sigmaS = { sigma_s.v[0], sigma_s.v[1] ,sigma_s.v[2] };
+    std::string type = medium.dict.GetOneString("type", "");
+    if (type == "nanovdb") {
+      std::string filename = prefix + medium.dict.GetOneString("filename", "");
+      nanovdb_loader(filename, medium_handle);
+    }
+
+    // create majorant grid
+    medium_handle->majorantGrid = Medium::MajorantGrid();
+    medium_handle->majorantGrid->res = ivec3(16, 16, 16);
+    medium_handle->majorantGrid->bounds = medium_handle->density->bounds;
+    medium_handle->majorantGrid->voxels.resize(16 * 16 * 16);
+    // Initialize _majorantGrid_ for _GridMedium_
+    for (int z = 0; z < medium_handle->majorantGrid->res.z; ++z)
+      for (int y = 0; y < medium_handle->majorantGrid->res.y; ++y)
+        for (int x = 0; x < medium_handle->majorantGrid->res.x; ++x) {
+          bounds3 bounds = medium_handle->majorantGrid->voxel_bounds(x, y, z);
+          medium_handle->majorantGrid->set(x, y, z, medium_handle->density->max_value(bounds));
+        }
+  }
+
+  for (auto& shape : scene_pbrt->shapes) {
+    std::vector<tiny_pbrt_loader::Point3f> p = shape.dict.GetPoint3fArray("P");
+    std::vector<int> idx = shape.dict.GetIntArray("indices");
+    auto node = scene->createNode(shape.name);
+    NodeProperty& prop = scene->registry.get<NodeProperty>(node.entity);
+    Transform& transformComponent = scene->registry.get<Transform>(node.entity);
+    auto& pbrt_trans = shape.renderFromObject;
+    FillTransfromFromPBRT(pbrt_trans, transformComponent);
+
+    // if the mesh is defined by points and indices
+    if (idx.size() > 0) {
+      MeshRenderer& mesh_renderer = scene->registry.emplace<MeshRenderer>(node.entity);
+      mesh_renderer.mesh = loadPbrtDefineddMesh(p, idx, *(scene.get()));
+    }
+  }
+
+  return scene;
+}
+
 SceneLoader::result_type SceneLoader::operator()(SceneLoader::from_scratch_tag) {
   SceneLoader::result_type scene = std::make_shared<Scene>();
   // create node
@@ -3956,6 +3020,13 @@ auto GFXContext::load_scene_gltf(std::string const& path) noexcept -> SceneHandl
 auto GFXContext::load_scene_xml(std::string const& path) noexcept -> SceneHandle {
   RUID const ruid = root::resource::queryRUID();
   auto ret = scenes.load(ruid, SceneLoader::from_xml_tag{}, path);
+  ret.first->second->dirtyFlags = (uint64_t)se::gfx::Scene::DirtyFlagBit::ALL;
+  return SceneHandle{ ret.first->second };
+}
+
+auto GFXContext::load_scene_pbrt(std::string const& path) noexcept -> SceneHandle {
+  RUID const ruid = root::resource::queryRUID();
+  auto ret = scenes.load(ruid, SceneLoader::from_pbrt_tag{}, path);
   ret.first->second->dirtyFlags = (uint64_t)se::gfx::Scene::DirtyFlagBit::ALL;
   return SceneHandle{ ret.first->second };
 }

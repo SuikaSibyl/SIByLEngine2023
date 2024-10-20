@@ -314,12 +314,30 @@ struct SIByL_API IBxDF {
 struct SIByL_API Medium {
   enum struct MediumType : uint32_t {
     Homogeneous = 0,
-    Heterogeneous = 1,
+    GridMedium = 1,
+    RGBGridMedium = 2,
   };
 
   enum struct PhaseType :uint32_t {
     IsotropicPhase = 0,
     HenyeyGreenstein = 1,
+  };
+
+  struct SampledGrid {
+    int nx, ny, nz;
+    std::vector<float> values;
+    float max_value(const bounds3& bounds) const;
+    float lookup(const ivec3& p) const;
+    bounds3 bounds;
+  };
+
+  struct MajorantGrid {
+    bounds3 bounds;
+    std::vector<float> voxels;
+    ivec3 res;
+
+    bounds3 voxel_bounds(int x, int y, int z) const;
+    void set(int x, int y, int z, float v);
   };
 
   struct MediumPacket {
@@ -328,8 +346,25 @@ struct SIByL_API Medium {
     vec3 sigmaS;
     float scale;
     vec3 aniso;
-    float padding;
+    float temperatureScale;
+    vec3 bound_min;
+    float LeScale;
+    vec3 bound_max;
+    MediumType type = MediumType::Homogeneous;
+    ivec3 density_nxyz;
+    int32_t density_offset = -1;
+    ivec3 temperature_nxyz;
+    int32_t temperature_offset = -1;
+    ivec3 le_nxyz;
+    int32_t le_offset = -1;
+    ivec3 majorant_nxyz;
+    int32_t majorant_offset = -1;
   } packet;
+
+  std::optional<SampledGrid> density;
+  std::optional<SampledGrid> LeScale;
+  std::optional<SampledGrid> temperatureGrid;
+  std::optional<MajorantGrid> majorantGrid;
 
   bool isDirty = false;
 };
@@ -498,7 +533,7 @@ struct SIByL_API Camera {
   };
   float aspectRatio = 1.f;
   float yfov = 45.f;
-  float znear = 0.1f, zfar = 100.0f;
+  float znear = 0.1f, zfar = 10000.0f;
   int32_t width = 512, height = 512;
   float left_right = 0;
   float bottom_top = 0;
@@ -628,6 +663,7 @@ struct SIByL_API Scene : public Resource {
     BufferHandle light_buffer;
     BufferHandle medium_buffer;
     BufferHandle scene_desc_buffer;
+    BufferHandle grid_storage_buffer;
 
     struct TLAS {
       rhi::TLASDescriptor desc = {};
@@ -664,6 +700,7 @@ struct SIByL_API Scene : public Resource {
     auto bindingResourceLightBVH() noexcept -> rhi::BindingResource;
     auto bindingResourceLightTrail() noexcept -> rhi::BindingResource;
     auto bindingResourceTextures() noexcept -> rhi::BindingResource;
+    auto bindingResourceGridStorage() noexcept -> rhi::BindingResource;
     auto bindingSceneDescriptor() noexcept -> rhi::BindingResource;
 
     auto getPositionBuffer() noexcept -> BufferHandle;
@@ -724,10 +761,12 @@ struct SIByL_API SceneLoader {
 
   struct from_gltf_tag {};
   struct from_xml_tag {};
+  struct from_pbrt_tag {};
   struct from_scratch_tag {};
 
   result_type operator()(from_gltf_tag, std::string const& path);
   result_type operator()(from_xml_tag, std::string const& path);
+  result_type operator()(from_pbrt_tag, std::string const& path);
   result_type operator()(from_scratch_tag);
 };
 
@@ -828,6 +867,7 @@ struct SIByL_API GFXContext {
 
   static auto load_scene_gltf(std::string const& path) noexcept -> SceneHandle;
   static auto load_scene_xml(std::string const& path) noexcept -> SceneHandle;
+  static auto load_scene_pbrt(std::string const& path) noexcept -> SceneHandle;
   static auto create_scene(std::string const& name) noexcept -> SceneHandle;
 };
 

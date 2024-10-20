@@ -10,7 +10,8 @@ target_include_directories(${PROJECT_NAME} PUBLIC include
   "${PROJECT_SOURCE_DIR}/Engine/extern/slang/include"
   "${PROJECT_SOURCE_DIR}/Engine/extern/tinygltf/include"
   "${PROJECT_SOURCE_DIR}/Engine/extern/tinyobjloader/include"
-  "${PROJECT_SOURCE_DIR}/Engine/extern/vulkan/include")
+  "${PROJECT_SOURCE_DIR}/Engine/extern/vulkan/include"
+  "${PROJECT_SOURCE_DIR}/Engine/extern/nanovdb")
 target_link_directories(${PROJECT_NAME} PUBLIC
   "${PROJECT_SOURCE_DIR}/Engine/extern/glfw/libs"
   "${PROJECT_SOURCE_DIR}/Engine/extern/vulkan/libs"
@@ -33,6 +34,7 @@ target_sources(${PROJECT_NAME} PRIVATE
   "source/rhi/se.rhi.cu.cpp"
   "source/rhi/se.rhi.torch.cpp"
   "source/gfx/ex.spirv_reflect.cpp"
+  "source/gfx/ex.tinyprbrtloader.cpp"
   "source/gfx/se.gfx.cpp"
   "source/gfx/se.gfx.scene.cpp"
   "source/gfx/se.gfx.pmf.cpp"
