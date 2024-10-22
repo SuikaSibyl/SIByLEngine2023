@@ -39,7 +39,8 @@ std::unique_ptr<se::window> window = se::window::create(se::window::WindowOption
  //std::string path = "S:/SIByL2024/Sandbox/examples/lighting/_data/onelight-2.gltf";
  //std::string path = "D:/Art/Scenes/veach-mis-mitsuba/scene_v3.xml";
  //std::string path = "P:/GitProjects/lajolla_public/scenes/volpath_test/volpath_test_buddha.xml";
- std::string path = "D:/Art/Scenes/pbrt-v4-volumes/scenes/ground_explosion/ground_explosion.pbrt";
+ //std::string path = "D:/Art/Scenes/pbrt-v4-volumes/scenes/ground_explosion/ground_explosion.pbrt";
+ std::string path = "D:/Art/Scenes/pbrt-v4-volumes/scenes/teapot_cloud/teapot_cloud.pbrt";
  //std::string path = "P:/GitProjects/lajolla_public/scenes/volpath_test/volpath_test2.gltf";
  //auto scene = se::gfx::GFXContext::load_scene_xml(path);
  auto scene = se::gfx::GFXContext::load_scene_pbrt(path);
@@ -53,6 +54,8 @@ std::unique_ptr<se::window> window = se::window::create(se::window::WindowOption
  //float pdf; int offset;
  //float a = pc1d.sample(0.09, pdf, offset);
  scene->serialize("D:/Art/Scenes/veach-mis-mitsuba/scene_v3.gltf");
+
+ auto test = scene->getGPUScene()->bindingResourceGrids();
 
  device->waitIdle();
  se::editor::EditorBase::finalize();

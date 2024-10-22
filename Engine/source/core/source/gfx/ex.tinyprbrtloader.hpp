@@ -387,10 +387,9 @@ namespace tiny_pbrt_loader {
     CameraSceneEntity camera;
     std::vector<SceneEntity> materials;
     std::vector<SceneEntity> areaLights;
-    std::vector<SceneEntity> mediums;
+    std::vector<MediumSceneEntity> mediums;
     std::vector<ShapeSceneEntity> shapes;
     std::vector<std::pair<std::string, SceneEntity>> namedMaterials;
-    std::vector<std::pair<std::string, SceneEntity>> namedMedium;
   };
 
   std::unique_ptr<BasicScene> load_scene_from_string(std::string str);

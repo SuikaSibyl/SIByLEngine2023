@@ -67,9 +67,9 @@ float3 inspector_pt(
     if (hit) {
         float2 texcoord = payload.hit.texcoord;
         Optional<MaterialData> mat = fetchMaterialData(payload.hit);
-        if (mat == none) return float3(1, 0, 1);
         switch (inspector_mode) {
         case InspectorMode::ALBEDO: {
+            if (mat == none) return float3(1, 0, 1);
             output = materials::albedo(mat.value, texcoord);
             float3 visual_emission = materials::emission(mat.value);
             if (any(visual_emission > 0)) {
@@ -78,7 +78,10 @@ float3 inspector_pt(
             }
             break;
         }
-        case InspectorMode::EMISSION: output = materials::emission(mat.value); break;
+        case InspectorMode::EMISSION: {
+            if (mat == none) return float3(1, 0, 1);
+            output = materials::emission(mat.value); break;
+        }
         case InspectorMode::FACEFORWARD: output = IsFaceForward(payload.hit) ? float3(0, 1, 0) : float3(1, 0, 0); break;
         case InspectorMode::BARYCENTRIC: output = float3(payload.hit.texcoord, 0); break;
         case InspectorMode::NORMAL: output = payload.hit.shadingNormal * 0.5 + 0.5; break;

@@ -36,10 +36,6 @@ struct RawPayload {
     bool hasHit;
 };
 
-struct MediumHit {
-    int mediumID;
-};
-
 // geometry info
 struct GeometryData {
     uint vertexOffset;
@@ -92,6 +88,7 @@ struct LightPacket {
 struct MediumPacket {
     enum MediumType {
         HOMOGENEOUS,
+        GRID_MEDIUM,
         HETEROGENEOUS,
         MAX_ENUM,
     };
@@ -114,12 +111,17 @@ struct MediumPacket {
     int le_offset;
     int3 majorant_xyz;
     int majorant_offset;
-
+    float4 transform[3];
+    float4 transformInverse[3];
+    
     float3 get_g() { return clamp(aniso, -1 + 1e-3, 1 - 1e-3); }
     float3 get_sigma_a() { return sigma_a * scale; }
     float3 get_sigma_s() { return sigma_s * scale; }
     float3 get_sigma_t() { return sigma_a * scale + sigma_s * scale; }
-    MediumType get_medium_type() { return MediumType::HOMOGENEOUS; }
+    MediumType get_medium_type() { return medium_type; }
+
+    float4x4 medium_to_world() { return transpose(float4x4(transform[0], transform[1], transform[2], float4(0, 0, 0, 1))); }
+    float4x4 world_to_medium() { return transpose(float4x4(transformInverse[0], transformInverse[1], transformInverse[2], float4(0, 0, 0, 1))); }
 };
 
 bool IsValidMedium(MediumPacket medium) {
@@ -195,8 +197,8 @@ Ray SpawnRay(
     in_ref(float3) dir) {
     const float3 offsetDir = faceforward(isect.geometryNormal, 
         -dir, isect.geometryNormal);
-    const float3 offsetedPosition = offsetPositionAlongNormal(
-        isect.position, offsetDir);
+    float3 offsetedPosition = offsetPositionAlongNormal(isect.position, offsetDir);
+    if (any(abs(offsetedPosition) >= 8)) { offsetedPosition += 1e-4 * offsetDir; } 
     Ray ray;
     ray.origin = offsetedPosition;
     ray.direction = dir;

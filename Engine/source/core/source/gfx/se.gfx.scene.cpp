@@ -107,6 +107,7 @@ Scene::Scene() {
   gpuScene.camera_buffer = GFXContext::load_buffer_empty();
   gpuScene.scene_desc_buffer = GFXContext::load_buffer_empty();
   gpuScene.medium_buffer = GFXContext::load_buffer_empty();
+  gpuScene.grid_storage_buffer = GFXContext::load_buffer_empty();
   gpuScene.lbvh.light_bvh_buffer = GFXContext::load_buffer_empty();
   gpuScene.lbvh.light_trail_buffer = GFXContext::load_buffer_empty();
   gpuScene.camera_buffer->host.resize(sizeof(Scene::CameraData));
@@ -144,6 +145,9 @@ Scene::Scene() {
     (uint32_t)rhi::BufferUsageBit::SHADER_DEVICE_ADDRESS |
     (uint32_t)rhi::BufferUsageBit::STORAGE;
   gpuScene.camera_buffer->usages =
+    (uint32_t)rhi::BufferUsageBit::SHADER_DEVICE_ADDRESS |
+    (uint32_t)rhi::BufferUsageBit::STORAGE;
+  gpuScene.grid_storage_buffer->usages =
     (uint32_t)rhi::BufferUsageBit::SHADER_DEVICE_ADDRESS |
     (uint32_t)rhi::BufferUsageBit::STORAGE;
   gpuScene.scene_desc_buffer->usages =
@@ -744,6 +748,7 @@ auto Scene::updateGPUScene() noexcept -> void {
   gpuScene.material_buffer->hostToDevice();
   gpuScene.light_buffer->hostToDevice();
   gpuScene.medium_buffer->hostToDevice();
+  gpuScene.grid_storage_buffer->hostToDevice();
   gpuScene.scene_desc_buffer->hostToDevice();
 
   // also update the light bvh
@@ -894,7 +899,7 @@ auto Scene::GPUScene::bindingResourceMedium() noexcept -> rhi::BindingResource {
   return rhi::BindingResource{ {medium_buffer->buffer.get(), 0, medium_buffer->buffer->size()} };
 }
 
-auto Scene::GPUScene::bindingResourceGridStorage() noexcept -> rhi::BindingResource {
+auto Scene::GPUScene::bindingResourceGrids() noexcept -> rhi::BindingResource {
   return rhi::BindingResource{ {grid_storage_buffer->buffer.get(), 0, grid_storage_buffer->buffer->size()} };
 }
 
@@ -968,21 +973,41 @@ auto Scene::GPUScene::try_fetch_medium_index(MediumHandle& handle) noexcept -> i
   if (iter == medium_loc_index.end()) {
     int index = medium_loc_index.size();
     medium_loc_index[handle.ruid] = { index, handle };
+
+    // upload density grid
+    if (handle->density.has_value()) {
+      handle->packet.bound_min = handle->density->bounds.pMin;
+      handle->packet.bound_max = handle->density->bounds.pMax;
+      handle->packet.density_nxyz = ivec3{ handle->density->nx, handle->density->ny, handle->density->nz };
+      int size = handle->density->values.size();
+      int offset = grid_storage_buffer->host.size() / sizeof(float);
+      offset = int((offset + 63) / 64) * 64;
+      handle->packet.density_offset = offset;
+      grid_storage_buffer->host.resize(sizeof(float) * (offset + size));
+      memcpy(&(grid_storage_buffer->host[offset * sizeof(float)]),
+        handle->density->values.data(), size * sizeof(float));
+      grid_storage_buffer->host_stamp++;
+    }
+
+    // upload majorant grid
+    if (handle->majorantGrid.has_value()) {
+      handle->packet.majorant_nxyz = handle->majorantGrid->res;
+      int size = handle->majorantGrid->voxels.size();
+      int offset = grid_storage_buffer->host.size() / sizeof(float);
+      offset = int((offset + 63) / 64) * 64;
+      handle->packet.majorant_offset = offset;
+      grid_storage_buffer->host.resize(sizeof(float) * (offset + size));
+      memcpy(&(grid_storage_buffer->host[offset * sizeof(float)]),
+        handle->majorantGrid->voxels.data(), size * sizeof(float));
+      grid_storage_buffer->host_stamp++;
+    }
+
+    // copy the packet to GPU
     medium_buffer->host.resize(sizeof(Medium::MediumPacket) * (index + 1));
     Medium::MediumPacket pack = handle->packet;
     memcpy((float*)&(medium_buffer->host[sizeof(Medium::MediumPacket) * index]), &pack, sizeof(pack));
     medium_buffer->host_stamp++;
 
-    if (handle->density.has_value()) {
-      handle->packet.bound_min = handle->density->bounds.pMin;
-      handle->packet.bound_max = handle->density->bounds.pMax;
-      int size = handle->density->values.size();
-      handle->packet.density_offset = grid_storage_buffer->host.size() / sizeof(float);
-      grid_storage_buffer->host.resize(sizeof(float) * size);
-      memcpy(&(grid_storage_buffer->host[handle->packet.density_offset * sizeof(float)]),
-        handle->density->values.data(), size * sizeof(float));
-      grid_storage_buffer->host_stamp++;
-    }
 
     return index;
   }
@@ -2306,15 +2331,16 @@ auto nanovdb_float_grid_loader(nanovdb::GridHandle<nanovdb::HostBuffer>& grid) -
   floatGrid->tree().extrema(minValue, maxValue);
   nanovdb::Vec3dBBox bbox = floatGrid->worldBBox();
 
+  auto grid_bounds = floatGrid->indexBBox();
   int nx = floatGrid->indexBBox().dim()[0];
   int ny = floatGrid->indexBBox().dim()[1];
   int nz = floatGrid->indexBBox().dim()[2];
 
   std::vector<float> values;
 
-  int z0 = 0, z1 = nz;
-  int y0 = 0, y1 = ny;
-  int x0 = 0, x1 = nx;
+  int z0 = grid_bounds.min()[2], z1 = grid_bounds.max()[2];
+  int y0 = grid_bounds.min()[1], y1 = grid_bounds.max()[1];
+  int x0 = grid_bounds.min()[0], x1 = grid_bounds.max()[0];
 
   bounds3 bounds = bounds3(vec3(bbox.min()[0], bbox.min()[1], bbox.min()[2]),
     vec3(bbox.max()[0], bbox.max()[1], bbox.max()[2]));
@@ -2341,10 +2367,14 @@ auto nanovdb_float_grid_loader(nanovdb::GridHandle<nanovdb::HostBuffer>& grid) -
   ny = round(y0, y1, bounds.pMin.y, bounds.pMax.y);
   nx = round(x0, x1, bounds.pMin.x, bounds.pMax.x);
 
+  int x_mid = (x0 + x1) / 2;
+  int y_mid = (y0 + y1) / 2;
+  int z_mid = (z0 + z1) / 2;
+
   for (int z = z0; z < z1; ++z)
     for (int y = y0; y < y1; ++y)
       for (int x = x0; x < x1; ++x) {
-        values.push_back(floatGrid->tree().getValue({ x, y, z }));
+        values.push_back(floatGrid->getAccessor().getValue({ x, y, z }));
       }
 
   while (downsample > 0) {
@@ -2917,7 +2947,7 @@ float Medium::SampledGrid::lookup(const ivec3& p) const {
 
 SceneLoader::result_type SceneLoader::operator()(SceneLoader::from_pbrt_tag, std::string const& path) {
   SceneLoader::result_type scene = std::make_shared<Scene>();
-  std::string fileContent = loadFileAsString("D:/Art/Scenes/pbrt-v4-volumes/scenes/ground_explosion/ground_explosion.pbrt");
+  std::string fileContent = loadFileAsString(path);
   std::unique_ptr<tiny_pbrt_loader::BasicScene> scene_pbrt = tiny_pbrt_loader::load_scene_from_string(fileContent);
   std::string prefix = path.substr(0, path.find_last_of("/") + 1);
   // camera
@@ -2927,8 +2957,23 @@ SceneLoader::result_type SceneLoader::operator()(SceneLoader::from_pbrt_tag, std
     Camera& cameraComponent = scene->registry.emplace<Camera>(camera_node.entity);
     //cameraComponent.yfov = scene_pbrt->camera.cameraFromWorld;
     FillTransfromFromPBRT(scene_pbrt->camera.cameraFromWorld, transformComponent);
+    se::Transform rotate = se::rotateY(180);
+    transformComponent.rotation = Quaternion(rotate.m) * transformComponent.rotation;
     cameraComponent.yfov = scene_pbrt->camera.dict.GetOneFloat("fov", 0.f);
     float b = 1.f;
+  }
+
+  std::vector<std::optional<MaterialHandle>> material_map(scene_pbrt->materials.size());
+
+  for (size_t i = 0; i < scene_pbrt->materials.size(); ++i) {
+    auto& material = scene_pbrt->materials[i];
+    std::optional<MaterialHandle> handle = std::nullopt;
+    if (material.name == "interface") {
+    }
+    else {
+      float a = 1.f;
+    }
+    material_map[i] = handle;
   }
 
   // shapes  // first, create the nodes
@@ -2944,6 +2989,8 @@ SceneLoader::result_type SceneLoader::operator()(SceneLoader::from_pbrt_tag, std
   //  }
   //}
 
+  std::unordered_map<std::string, MediumHandle> medium_map;
+
   for (auto& medium : scene_pbrt->mediums) {
     MediumHandle medium_handle = GFXContext::load_medium_empty();
     medium_handle->packet.scale = medium.dict.GetOneFloat("scale", 1.f);
@@ -2953,24 +3000,28 @@ SceneLoader::result_type SceneLoader::operator()(SceneLoader::from_pbrt_tag, std
     tiny_pbrt_loader::Vector3f sigma_s = medium.dict.GetOneRGB3f("sigma_s", { 0.f ,0.f ,0.f });
     medium_handle->packet.sigmaA = { sigma_a.v[0], sigma_a.v[1] ,sigma_a.v[2] };
     medium_handle->packet.sigmaS = { sigma_s.v[0], sigma_s.v[1] ,sigma_s.v[2] };
+    //medium_handle->packet.geometryTransform = medium.dict[]
     std::string type = medium.dict.GetOneString("type", "");
     if (type == "nanovdb") {
       std::string filename = prefix + medium.dict.GetOneString("filename", "");
       nanovdb_loader(filename, medium_handle);
+      medium_handle->packet.type = Medium::MediumType::GridMedium;
+
+      // create majorant grid
+      medium_handle->majorantGrid = Medium::MajorantGrid();
+      medium_handle->majorantGrid->res = ivec3(16, 16, 16);
+      medium_handle->majorantGrid->bounds = medium_handle->density->bounds;
+      medium_handle->majorantGrid->voxels.resize(16 * 16 * 16);
+      // Initialize _majorantGrid_ for _GridMedium_
+      for (int z = 0; z < medium_handle->majorantGrid->res.z; ++z)
+        for (int y = 0; y < medium_handle->majorantGrid->res.y; ++y)
+          for (int x = 0; x < medium_handle->majorantGrid->res.x; ++x) {
+            bounds3 bounds = medium_handle->majorantGrid->voxel_bounds(x, y, z);
+            medium_handle->majorantGrid->set(x, y, z, medium_handle->density->max_value(bounds));
+          }
     }
 
-    // create majorant grid
-    medium_handle->majorantGrid = Medium::MajorantGrid();
-    medium_handle->majorantGrid->res = ivec3(16, 16, 16);
-    medium_handle->majorantGrid->bounds = medium_handle->density->bounds;
-    medium_handle->majorantGrid->voxels.resize(16 * 16 * 16);
-    // Initialize _majorantGrid_ for _GridMedium_
-    for (int z = 0; z < medium_handle->majorantGrid->res.z; ++z)
-      for (int y = 0; y < medium_handle->majorantGrid->res.y; ++y)
-        for (int x = 0; x < medium_handle->majorantGrid->res.x; ++x) {
-          bounds3 bounds = medium_handle->majorantGrid->voxel_bounds(x, y, z);
-          medium_handle->majorantGrid->set(x, y, z, medium_handle->density->max_value(bounds));
-        }
+    medium_map[medium.name] = medium_handle;
   }
 
   for (auto& shape : scene_pbrt->shapes) {
@@ -2986,6 +3037,29 @@ SceneLoader::result_type SceneLoader::operator()(SceneLoader::from_pbrt_tag, std
     if (idx.size() > 0) {
       MeshRenderer& mesh_renderer = scene->registry.emplace<MeshRenderer>(node.entity);
       mesh_renderer.mesh = loadPbrtDefineddMesh(p, idx, *(scene.get()));
+
+      if (!material_map[shape.materialIndex].has_value()) {
+        
+      }
+      else {
+
+      }
+
+      if (shape.insideMedium != "") {
+        auto& handle = medium_map[shape.insideMedium];
+        for (auto& primitive : mesh_renderer.mesh->primitives)
+          primitive.interior = handle;
+        for (auto& primitive : mesh_renderer.mesh->custom_primitives)
+          primitive.interior = handle;
+      }
+
+      if (shape.outsideMedium != "") {
+        auto& handle = medium_map[shape.outsideMedium];
+        for (auto& primitive : mesh_renderer.mesh->primitives)
+          primitive.exterior = handle;
+        for (auto& primitive : mesh_renderer.mesh->custom_primitives)
+          primitive.exterior = handle;
+      }
     }
   }
 

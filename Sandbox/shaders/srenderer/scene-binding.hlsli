@@ -22,6 +22,7 @@ RWStructuredBuffer<LightBVHNode> GPUScene_light_bvh;
 RWStructuredBuffer<uint32_t> GPUScene_light_trail;
 RWStructuredBuffer<SceneDescription> GPUScene_description;
 RWStructuredBuffer<MediumPacket> GPUScene_medium;
+RWStructuredBuffer<float> GPUScene_grid_storage;
 Sampler2D GPUScene_textures[];
 
 float3 fetchVertexPosition(int vertexIndex) { return GPUScene_position.Load<float3>(vertexIndex * 12); }

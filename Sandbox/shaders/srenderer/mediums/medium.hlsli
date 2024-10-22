@@ -7,9 +7,6 @@
 #include "srenderer/spt.hlsli"
 #include "srenderer/utils/miscbuff.hlsli"
 
-
-RWStructuredBuffer<float> GPUScene_MajorantGrids;
-
 namespace imedium {
 struct RayMajorantSegment {
     float3 sigma_maj;
@@ -45,14 +42,14 @@ struct MajorantGrid {
     int offset;
 
     float look_up(int3 idx) {
-        return GPUScene_MajorantGrids[offset +
+        return GPUScene_grid_storage[offset +
                                       (idx.z * resolution.y + idx.y) * resolution.x + idx.x];
     }
 
     float look_up(int x, int y, int z) { return look_up(int3(x, y, z)); }
 
     void set(int3 idx, float val) {
-        GPUScene_MajorantGrids[offset +
+        GPUScene_grid_storage[offset +
                                (idx.z * resolution.y + idx.y) * resolution.x + idx.x] = val;
     }
 
@@ -284,6 +281,29 @@ struct GridMediumParameter : IMediumParameter {
     SampledGrid densityGrid;
     SampledGrid LeScale;
     SampledGrid temperatureGrid;
+    
+    __init() {}
+    __init(MediumPacket packet) {
+        sigma_a_spec = packet.get_sigma_a();
+        sigma_s_spec = packet.get_sigma_s();
+        Le_spec = float3(0);
+        phase = { packet.get_g() };
+
+        o2w = packet.medium_to_world();
+        w2o = packet.world_to_medium();
+        bounds = bounds3(packet.bound_min, packet.bound_max);
+        
+        densityGrid = {
+            packet.density_xyz.x, packet.density_xyz.y, 
+            packet.density_xyz.z, packet.density_offset, true
+        };
+
+        majorantGrid = {
+            bounds, packet.majorant_xyz, packet.majorant_offset
+        };
+
+        isEmissive = false;
+    }
 };
 
 struct GridMedium : IMedium {
@@ -305,6 +325,7 @@ struct GridMedium : IMedium {
         // Scale scattering coefficients by medium density at p
         p = mul(float4(p, 1), param.o2w).xyz;
         p = param.bounds.offset(p);
+        
         float d = param.densityGrid.look_up(p);
         sigma_a *= d;
         sigma_s *= d;
@@ -350,6 +371,12 @@ struct GridMedium : IMedium {
         iter.dda = imedium::DDAMajorantIterator(
             ray, tMin, tMax, param.majorantGrid, sigma_t);
         return iter;
+        
+        // imedium::RayMajorantIterator iter;
+        // iter.type = imedium::RayMajorantIterator::IteratorType::homogeneous;
+        // iter.homogeneous = imedium::HomogeneousMajorantIterator(
+        //     0, raytMax, param.sigma_s_spec + param.sigma_a_spec);
+        // return iter;
     }
 };
 

@@ -3,13 +3,14 @@
 
 #include "common/math.hlsli"
 #include "common/geometry.hlsli"
-
-RWStructuredBuffer<float> GPUScene_grid_storage;
+#include "srenderer/scene-binding.hlsli"
 
 struct SampledGrid {
     int nx; int ny; int nz;
     int offset;
     bool valid;
+    
+    __init() { valid = false; }
 
     float look_up(float3 p) {
         // Compute voxel coordinates and offsets for p
@@ -31,7 +32,8 @@ struct SampledGrid {
     
     float look_up(int3 p) {
         bounds3i sampleBounds = { int3(0, 0, 0), int3(nx, ny, nz) };
-        if (!bounds3i::inside_exclusive(p, sampleBounds)) return 0;
+        p = clamp(p, sampleBounds.pMin, sampleBounds.pMax - int3(1, 1, 1));
+        // if (!bounds3i::inside_exclusive(p, sampleBounds)) return 0;
         return GPUScene_grid_storage[offset + (p.z * ny + p.y) * nx + p.x];
     }
 

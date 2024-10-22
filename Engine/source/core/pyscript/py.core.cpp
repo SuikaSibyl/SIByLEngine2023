@@ -708,6 +708,7 @@ PYBIND11_MODULE(pycore, m) {
   class_gfx_context.def_static("captureImage", static_cast<void(*)(se::gfx::TextureHandle src, std::string path)>(&se::gfx::captureImage));
   class_gfx_context.def_static("finalize", &se::gfx::GFXContext::finalize);
   class_gfx_context.def_static("load_scene_gltf", &se::gfx::GFXContext::load_scene_gltf);
+  class_gfx_context.def_static("load_scene_pbrt", &se::gfx::GFXContext::load_scene_pbrt);
   class_gfx_context.def_static("load_scene_xml", &se::gfx::GFXContext::load_scene_xml);
   class_gfx_context.def_static("create_texture_file", &se::gfx::GFXContext::create_texture_file);
   class_gfx_context.def_static("create_sampler_desc", static_cast<se::gfx::SamplerHandle(*)
@@ -773,6 +774,7 @@ PYBIND11_MODULE(pycore, m) {
     .def("bindingResourceLight", &se::gfx::Scene::GPUScene::bindingResourceLight)
     .def("bindingResourceLightBVH", &se::gfx::Scene::GPUScene::bindingResourceLightBVH)
     .def("bindingResourceLightTrail", &se::gfx::Scene::GPUScene::bindingResourceLightTrail)
+    .def("bindingResourceGrids", &se::gfx::Scene::GPUScene::bindingResourceGrids)
     .def("bindingSceneDescriptor", &se::gfx::Scene::GPUScene::bindingSceneDescriptor)
     .def("bindingResourceIndex", &se::gfx::Scene::GPUScene::bindingResourceIndex)
     .def("bindingResourceVertex", &se::gfx::Scene::GPUScene::bindingResourceVertex)

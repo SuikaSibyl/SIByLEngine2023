@@ -359,6 +359,8 @@ struct SIByL_API Medium {
     int32_t le_offset = -1;
     ivec3 majorant_nxyz;
     int32_t majorant_offset = -1;
+    rhi::AffineTransformMatrix geometryTransform = {};
+    rhi::AffineTransformMatrix geometryTransformInverse = {};
   } packet;
 
   std::optional<SampledGrid> density;
@@ -700,7 +702,7 @@ struct SIByL_API Scene : public Resource {
     auto bindingResourceLightBVH() noexcept -> rhi::BindingResource;
     auto bindingResourceLightTrail() noexcept -> rhi::BindingResource;
     auto bindingResourceTextures() noexcept -> rhi::BindingResource;
-    auto bindingResourceGridStorage() noexcept -> rhi::BindingResource;
+    auto bindingResourceGrids() noexcept -> rhi::BindingResource;
     auto bindingSceneDescriptor() noexcept -> rhi::BindingResource;
 
     auto getPositionBuffer() noexcept -> BufferHandle;
